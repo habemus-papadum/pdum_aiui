@@ -9,10 +9,21 @@ catalogs:
     '@habemus-papadum/aiui-registry':
       specifier: 0.1.0
       version: 0.1.0
+  solid:
+    '@solidjs/web':
+      specifier: 2.0.0-beta.15
+      version: 2.0.0-beta.15
+    solid-js:
+      specifier: 2.0.0-beta.15
+      version: 2.0.0-beta.15
+    vite-plugin-solid:
+      specifier: 3.0.0-next.5
+      version: 3.0.0-next.5
 
 overrides:
   '@duckdb/duckdb-wasm': 1.33.1-dev61.0
   babel-preset-solid: 2.0.0-beta.15
+  '@solidjs/signals': 2.0.0-beta.15
 
 importers:
 
@@ -101,7 +112,7 @@ importers:
         specifier: ^0.6.17
         version: 0.6.17
       '@solidjs/web':
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15(solid-js@2.0.0-beta.15)
       '@uwdata/mosaic-core':
         specifier: ^0.28.1
@@ -116,7 +127,7 @@ importers:
         specifier: ^6.8.9
         version: 6.8.9
       solid-js:
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15
     devDependencies:
       '@babel/core':
@@ -144,7 +155,7 @@ importers:
         specifier: ^6.4.1
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
-        specifier: 3.0.0-next.5
+        specifier: catalog:solid
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
       vitest:
         specifier: ^3.2.0
@@ -165,10 +176,10 @@ importers:
         specifier: ^0.6.17
         version: 0.6.17
       '@solidjs/web':
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15(solid-js@2.0.0-beta.15)
       solid-js:
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15
     devDependencies:
       '@babel/core':
@@ -190,7 +201,7 @@ importers:
         specifier: ^6.4.1
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
-        specifier: 3.0.0-next.5
+        specifier: catalog:solid
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
       vitest:
         specifier: ^3.2.0
@@ -211,13 +222,13 @@ importers:
         specifier: workspace:^
         version: link:../../packages/aiui-viz
       '@solidjs/web':
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15(solid-js@2.0.0-beta.15)
       katex:
         specifier: ^0.17.0
         version: 0.17.0
       solid-js:
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15
     devDependencies:
       '@babel/core':
@@ -239,7 +250,7 @@ importers:
         specifier: ^6.4.1
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
-        specifier: 3.0.0-next.5
+        specifier: catalog:solid
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
       vitest:
         specifier: ^3.2.0
@@ -254,10 +265,10 @@ importers:
         specifier: workspace:^
         version: link:../../packages/aiui-viz
       '@solidjs/web':
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15(solid-js@2.0.0-beta.15)
       solid-js:
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15
     devDependencies:
       '@babel/core':
@@ -279,7 +290,7 @@ importers:
         specifier: ^6.4.1
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
-        specifier: 3.0.0-next.5
+        specifier: catalog:solid
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
       vitest:
         specifier: ^3.2.0
@@ -297,10 +308,10 @@ importers:
         specifier: workspace:^
         version: link:../../packages/aiui-viz
       '@solidjs/web':
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15(solid-js@2.0.0-beta.15)
       solid-js:
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15
     devDependencies:
       '@babel/core':
@@ -319,7 +330,7 @@ importers:
         specifier: ^6.4.1
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
-        specifier: 3.0.0-next.5
+        specifier: catalog:solid
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
 
   demos/gears:
@@ -334,10 +345,10 @@ importers:
         specifier: workspace:^
         version: link:../../packages/aiui-viz
       '@solidjs/web':
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15(solid-js@2.0.0-beta.15)
       solid-js:
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15
     devDependencies:
       '@babel/core':
@@ -359,7 +370,7 @@ importers:
         specifier: ^6.4.1
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
-        specifier: 3.0.0-next.5
+        specifier: catalog:solid
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
       vitest:
         specifier: ^3.2.0
@@ -380,10 +391,10 @@ importers:
         specifier: workspace:^
         version: link:../../packages/aiui-viz
       '@solidjs/web':
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15(solid-js@2.0.0-beta.15)
       solid-js:
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15
     devDependencies:
       '@babel/core':
@@ -405,7 +416,7 @@ importers:
         specifier: ^6.4.1
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
-        specifier: 3.0.0-next.5
+        specifier: catalog:solid
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
       vitest:
         specifier: ^3.2.0
@@ -426,10 +437,10 @@ importers:
         specifier: workspace:^
         version: link:../../packages/aiui-viz
       '@solidjs/web':
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15(solid-js@2.0.0-beta.15)
       solid-js:
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15
     devDependencies:
       '@babel/core':
@@ -451,7 +462,7 @@ importers:
         specifier: ^6.4.1
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
-        specifier: 3.0.0-next.5
+        specifier: catalog:solid
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
       vitest:
         specifier: ^3.2.0
@@ -481,13 +492,13 @@ importers:
         specifier: ^0.6.17
         version: 0.6.17
       '@solidjs/web':
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15(solid-js@2.0.0-beta.15)
       d3:
         specifier: ^7.9.0
         version: 7.9.0
       solid-js:
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15
     devDependencies:
       '@babel/core':
@@ -512,7 +523,7 @@ importers:
         specifier: ^6.4.1
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
-        specifier: 3.0.0-next.5
+        specifier: catalog:solid
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
       vitest:
         specifier: ^3.2.0
@@ -521,10 +532,10 @@ importers:
   demos/optics:
     devDependencies:
       '@solidjs/web':
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15(solid-js@2.0.0-beta.15)
       solid-js:
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15
       typescript:
         specifier: ^5.6.0
@@ -546,10 +557,10 @@ importers:
         specifier: workspace:^
         version: link:../../packages/aiui-source-processor
       '@solidjs/web':
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15(solid-js@2.0.0-beta.15)
       solid-js:
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15
 
   demos/seismos:
@@ -570,7 +581,7 @@ importers:
         specifier: ^0.6.17
         version: 0.6.17
       '@solidjs/web':
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15(solid-js@2.0.0-beta.15)
       '@uwdata/mosaic-core':
         specifier: ^0.28.1
@@ -588,7 +599,7 @@ importers:
         specifier: 0.28.1
         version: 0.28.1
       solid-js:
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15
     devDependencies:
       '@babel/core':
@@ -610,7 +621,7 @@ importers:
         specifier: ^6.4.1
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
-        specifier: 3.0.0-next.5
+        specifier: catalog:solid
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
       vitest:
         specifier: ^3.2.0
@@ -628,10 +639,10 @@ importers:
         specifier: workspace:^
         version: link:../../packages/aiui-viz
       '@solidjs/web':
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15(solid-js@2.0.0-beta.15)
       solid-js:
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15
     devDependencies:
       '@babel/core':
@@ -653,7 +664,7 @@ importers:
         specifier: ^6.4.1
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
-        specifier: 3.0.0-next.5
+        specifier: catalog:solid
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
       vitest:
         specifier: ^3.2.0
@@ -668,10 +679,10 @@ importers:
         specifier: workspace:^
         version: link:../../packages/aiui-viz
       '@solidjs/web':
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15(solid-js@2.0.0-beta.15)
       solid-js:
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15
     devDependencies:
       '@babel/core':
@@ -693,7 +704,7 @@ importers:
         specifier: ^6.4.1
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
-        specifier: 3.0.0-next.5
+        specifier: catalog:solid
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
       vitest:
         specifier: ^3.2.0
@@ -812,10 +823,10 @@ importers:
         specifier: workspace:^
         version: link:../aiui-util
       '@solidjs/web':
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15(solid-js@2.0.0-beta.15)
       solid-js:
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15
     devDependencies:
       '@habemus-papadum/aiui-build-config':
@@ -837,7 +848,7 @@ importers:
         specifier: ^6.4.1
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
-        specifier: 3.0.0-next.5
+        specifier: catalog:solid
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
 
   packages/aiui-intent-client:
@@ -867,10 +878,10 @@ importers:
         specifier: workspace:^
         version: link:../aiui-viz
       '@solidjs/web':
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15(solid-js@2.0.0-beta.15)
       solid-js:
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15
       ws:
         specifier: ^8.18.0
@@ -910,7 +921,7 @@ importers:
         specifier: ^6.4.1
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
-        specifier: 3.0.0-next.5
+        specifier: catalog:solid
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
 
   packages/aiui-intent-runtime:
@@ -951,10 +962,10 @@ importers:
         specifier: ^0.1.0
         version: 0.1.0
       '@solidjs/web':
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15(solid-js@2.0.0-beta.15)
       solid-js:
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15
     devDependencies:
       '@habemus-papadum/aiui-build-config':
@@ -970,7 +981,7 @@ importers:
         specifier: ^6.4.1
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
-        specifier: 3.0.0-next.5
+        specifier: catalog:solid
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
 
   packages/aiui-pencil:
@@ -988,10 +999,10 @@ importers:
         specifier: workspace:^
         version: link:../aiui-viz
       '@solidjs/web':
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15(solid-js@2.0.0-beta.15)
       solid-js:
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15
     devDependencies:
       '@babel/core':
@@ -1022,7 +1033,7 @@ importers:
         specifier: ^6.4.1
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
-        specifier: 3.0.0-next.5
+        specifier: catalog:solid
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
       ws:
         specifier: ^8.18.0
@@ -1037,10 +1048,10 @@ importers:
         specifier: workspace:^
         version: link:../aiui-viz
       '@solidjs/web':
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15(solid-js@2.0.0-beta.15)
       solid-js:
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15
     devDependencies:
       '@habemus-papadum/aiui-build-config':
@@ -1065,7 +1076,7 @@ importers:
         specifier: ^6.4.1
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
-        specifier: 3.0.0-next.5
+        specifier: catalog:solid
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
       ws:
         specifier: ^8.18.0
@@ -1112,10 +1123,10 @@ importers:
         specifier: workspace:^
         version: link:../aiui-viz
       '@solidjs/web':
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15(solid-js@2.0.0-beta.15)
       solid-js:
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15
     devDependencies:
       '@babel/core':
@@ -1128,7 +1139,7 @@ importers:
         specifier: ^6.4.1
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
-        specifier: 3.0.0-next.5
+        specifier: catalog:solid
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
 
   packages/aiui-trace-ui:
@@ -1181,7 +1192,7 @@ importers:
         specifier: ^0.6.17
         version: 0.6.17
       '@solidjs/web':
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15(solid-js@2.0.0-beta.15)
       '@uwdata/mosaic-plot':
         specifier: ^0.28.1
@@ -1190,13 +1201,13 @@ importers:
         specifier: ^0.17.0
         version: 0.17.0
       solid-js:
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15
       vite:
         specifier: ^6.4.1
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
-        specifier: 3.0.0-next.5
+        specifier: catalog:solid
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
 
   packages/aiui-vscode:
@@ -1242,10 +1253,10 @@ importers:
         specifier: workspace:^
         version: link:../aiui-viz
       '@solidjs/web':
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15(solid-js@2.0.0-beta.15)
       solid-js:
-        specifier: 2.0.0-beta.15
+        specifier: catalog:solid
         version: 2.0.0-beta.15
       typescript:
         specifier: ^5.6.0
@@ -1254,7 +1265,7 @@ importers:
         specifier: ^6.4.1
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
-        specifier: 3.0.0-next.5
+        specifier: catalog:solid
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
       vitest:
         specifier: ^3.2.0

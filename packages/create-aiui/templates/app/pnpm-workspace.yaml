@@ -14,6 +14,9 @@ onlyBuiltDependencies:
 # the JSX compiler must match the @solidjs/web runtime beta pinned in
 # package.json — newer presets emit helpers (claimElement) the beta.15 runtime
 # doesn't export, so a fresh install breaks in dev and at `vite build`. Bump
-# this in step with the solid-js / @solidjs/web pins.
+# this in step with the solid-js / @solidjs/web pins. Same trap one layer down:
+# solid-js's dependency on @solidjs/signals is a caret that floats across
+# betas, so it is pinned to the same beta too. (Inert under npm/yarn.)
 overrides:
   babel-preset-solid: 2.0.0-beta.15
+  "@solidjs/signals": 2.0.0-beta.15

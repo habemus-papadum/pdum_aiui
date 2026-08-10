@@ -58,8 +58,8 @@
   "dependencies": {
     "@habemus-papadum/aiui-trace-ui": "workspace:^",
     "@habemus-papadum/aiui-util": "workspace:^",
-    "@solidjs/web": "2.0.0-beta.15",
-    "solid-js": "2.0.0-beta.15"
+    "@solidjs/web": "catalog:solid",
+    "solid-js": "catalog:solid"
   },
   "devDependencies": {
     "@habemus-papadum/aiui-build-config": "workspace:^",
@@ -68,6 +68,6 @@
     "express": "^5.1.0",
     "jsdom": "^29.0.0",
     "vite": "^6.4.1",
-    "vite-plugin-solid": "3.0.0-next.5"
+    "vite-plugin-solid": "catalog:solid"
   }
 }

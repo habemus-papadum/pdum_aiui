@@ -22,6 +22,22 @@ packages:
 catalog:
   "@habemus-papadum/aiui-registry": 0.1.0
 
+# Named catalogs: each group is a set of versions that move together. Manifests
+# reference them as `"catalog:<name>"`; `pnpm pack`/`publish` materialize the
+# literal version, so published artifacts are unchanged (pnpm test:packaging
+# guards this). NOT used by create-aiui's app template — its package.json ships
+# as an asset that npm/yarn must also be able to parse, so it keeps literal
+# pins; bump it in step with the catalog (new-demo rewrites scaffolded demos to
+# catalog references, so only the template itself carries literals).
+catalogs:
+  # The Solid 2.0 beta line. During the beta the JSX compiler and runtime move
+  # in lockstep (see the babel-preset-solid override below); bumping Solid is
+  # editing these three lines plus the two overrides below and the template.
+  solid:
+    solid-js: 2.0.0-beta.15
+    "@solidjs/web": 2.0.0-beta.15
+    vite-plugin-solid: 3.0.0-next.5
+
 # Mosaic pins an exact, older duckdb-wasm (`@uwdata/mosaic-core@0.28.1` wants
 # 1.33.1-dev45.0). Without this override two copies install, and passing our
 # connection into `wasmConnector()` fails to typecheck against the other copy's
@@ -35,9 +51,14 @@ overrides:
   # emit helpers (claimElement) that beta.15 doesn't export, breaking consumers
   # at dev/build time. The monorepo lockfile happens to hold beta.15 already;
   # this makes the invariant explicit and keeps `pnpm update` honest. Bump in
-  # step with the solid-js / @solidjs/web pins (see frontend-hard-won.md,
+  # step with the `solid` catalog above (see frontend-hard-won.md,
   # "Ecosystem status").
   babel-preset-solid: 2.0.0-beta.15
+  # Same trap, one layer down: solid-js depends on @solidjs/signals via a caret
+  # that floats across betas (`^2.0.0-beta.N` matches every later beta), so a
+  # fresh lockfile can pair an old solid-js with a newer signals core. Pin it to
+  # the same beta as the `solid` catalog and bump them together.
+  "@solidjs/signals": 2.0.0-beta.15
 
 # pnpm blocks dependency build scripts by default; allow the ones we trust.
 # (esbuild ships a prebuilt binary but runs a postinstall to link it.)

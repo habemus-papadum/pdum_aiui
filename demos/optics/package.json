@@ -27,8 +27,8 @@
     "solid-js": ">=2.0.0-beta.0 <2.0.0-experimental.0"
   },
   "devDependencies": {
-    "@solidjs/web": "2.0.0-beta.15",
-    "solid-js": "2.0.0-beta.15",
+    "@solidjs/web": "catalog:solid",
+    "solid-js": "catalog:solid",
     "typescript": "^5.6.0",
     "vitest": "^3.2.0"
   }
