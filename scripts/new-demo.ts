@@ -26,7 +26,14 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { scaffoldApp, templateRoot } from "../packages/create-aiui/src/scaffold";
-import { currentVersion, deriveContext, fail, repoRoot, slugify } from "./lib/common.mjs";
+import {
+  catalogRefs,
+  currentVersion,
+  deriveContext,
+  fail,
+  repoRoot,
+  slugify,
+} from "./lib/common.mjs";
 
 const USAGE = 'usage: pnpm new-demo <name> [--description "..."]';
 
@@ -109,10 +116,31 @@ function rewirePackageJson(
       test: "vitest run",
       typecheck: "tsc --noEmit -p tsconfig.json",
     },
-    dependencies: template.dependencies,
-    devDependencies: template.devDependencies,
+    dependencies: withCatalogRefs(template.dependencies),
+    devDependencies: withCatalogRefs(template.devDependencies),
   };
   writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
+}
+
+/**
+ * Swap the template's literal pins for the root workspace's catalog references
+ * wherever a catalog entry exists (`catalog:solid` for the Solid lockstep set,
+ * `catalog:` for shared singletons like vite/typescript/vitest).
+ *
+ * The template itself keeps literal pins on purpose — its package.json ships
+ * inside create-aiui as an asset that npm/yarn must also parse, and `catalog:`
+ * is pnpm-only. A demo lives in THIS workspace, where the catalogs are the
+ * source of truth; freezing the template's literals into a demo would fork it
+ * from the lockstep the moment a catalog bumps.
+ */
+function withCatalogRefs(deps: Record<string, string>): Record<string, string> {
+  const refs = catalogRefs();
+  return Object.fromEntries(
+    Object.entries(deps).map(([name, range]) => [
+      name,
+      range.startsWith("workspace:") ? range : (refs.get(name) ?? range),
+    ]),
+  );
 }
 
 /**

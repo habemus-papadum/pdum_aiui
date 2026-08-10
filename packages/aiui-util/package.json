@@ -50,8 +50,8 @@
   },
   "devDependencies": {
     "@habemus-papadum/aiui-build-config": "workspace:^",
-    "@types/express": "^5.0.0",
-    "express": "^5.1.0",
-    "vite": "^6.4.1"
+    "@types/express": "catalog:",
+    "express": "catalog:",
+    "vite": "catalog:"
   }
 }

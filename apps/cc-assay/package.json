@@ -34,8 +34,8 @@
     "hyparquet-writer": "^0.16.1"
   },
   "devDependencies": {
-    "tsx": "^4.22.5",
-    "typescript": "^5.6.0",
-    "vitest": "^3.2.0"
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }

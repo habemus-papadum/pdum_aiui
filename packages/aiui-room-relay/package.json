@@ -39,10 +39,10 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "ws": "^8.18.0"
+    "ws": "catalog:"
   },
   "devDependencies": {
     "@habemus-papadum/aiui-build-config": "workspace:^",
-    "@types/ws": "^8.5.0"
+    "@types/ws": "catalog:"
   }
 }

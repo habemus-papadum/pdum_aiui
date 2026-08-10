@@ -97,14 +97,14 @@
     }
   },
   "devDependencies": {
-    "@duckdb/duckdb-wasm": "1.33.1-dev61.0",
+    "@duckdb/duckdb-wasm": "catalog:",
     "@habemus-papadum/aiui-build-config": "workspace:^",
-    "@observablehq/plot": "^0.6.17",
+    "@observablehq/plot": "catalog:",
     "@solidjs/web": "catalog:solid",
     "@uwdata/mosaic-plot": "^0.28.1",
     "katex": "^0.17.0",
     "solid-js": "catalog:solid",
-    "vite": "^6.4.1",
+    "vite": "catalog:",
     "vite-plugin-solid": "catalog:solid"
   }
 }

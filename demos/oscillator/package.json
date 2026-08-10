@@ -29,7 +29,7 @@
     "solid-js": ">=2.0.0-beta.0 <2.0.0-experimental.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.29.7",
+    "@babel/core": "catalog:",
     "@habemus-papadum/aiui-source-processor": "workspace:^",
     "solid-js": "catalog:solid",
     "@solidjs/web": "catalog:solid"

@@ -117,6 +117,15 @@ artifact is unchanged. Rules that keep this working:
 - **Never `optimizeDeps.include` a workspace package** in a Vite config: the dep-optimizer cache
   is keyed by the lockfile, not package contents, so a linked package would be served stale (see
   the comment in `packages/aiui-trace-ui/src/vite.ts`).
+- **Shared external deps are pinned through pnpm catalogs** in `pnpm-workspace.yaml`: the default
+  catalog holds shared singleton versions (referenced as `"catalog:"` — vite, typescript, vitest,
+  …), and named groups hold sets that move in lockstep (today `catalog:solid` for the Solid 2.0
+  beta line, bumped together with the `babel-preset-solid`/`@solidjs/signals` overrides beside
+  it). Bump a version there, once. `pnpm pack`/`publish` materialize literal versions, so
+  published artifacts are unchanged (`pnpm test:packaging` guards this). Exception: create-aiui's
+  app template keeps literal pins — its `package.json` ships as an asset npm/yarn must parse, and
+  `catalog:` is pnpm-only — so bump the template in step; `new-demo` rewrites scaffolded demos to
+  catalog references, so only the template itself carries literals.
 
 ## In-repo demo apps — `pnpm new-demo <name>`
 
@@ -273,6 +282,10 @@ running the eviction and watching it fail, not by reasoning:
   first, Mosaic's exact older `duckdb-wasm` pin installs a second copy and the
   types stop unifying; without the second, install fails on esbuild's build
   script.
+- **the `catalog:`/`catalogs:` blocks**, same file (this one carried by
+  reasoning when catalogs were introduced, not discovered by a failure: a
+  manifest's `catalog:` reference is unresolvable without its definition, so
+  the evicted tree could not even install).
 - **`../../` paths** — `apps/<name>/` is two levels below the root, `<name>/` in
   the evicted repo is one.
 - **a root `.gitignore`** — `biome.json` sets `vcs.useIgnoreFile`, so lint

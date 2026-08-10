@@ -51,6 +51,50 @@ export function currentVersion() {
 }
 
 /**
+ * Dependency name → catalog reference, read from the root pnpm-workspace.yaml:
+ * `"catalog:"` for default-catalog entries, `"catalog:<group>"` for named
+ * groups (today: `solid`).
+ *
+ * A deliberately minimal parse of OUR OWN file rather than a YAML dependency:
+ * catalog entries are single `name: version` lines at fixed indentation, and
+ * this helper only needs the names. If the catalogs ever grow shapes this
+ * cannot read, keep the entries simple rather than teaching this parser YAML.
+ * @returns {Map<string, string>}
+ */
+export function catalogRefs() {
+  const text = readFileSync(join(repoRoot, "pnpm-workspace.yaml"), "utf8");
+  const refs = new Map();
+  /** @type {"catalog" | "catalogs" | null} */
+  let section = null;
+  let group = null;
+  for (const line of text.split("\n")) {
+    if (/^\S/.test(line)) {
+      section = line.startsWith("catalog:")
+        ? "catalog"
+        : line.startsWith("catalogs:")
+          ? "catalogs"
+          : null;
+      group = null;
+      continue;
+    }
+    const stripped = line.trim();
+    if (!section || !stripped || stripped.startsWith("#")) continue;
+    const m = /^("?)([^"]+)\1:(.*)$/.exec(stripped);
+    if (!m) continue;
+    const key = m[2];
+    const indent = line.length - line.trimStart().length;
+    if (section === "catalog" && indent === 2) {
+      refs.set(key, "catalog:");
+    } else if (section === "catalogs" && indent === 2 && m[3].trim() === "") {
+      group = key;
+    } else if (section === "catalogs" && group && indent >= 4) {
+      refs.set(key, `catalog:${group}`);
+    }
+  }
+  return refs;
+}
+
+/**
  * Infer the npm scope and repo URL from the first existing scoped package under
  * packages/. Output-identical to reading packages/aiui directly as long as every
  * package shares one scope and repo URL (as they do), while tolerating that

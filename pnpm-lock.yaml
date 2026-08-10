@@ -6,9 +6,48 @@ settings:
 
 catalogs:
   default:
+    '@babel/core':
+      specifier: ^7.29.7
+      version: 7.29.7
     '@habemus-papadum/aiui-registry':
       specifier: 0.1.0
       version: 0.1.0
+    '@observablehq/plot':
+      specifier: ^0.6.17
+      version: 0.6.17
+    '@types/express':
+      specifier: ^5.0.0
+      version: 5.0.6
+    '@types/ws':
+      specifier: ^8.5.0
+      version: 8.18.1
+    commander:
+      specifier: ^15.0.0
+      version: 15.0.0
+    express:
+      specifier: ^5.1.0
+      version: 5.2.1
+    jsdom:
+      specifier: ^29.0.0
+      version: 29.1.1
+    tsx:
+      specifier: ^4.22.5
+      version: 4.22.5
+    typescript:
+      specifier: ^5.6.0
+      version: 5.9.3
+    typescript-language-server:
+      specifier: ^5.3.0
+      version: 5.3.0
+    vite:
+      specifier: ^6.4.3
+      version: 6.4.3
+    vitest:
+      specifier: ^3.2.0
+      version: 3.2.6
+    ws:
+      specifier: ^8.18.0
+      version: 8.21.0
   solid:
     '@solidjs/web':
       specifier: 2.0.0-beta.15
@@ -39,7 +78,7 @@ importers:
         specifier: ^11.16.0
         version: 11.16.0
       tsx:
-        specifier: ^4.22.5
+        specifier: 'catalog:'
         version: 4.22.5
       typedoc:
         specifier: ^0.28.19
@@ -51,13 +90,13 @@ importers:
         specifier: ^1.1.3
         version: 1.1.3(typedoc-plugin-markdown@4.12.0(typedoc@0.28.19(typescript@5.9.3)))
       typescript:
-        specifier: ^5.6.0
+        specifier: 'catalog:'
         version: 5.9.3
       typescript-language-server:
-        specifier: ^5.3.0
+        specifier: 'catalog:'
         version: 5.3.0
       vite:
-        specifier: ^6.0.0
+        specifier: 'catalog:'
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vitepress:
         specifier: ^1.6.4
@@ -66,7 +105,7 @@ importers:
         specifier: ^2.0.17
         version: 2.0.17(mermaid@11.16.0)(vitepress@1.6.4(@algolia/client-search@5.55.1)(@types/node@26.1.0)(postcss@8.5.16)(search-insights@2.17.3)(typescript@5.9.3))
       vitest:
-        specifier: ^3.2.0
+        specifier: 'catalog:'
         version: 3.2.6(@types/debug@4.1.13)(@types/node@26.1.0)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(tsx@4.22.5)(yaml@2.9.0)
 
   apps/cc-assay:
@@ -82,13 +121,13 @@ importers:
         version: 0.16.1
     devDependencies:
       tsx:
-        specifier: ^4.22.5
+        specifier: 'catalog:'
         version: 4.22.5
       typescript:
-        specifier: ^5.6.0
+        specifier: 'catalog:'
         version: 5.9.3
       vitest:
-        specifier: ^3.2.0
+        specifier: 'catalog:'
         version: 3.2.6(@types/debug@4.1.13)(@types/node@26.1.0)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(tsx@4.22.5)(yaml@2.9.0)
 
   apps/cc-miner:
@@ -109,7 +148,7 @@ importers:
         specifier: workspace:^
         version: link:../cc-assay
       '@observablehq/plot':
-        specifier: ^0.6.17
+        specifier: 'catalog:'
         version: 0.6.17
       '@solidjs/web':
         specifier: catalog:solid
@@ -131,7 +170,7 @@ importers:
         version: 2.0.0-beta.15
     devDependencies:
       '@babel/core':
-        specifier: ^7.29.7
+        specifier: 'catalog:'
         version: 7.29.7
       '@habemus-papadum/aiui':
         specifier: workspace:^
@@ -143,22 +182,22 @@ importers:
         specifier: ^26.15.3
         version: 26.15.3(electron-builder-squirrel-windows@26.15.3)
       jsdom:
-        specifier: ^29.0.0
+        specifier: 'catalog:'
         version: 29.1.1(@noble/hashes@2.2.0)
       typescript:
-        specifier: ^5.6.0
+        specifier: 'catalog:'
         version: 5.9.3
       typescript-language-server:
-        specifier: ^5.3.0
+        specifier: 'catalog:'
         version: 5.3.0
       vite:
-        specifier: ^6.4.1
+        specifier: 'catalog:'
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
         specifier: catalog:solid
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
       vitest:
-        specifier: ^3.2.0
+        specifier: 'catalog:'
         version: 3.2.6(@types/debug@4.1.13)(@types/node@26.1.0)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(tsx@4.22.5)(yaml@2.9.0)
 
   demos/aztec:
@@ -173,7 +212,7 @@ importers:
         specifier: workspace:^
         version: link:../../packages/aiui-viz
       '@observablehq/plot':
-        specifier: ^0.6.17
+        specifier: 'catalog:'
         version: 0.6.17
       '@solidjs/web':
         specifier: catalog:solid
@@ -183,28 +222,28 @@ importers:
         version: 2.0.0-beta.15
     devDependencies:
       '@babel/core':
-        specifier: ^7.29.7
+        specifier: 'catalog:'
         version: 7.29.7
       '@habemus-papadum/aiui':
         specifier: workspace:^
         version: link:../../packages/aiui
       jsdom:
-        specifier: ^29.0.0
+        specifier: 'catalog:'
         version: 29.1.1(@noble/hashes@2.2.0)
       typescript:
-        specifier: ^5.6.0
+        specifier: 'catalog:'
         version: 5.9.3
       typescript-language-server:
-        specifier: ^5.3.0
+        specifier: 'catalog:'
         version: 5.3.0
       vite:
-        specifier: ^6.4.1
+        specifier: 'catalog:'
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
         specifier: catalog:solid
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
       vitest:
-        specifier: ^3.2.0
+        specifier: 'catalog:'
         version: 3.2.6(@types/debug@4.1.13)(@types/node@26.1.0)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(tsx@4.22.5)(yaml@2.9.0)
 
   demos/circle:
@@ -232,28 +271,28 @@ importers:
         version: 2.0.0-beta.15
     devDependencies:
       '@babel/core':
-        specifier: ^7.29.7
+        specifier: 'catalog:'
         version: 7.29.7
       '@habemus-papadum/aiui':
         specifier: workspace:^
         version: link:../../packages/aiui
       jsdom:
-        specifier: ^29.0.0
+        specifier: 'catalog:'
         version: 29.1.1(@noble/hashes@2.2.0)
       typescript:
-        specifier: ^5.6.0
+        specifier: 'catalog:'
         version: 5.9.3
       typescript-language-server:
-        specifier: ^5.3.0
+        specifier: 'catalog:'
         version: 5.3.0
       vite:
-        specifier: ^6.4.1
+        specifier: 'catalog:'
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
         specifier: catalog:solid
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
       vitest:
-        specifier: ^3.2.0
+        specifier: 'catalog:'
         version: 3.2.6(@types/debug@4.1.13)(@types/node@26.1.0)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(tsx@4.22.5)(yaml@2.9.0)
 
   demos/dna-script:
@@ -272,28 +311,28 @@ importers:
         version: 2.0.0-beta.15
     devDependencies:
       '@babel/core':
-        specifier: ^7.29.7
+        specifier: 'catalog:'
         version: 7.29.7
       '@habemus-papadum/aiui':
         specifier: workspace:^
         version: link:../../packages/aiui
       jsdom:
-        specifier: ^29.0.0
+        specifier: 'catalog:'
         version: 29.1.1(@noble/hashes@2.2.0)
       typescript:
-        specifier: ^5.6.0
+        specifier: 'catalog:'
         version: 5.9.3
       typescript-language-server:
-        specifier: ^5.3.0
+        specifier: 'catalog:'
         version: 5.3.0
       vite:
-        specifier: ^6.4.1
+        specifier: 'catalog:'
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
         specifier: catalog:solid
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
       vitest:
-        specifier: ^3.2.0
+        specifier: 'catalog:'
         version: 3.2.6(@types/debug@4.1.13)(@types/node@26.1.0)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(tsx@4.22.5)(yaml@2.9.0)
 
   demos/gallery:
@@ -315,19 +354,19 @@ importers:
         version: 2.0.0-beta.15
     devDependencies:
       '@babel/core':
-        specifier: ^7.29.7
+        specifier: 'catalog:'
         version: 7.29.7
       '@habemus-papadum/aiui':
         specifier: workspace:^
         version: link:../../packages/aiui
       typescript:
-        specifier: ^5.6.0
+        specifier: 'catalog:'
         version: 5.9.3
       typescript-language-server:
-        specifier: ^5.3.0
+        specifier: 'catalog:'
         version: 5.3.0
       vite:
-        specifier: ^6.4.1
+        specifier: 'catalog:'
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
         specifier: catalog:solid
@@ -352,28 +391,28 @@ importers:
         version: 2.0.0-beta.15
     devDependencies:
       '@babel/core':
-        specifier: ^7.29.7
+        specifier: 'catalog:'
         version: 7.29.7
       '@habemus-papadum/aiui':
         specifier: workspace:^
         version: link:../../packages/aiui
       jsdom:
-        specifier: ^29.0.0
+        specifier: 'catalog:'
         version: 29.1.1(@noble/hashes@2.2.0)
       typescript:
-        specifier: ^5.6.0
+        specifier: 'catalog:'
         version: 5.9.3
       typescript-language-server:
-        specifier: ^5.3.0
+        specifier: 'catalog:'
         version: 5.3.0
       vite:
-        specifier: ^6.4.1
+        specifier: 'catalog:'
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
         specifier: catalog:solid
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
       vitest:
-        specifier: ^3.2.0
+        specifier: 'catalog:'
         version: 3.2.6(@types/debug@4.1.13)(@types/node@26.1.0)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(tsx@4.22.5)(yaml@2.9.0)
 
   demos/gratings:
@@ -398,28 +437,28 @@ importers:
         version: 2.0.0-beta.15
     devDependencies:
       '@babel/core':
-        specifier: ^7.29.7
+        specifier: 'catalog:'
         version: 7.29.7
       '@habemus-papadum/aiui':
         specifier: workspace:^
         version: link:../../packages/aiui
       jsdom:
-        specifier: ^29.0.0
+        specifier: 'catalog:'
         version: 29.1.1(@noble/hashes@2.2.0)
       typescript:
-        specifier: ^5.6.0
+        specifier: 'catalog:'
         version: 5.9.3
       typescript-language-server:
-        specifier: ^5.3.0
+        specifier: 'catalog:'
         version: 5.3.0
       vite:
-        specifier: ^6.4.1
+        specifier: 'catalog:'
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
         specifier: catalog:solid
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
       vitest:
-        specifier: ^3.2.0
+        specifier: 'catalog:'
         version: 3.2.6(@types/debug@4.1.13)(@types/node@26.1.0)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(tsx@4.22.5)(yaml@2.9.0)
 
   demos/holograms:
@@ -444,37 +483,37 @@ importers:
         version: 2.0.0-beta.15
     devDependencies:
       '@babel/core':
-        specifier: ^7.29.7
+        specifier: 'catalog:'
         version: 7.29.7
       '@habemus-papadum/aiui':
         specifier: workspace:^
         version: link:../../packages/aiui
       jsdom:
-        specifier: ^29.0.0
+        specifier: 'catalog:'
         version: 29.1.1(@noble/hashes@2.2.0)
       typescript:
-        specifier: ^5.6.0
+        specifier: 'catalog:'
         version: 5.9.3
       typescript-language-server:
-        specifier: ^5.3.0
+        specifier: 'catalog:'
         version: 5.3.0
       vite:
-        specifier: ^6.4.1
+        specifier: 'catalog:'
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
         specifier: catalog:solid
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
       vitest:
-        specifier: ^3.2.0
+        specifier: 'catalog:'
         version: 3.2.6(@types/debug@4.1.13)(@types/node@26.1.0)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(tsx@4.22.5)(yaml@2.9.0)
 
   demos/journal:
     devDependencies:
       typescript:
-        specifier: ^5.6.0
+        specifier: 'catalog:'
         version: 5.9.3
       vitest:
-        specifier: ^3.2.0
+        specifier: 'catalog:'
         version: 3.2.6(@types/debug@4.1.13)(@types/node@26.1.0)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(tsx@4.22.5)(yaml@2.9.0)
 
   demos/morphogen:
@@ -489,7 +528,7 @@ importers:
         specifier: workspace:^
         version: link:../../packages/aiui-viz
       '@observablehq/plot':
-        specifier: ^0.6.17
+        specifier: 'catalog:'
         version: 0.6.17
       '@solidjs/web':
         specifier: catalog:solid
@@ -502,7 +541,7 @@ importers:
         version: 2.0.0-beta.15
     devDependencies:
       '@babel/core':
-        specifier: ^7.29.7
+        specifier: 'catalog:'
         version: 7.29.7
       '@habemus-papadum/aiui':
         specifier: workspace:^
@@ -511,22 +550,22 @@ importers:
         specifier: ^7.4.3
         version: 7.4.3
       jsdom:
-        specifier: ^29.0.0
+        specifier: 'catalog:'
         version: 29.1.1(@noble/hashes@2.2.0)
       typescript:
-        specifier: ^5.6.0
+        specifier: 'catalog:'
         version: 5.9.3
       typescript-language-server:
-        specifier: ^5.3.0
+        specifier: 'catalog:'
         version: 5.3.0
       vite:
-        specifier: ^6.4.1
+        specifier: 'catalog:'
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
         specifier: catalog:solid
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
       vitest:
-        specifier: ^3.2.0
+        specifier: 'catalog:'
         version: 3.2.6(@types/debug@4.1.13)(@types/node@26.1.0)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(tsx@4.22.5)(yaml@2.9.0)
 
   demos/optics:
@@ -538,10 +577,10 @@ importers:
         specifier: catalog:solid
         version: 2.0.0-beta.15
       typescript:
-        specifier: ^5.6.0
+        specifier: 'catalog:'
         version: 5.9.3
       vitest:
-        specifier: ^3.2.0
+        specifier: 'catalog:'
         version: 3.2.6(@types/debug@4.1.13)(@types/node@26.1.0)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(tsx@4.22.5)(yaml@2.9.0)
 
   demos/oscillator:
@@ -551,7 +590,7 @@ importers:
         version: link:../../packages/aiui-viz
     devDependencies:
       '@babel/core':
-        specifier: ^7.29.7
+        specifier: 'catalog:'
         version: 7.29.7
       '@habemus-papadum/aiui-source-processor':
         specifier: workspace:^
@@ -578,7 +617,7 @@ importers:
         specifier: workspace:^
         version: link:../../packages/aiui-viz
       '@observablehq/plot':
-        specifier: ^0.6.17
+        specifier: 'catalog:'
         version: 0.6.17
       '@solidjs/web':
         specifier: catalog:solid
@@ -603,28 +642,28 @@ importers:
         version: 2.0.0-beta.15
     devDependencies:
       '@babel/core':
-        specifier: ^7.29.7
+        specifier: 'catalog:'
         version: 7.29.7
       '@habemus-papadum/aiui':
         specifier: workspace:^
         version: link:../../packages/aiui
       jsdom:
-        specifier: ^29.0.0
+        specifier: 'catalog:'
         version: 29.1.1(@noble/hashes@2.2.0)
       typescript:
-        specifier: ^5.6.0
+        specifier: 'catalog:'
         version: 5.9.3
       typescript-language-server:
-        specifier: ^5.3.0
+        specifier: 'catalog:'
         version: 5.3.0
       vite:
-        specifier: ^6.4.1
+        specifier: 'catalog:'
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
         specifier: catalog:solid
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
       vitest:
-        specifier: ^3.2.0
+        specifier: 'catalog:'
         version: 3.2.6(@types/debug@4.1.13)(@types/node@26.1.0)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(tsx@4.22.5)(yaml@2.9.0)
 
   demos/twins:
@@ -646,28 +685,28 @@ importers:
         version: 2.0.0-beta.15
     devDependencies:
       '@babel/core':
-        specifier: ^7.29.7
+        specifier: 'catalog:'
         version: 7.29.7
       '@habemus-papadum/aiui':
         specifier: workspace:^
         version: link:../../packages/aiui
       jsdom:
-        specifier: ^29.0.0
+        specifier: 'catalog:'
         version: 29.1.1(@noble/hashes@2.2.0)
       typescript:
-        specifier: ^5.6.0
+        specifier: 'catalog:'
         version: 5.9.3
       typescript-language-server:
-        specifier: ^5.3.0
+        specifier: 'catalog:'
         version: 5.3.0
       vite:
-        specifier: ^6.4.1
+        specifier: 'catalog:'
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
         specifier: catalog:solid
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
       vitest:
-        specifier: ^3.2.0
+        specifier: 'catalog:'
         version: 3.2.6(@types/debug@4.1.13)(@types/node@26.1.0)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(tsx@4.22.5)(yaml@2.9.0)
 
   demos/walkthrough:
@@ -686,28 +725,28 @@ importers:
         version: 2.0.0-beta.15
     devDependencies:
       '@babel/core':
-        specifier: ^7.29.7
+        specifier: 'catalog:'
         version: 7.29.7
       '@habemus-papadum/aiui':
         specifier: workspace:^
         version: link:../../packages/aiui
       jsdom:
-        specifier: ^29.0.0
+        specifier: 'catalog:'
         version: 29.1.1(@noble/hashes@2.2.0)
       typescript:
-        specifier: ^5.6.0
+        specifier: 'catalog:'
         version: 5.9.3
       typescript-language-server:
-        specifier: ^5.3.0
+        specifier: 'catalog:'
         version: 5.3.0
       vite:
-        specifier: ^6.4.1
+        specifier: 'catalog:'
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
         specifier: catalog:solid
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
       vitest:
-        specifier: ^3.2.0
+        specifier: 'catalog:'
         version: 3.2.6(@types/debug@4.1.13)(@types/node@26.1.0)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(tsx@4.22.5)(yaml@2.9.0)
 
   packages/aiui:
@@ -734,13 +773,13 @@ importers:
         specifier: ^5.3.0
         version: 5.6.2
       commander:
-        specifier: ^15.0.0
+        specifier: 'catalog:'
         version: 15.0.0
       execa:
         specifier: ^9.6.1
         version: 9.6.1
       vite:
-        specifier: ^6.4.3
+        specifier: 'catalog:'
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
     devDependencies:
       '@habemus-papadum/aiui-build-config':
@@ -785,29 +824,29 @@ importers:
         specifier: ^0.1.0
         version: 0.1.0
       commander:
-        specifier: ^15.0.0
+        specifier: 'catalog:'
         version: 15.0.0
       express:
-        specifier: ^5.1.0
+        specifier: 'catalog:'
         version: 5.2.1
       ws:
-        specifier: ^8.18.0
+        specifier: 'catalog:'
         version: 8.21.0
     devDependencies:
       '@habemus-papadum/aiui-build-config':
         specifier: workspace:^
         version: link:../aiui-build-config
       '@types/express':
-        specifier: ^5.0.0
+        specifier: 'catalog:'
         version: 5.0.6
       '@types/ws':
-        specifier: ^8.5.0
+        specifier: 'catalog:'
         version: 8.18.1
 
   packages/aiui-claude-plugin:
     dependencies:
       commander:
-        specifier: ^15.0.0
+        specifier: 'catalog:'
         version: 15.0.0
     devDependencies:
       '@habemus-papadum/aiui-build-config':
@@ -836,16 +875,16 @@ importers:
         specifier: workspace:^
         version: link:../aiui-claude-channel
       '@types/express':
-        specifier: ^5.0.0
+        specifier: 'catalog:'
         version: 5.0.6
       express:
-        specifier: ^5.1.0
+        specifier: 'catalog:'
         version: 5.2.1
       jsdom:
-        specifier: ^29.0.0
+        specifier: 'catalog:'
         version: 29.1.1(@noble/hashes@2.2.0)
       vite:
-        specifier: ^6.4.1
+        specifier: 'catalog:'
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
         specifier: catalog:solid
@@ -884,7 +923,7 @@ importers:
         specifier: catalog:solid
         version: 2.0.0-beta.15
       ws:
-        specifier: ^8.18.0
+        specifier: 'catalog:'
         version: 8.21.0
     devDependencies:
       '@habemus-papadum/aiui-build-config':
@@ -900,25 +939,25 @@ importers:
         specifier: ^0.0.287
         version: 0.0.287
       '@types/express':
-        specifier: ^5.0.0
+        specifier: 'catalog:'
         version: 5.0.6
       '@types/ws':
-        specifier: ^8.5.0
+        specifier: 'catalog:'
         version: 8.18.1
       esbuild:
         specifier: ^0.25.12
         version: 0.25.12
       express:
-        specifier: ^5.1.0
+        specifier: 'catalog:'
         version: 5.2.1
       jsdom:
         specifier: ^25.0.1
         version: 25.0.1
       tsx:
-        specifier: ^4.22.5
+        specifier: 'catalog:'
         version: 4.22.5
       vite:
-        specifier: ^6.4.1
+        specifier: 'catalog:'
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
         specifier: catalog:solid
@@ -937,10 +976,10 @@ importers:
         specifier: workspace:^
         version: link:../aiui-claude-channel
       jsdom:
-        specifier: ^29.0.0
+        specifier: 'catalog:'
         version: 29.1.1(@noble/hashes@2.2.0)
       vite:
-        specifier: ^6.4.1
+        specifier: 'catalog:'
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
 
   packages/aiui-lowering-pipeline:
@@ -975,10 +1014,10 @@ importers:
         specifier: workspace:^
         version: link:../aiui-source-processor
       jsdom:
-        specifier: ^29.0.0
+        specifier: 'catalog:'
         version: 29.1.1(@noble/hashes@2.2.0)
       vite:
-        specifier: ^6.4.1
+        specifier: 'catalog:'
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
         specifier: catalog:solid
@@ -1006,7 +1045,7 @@ importers:
         version: 2.0.0-beta.15
     devDependencies:
       '@babel/core':
-        specifier: ^7.29.7
+        specifier: 'catalog:'
         version: 7.29.7
       '@habemus-papadum/aiui-build-config':
         specifier: workspace:^
@@ -1018,25 +1057,25 @@ importers:
         specifier: workspace:^
         version: link:../aiui-source-processor
       '@types/express':
-        specifier: ^5.0.0
+        specifier: 'catalog:'
         version: 5.0.6
       '@types/ws':
-        specifier: ^8.5.0
+        specifier: 'catalog:'
         version: 8.18.1
       express:
-        specifier: ^5.1.0
+        specifier: 'catalog:'
         version: 5.2.1
       jsdom:
-        specifier: ^29.0.0
+        specifier: 'catalog:'
         version: 29.1.1(@noble/hashes@2.2.0)
       vite:
-        specifier: ^6.4.1
+        specifier: 'catalog:'
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
         specifier: catalog:solid
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
       ws:
-        specifier: ^8.18.0
+        specifier: 'catalog:'
         version: 8.21.0
 
   packages/aiui-remote-bar:
@@ -1061,38 +1100,38 @@ importers:
         specifier: workspace:^
         version: link:../aiui-claude-channel
       '@types/express':
-        specifier: ^5.0.0
+        specifier: 'catalog:'
         version: 5.0.6
       '@types/ws':
-        specifier: ^8.5.0
+        specifier: 'catalog:'
         version: 8.18.1
       express:
-        specifier: ^5.1.0
+        specifier: 'catalog:'
         version: 5.2.1
       jsdom:
-        specifier: ^29.0.0
+        specifier: 'catalog:'
         version: 29.1.1(@noble/hashes@2.2.0)
       vite:
-        specifier: ^6.4.1
+        specifier: 'catalog:'
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
         specifier: catalog:solid
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
       ws:
-        specifier: ^8.18.0
+        specifier: 'catalog:'
         version: 8.21.0
 
   packages/aiui-room-relay:
     dependencies:
       ws:
-        specifier: ^8.18.0
+        specifier: 'catalog:'
         version: 8.21.0
     devDependencies:
       '@habemus-papadum/aiui-build-config':
         specifier: workspace:^
         version: link:../aiui-build-config
       '@types/ws':
-        specifier: ^8.5.0
+        specifier: 'catalog:'
         version: 8.18.1
 
   packages/aiui-source-processor:
@@ -1102,7 +1141,7 @@ importers:
         version: link:../aiui-util
     devDependencies:
       '@babel/core':
-        specifier: ^7.29.0
+        specifier: 'catalog:'
         version: 7.29.7
       '@habemus-papadum/aiui-build-config':
         specifier: workspace:^
@@ -1111,7 +1150,7 @@ importers:
         specifier: ^7.20.5
         version: 7.20.5
       vite:
-        specifier: ^6.4.1
+        specifier: 'catalog:'
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
 
   packages/aiui-test-app:
@@ -1130,13 +1169,13 @@ importers:
         version: 2.0.0-beta.15
     devDependencies:
       '@babel/core':
-        specifier: ^7.29.7
+        specifier: 'catalog:'
         version: 7.29.7
       typescript:
-        specifier: ^5.6.0
+        specifier: 'catalog:'
         version: 5.9.3
       vite:
-        specifier: ^6.4.1
+        specifier: 'catalog:'
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
         specifier: catalog:solid
@@ -1152,10 +1191,10 @@ importers:
         specifier: workspace:^
         version: link:../aiui-build-config
       jsdom:
-        specifier: ^29.0.0
+        specifier: 'catalog:'
         version: 29.1.1(@noble/hashes@2.2.0)
       vite:
-        specifier: ^6.4.1
+        specifier: 'catalog:'
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
 
   packages/aiui-util:
@@ -1171,13 +1210,13 @@ importers:
         specifier: workspace:^
         version: link:../aiui-build-config
       '@types/express':
-        specifier: ^5.0.0
+        specifier: 'catalog:'
         version: 5.0.6
       express:
-        specifier: ^5.1.0
+        specifier: 'catalog:'
         version: 5.2.1
       vite:
-        specifier: ^6.4.1
+        specifier: 'catalog:'
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
 
   packages/aiui-viz:
@@ -1189,7 +1228,7 @@ importers:
         specifier: workspace:^
         version: link:../aiui-build-config
       '@observablehq/plot':
-        specifier: ^0.6.17
+        specifier: 'catalog:'
         version: 0.6.17
       '@solidjs/web':
         specifier: catalog:solid
@@ -1204,7 +1243,7 @@ importers:
         specifier: catalog:solid
         version: 2.0.0-beta.15
       vite:
-        specifier: ^6.4.1
+        specifier: 'catalog:'
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
         specifier: catalog:solid
@@ -1241,7 +1280,7 @@ importers:
   packages/create-aiui:
     devDependencies:
       '@babel/core':
-        specifier: ^7.29.7
+        specifier: 'catalog:'
         version: 7.29.7
       '@habemus-papadum/aiui-build-config':
         specifier: workspace:^
@@ -1259,16 +1298,16 @@ importers:
         specifier: catalog:solid
         version: 2.0.0-beta.15
       typescript:
-        specifier: ^5.6.0
+        specifier: 'catalog:'
         version: 5.9.3
       vite:
-        specifier: ^6.4.1
+        specifier: 'catalog:'
         version: 6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
       vite-plugin-solid:
         specifier: catalog:solid
         version: 3.0.0-next.5(@solidjs/web@2.0.0-beta.15(solid-js@2.0.0-beta.15))(solid-js@2.0.0-beta.15)(vite@6.4.3(@types/node@26.1.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
       vitest:
-        specifier: ^3.2.0
+        specifier: 'catalog:'
         version: 3.2.6(@types/debug@4.1.13)(@types/node@26.1.0)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(tsx@4.22.5)(yaml@2.9.0)
 
 packages:

@@ -59,17 +59,17 @@
   "devDependencies": {
     "@habemus-papadum/aiui-build-config": "workspace:^",
     "@habemus-papadum/aiui-claude-channel": "workspace:^",
-    "@types/express": "^5.0.0",
-    "@types/ws": "^8.5.0",
-    "express": "^5.1.0",
-    "jsdom": "^29.0.0",
-    "vite": "^6.4.1",
+    "@types/express": "catalog:",
+    "@types/ws": "catalog:",
+    "express": "catalog:",
+    "jsdom": "catalog:",
+    "vite": "catalog:",
     "vite-plugin-solid": "catalog:solid",
-    "ws": "^8.18.0"
+    "ws": "catalog:"
   },
   "peerDependencies": {
     "@habemus-papadum/aiui-claude-channel": "workspace:^",
-    "express": "^5.1.0"
+    "express": "catalog:"
   },
   "peerDependenciesMeta": {
     "@habemus-papadum/aiui-claude-channel": {

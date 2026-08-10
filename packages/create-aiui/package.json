@@ -43,15 +43,15 @@
     "test": "vitest run"
   },
   "devDependencies": {
-    "@babel/core": "^7.29.7",
+    "@babel/core": "catalog:",
     "@habemus-papadum/aiui-build-config": "workspace:^",
     "@habemus-papadum/aiui-source-processor": "workspace:^",
     "@habemus-papadum/aiui-viz": "workspace:^",
     "@solidjs/web": "catalog:solid",
     "solid-js": "catalog:solid",
-    "typescript": "^5.6.0",
-    "vite": "^6.4.1",
+    "typescript": "catalog:",
+    "vite": "catalog:",
     "vite-plugin-solid": "catalog:solid",
-    "vitest": "^3.2.0"
+    "vitest": "catalog:"
   }
 }

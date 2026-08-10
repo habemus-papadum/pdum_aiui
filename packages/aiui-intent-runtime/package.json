@@ -86,7 +86,7 @@
   "devDependencies": {
     "@habemus-papadum/aiui-build-config": "workspace:^",
     "@habemus-papadum/aiui-claude-channel": "workspace:^",
-    "jsdom": "^29.0.0",
-    "vite": "^6.4.1"
+    "jsdom": "catalog:",
+    "vite": "catalog:"
   }
 }

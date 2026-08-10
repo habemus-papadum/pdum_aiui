@@ -45,7 +45,7 @@
     "postpack": "node ../../scripts/bundle-skill-docs.mjs restore"
   },
   "dependencies": {
-    "commander": "^15.0.0"
+    "commander": "catalog:"
   },
   "devDependencies": {
     "@habemus-papadum/aiui-build-config": "workspace:^"

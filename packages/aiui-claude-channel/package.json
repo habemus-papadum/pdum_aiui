@@ -59,13 +59,13 @@
     "@inquirer/prompts": "^7.2.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@pydantic/genai-prices": "^0.1.0",
-    "commander": "^15.0.0",
-    "express": "^5.1.0",
-    "ws": "^8.18.0"
+    "commander": "catalog:",
+    "express": "catalog:",
+    "ws": "catalog:"
   },
   "devDependencies": {
     "@habemus-papadum/aiui-build-config": "workspace:^",
-    "@types/express": "^5.0.0",
-    "@types/ws": "^8.5.0"
+    "@types/express": "catalog:",
+    "@types/ws": "catalog:"
   }
 }

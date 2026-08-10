@@ -61,17 +61,17 @@
     "dev:client": "vite client"
   },
   "devDependencies": {
-    "@babel/core": "^7.29.7",
+    "@babel/core": "catalog:",
     "@habemus-papadum/aiui-build-config": "workspace:^",
     "@habemus-papadum/aiui-claude-channel": "workspace:^",
     "@habemus-papadum/aiui-source-processor": "workspace:^",
-    "@types/express": "^5.0.0",
-    "@types/ws": "^8.5.0",
-    "express": "^5.1.0",
-    "jsdom": "^29.0.0",
-    "vite": "^6.4.1",
+    "@types/express": "catalog:",
+    "@types/ws": "catalog:",
+    "express": "catalog:",
+    "jsdom": "catalog:",
+    "vite": "catalog:",
     "vite-plugin-solid": "catalog:solid",
-    "ws": "^8.18.0"
+    "ws": "catalog:"
   },
   "dependencies": {
     "@habemus-papadum/aiui-remote-bar": "workspace:^",

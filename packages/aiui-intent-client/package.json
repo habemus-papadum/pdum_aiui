@@ -64,20 +64,20 @@
     "@habemus-papadum/aiui-viz": "workspace:^",
     "@solidjs/web": "catalog:solid",
     "solid-js": "catalog:solid",
-    "ws": "^8.18.0"
+    "ws": "catalog:"
   },
   "devDependencies": {
     "@habemus-papadum/aiui-build-config": "workspace:^",
     "@habemus-papadum/aiui-claude-channel": "workspace:^",
     "@habemus-papadum/aiui-vscode": "workspace:^",
     "@types/chrome": "^0.0.287",
-    "@types/express": "^5.0.0",
-    "@types/ws": "^8.5.0",
+    "@types/express": "catalog:",
+    "@types/ws": "catalog:",
     "esbuild": "^0.25.12",
-    "express": "^5.1.0",
+    "express": "catalog:",
     "jsdom": "^25.0.1",
-    "tsx": "^4.22.5",
-    "vite": "^6.4.1",
+    "tsx": "catalog:",
+    "vite": "catalog:",
     "vite-plugin-solid": "catalog:solid"
   }
 }
