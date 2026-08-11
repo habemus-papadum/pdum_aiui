@@ -4,6 +4,13 @@
  * with this module is "give me something I can open a socket with" — nothing
  * more.
  *
+ * **The DEFAULT engine is ElevenLabs Scribe** ({@link scribeConnectUrl}) —
+ * the stack-wide decision (the aiui-stt proposal's primary engine; the intent
+ * pipeline's `DEFAULT_INTENT_CONFIG.transcriber`): word timestamps + logprobs
+ * make it the richest engine. The OpenAI `transcription`-type flavor
+ * ({@link transcriptionKeySource}) is the ALTERNATE, for apps that want one
+ * vendor or `ek_` semantics.
+ *
  * Two species, deliberately different shapes (D4 — species semantics are API
  * shape, not documentation):
  *
@@ -25,8 +32,10 @@ import { type FederatedMintOptions, federatedKeySource } from "./oracle";
 import { type BrokerOptions, brokerRoute } from "./shared";
 
 /**
- * The default realtime transcription model — the channel's proven default
- * (`aiui-claude-channel/src/realtime.ts`, a natively-streaming whisper).
+ * The ALTERNATE (OpenAI) flavor's default transcription model — the channel's
+ * proven whisper (`aiui-claude-channel/src/realtime.ts`). This is an OpenAI
+ * model id inside an OpenAI mint; it cannot name the default engine's model
+ * (Scribe's `scribe_v2_realtime` rides {@link scribeConnectUrl}'s socket URL).
  */
 export const DEFAULT_TRANSCRIPTION_MODEL = "gpt-realtime-whisper";
 

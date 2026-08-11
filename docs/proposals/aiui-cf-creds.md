@@ -8,8 +8,11 @@ constructing one, mirroring the kit's `credentialAwareConnector`, and takes the
 required `region` (a D3 baked fact the sketch missed); `scribeConnectUrl` passes the
 kit's socket options through; `brokerUrl` everywhere is the broker's ORIGIN (the
 kit's conventional `/api/credentials/*` paths are appended — one deployment fact at
-the composition root); `transcriptionKeySource` defaults its model to the channel's
-proven `gpt-realtime-whisper`; `/oracle` exposes a structural `MintClient` injection
+the composition root); `/stt` declares ElevenLabs Scribe the DEFAULT engine (the aiui-stt
+proposal's primary; the intent pipeline's own default) with the OpenAI flavor as
+the labeled alternate, whose `transcriptionKeySource` defaults its model to the
+channel's proven `gpt-realtime-whisper` (an OpenAI model id inside an OpenAI mint —
+it cannot name a Scribe model); `/oracle` exposes a structural `MintClient` injection
 seam so tests stub the SDK surface without this package ever naming `openai` types.
 Open question 1 settled: `aiui-cf-creds`, name the thing that exists.
 

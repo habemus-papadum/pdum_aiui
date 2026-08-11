@@ -6,7 +6,7 @@ built on the `cf_browser_credentials` kit. Three bridges, one per subpath:
 | Subpath | What it gives you | Credential species |
 | --- | --- | --- |
 | `/oracle` | `federatedKeySource` — browser-side `ek_` minting, no parent key | federated (mint on demand) |
-| `/stt` | `scribeConnectUrl` + `transcriptionKeySource` | single-use / federated |
+| `/stt` | `scribeConnectUrl` (ElevenLabs Scribe, **the default engine**) + `transcriptionKeySource` (OpenAI, the alternate) | single-use / federated |
 | `/mosaic` | `brokerConnector` — queries run with credentials installed | session (cached, rotated) |
 
 ## Prerequisites

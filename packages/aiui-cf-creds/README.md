@@ -46,14 +46,18 @@ non-secret, and baked at the app's composition root — this package carries no 
 
 ### `aiui-cf-creds/stt` — both STT credential flavors
 
+**The default engine is ElevenLabs Scribe** (the stack-wide decision — richest word
+data); the OpenAI transcription flavor is the alternate.
+
 ```ts
 import { scribeConnectUrl, transcriptionKeySource } from "@habemus-papadum/aiui-cf-creds/stt";
 
-// ElevenLabs scribe: SINGLE-USE. One call = one connect; there is no cache to hold wrong.
+// THE DEFAULT — ElevenLabs scribe: SINGLE-USE. One call = one connect;
+// there is no cache to hold wrong.
 const socket = new WebSocket(await scribeConnectUrl());
 
-// OpenAI transcription-type sessions: an ordinary ek_ KeySource whose minted
-// secrets carry the transcription session config.
+// The ALTERNATE — OpenAI transcription-type sessions: an ordinary ek_
+// KeySource whose minted secrets carry the transcription session config.
 const source = transcriptionKeySource({ region, identityProviderId, serviceAccountId });
 ```
 
