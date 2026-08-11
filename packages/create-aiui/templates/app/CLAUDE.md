@@ -61,7 +61,16 @@ Ground rules:
 - **Don't remove the integration.** The `aiui()` plugin in `vite.config.ts` stamps JSX with
   `data-source-loc` and injects `cell()` identities — the handles the intent client's
   screenshot/selection attribution reads. The loop stops working without it. (And never
-  hand-write a `data-source-loc`/`data-cell-loc` — locations are compiler output.)
+  hand-write a `data-source-loc`/`data-cell-loc` — locations are compiler output.) The
+  `PageBoundary` in `main.tsx` is wiring too: an uncaught effect throw halts the page's whole
+  reactive system (Solid 2.0), and the boundary turns that into a contained fault card.
+- **Harden foreign crossings with `bridgeEffect`.** An effect whose handler calls into an
+  imperative system — an engine setter, a worker `postMessage`, a socket, a canvas context —
+  uses `bridgeEffect(compute, handler, { name, scope: appScope })` (from
+  `@habemus-papadum/aiui-viz`), not bare `createEffect`: a sync throw in a plain handler halts
+  the reactive graph, and graph-level effects outlive the mount so no boundary can catch them.
+  A bridge failure is recorded (the `report` tool's `bridges` section) and the feed stays live.
+  Pure-reactive effects stay `createEffect` — there a throw is a bug you want loud.
 - **Keep the architecture's split.** `src/model/store.ts` holds the *durable roots* AND the
   **control surface**: user-movable parameters are `control({ scope: appScope, value, min, max, … })`
   with a real doc comment (the compiler injects the name from the binding and lifts the comment

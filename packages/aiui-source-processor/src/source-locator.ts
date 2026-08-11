@@ -119,9 +119,15 @@ export function optionsFactory(callee: string): FactorySpec {
   };
 }
 
-/** The default table: `cell`, plus the control-surface factories. */
+/** The default table: `cell` (and its shape-sharing sibling `bridgeEffect`),
+ * plus the control-surface factories. */
 export function defaultFactories(): FactorySpec[] {
-  return [cellFactory(), optionsFactory("control"), optionsFactory("action")];
+  return [
+    cellFactory(),
+    cellFactory("bridgeEffect"),
+    optionsFactory("control"),
+    optionsFactory("action"),
+  ];
 }
 
 export interface SourceLocatorOptions {

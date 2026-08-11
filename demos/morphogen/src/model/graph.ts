@@ -18,6 +18,7 @@
 import {
   action,
   agentToolkit,
+  bridgeEffect,
   type Cell,
   cell,
   fromWorker,
@@ -65,11 +66,22 @@ export const morphoGraph = hotCellGraph<MorphoGraph>(
   "morphogen",
   () => {
     // ---- parameters flow INTO the imperative sim island ------------------
-    createEffect(
+    // bridgeEffect, not createEffect: these handlers CROSS into the engine,
+    // and a sync throw in a plain effect handler would halt the document's
+    // whole reactive graph (Solid 2.0) — this durable root outlives any page
+    // mount, so no PageBoundary can contain it. A failed crossing is
+    // recorded (report → bridges) and the feed stays live for the next
+    // change. The airlock rule: frontend-hard-won.md, "SolidJS 2.0 (beta)
+    // semantics".
+    bridgeEffect(
       () => ({ F: paramF.get(), k: paramK.get() }),
       (p) => sim.engine.setParams({ ...p, ...DIFFUSION }),
+      { name: "sim-params", scope: morphogenScope },
     );
-    createEffect(speed.get, (s) => sim.loop.setSpeed(s));
+    bridgeEffect(speed.get, (s) => sim.loop.setSpeed(s), {
+      name: "sim-speed",
+      scope: morphogenScope,
+    });
 
     // ---- the regime catalog: a slow, cancellable, retryable download ------
     const [attempt, setAttempt] = createSignal(1);

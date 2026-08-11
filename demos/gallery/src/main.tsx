@@ -23,7 +23,7 @@
 import { render } from "@solidjs/web";
 import "@habemus-papadum/aiui-journal/styles.css";
 import { initTheme } from "@habemus-papadum/aiui-journal";
-import { setSitePageActive } from "@habemus-papadum/aiui-viz";
+import { PageBoundary, setSitePageActive } from "@habemus-papadum/aiui-viz";
 import { SiteNav } from "@habemus-papadum/aiui-viz/site";
 import { createEffect, createSignal, Show, untrack } from "solid-js";
 import { Landing } from "./site/Landing";
@@ -80,9 +80,15 @@ function Shell() {
           {/* keyed: a route change DISPOSES the old page's component tree and
               mounts the new one over the surviving durables (the HMR discipline,
               reused). The brief first-load gap renders nothing on purpose —
-              page chunks are small and local. */}
+              page chunks are small and local. PageBoundary is the containment
+              seam: one page's uncaught effect throw would otherwise halt the
+              WHOLE shared document's reactive system (Solid 2.0-beta.32). */}
           <Show when={view()} keyed>
-            {(v) => <v.page.App />}
+            {(v) => (
+              <PageBoundary name={v.page.title}>
+                <v.page.App />
+              </PageBoundary>
+            )}
           </Show>
         </Show>
       </main>

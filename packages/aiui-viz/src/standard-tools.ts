@@ -32,6 +32,7 @@
  */
 
 import type { AgentTool, AgentToolkit } from "./agent-tools";
+import { bridgeRegistry } from "./bridge-effect";
 import { cellRegistry } from "./cell";
 import { actionByName, controlByName, controlSurface, subscribeControlSurface } from "./control";
 import { dependencyEdges } from "./graph-trace";
@@ -97,6 +98,7 @@ function buildReport(
   const surface = controlSurface().filter((e) => view.ownsScope(e.scope));
   const cells = cellRegistry().filter((c) => view.ownsName(c.name));
   const edges = dependencyEdges().filter((e) => view.ownsName(e.cell));
+  const bridges = bridgeRegistry().filter((b) => view.ownsName(b.name));
 
   if (format === "brief") {
     return {
@@ -109,6 +111,19 @@ function buildReport(
       edges: Object.fromEntries(
         edges.map((e) => [e.cell, e.reads.map((r) => `${r.kind}:${r.name}`)]),
       ),
+      // Airlocks into imperative systems (bridgeEffect): a failed crossing is
+      // recorded here rather than thrown, so this line is where it surfaces.
+      // Omitted entirely when the app declares no named bridges.
+      ...(bridges.length
+        ? {
+            bridges: Object.fromEntries(
+              bridges.map((b) => [
+                b.name,
+                b.errorCount === 0 ? "ok" : `error×${b.errorCount}: ${b.lastError}`,
+              ]),
+            ),
+          }
+        : {}),
       ...custom(kit),
     };
   }
@@ -117,13 +132,14 @@ function buildReport(
     actions: surface.filter((e) => e.kind === "action"),
     cells,
     edges,
+    ...(bridges.length ? { bridges } : {}),
     ...custom(kit),
   };
 }
 
 /** The app's own reporter sections (minus ours — they'd double-report). */
 function custom(kit: AgentToolkit): Record<string, unknown> {
-  const ours = new Set(["cells"]);
+  const ours = new Set(["cells", "bridges"]);
   const out: Record<string, unknown> = {};
   for (const [name, reporter] of kit.handle().reporters) {
     if (ours.has(name)) continue;
@@ -260,6 +276,9 @@ export function registerStandardTools(
   // consumers keep working; the `report` tool above is the format-aware
   // superset.)
   kit.registerReporter("cells", () => cellRegistry().filter((c) => view.ownsName(c.name)));
+  // The airlock table: named bridgeEffect crossings and their failure history
+  // (a bridge failure is recorded, not thrown — this is where it surfaces).
+  kit.registerReporter("bridges", () => bridgeRegistry().filter((b) => view.ownsName(b.name)));
 
   // ---- actions become real tools, whatever order they were declared in -----
   // OWNED actions only: the control surface is global, the kit's view is not.

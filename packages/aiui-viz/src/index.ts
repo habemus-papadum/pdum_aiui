@@ -24,6 +24,15 @@ export {
   type AiuiToolsRegistry,
   ensureAiuiGlobal,
 } from "./aiui-global";
+// bridge-effect.ts — the hardened crossing into imperative systems (a sync
+// throw is recorded to the bridge registry, never allowed to halt the graph).
+export {
+  type BridgeEffectOptions,
+  type BridgeEntry,
+  bridgeByName,
+  bridgeEffect,
+  bridgeRegistry,
+} from "./bridge-effect";
 export type { Cell, CellCompute, CellContext, CellOptions, CellState } from "./cell";
 // cell.ts — Observable-style async dataflow cells for SolidJS 2.0.
 export { cell, cellGraph, cellRegistry, settledOnly } from "./cell";
@@ -65,6 +74,9 @@ export {
   type SolidModeEngineConfig,
   solidModeEngine,
 } from "./mode-solid";
+// page-boundary.tsx — the mount-seam error boundary (one page's fault must
+// not halt a multi-app document); pairs with bridgeEffect for durable graphs.
+export { PageBoundary } from "./page-boundary";
 export type { Scope } from "./scope";
 // scope.ts — instance identity for composable slices (qualified names).
 export { scope } from "./scope";

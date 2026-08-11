@@ -12,7 +12,7 @@
  * A demo that ships no `./card` (no `loadCard`) degrades to a preview-less
  * card — title, blurb (the sidebar `desc`), and the open affordance.
  */
-import type { DemoCard } from "@habemus-papadum/aiui-viz";
+import { type DemoCard, PageBoundary } from "@habemus-papadum/aiui-viz";
 import { createSignal, For, Show } from "solid-js";
 import { DEMOS, type DemoPageEntry } from "./registry";
 import { hrefOf } from "./router";
@@ -40,12 +40,18 @@ function DemoCardTile(props: { entry: DemoPageEntry }) {
             )
           }
         >
-          {/* Mount the demo's live preview component (self-contained). The
-              fragment matters: Show invokes the children callback untracked,
-              so a bare Preview()({}) reads the accessor outside any tracking
-              scope (Solid 2.0-beta.32 flags it STRICT_READ_UNTRACKED); the
-              fragment's expression container is a tracked insert. */}
-          {(Preview) => <>{Preview()({})}</>}
+          {/* Mount the demo's live preview component (self-contained). Show
+              invokes this children callback untracked, so a bare
+              Preview()({}) would read the accessor outside any tracking scope
+              (Solid 2.0-beta.32 flags it STRICT_READ_UNTRACKED) — but
+              PageBoundary's children prop is a lazy getter evaluated inside
+              the boundary's own tracked scope, which both fixes the read AND
+              contains a faulty preview to its tile: the landing mounts EVERY
+              demo's preview, and one demo's bug must not halt the shared
+              document (same seam as the shell's page mount). */}
+          {(Preview) => (
+            <PageBoundary name={`${props.entry.slug} preview`}>{Preview()({})}</PageBoundary>
+          )}
         </Show>
       </div>
       <div class="demo-card-body">

@@ -32,9 +32,20 @@
  * ──────────────────────────────────────────────────────────────────────────────
  */
 
+import { PageBoundary } from "@habemus-papadum/aiui-viz";
 import { render } from "@solidjs/web";
 import { page } from "./page";
 
 document.title = page.title;
 page.activate?.();
-render(() => <page.App />, document.getElementById("root") as HTMLElement);
+// PageBoundary: an uncaught effect throw would otherwise halt the page's
+// whole reactive system (Solid 2.0 semantics) — contained, it renders a
+// fault card with a reset instead. Same seam a multi-app shell uses.
+render(
+  () => (
+    <PageBoundary name={page.title}>
+      <page.App />
+    </PageBoundary>
+  ),
+  document.getElementById("root") as HTMLElement,
+);

@@ -60,6 +60,27 @@ Versions these were established against: `solid-js@2.0.0-beta.15`, `@solidjs/web
   button enabled across the whole gesture, or the pointerup lands on a disabled element and the
   hold wedges. The bar projection encodes the rule: a hold cap stays enabled while *either* half
   of its gesture applies (`packages/aiui-viz/src/modal/bar.ts`).
+- **An uncaught effect-phase throw permanently halts the document's reactive system** (since
+  2.0.0-beta.32; recoverable only via `resetErrorHalt`). Symptom: a page that looks alive but
+  stops responding entirely — one console error, no crash. Only SYNCHRONOUS throws in the
+  handler do this; an async rejection is an unhandled rejection, not a halt (still `.catch()`
+  it). The rule has two complementary halves, one per owner kind:
+  - **Component trees: an error boundary at the mount seam.** aiui-viz's `PageBoundary` wraps
+    each mounted `SitePage` (the gallery shell, the scaffold's `main.tsx`) and each landing-card
+    preview, so in a multi-app document one page's fault renders a contained fault card — with a
+    reset, and self-recovery when the faulting source changes — while every sibling keeps
+    flowing. Don't blanket-wrap individual effects: for pure-reactive effects a throw is a bug
+    you want loud, and in dev the fault card names it.
+  - **Durable graphs: `bridgeEffect` at every foreign crossing.** Effects in `hotCellGraph`
+    roots outlive any mount, so no boundary can contain them — and their handlers are exactly
+    where real throws come from (engine setters, worker `postMessage`, `chrome.*` after
+    "extension context invalidated", socket sends, lost GL contexts). `bridgeEffect(compute,
+    handler, { name, scope })` hardens the crossing: a failure is recorded to the bridge
+    registry (surfaced in the `report` tool's `bridges` section) and the console, and the feed
+    stays live for the next change. The airlock rule: a foreign system's failure is a fact to
+    surface, never permission to halt the graph. Living reference: morphogen's sim-params feeds
+    (`demos/morphogen/src/model/graph.ts`); containment proof:
+    `packages/aiui-viz/src/page-boundary.test.tsx`.
 - **Errored memos read as `undefined` and drop their previous value**; without an error boundary
   the failure is near-silent (`isPending` stays true, error dumped globally). This is why cells
   cache their own last value and wrap state derivation in `createErrorBoundary` — and why
