@@ -33,8 +33,8 @@ transcript) at the center. Three layers:
    own dashboard served at its root (`/` redirects there). `aiui dashboard` opens that console in the
    session browser. The channel serves **no HTML of its own** — JSON/data routes only
    (`/debug/api/*`, `/health`); every page belongs to a sidecar frontend. (The page-serving
-   sidecars: the console at `/` + `/__aiui`; the paint sidecar's self-contained iPad client at
-   `/paint/`; the intent client's panel under `/intent/`; the pencil client at `/pencil/`.)
+   sidecars: the console at `/` + `/__aiui`; the intent client's panel under `/intent/`; the
+   pencil client at `/pencil/`; the remote bar at `/bar/`.)
 3. **Frontend for agents** — principles/utilities/Claude skills for agent-written scientific UI:
    SolidJS 2.0 (beta), Observable-style async dataflow in mainstream syntax, code debuggable by
    the agent's future self (source locators, self-installed debug hooks, HMR-mindful,
@@ -49,13 +49,13 @@ exploratory notes and finished proposals are retired outright — git history is
 **Security posture (deliberate, documented — do not "fix" without being asked):** `aiui claude`
 passes `--dangerously-skip-permissions` only when it is present in the general `claude.args` list
 (argv forwarded to `claude` on every launch); it is **opt-in and off by default** — add it with
-`aiui config set-dsp`, remove it with `aiui config unset claude.args` (see
+`aiui config yolo` (the one explicit opt-in, which ALSO sets `channel.bind: "host"` after a
+stated-consequences confirm), remove it with `aiui config unset claude.args` (see
 `packages/aiui/src/commands/config.ts`; the retired `claude.skipPermissions` boolean is tolerated
-and dropped for old configs). `aiui claude` asks on the first interactive run where the
-channel's web server binds and persists that (`channel.bind`: `loopback` keeps the
-unauthenticated surface this-machine-only, non-interactive default; `host` binds `0.0.0.0` so a
-LAN iPad can reach the always-on paint sidecar — and everything else on the port; the trusted-LAN
-posture), loads
+and dropped for old configs). The channel's web bind is `channel.bind`: `loopback` keeps the
+unauthenticated surface this-machine-only (the default — deliberately never asked at first run);
+`host` binds `0.0.0.0` so a LAN iPad can reach the pencil sidecar — and everything else on the
+port; the trusted-LAN posture. `aiui claude` loads
 the custom channel via `--dangerously-load-development-channels`, resolves the vendor API keys
 (OpenAI/Gemini/ElevenLabs) at channel boot — env-first in a source checkout (`.env`/direnv),
 **OS-vault-only when installed** (macOS keychain / Secret Service; `aiui keys` manages the
@@ -63,14 +63,14 @@ secrets plus the per-provider `keys.*` decisions in the user config; `aiui-util`
 vault/vendor-keys modules, promoted from `exploration/os-vault`), so installed users' keys never
 enter the agent's environment — and by default attaches the Chrome DevTools
 MCP — by default **attached** to a shared, user-visible session browser (launched
-eagerly with an unauthenticated loopback debug port, project-local profile under
-`.aiui-cache/chrome/`; discovery via the profile's `DevToolsActivePort`; see
-`packages/aiui/src/util/browser.ts`, `chrome.ts`, and `packages/aiui/docs/chrome.md` +
-`remote.md`). Off
-under CI, `--aiui-no-chrome`, or `chrome.enabled: false`; `chrome.mode: "launch"` reverts to a
-lazy MCP-private browser. Interactive launches prefer a managed **Chrome for Testing** install
-(`~/.cache/aiui/chrome/`, offered/updated via prompts — `chrome.forTesting` in config;
-`packages/aiui/src/util/cft.ts`). The docs
+eagerly with an unauthenticated loopback debug port; browser identity belongs to **profiles**
+under `~/.cache/aiui/userdata/<name>/`, not config; discovery via the profile's
+`DevToolsActivePort`; see `packages/aiui/src/util/session-browser.ts`, `chrome.ts`, and
+`packages/aiui/docs/chrome.md` + `remote.md`). Off
+under CI or `--aiui-no-session-browser` (the old `chrome.enabled`/`chrome.mode` keys are
+retired). Interactive launches prefer a managed browser install — **Chromium by default**
+(`~/.cache/aiui/chromium/`; Chrome for Testing the alternate flavor) — offered/updated via
+prompts (`chrome.manage` in config; `packages/aiui/src/util/managed-browser.ts`). The docs
 (`docs/guide/warning.md`, README) tell readers this repo is safer to read than to run — keep that
 warning intact and accurate as behavior evolves.
 

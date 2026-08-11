@@ -12,11 +12,13 @@ Claude Code's own permission prompts in charge — nothing runs without asking. 
 `--dangerously-skip-permissions`, add it yourself:
 
 ```sh
-aiui config set-dsp        # appends --dangerously-skip-permissions to claude.args
+aiui config yolo           # appends --dangerously-skip-permissions to claude.args
+                           # (and sets channel.bind: "host" — the trusted-LAN posture)
 ```
 
 That flag lives in the general [`claude.args`](./config) list (the argv passed to `claude` on
-every launch); `set-dsp` is just the ergonomic way to add it. With it on, every action the agent
+every launch); `yolo` is just the ergonomic way to add it, after a stated-consequences
+confirmation. With it on, every action the agent
 takes (shell commands, file writes, network, the browser) runs without asking you first. That's
 the author's personal preference, not a recommendation — aiui works perfectly well without it.
 
@@ -57,7 +59,7 @@ You are placing a lot of trust in the author. Don't do that casually.
 
 `aiui claude` also attaches the
 [Chrome DevTools MCP](https://github.com/ChromeDevTools/chrome-devtools-mcp) unless you opt out
-(`--aiui-no-chrome`, or `chrome.enabled: false` in [config](./config); it's off automatically
+(`--aiui-no-session-browser`; it's off automatically
 under CI). Combined with skipped permissions, that means the agent can drive a real Chrome —
 navigate anywhere, click, fill forms, run JavaScript in pages — without asking. Two things to
 understand about how it's wired:
@@ -92,7 +94,7 @@ credentials you can revoke.
 
 ## Roadmap for softening this
 
-- [x] Make skipping permissions explicit and off by default — opt in with `aiui config set-dsp`,
+- [x] Make skipping permissions explicit and off by default — opt in with `aiui config yolo`,
       which adds `--dangerously-skip-permissions` to `claude.args` in [config.json](./config).
       Choosing a specific `--permission-mode` is still open.
 - [ ] Document the channel's exact attack surface (what listens where, who can connect).

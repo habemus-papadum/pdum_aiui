@@ -7,7 +7,7 @@ them.
 
 ::: danger First
 Read [⚠️ Read before running](./warning). `aiui claude` loads a custom channel into your session
-and, if you opt in (`aiui config set-dsp`), launches Claude Code with permissions skipped. If
+and, if you opt in (`aiui config yolo`), launches Claude Code with permissions skipped. If
 you're still here, you've decided to trust this code.
 :::
 
@@ -95,9 +95,8 @@ MCP attached. [The Agent's Browser](/packages/aiui/chrome) covers modes, profile
 `aiui browser`/`aiui chrome` commands; working remotely (session on another machine, browser on
 yours) is [Remote Development](/packages/aiui/remote).
 
-**Terminal two — `aiui vite dev`.** A thin wrapper: launches Vite, then opens the app in the
-session browser (not your default browser). Plain `vite dev` works too; reopen later with
-`aiui open http://localhost:5173`.
+**Terminal two — `vite dev`** (or the app's `pnpm dev`). Open the app in the session browser
+(not your default browser) with `aiui open http://localhost:5173`.
 
 **Compose.** The panel rides the session browser ([or the `/intent/` page](./intent-panel)); it
 arms as soon as the channel connects. Hold **Space** and talk, take screenshots, draw, select —

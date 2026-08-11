@@ -23,7 +23,7 @@ the level of abstraction you prompt it at. Three layers:
 > [!CAUTION]
 > **This codebase is dangerous to run.** It injects externally-supplied prompts into your live
 > Claude Code session through a custom channel — and can launch that session with
-> `--dangerously-skip-permissions` (opt-in via `aiui config set-dsp`, off by default) — which
+> `--dangerously-skip-permissions` (opt-in via `aiui config yolo`, off by default) — which
 > means trusting this code completely. It is **safer to read than to run**: treat it as reference
 > and parts for building your own system. Details:
 > [Read before running](https://habemus-papadum.github.io/pdum_aiui/guide/warning).
