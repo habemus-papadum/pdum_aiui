@@ -12,7 +12,7 @@ wiring. That is deliberate: explicit code is code an agent (and its future self,
 test, and debug. Everything here remains perfectly writable by hand, and this guide teaches it that
 way.
 
-The other frontend pages are for framework designers: [Concepts](./frontend-for-agents),
+The other frontend pages are for framework designers: [Concepts](/guide/frontend-for-agents),
 [Design choices](./frontend-design-choices), and the [findings ledger](./frontend-hard-won). You
 need none of them to use this one. When you're past learning the pieces and are building a whole
 app, the [Playbook](./frontend-playbook) sequences the work — pure functions, then cells, then
@@ -562,7 +562,7 @@ they're written down. The full ledger, with the debugging stories, is
   state-machine dispatch) calls `flush()` from `solid-js`, which commits synchronously
   (`flush(fn)` runs effect handlers too). In tests, `await tick()` after every `set` also works.
   And when the state in question is modal machine state, put it in the
-  [mode engine](./frontend-for-agents#the-mode-engine-settings-operations-and-one-writer): its
+  [mode engine](/guide/frontend-for-agents#the-mode-engine-settings-operations-and-one-writer): its
   dispatch commits under `flush` and machine state is a plain frozen object — never stale to
   read, so this trap has no surface there.
 - **Don't `set` a signal from inside a cell's compute** (before its first `await`). The dev build
@@ -688,7 +688,7 @@ client-side routing. The four reference notebooks (`demos/morphogen` · `aztec` 
   pipeline), `demos/seismos` (DuckDB crossfilter), `demos/circle` (pencil input), `demos/gears`
   (pure SVG geometry) — real demo packages built from nothing but these steps, composed into one
   site (landing + sidebar) by `demos/gallery`.
-- **Deeper:** [Concepts](./frontend-for-agents) · [Design choices](./frontend-design-choices) ·
+- **Deeper:** [Concepts](/guide/frontend-for-agents) · [Design choices](./frontend-design-choices) ·
   [Hard-won details](./frontend-hard-won) ·
   [Attribution: gesture → source](./attribution) (how "make *this* wider" finds your code) · the
   [`aiui-viz` API reference](/packages/aiui-viz/).

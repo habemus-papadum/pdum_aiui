@@ -175,7 +175,7 @@ scattered `addEventListener("keydown", …)` calls, with bindings dispatching th
 actions and validated controls the widgets and the agent use; and when the modes themselves
 multiply, the **mode engine** composes them — regions, commands, and excludes as one spec,
 enablement derived via `canDispatch`, see
-[Concepts](./frontend-for-agents#the-mode-engine-settings-operations-and-one-writer)); and, when one page isn't enough, the
+[Concepts](/guide/frontend-for-agents#the-mode-engine-settings-operations-and-one-writer)); and, when one page isn't enough, the
 progression across pages — an introductory notebook flowing to a deeper one, as **routed page
 modules under one document** (a thin SPA shell + client-side routing), never separate `.html`
 entries: one document is what lets an open intent turn survive the switch, and the resource story

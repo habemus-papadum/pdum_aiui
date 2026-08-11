@@ -6,19 +6,19 @@ description: How to write reactive scientific-visualization frontends in aiui pr
 # aiui frontend design
 
 **Sources of truth** (read when depth is needed; if this digest ever disagrees, trust them and
-say so): [frontend-playbook.md](../../../../../../../docs/guide/frontend-playbook.md)
+say so): [frontend-playbook.md](../../../../../../../packages/aiui-viz/docs/frontend-playbook.md)
 (the BUILD ORDER: pure functions → cells → components → application, a definition of done per
 layer, vertical slices — follow it when creating or extending an app) →
-[frontend-user-guide.md](../../../../../../../docs/guide/frontend-user-guide.md)
+[frontend-user-guide.md](../../../../../../../packages/aiui-viz/docs/frontend-user-guide.md)
 (the progressive how-to — cells, deps tracking and its out-of-sync bug, testing, streaming,
 cancellation, workers, layout) →
 [frontend-for-agents.md](../../../../../../../docs/guide/frontend-for-agents.md)
 (concepts) →
-[frontend-design-choices.md](../../../../../../../docs/guide/frontend-design-choices.md)
+[frontend-design-choices.md](../../../../../../../packages/aiui-viz/docs/frontend-design-choices.md)
 (design, with code refs) →
-[frontend-hard-won.md](../../../../../../../docs/guide/frontend-hard-won.md) (gotcha ledger —
+[frontend-hard-won.md](../../../../../../../packages/aiui-viz/docs/frontend-hard-won.md) (gotcha ledger —
 includes the Mosaic/DuckDB-WASM section) →
-[frontend-style-guide.md](../../../../../../../docs/guide/frontend-style-guide.md) (authoring
+[frontend-style-guide.md](../../../../../../../packages/aiui-viz/docs/frontend-style-guide.md) (authoring
 conventions: page structure, TOC, plotting, math, porcelain/plumbing). (In the pdum_aiui repo
 these links are the live guide docs; in a packaged install they point at copies bundled with
 this skill. Same content published at https://habemus-papadum.github.io/pdum_aiui/.) And
@@ -50,7 +50,7 @@ stack's field ledger).
 ## The playbook: the default order of work (and the default shape of a plan)
 
 When building **from scratch — or anything bigger than a one-line tweak — follow the
-[playbook](../../../../../../../docs/guide/frontend-playbook.md) unless you can state a concrete
+[playbook](../../../../../../../packages/aiui-viz/docs/frontend-playbook.md) unless you can state a concrete
 reason not to.** Four layers, each with its own verification, rigor front-loaded:
 
 1. **Pure functions** — domain math, realm-free (no solid-js, no window, no import.meta.env);
@@ -152,7 +152,7 @@ compiler output (the source-locator plugin, `aiuiDevOverlay({ locator })`); a ty
 `file:line:col` lies as soon as the file is edited and the resolvers cannot detect it. An agent
 did this once instead of enabling the plugin, and the confident-but-wrong resolutions it caused
 must not be repeated: if stamps are missing, fix `vite.config.ts`, never the markup (full
-contract: [attribution.md](../../../../../../../docs/guide/attribution.md)). Verify your own work through this
+contract: [attribution.md](../../../../../../../packages/aiui-viz/docs/attribution.md)). Verify your own work through this
 surface: `.tools`, `.call(name, args)`, `.report()`, `.call("locate", { selector })`.
 
 ## Modal / stateful UI = the mode engine

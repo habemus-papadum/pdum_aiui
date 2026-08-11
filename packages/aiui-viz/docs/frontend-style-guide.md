@@ -1,6 +1,6 @@
 # Frontend: style guide
 
-The fourth frontend document — where [concepts](./frontend-for-agents) says *what the pieces
+The fourth frontend document — where [concepts](/guide/frontend-for-agents) says *what the pieces
 are*, [design choices](./frontend-design-choices) says *how they're built and why*, and the
 [ledger](./frontend-hard-won) records *what it cost to learn*, this page says **how a notebook
 page should look and read**: the conventions an author (human or agent) follows so every page in

@@ -67,7 +67,7 @@ session. Install it **on the remote box** (run the commands above from the remot
 integrated terminal; `vscode:link` links into `~/.vscode-server/extensions/` there). Selection
 chips deep-link back through `vscode://vscode-remote/…` instead of `vscode://file/…`, so
 clicking one in your local browser reopens the file in the remote workspace. The rest of the
-remote story is [Remote Development](./remote).
+remote story is [Remote Development](/guide/remote).
 
 ## From the page back to the editor: VS Code jump mode
 
@@ -82,7 +82,7 @@ commit, **Esc** dismisses; committing opens VS Code at that `file:line`.
 
 The `vscode://file/…` URL is **computed on the fly** from the row's stamp and the dev server's
 source root — the same annotations screenshots and selections attribute with (see
-[Frontend for Agents](./frontend-for-agents)). Misses are always **named** — an unstamped click
+[Frontend for Agents](/guide/frontend-for-agents)). Misses are always **named** — an unstamped click
 opens a picker that says "no source location on or around this element"; a cell with no
 recorded definition shows grayed — a jump never silently does nothing. The full interaction is
 named — a jump never silently does nothing.
@@ -110,6 +110,6 @@ VS Code ──POST /session/publish {clientId, topic:"contribution", payload}─
 ```
 
 The extension holds no websocket — it goes through the channel web backend's session HTTP
-surface (a peer of the `/session` bus — see [the channel](./channel)). The payload stays structured
+surface (a peer of the `/session` bus — see [the channel](/packages/aiui-claude-channel/architecture)). The payload stays structured
 (verbatim text + locator); rendering is deferred to `composeIntent` at lowering time, like
 every other contribution.

@@ -1,7 +1,7 @@
 # Frontend: hard-won details
 
 The level-3 ledger: technical findings underneath
-[Frontend for agents](./frontend-for-agents) and
+[Frontend for agents](/guide/frontend-for-agents) and
 [Design choices](./frontend-design-choices), each paid for with a real debugging loop while
 building the reference notebooks. Some are transient (pinned to beta versions — noted); all are
 worth keeping so nobody pays twice. Format: **symptom → cause → rule.**

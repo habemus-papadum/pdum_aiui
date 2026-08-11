@@ -1,7 +1,7 @@
 # Frontend design choices
 
 The level-2 document: what we actually built, how it works, and why — written for a reader who
-designs frameworks for a living. [Frontend for agents](./frontend-for-agents) is the conceptual
+designs frameworks for a living. [Frontend for agents](/guide/frontend-for-agents) is the conceptual
 overview; [Hard-won details](./frontend-hard-won) is the ledger of low-level findings this page
 occasionally leans on; the [Style guide](./frontend-style-guide) carries the authoring
 conventions built on these mechanisms. Code lives in `packages/aiui-viz` (the library) and `demos/gallery`
@@ -251,7 +251,7 @@ registry closes the loop for anything it misses.
 
 ## 8 · Pages, entries, and resource lifecycles
 
-Documented in [Frontend for agents](./frontend-for-agents#many-notebooks-one-lab) at the concept
+Documented in [Frontend for agents](/guide/frontend-for-agents#many-notebooks-one-lab) at the concept
 level; the design commitments: **Level 1** (separate Vite entries, plain-link nav, full reload as
 the resource policy) and **Level 2** (one entry, one document, lazy page modules behind
 client-side routing, per-island suspend policies). The gallery ran Level 1 for its first life and

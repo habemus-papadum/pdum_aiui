@@ -35,8 +35,8 @@ import { INSTRUCTIONS } from "./src/server";
 
 /**
  * `--docs` mode: emit the settled reference (no Comments blocks, a
- * documentation intro) to docs/guide/prompt-rendering.md instead of the
- * audit.local working pair.
+ * documentation intro) to this package's docs/prompt-rendering.md (auto-listed
+ * on the docs site by docs-gen) instead of the audit.local working pair.
  */
 const DOCS_MODE = process.argv.includes("--docs");
 
@@ -719,8 +719,8 @@ quote(
 
 const content = out.join("\n");
 if (DOCS_MODE) {
-  const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-  const target = join(repoRoot, "docs", "guide", "prompt-rendering.md");
+  const pkgDir = dirname(fileURLToPath(import.meta.url));
+  const target = join(pkgDir, "docs", "prompt-rendering.md");
   writeFileSync(target, content);
   console.log(`wrote ${target} (${caseNo} cases, docs mode)`);
 } else if (process.argv[2] !== undefined) {
