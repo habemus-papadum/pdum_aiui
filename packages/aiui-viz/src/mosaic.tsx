@@ -47,18 +47,22 @@ export function MosaicView(props: {
   class?: string;
 }) {
   let host!: HTMLDivElement;
+  // The coordinator rides through the compute: a props read is reactive, and
+  // reading it in the untracked handler (or the cleanup) both warns
+  // STRICT_READ_UNTRACKED and would go stale if the prop ever changed —
+  // consume what the source computed (frontend-hard-won.md).
   createEffect(
-    () => props.spec(),
-    (directives) => {
+    () => ({ directives: props.spec(), coordinator: props.coordinator }),
+    ({ directives, coordinator }) => {
       const p = new Plot(document.createElement("div"));
       for (const d of directives.flat()) d(p);
-      for (const mark of p.marks) props.coordinator.connect(mark);
+      for (const mark of p.marks) coordinator.connect(mark);
       // vgplot's own plot() calls update() argless for the initial full render;
       // the generated d.ts types the mark param as required, so pass undefined.
       p.update(undefined);
       host.replaceChildren(p.element);
       return () => {
-        for (const mark of p.marks) props.coordinator.disconnect(mark);
+        for (const mark of p.marks) coordinator.disconnect(mark);
         p.element.remove();
       };
     },
