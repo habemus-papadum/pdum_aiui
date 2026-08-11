@@ -797,20 +797,20 @@ importers:
         specifier: workspace:^
         version: link:../aiui-oracle
       '@habemus-papadum/cf-browser-credentials':
-        specifier: ^0.2.1
-        version: 0.2.1
+        specifier: ^0.2.2
+        version: 0.2.2
       '@habemus-papadum/cf-creds-aws':
-        specifier: ^0.2.1
-        version: 0.2.1
+        specifier: ^0.2.2
+        version: 0.2.2
       '@habemus-papadum/cf-creds-elevenlabs':
-        specifier: ^0.2.1
-        version: 0.2.1
+        specifier: ^0.2.2
+        version: 0.2.2
       '@habemus-papadum/cf-creds-mosaic':
-        specifier: ^0.2.1
-        version: 0.2.1(@uwdata/mosaic-core@0.28.1)
+        specifier: ^0.2.2
+        version: 0.2.2(@uwdata/mosaic-core@0.28.1)
       '@habemus-papadum/cf-creds-openai':
-        specifier: ^0.2.1
-        version: 0.2.1(@aws-sdk/client-sts@3.1106.0)(openai@7.4.0(@aws-sdk/credential-provider-node@3.972.78)(@smithy/signature-v4@5.6.12)(ws@8.21.0)(zod@4.4.3))
+        specifier: ^0.2.2
+        version: 0.2.2(@aws-sdk/client-sts@3.1106.0)(openai@7.4.0(@aws-sdk/credential-provider-node@3.972.78)(@smithy/signature-v4@5.6.12)(ws@8.21.0)(zod@4.4.3))
     devDependencies:
       '@aws-sdk/client-sts':
         specifier: ^3.1104.0
@@ -2430,25 +2430,25 @@ packages:
     resolution: {integrity: sha512-WoGgxnZaAhm6QWv647COf5+5/YHYx6F77sJ+cYNH0x/sx/1OtIwr2/RM/E1spmvmhpw9GUES60eELtX/3ucsrQ==}
     engines: {node: '>=20'}
 
-  '@habemus-papadum/cf-browser-credentials@0.2.1':
-    resolution: {integrity: sha512-6DT6xX/hdWTCm7V7W+p6SaYT8f4qTsNvJaYDtcZbnnTiEFB7nbfmkZsQhfZg9g1wmNXWgWTzmtKhe819zKHL9w==}
+  '@habemus-papadum/cf-browser-credentials@0.2.2':
+    resolution: {integrity: sha512-CfTeGT60S0jMg96aWhz9YXOTvL7zhIy7mcs3XH54TpehyiUnpX8JLe0+6eWIC6jql8TzxuGW8cdBg+Se2oNgYw==}
 
-  '@habemus-papadum/cf-creds-aws@0.2.1':
-    resolution: {integrity: sha512-RmIjkWB1dKH6Qw0bcCdHkOGfwJwmy73w38KOExAuXk3fk6D9bz4P4Hb0mB0xZ2EXrhP4FOp60Q82mit7V0j+iA==}
+  '@habemus-papadum/cf-creds-aws@0.2.2':
+    resolution: {integrity: sha512-3iE1wYs0cB5kgOXhjHSQzZy6pVFTbJ/0HpVdoWEfE69HXyOh4AET3f69zvKGnvqsf34PuIo12Uw/bS52+WPqQA==}
 
-  '@habemus-papadum/cf-creds-elevenlabs@0.2.1':
-    resolution: {integrity: sha512-CfJRrin9wquyp2OnLe72fBj9aIHqT319qQtFCPsRMOC47OBaVKD4n8b8v+ls1/kVvRYOX6dHWG81R2bB1RTCjg==}
+  '@habemus-papadum/cf-creds-elevenlabs@0.2.2':
+    resolution: {integrity: sha512-rOKvyxLNvOHssC1xA/rn0wxcMkVP9/A7edmSJe7+yLnaRNY2Rz6k651Qi+91RGNHutKnijGfimtGoFvkfjNN8Q==}
 
-  '@habemus-papadum/cf-creds-mosaic@0.2.1':
-    resolution: {integrity: sha512-ZAop/rebhqxSklEzR55lsJCN0RcRvQHRiZsq6pSCjJeMHUmCpvxf7nMVISr7F04RmtPp/u8DMyDgeqGY5ChvCA==}
+  '@habemus-papadum/cf-creds-mosaic@0.2.2':
+    resolution: {integrity: sha512-vRHwAwt70lzJnBm1uoo9AXcW59dF3FP5r4379gohSlNTTIBEHus473WmBi4XGo15tv/pDb5xDbWjI3pMkXkyyQ==}
     peerDependencies:
       '@uwdata/mosaic-core': '>=0.28 <0.31'
     peerDependenciesMeta:
       '@uwdata/mosaic-core':
         optional: true
 
-  '@habemus-papadum/cf-creds-openai@0.2.1':
-    resolution: {integrity: sha512-joSO+9PBDIRKPXPYxSHV2v7OhulRvOzoANs8lTpgAsndBoABWBK9Mwew4vQStUI7hRsWItj+steErWttHue9MA==}
+  '@habemus-papadum/cf-creds-openai@0.2.2':
+    resolution: {integrity: sha512-wPXGXfcpO54yZNhNxOITpBcgtjtXVicZq8kz8Mlaph3zy8p1jux1ndVauA+ZRdug8Z/rqbiwbqtyg035cwDsPg==}
     peerDependencies:
       '@aws-sdk/client-sts': ^3.1104.0
       openai: ^7.4.0
@@ -7563,29 +7563,29 @@ snapshots:
       '@habemus-papadum/aiui-registry-host-linux-arm64': 0.1.0
       '@habemus-papadum/aiui-registry-host-linux-x64': 0.1.0
 
-  '@habemus-papadum/cf-browser-credentials@0.2.1': {}
+  '@habemus-papadum/cf-browser-credentials@0.2.2': {}
 
-  '@habemus-papadum/cf-creds-aws@0.2.1':
+  '@habemus-papadum/cf-creds-aws@0.2.2':
     dependencies:
-      '@habemus-papadum/cf-browser-credentials': 0.2.1
+      '@habemus-papadum/cf-browser-credentials': 0.2.2
       aws4fetch: 1.0.20
 
-  '@habemus-papadum/cf-creds-elevenlabs@0.2.1':
+  '@habemus-papadum/cf-creds-elevenlabs@0.2.2':
     dependencies:
-      '@habemus-papadum/cf-browser-credentials': 0.2.1
+      '@habemus-papadum/cf-browser-credentials': 0.2.2
 
-  '@habemus-papadum/cf-creds-mosaic@0.2.1(@uwdata/mosaic-core@0.28.1)':
+  '@habemus-papadum/cf-creds-mosaic@0.2.2(@uwdata/mosaic-core@0.28.1)':
     dependencies:
-      '@habemus-papadum/cf-browser-credentials': 0.2.1
-      '@habemus-papadum/cf-creds-aws': 0.2.1
+      '@habemus-papadum/cf-browser-credentials': 0.2.2
+      '@habemus-papadum/cf-creds-aws': 0.2.2
     optionalDependencies:
       '@uwdata/mosaic-core': 0.28.1
 
-  '@habemus-papadum/cf-creds-openai@0.2.1(@aws-sdk/client-sts@3.1106.0)(openai@7.4.0(@aws-sdk/credential-provider-node@3.972.78)(@smithy/signature-v4@5.6.12)(ws@8.21.0)(zod@4.4.3))':
+  '@habemus-papadum/cf-creds-openai@0.2.2(@aws-sdk/client-sts@3.1106.0)(openai@7.4.0(@aws-sdk/credential-provider-node@3.972.78)(@smithy/signature-v4@5.6.12)(ws@8.21.0)(zod@4.4.3))':
     dependencies:
       '@aws-sdk/client-sts': 3.1106.0
-      '@habemus-papadum/cf-browser-credentials': 0.2.1
-      '@habemus-papadum/cf-creds-aws': 0.2.1
+      '@habemus-papadum/cf-browser-credentials': 0.2.2
+      '@habemus-papadum/cf-creds-aws': 0.2.2
       openai: 7.4.0(@aws-sdk/credential-provider-node@3.972.78)(@smithy/signature-v4@5.6.12)(ws@8.21.0)(zod@4.4.3)
 
   '@hono/node-server@1.19.14(hono@4.12.27)':

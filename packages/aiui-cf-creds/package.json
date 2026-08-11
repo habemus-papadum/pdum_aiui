@@ -58,11 +58,11 @@
   },
   "dependencies": {
     "@habemus-papadum/aiui-oracle": "workspace:^",
-    "@habemus-papadum/cf-browser-credentials": "^0.2.1",
-    "@habemus-papadum/cf-creds-aws": "^0.2.1",
-    "@habemus-papadum/cf-creds-elevenlabs": "^0.2.1",
-    "@habemus-papadum/cf-creds-mosaic": "^0.2.1",
-    "@habemus-papadum/cf-creds-openai": "^0.2.1"
+    "@habemus-papadum/cf-browser-credentials": "^0.2.2",
+    "@habemus-papadum/cf-creds-aws": "^0.2.2",
+    "@habemus-papadum/cf-creds-elevenlabs": "^0.2.2",
+    "@habemus-papadum/cf-creds-mosaic": "^0.2.2",
+    "@habemus-papadum/cf-creds-openai": "^0.2.2"
   },
   "peerDependencies": {
     "@uwdata/mosaic-core": ">=0.28"

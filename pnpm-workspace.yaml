@@ -110,11 +110,11 @@ allowBuilds:
 minimumReleaseAgeExclude:
   # The cf_browser_credentials kit (aiui-cf-creds' substrate) is our own —
   # freshly published versions are consumed deliberately, pinned per version.
-  - '@habemus-papadum/cf-browser-credentials@0.2.1'
-  - '@habemus-papadum/cf-creds-aws@0.2.1'
-  - '@habemus-papadum/cf-creds-elevenlabs@0.2.1'
-  - '@habemus-papadum/cf-creds-mosaic@0.2.1'
-  - '@habemus-papadum/cf-creds-openai@0.2.1'
+  - '@habemus-papadum/cf-browser-credentials@0.2.2'
+  - '@habemus-papadum/cf-creds-aws@0.2.2'
+  - '@habemus-papadum/cf-creds-elevenlabs@0.2.2'
+  - '@habemus-papadum/cf-creds-mosaic@0.2.2'
+  - '@habemus-papadum/cf-creds-openai@0.2.2'
   - '@habemus-papadum/aiui-registry-host-darwin-arm64@0.1.0'
   - '@habemus-papadum/aiui-registry-host-darwin-x64@0.1.0'
   - '@habemus-papadum/aiui-registry-host-linux-arm64@0.1.0'
