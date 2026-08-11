@@ -313,16 +313,20 @@ one accepted duplication: `cacheDir` path resolution exists in both `aiui-util` 
 
 ## Publication convention
 
-> **Publishing uses npm [trusted publishing](https://docs.npmjs.com/trusted-publishers/) (OIDC) —
-> no long-lived `NPM_TOKEN`.** The release workflow authenticates to npm via its GitHub Actions
-> identity (`habemus-papadum/pdum_aiui` · `release.yml`), which each package is configured to trust.
-> There is no publish token stored anywhere. See [Trusted publishing](#trusted-publishing-two-steps)
-> below for the one-time-per-package setup.
+> **Publishing authenticates with a stored npm token.** The release workflow reads the
+> `NPM_TOKEN` repo secret (an npm token from the owner's account; set or rotate it with
+> `gh secret set NPM_TOKEN --repo habemus-papadum/pdum_aiui`) and runs one recursive
+> `pnpm -r publish`. A NEW package needs **no provisioning** — its first release simply
+> publishes it. This replaced npm trusted publishing (OIDC) on 2026-08-11: OIDC bound auth to a
+> per-package trusted-publisher registration, a manual step for every new package (and
+> website-only on a passkey npm account). `--provenance` attestation still rides the workflow's
+> `id-token: write` permission — that half is independent of auth. See
+> [Name reservation](#name-reservation-optional) below for the one remaining (optional) act.
 >
 > **Assumption: this project has a paid npm account/org.** Publishing scoped packages
 > (`@habemus-papadum/*`) as private (`--private`, `restricted` access) requires it. On the free tier,
-> scoped packages can only be published as `--public`. (This is about visibility, independent of the
-> token-vs-OIDC auth question above.)
+> scoped packages can only be published as `--public`. (This is about visibility, independent of
+> the auth question above.)
 
 ### Every package declares a publication level at creation time
 
@@ -350,21 +354,18 @@ section, or every `--private` package's publish will error. (Were this project e
 the only non-public option would be `--no-publish`: hold a package back and flip it to `--public`
 when ready.)
 
-### Trusted publishing (two steps)
+### Name reservation (optional)
 
-npm requires a package to **exist** before you can attach a trusted publisher to it, so standing up
-OIDC publishing for a name is two deliberately separate acts — both run **locally** with your own
-npm login (they may prompt for 2FA), never from CI:
+With token auth, nothing must exist before a release — the first publish creates the package. The
+one remaining provisioning act, now purely optional, is claiming a name **early** (before the next
+release ships it for real): `pnpm npm:reserve <slug>` publishes a tiny placeholder
+(`@habemus-papadum/<slug>@0.0.0-reserve.0`, under the `reserve` dist-tag, so it never becomes
+`latest`). Idempotent: names already on the registry are skipped. `pnpm new-package … --public`
+does this automatically (opt out with `--no-reserve`); it runs locally with your own npm login.
 
-1. **Reserve** the name — `pnpm npm:reserve <slug>` publishes a tiny placeholder
-   (`@habemus-papadum/<slug>@0.0.0-reserve.0`, under the `reserve` dist-tag, so it never becomes
-   `latest`). Idempotent: names already on the registry are skipped. `pnpm new-package … --public`
-   does this automatically (opt out with `--no-reserve`).
-2. **Trust** this repo — `pnpm npm:trust <slug>` runs `npm trust github` to register
-   `habemus-papadum/pdum_aiui` · `release.yml` as an allowed publisher (needs npm ≥ 11.15.0).
-
-With no slug, both default to **all** publishable packages. After both steps, `release.yml` publishes
-real versions over OIDC with zero stored secrets. `pnpm npm:list` shows what's publishable.
+`pnpm npm:trust` (attaching an OIDC trusted publisher) is **retired** — nothing requires it. The
+command remains in the tree for a future return to OIDC, but never suggest it as a setup step.
+`pnpm npm:list` shows what's publishable.
 
 ### Changing a package's level later
 
@@ -388,7 +389,7 @@ retroactively change an already-published package.
 ### Publishing is CI-only
 
 Releasing real versions happens **exclusively** through `.github/workflows/release.yml` (a manual
-`workflow_dispatch`), over OIDC. Never run `pnpm publish` / `npm publish` to cut a release locally.
-The **only** local npm-write exceptions are the provisioning steps above (`pnpm npm:reserve` /
-`pnpm npm:trust`) — one-time name reservation and trusted-publisher setup, not releases. See
+`workflow_dispatch`), authenticated by the `NPM_TOKEN` secret. Never run `pnpm publish` /
+`npm publish` to cut a release locally. The **only** local npm-write exception is the optional
+name reservation above (`pnpm npm:reserve`) — a placeholder, not a release. See
 [AGENTS.md](./AGENTS.md).

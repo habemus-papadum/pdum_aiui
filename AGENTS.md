@@ -14,9 +14,8 @@ Releasing is a single GitHub Actions workflow: `.github/workflows/release.yml`, 
 a human runs from the Actions UI (or `gh workflow run release.yml -f bump=minor`). There is **no**
 local release script and **no** tag trigger — CI is the only publish path.
 
-It has **two modes**, and both live in that one file because npm trusted publishing is bound to
-`habemus-papadum/pdum_aiui · release.yml` exactly — a second workflow file could not authenticate
-without a stored token:
+It has **two modes**, and both live in that one file so there is exactly one workflow that can
+publish — one gate, one version computation, one secret surface:
 
 - **release** (default) — stamp `X.Y.Z` across every manifest, commit, tag, publish to `latest`,
   cut a GitHub Release, deploy the gallery.
@@ -24,15 +23,18 @@ without a stored token:
   `X.Y.Z-canary.<sha>` under the **`canary`** dist-tag and stops. No commit, no tag, no GitHub
   Release, no site deploy. It exists so a small upstream fix can reach a consumer (see the
   evicted `cc-miner` repo) in a couple of minutes rather than a full release, which is what
-  otherwise discourages making the fix upstream at all. `latest` is never touched. It authenticates via npm
-**trusted publishing (OIDC)** — no `NPM_TOKEN` secret. Never run `pnpm publish` / `npm publish` to
+  otherwise discourages making the fix upstream at all. `latest` is never touched.
+
+The workflow authenticates with the **`NPM_TOKEN` repo secret** (an npm token from the owner's
+account — see CLAUDE.md → *Publication convention*). Never run `pnpm publish` / `npm publish` to
 cut a release, never push a `vX.Y.Z` tag, and do not suggest a release unless the user explicitly
 asks about the process.
 
-**One-time provisioning is not releasing.** `pnpm npm:reserve <slug>` (placeholder-publish a name so
-a trusted publisher can be attached) and `pnpm npm:trust <slug>` (attach it) are deliberate local
-setup steps run with the human's npm login — see CLAUDE.md → *Trusted publishing*. Do not run them on
-your own initiative; only when the user explicitly asks to provision a package for publishing.
+**Name reservation is not releasing.** `pnpm npm:reserve <slug>` (placeholder-publish a name to
+claim it ahead of its first real release — optional; nothing requires it) is a deliberate local
+step run with the human's npm login. Do not run it on your own initiative; only when the user
+explicitly asks. (`pnpm npm:trust` is retired — it belonged to the OIDC trusted-publishing era;
+never suggest it as a setup step.)
 
 **The one exception: `bootstrap/` packages.** `bootstrap/aiui-registry` (and any future
 `bootstrap/*`) sits OUTSIDE the workspace, carries its own semver, and is published **manually** via
@@ -55,13 +57,13 @@ pnpm lint        # Biome (also enforced in CI)
 pnpm new-package <name> (--public | --private | --no-publish) [--no-reserve]
 pnpm new-demo <name>    # scaffold demos/<name> — an in-repo demo app on workspace:^ deps
 pnpm npm:list    # the packages release.yml would publish
-pnpm npm:reserve # reserve npm name(s) — placeholder publish (local auth); prereq for trust
-pnpm npm:trust   # attach the OIDC trusted publisher to npm name(s) (npm >= 11.15.0)
+pnpm npm:reserve # optionally claim npm name(s) early — placeholder publish (local auth)
 ```
 
 `new-package` requires a publication level — see [CLAUDE.md](./CLAUDE.md) for the
-`--public` / `--private` / `--no-publish` convention and the trusted-publishing setup. A publishable
-`new-package` auto-reserves its npm name (opt out with `--no-reserve`).
+`--public` / `--private` / `--no-publish` convention. A publishable `new-package` auto-reserves
+its npm name (opt out with `--no-reserve`); no other provisioning exists — the next release
+publishes it.
 
 `new-demo` takes no level: demos are never published, but they *are* full workspace members, so they
 join version lockstep like everything else — see [CLAUDE.md](./CLAUDE.md) → *In-repo demo apps*.

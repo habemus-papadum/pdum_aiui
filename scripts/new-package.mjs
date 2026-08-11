@@ -11,9 +11,9 @@
 //
 // For a publishable level (--public/--private), the new name is also RESERVED on
 // npm right away (a placeholder publish via npm-provision.mjs, using your local
-// npm auth) so a trusted publisher can be attached to it later. Pass --no-reserve
-// to scaffold files only and touch npm yourself. Attaching the OIDC trusted
-// publisher is a deliberately SEPARATE step: `pnpm npm:trust <slug>`.
+// npm auth) so nobody else claims it before its first real release. Pass
+// --no-reserve to skip — reservation is optional: releases authenticate with the
+// NPM_TOKEN secret, and a new package's first publish needs no setup at all.
 //
 // The new package joins version lockstep immediately (it adopts the current shared
 // version). No other file needs editing — the packages/* glob picks it up everywhere.
@@ -151,7 +151,8 @@ function main() {
 
   // For a publishable level, reserve the name on npm now (a placeholder publish
   // via the shared provisioning tool, using local npm auth) unless --no-reserve.
-  // Attaching the OIDC trusted publisher stays a separate, deliberate step.
+  // Reservation only claims the name early — the next release publishes with the
+  // NPM_TOKEN secret either way, no per-package setup (docs/guide/releasing.md).
   if (publish && reserve) {
     process.stdout.write(
       `\nReserving ${scope}/${slug} on npm (local auth; may prompt for 2FA)...\n`,
@@ -164,17 +165,13 @@ function main() {
     } catch {
       process.stderr.write(
         `\nwarning: name reservation failed. Scaffolding is done; reserve later with ` +
-          `\`pnpm npm:reserve ${slug}\`.\n`,
+          `\`pnpm npm:reserve ${slug}\` — or not at all (the next release publishes it regardless).\n`,
       );
     }
-    process.stdout.write(
-      `Then attach the trusted publisher (separate step): \`pnpm npm:trust ${slug}\` — or, if your\n` +
-        `npm account is passkey-only, configure it on the website (see docs/guide/releasing.md).\n`,
-    );
   } else if (publish) {
     process.stdout.write(
-      `\nPublishing steps (run when ready): \`pnpm npm:reserve ${slug}\`, then attach the trusted\n` +
-        `publisher (\`pnpm npm:trust ${slug}\` or the website) — see docs/guide/releasing.md.\n`,
+      `\nNo publishing setup needed — the next release publishes it. (Optional: claim the name\n` +
+        `early with \`pnpm npm:reserve ${slug}\`; see docs/guide/releasing.md.)\n`,
     );
   }
 }

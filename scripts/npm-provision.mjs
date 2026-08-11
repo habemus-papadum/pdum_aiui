@@ -1,23 +1,20 @@
 #!/usr/bin/env node
-// npm provisioning for trusted publishing — the deliberate, one-time-per-package
-// steps that stand up OIDC publishing. Zero dependencies; run with the repo's Node.
-//
-// Publishing steps come in TWO separate acts (npm requires a package to *exist*
-// before a trusted publisher can be attached to it):
-//
-//   1. reserve — publish a tiny placeholder so the name exists on the registry.
-//                Uses your LOCAL npm auth (may prompt for 2FA). Run once per name.
-//   2. trust   — attach this repo's release.yml as an OIDC trusted publisher, so
-//                CI can publish with no long-lived token. Needs npm >= 11.15.0.
-//
-// After both, .github/workflows/release.yml publishes real versions over OIDC.
-// The `publish` subcommand is the CI side of that (pack + `npm publish` a tarball).
+// npm provisioning helpers. Releases authenticate with the NPM_TOKEN secret
+// (see docs/guide/releasing.md), so a new package's first publish needs NO
+// setup — the only live provisioning act here is the optional `reserve`.
+// Zero dependencies; run with the repo's Node.
 //
 // Subcommands:
 //   list [--slugs]        list the publishable packages (name + slug, or bare slugs)
-//   reserve [slug...]     placeholder-publish names not yet on the registry (local auth)
-//   trust   [slug...]     attach the OIDC trusted publisher to each (npm >= 11.15.0)
-//   publish [--tag <t>]   CI-only: pack each package and `npm publish` the tarball (OIDC)
+//   reserve [slug...]     OPTIONAL: placeholder-publish names not yet on the registry,
+//                         claiming them ahead of their first real release (local auth;
+//                         may prompt for 2FA)
+//   trust   [slug...]     RETIRED (OIDC trusted-publishing era): attach release.yml as
+//                         a trusted publisher (npm >= 11.15.0). Kept for a future
+//                         return to OIDC; nothing requires it today.
+//   publish [--tag <t>]   pack each package and `npm publish` the tarball with ambient
+//                         auth. The workflow publishes via `pnpm -r publish` instead;
+//                         kept as the per-tarball alternative (it was the OIDC path).
 //
 // `reserve`/`trust`/`publish` default to ALL publishable packages when no slug is
 // given. `reserve`/`trust` also accept `--dry-run`.
@@ -219,8 +216,8 @@ function cmdReserve(args) {
     `\nreserve: ${reserved} ${dryRun ? "would be published" : "published"}, ${skipped} already present` +
       `${failed ? `, ${failed} failed` : ""}.\n` +
       (reserved > 0 && !dryRun
-        ? `Next (separate step): attach the OIDC trusted publisher — \`pnpm npm:trust\`, or the\n` +
-          `website if your npm account is passkey-only (see docs/guide/releasing.md).\n`
+        ? `Done — no further setup: the next release publishes real versions over the\n` +
+          `NPM_TOKEN secret (see docs/guide/releasing.md).\n`
         : ""),
   );
   if (failed) process.exitCode = 1;
@@ -285,13 +282,15 @@ function cmdTrust(args) {
   }
   process.stdout.write(
     `\ntrust: configured ${targets.length} package(s). ` +
-      `Releases via ${WORKFLOW_FILE} now publish over OIDC — no NPM_TOKEN needed.\n`,
+      `NOTE: releases publish with the NPM_TOKEN secret today — trust is only\n` +
+      `meaningful for a future return to OIDC (docs/guide/releasing.md, History).\n`,
   );
 }
 
-// CI-only: build has already run. Pack each publishable package (pnpm rewrites
-// `workspace:^` -> the real version in the tarball), then `npm publish` the
-// tarball over OIDC (trusted publishing supplies auth; provenance is automatic).
+// Pack each publishable package (pnpm rewrites `workspace:^` -> the real
+// version in the tarball), then `npm publish` the tarball with ambient auth +
+// --provenance. Build must have run first. The workflow uses `pnpm -r publish`
+// instead; this remains as the per-tarball alternative (it was the OIDC path).
 function cmdPublish(args = []) {
   const targets = listPublishable();
   // A dist-tag, for canary builds. npm defaults to `latest`, which is exactly
@@ -323,7 +322,7 @@ function cmdPublish(args = []) {
   }
   rmSync(staging, { recursive: true, force: true });
   process.stdout.write(
-    `\npublished ${targets.length} package(s) over OIDC${distTag ? ` under dist-tag "${distTag}"` : ""}.\n`,
+    `\npublished ${targets.length} package(s)${distTag ? ` under dist-tag "${distTag}"` : ""}.\n`,
   );
 }
 

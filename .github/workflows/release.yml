@@ -14,11 +14,11 @@ name: release
 #          except the tarballs. For getting a small upstream fix into a consumer
 #          (see cc-miner) in ~2 minutes instead of a full release.
 #
-# The canary lives HERE rather than in its own workflow file for a hard reason:
-# npm trusted publishing is bound to `habemus-papadum/pdum_aiui · release.yml`
-# exactly. A canary.yml would not be a trusted publisher and could not
-# authenticate, so a second workflow would need a stored token — which is the
-# thing this pipeline exists to avoid.
+# The canary lives HERE rather than in its own workflow file so there is
+# exactly ONE workflow that can publish: one gate, one version computation, one
+# secret surface. (Historically this was also forced by npm trusted publishing,
+# which bound auth to this file's identity; auth is a stored NPM_TOKEN now —
+# see the npm-publish job — but the single-publish-path discipline stands.)
 
 on:
   workflow_dispatch:
@@ -143,7 +143,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write # OIDC: both the trusted-publishing auth AND provenance
+      id-token: write # provenance attestation (independent of the token publish)
     steps:
       - uses: actions/checkout@v5
         with:
@@ -164,18 +164,23 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r run build
 
-      - name: Publish to npm (OIDC trusted publishing — no token)
+      - name: Publish to npm
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          # Trusted publishing: no NPM_TOKEN. The id-token:write permission above
-          # lets npm do the OIDC handshake, so auth comes from this workflow's
-          # identity (habemus-papadum/pdum_aiui · release.yml), which each package
-          # trusts (set once via `pnpm npm:trust`). Provenance is automatic.
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc-publish"
+          export NPM_CONFIG_USERCONFIG="$HOME/.npmrc-publish"
+          # ONE recursive publish across the workspace (the cf_browser_credentials
+          # pattern). pnpm auto-skips `private: true` members (demos/apps), applies
+          # the publishConfig dist/ swap, and expands each `workspace:^` dep to
+          # ^<release> at pack time.
           #
-          # We pack with pnpm (rewrites workspace:^ -> ^<release>) and publish each
-          # tarball with `npm publish`, because `npm` — not `pnpm` — speaks the OIDC
-          # handshake (pnpm #9812 / #11513). Needs npm >= 11.5.1; ensure a current one.
-          npm install -g npm@latest
-          node scripts/npm-provision.mjs publish ${{ inputs.canary && '--tag canary' || '' }}
+          # Auth = NPM_TOKEN (repo secret; an npm token from the owner's account —
+          # a NEW package's first publish just works, with no per-package
+          # trusted-publisher step). --provenance = OIDC attestation only, via the
+          # id-token permission above; it is independent of the auth.
+          pnpm -r publish --provenance --no-git-checks ${{ inputs.canary && '--tag canary' || '' }}
+          rm -f "$HOME/.npmrc-publish"
 
   github-release:
     needs: [prepare, npm-publish]
