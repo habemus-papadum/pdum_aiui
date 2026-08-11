@@ -107,7 +107,27 @@ allowBuilds:
   esbuild: true
   keytar: false
 
+# cf-creds-mosaic pins mosaic-core ^0.29.2; this workspace is on 0.28.1 (see
+# the duckdb-wasm override above — the two move together). The kit only uses
+# the structural `Connector` type, whose shape is identical in 0.28, so the
+# older line is genuinely compatible. Drop this when the workspace's Mosaic
+# line moves to 0.29 (or the kit widens its peer to >=0.28).
+peerDependencyRules:
+  allowedVersions:
+    "@habemus-papadum/cf-creds-mosaic>@uwdata/mosaic-core": ">=0.28"
+
 minimumReleaseAgeExclude:
+  # The cf_browser_credentials kit (aiui-cf-creds' substrate) is our own —
+  # freshly published versions are consumed deliberately, pinned per version.
+  - '@habemus-papadum/cf-browser-credentials@0.2.0'
+  - '@habemus-papadum/cf-creds-aws@0.2.0'
+  - '@habemus-papadum/cf-creds-elevenlabs@0.2.0'
+  - '@habemus-papadum/cf-creds-mosaic@0.2.0'
+  # 0.2.1 = 0.2.0 with the mosaic-core peer widened + optional (the 0.29.x
+  # line's published manifests leak a `workspace:^` peer that breaks npm
+  # consumers; test:packaging caught it). Listed ahead of its publish.
+  - '@habemus-papadum/cf-creds-mosaic@0.2.1'
+  - '@habemus-papadum/cf-creds-openai@0.2.0'
   - '@habemus-papadum/aiui-registry-host-darwin-arm64@0.1.0'
   - '@habemus-papadum/aiui-registry-host-darwin-x64@0.1.0'
   - '@habemus-papadum/aiui-registry-host-linux-arm64@0.1.0'

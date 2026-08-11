@@ -1,6 +1,19 @@
 # aiui-cf-creds — broker-backed ephemeral credentials for aiui apps
 
-Status: PROPOSED — drafted 2026-08-08. Grounded in two live spikes: this repo's
+Status: IMPLEMENTED — `packages/aiui-cf-creds`, 2026-08-11, against the kit's 0.2.0
+line. Deltas from the sketch below, all downstream of kit 0.2.0's own API: the
+`/mosaic` bridge is `brokerConnector(base, options)` — it WRAPS the base connector
+the app already constructs (seismos-style `wasmConnector(...)`) rather than
+constructing one, mirroring the kit's `credentialAwareConnector`, and takes the
+required `region` (a D3 baked fact the sketch missed); `scribeConnectUrl` passes the
+kit's socket options through; `brokerUrl` everywhere is the broker's ORIGIN (the
+kit's conventional `/api/credentials/*` paths are appended — one deployment fact at
+the composition root); `transcriptionKeySource` defaults its model to the channel's
+proven `gpt-realtime-whisper`; `/oracle` exposes a structural `MintClient` injection
+seam so tests stub the SDK surface without this package ever naming `openai` types.
+Open question 1 settled: `aiui-cf-creds`, name the thing that exists.
+
+Originally drafted 2026-08-08. Grounded in two live spikes: this repo's
 `exploration/ephemeral-keys/` (2026-07-20, the vendor ephemeral-credential matrix) and a
 2026-08-08-adjacent probe (2026-08-07) against a deployed credential broker, which
 verified the one fact this proposal newly depends on: **a workload-identity-federated

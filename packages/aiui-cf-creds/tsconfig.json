@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "declarationDir": "dist",
+    // No JSX of our own — these exist so the source-first typecheck can walk
+    // through aiui-oracle's barrel into aiui-viz's .tsx files (each resolves
+    // @solidjs/web from its own package).
+    "jsx": "preserve",
+    "jsxImportSource": "@solidjs/web"
+  },
+  "include": ["src"],
+  "exclude": ["dist", "node_modules", "src/**/*.test.ts"]
+}
