@@ -147,7 +147,7 @@ const registry = new Map<string, Cell<unknown>>();
 // that must stay framework-agnostic: the intent client's jump mode and the
 // intent runtime's VS Code ladder resolve a bare `data-cell="name"` stamp (the
 // one manual attribution attribute) to the cell's `cell(...)` definition site
-// through this, without importing aiui-viz (see docs/guide/attribution.md).
+// through this, without importing aiui-viz (see packages/aiui-viz/docs/attribution.md).
 // Read-only and deliberately tiny; guarded because the barrel is imported
 // from workers and node-side tests where `window` doesn't exist.
 if (typeof window !== "undefined") {

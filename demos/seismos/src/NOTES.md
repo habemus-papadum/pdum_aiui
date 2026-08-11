@@ -3,8 +3,8 @@
 The third notebook page: **cross-filtering the global earthquake catalog** in
 DuckDB-WASM with Mosaic/vgplot, with the Gutenberg–Richter b-value estimated live
 from the current selection. Built to the methodology in
-[frontend-design-choices](../../../../../docs/guide/frontend-design-choices.md)
-and [frontend-hard-won](../../../../../docs/guide/frontend-hard-won.md); this file
+[frontend-design-choices](../../../packages/aiui-viz/docs/frontend-design-choices.md)
+and [frontend-hard-won](../../../packages/aiui-viz/docs/frontend-hard-won.md); this file
 records what the build taught, for folding back into those.
 
 ## Dataset

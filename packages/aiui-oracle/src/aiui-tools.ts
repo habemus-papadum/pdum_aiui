@@ -12,7 +12,7 @@
  *    registrations (whatever the page installed, HMR-live) — the same surface
  *    the intent client forwards to the channel. The O3 spine.
  *
- * Solid-correctness (the pinned semantics, docs/guide/frontend-hard-won.md):
+ * Solid-correctness (the pinned semantics, packages/aiui-viz/docs/frontend-hard-won.md):
  * a write goes through the control's own validated `set`, and the RETURNED
  * value is the truth — never read back after a write (Solid 2.0 stages
  * commits; a boundary read would be stale). Calling `.set` from a transport

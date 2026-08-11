@@ -22,7 +22,7 @@ The library has two layers (one package for now; the seam is deliberate):
   subpath so its heavyweight dependency (`@observablehq/plot`, `katex`) stays an **optional
   peer** that plumbing consumers never pay for. Porcelain grows by extraction: a pattern proves
   itself in a reference notebook first, then moves here (the repo's
-  [style guide](../../docs/guide/frontend-style-guide.md) tracks which patterns are where).
+  [style guide](../../packages/aiui-viz/docs/frontend-style-guide.md) tracks which patterns are where).
 
 ## What's in it
 

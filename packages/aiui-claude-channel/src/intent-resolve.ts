@@ -65,7 +65,7 @@ export interface ResolvedIntent {
   liveModel: string;
   transcriber: IntentPipelineConfig["transcriber"];
   model: string;
-  /** Domain-vocabulary bias (the keywords slot — see docs/guide/transcription.md). */
+  /** Domain-vocabulary bias (the keywords slot — see docs/guide/intent-panel.md). */
   keywords: string[] | undefined;
   /** Realtime transcription model (when transcriber = `openai-realtime`). */
   realtimeModel: string;

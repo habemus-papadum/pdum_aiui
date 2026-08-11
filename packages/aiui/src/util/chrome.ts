@@ -6,7 +6,7 @@
  * run via npx, giving the agent a Chrome to drive (navigate, click, screenshot,
  * evaluate). It reaches a browser one of two ways — the mode ladder itself
  * lives in commands/claude.ts (chromeServerEntry); the full user-facing story
- * is docs/guide/chrome:
+ * is packages/aiui/docs/chrome:
  *
  * - **attach** (default): the MCP is pointed (`--browser-url`) at a shared,
  *   user-visible *session browser* — discovered or eagerly launched via

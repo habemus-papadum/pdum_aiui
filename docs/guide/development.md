@@ -45,8 +45,8 @@ pnpm test:e2e        # live Claude Code session e2e (spends subscription usage)
 ```
 
 (The intent overlay's offline lab — the **workbench** — has been retired; `packages/aiui-test-app`
-and the in-repo demos are the places to exercise the overlay now. Its findings ledgers live in
-`archive/workbench/`, and the interaction fixtures it recorded live on as the intent pipeline's
+and the in-repo demos are the places to exercise the overlay now. Its findings ledgers are in
+git history, and the interaction fixtures it recorded live on as the intent pipeline's
 regression corpus in `packages/aiui-lowering-pipeline/fixtures/`.)
 
 ### Editable workspace dependencies (source-first)
@@ -138,6 +138,27 @@ Then open the printed local URL. Edit any Markdown under `docs/` or any package 
 and the site hot-reloads. (Changes to a package's **API** — its TypeScript source — need a
 `pnpm docs:gen` re-run to re-extract.)
 
+### How the site is generated
+
+A small "MkDocs for a pnpm monorepo": VitePress renders, TypeDoc extracts the API reference,
+and `scripts/docs-gen.mjs` is the glue — it discovers packages with the same `packages/*` glob
+everything else uses, copies each `README.md` in as the overview, each `packages/<slug>/docs/*.md`
+as guides, runs TypeDoc per package, and writes the sidebar. Two altitudes:
+
+- **Top-level conceptual docs** — hand-written under `docs/guide/`, listed in the **curated**
+  sidebar in `docs-gen.mjs`. Generation *fails* if a page has no sidebar link or a link has no
+  page, so every add/delete is also a sidebar edit. A note that has served its purpose is
+  deleted outright — git history is the archive.
+- **Per-package docs** — assembled from the package itself (README + `docs/*.md` + TSDoc), with
+  **no curation**: a new package, or a new page beside one, appears on the next `docs:gen`.
+
+Only hand-written content is committed. `docs/packages/**` and
+`docs/.vitepress/sidebar.generated.json` (plus VitePress `cache/`/`dist/`) are generated,
+gitignored, and rebuilt from scratch each run — never edit them by hand. Two shipped Claude
+skills link into the docs with relative paths; `pnpm skills:check` verifies every link resolves
+(CI runs it), and `pnpm docs:lint` catches the bare `<placeholder>` tags that break VitePress's
+Vue compile.
+
 ## Adding a new package
 
 Nothing special is required for docs. Create the package as usual:
@@ -149,7 +170,31 @@ pnpm new-package my-lib --public
 The scaffold ships a `README.md` and a `docs/` folder with a starter page. The next
 `pnpm docs:gen` (or `docs:dev`) automatically picks the package up: its README becomes the
 overview, its `docs/*.md` become guides, and its exports become an API reference — no doc
-config to touch. See [The Documentation System](./documentation) for the full picture.
+config to touch.
+
+## Releasing & publishing
+
+Publishing is **CI-only**: a manual `workflow_dispatch` on `.github/workflows/release.yml`,
+authenticated by the `NPM_TOKEN` repo secret (an npm token from the owner's account —
+`gh secret set NPM_TOKEN --repo habemus-papadum/pdum_aiui` to set or rotate; it must be allowed
+to publish without an OTP). A **new** package needs no provisioning — its first release simply
+publishes it. (`--provenance` attestation rides the workflow's `id-token: write` permission,
+independent of auth. Until 2026-08-11 auth was npm trusted publishing/OIDC; it was retired
+because OIDC needs a per-package, website-only registration on a passkey account.)
+
+```sh
+gh workflow run release.yml -f bump=minor   # cut a release
+pnpm npm:list                               # what release.yml would publish
+pnpm npm:reserve [slug…]                    # optional: claim a name early (placeholder publish)
+```
+
+The workflow gates on green CI, writes the lockstep version across every `package.json`, tags,
+builds, and runs one `pnpm -r publish --provenance --no-git-checks` (pnpm skips `private: true`
+members, applies the `publishConfig` dist swap, rewrites `workspace:^` to the real version).
+Never `pnpm publish` locally — see
+[AGENTS.md](https://github.com/habemus-papadum/pdum_aiui/blob/main/AGENTS.md) and CLAUDE.md's
+publication convention (per-package levels, `--public`/`--private`/`--no-publish`) for the
+guardrails.
 
 ## Every string boundary is a compiler you can't see
 

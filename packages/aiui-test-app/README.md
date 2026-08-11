@@ -1,7 +1,7 @@
 # @habemus-papadum/aiui-test-app
 
 **Internal, never published.** A deliberately small SolidJS app for exercising the
-intent client and the [channel](../../docs/guide/channel.md)
+intent client and the [channel](../aiui-claude-channel/docs/architecture.md)
 without the weight of `demos/gallery` (no workers, no DuckDB, no Mosaic, no multi-page routing).
 
 It fits a **mixture of two Gaussians**: draw a sample, bin it, measure it, and recover the

@@ -43,7 +43,7 @@ via bare `npm publish` (a `prepublishOnly` guard blocks that; the script stages
 `optionalDependencies` the source manifest deliberately omits). Everything else in this section —
 CI-only releasing, versioning.mjs lockstep — simply does not apply to `bootstrap/`, and conversely:
 never fold a bootstrap package into `release.yml` or the lockstep. See CLAUDE.md → *The `bootstrap/`
-directory* and docs/proposals/aiui-registry.md §10. Do not run its publish script unasked.
+directory* and the aiui-registry proposal §10 (git history). Do not run its publish script unasked.
 
 ## Development
 

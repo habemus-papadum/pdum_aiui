@@ -5,7 +5,7 @@ page — pure functions (`/step1.html`), controls + cells (`/step2.html`), desig
 (`/step3.html`), the finished application (`/`).
 
 **[WALKTHROUGH.md](./WALKTHROUGH.md) is the narration** — read it beside the code. The
-methodology it demonstrates is the [frontend playbook](../../docs/guide/frontend-playbook.md).
+methodology it demonstrates is the [frontend playbook](../../packages/aiui-viz/docs/frontend-playbook.md).
 
 Run the loop from this directory:
 

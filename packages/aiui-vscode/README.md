@@ -65,7 +65,7 @@ URL computed on the fly from the same DOM attribution contract this extension's 
 in on. A click with nothing to open is named in the picker ("no source location on or around
 this element"), never a silent no-op, and the mode ends itself when the jump blurs the window,
 so returning to the tab resumes composing. Details in
-[VS Code Integration](../../docs/guide/vscode.md).
+[VS Code Integration](../../packages/aiui-vscode/docs/vscode.md).
 
 ## Install locally
 
@@ -96,7 +96,7 @@ command above from a checkout there, inside the remote window's integrated termi
 remote. Selection chips deep-link back through `vscode://vscode-remote/…` (instead of
 `vscode://file/…`), so clicking one in your local browser reopens the file in the remote
 workspace. The rest of the remote story — session browser tunnel, port forwards — is
-[Remote Development](../../docs/guide/remote.md).
+[Remote Development](../../packages/aiui/docs/remote.md).
 
 ## The npm package
 

@@ -1,5 +1,5 @@
 /**
- * The linter persona is a LOAD-BEARING prompt (docs/guide/prompt-linting.md
+ * The linter persona is a LOAD-BEARING prompt (docs/guide/intent-panel.md
  * publishes it verbatim) — these tests pin the teachings the sidecar's wire
  * behavior depends on, so an edit that drops one fails a named test instead
  * of silently degrading the lint.

@@ -1,7 +1,7 @@
 # The playbook, worked: heat in a rod
 
 This demo builds one small scientific app — 1-D heat diffusion — in exactly the order the
-[frontend playbook](../../docs/guide/frontend-playbook.md) prescribes, and **leaves every stage
+[frontend playbook](../../packages/aiui-viz/docs/frontend-playbook.md) prescribes, and **leaves every stage
 standing as its own page** so you can diff the layers:
 
 | page | layer | what exists |

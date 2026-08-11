@@ -15,7 +15,7 @@
  *
  * ## Why `hot` is a parameter and not something we read ourselves
  *
- * Two constraints, both paid for (docs/guide/frontend-hard-won):
+ * Two constraints, both paid for (packages/aiui-viz/docs/frontend-hard-won):
  *
  *   1. `import.meta.hot.accept()` registers a self-accept for *the module that
  *      owns that `hot` object*. A library cannot self-accept on a caller's
@@ -66,7 +66,7 @@ interface GraphEntry<G> {
  * `entry` is a **plain field, not a signal value**, and that is load-bearing:
  * Solid 2.0 commits signal writes transactionally, so a `get()` in the same
  * synchronous tick as its `set()` still returns the OLD value (see
- * docs/guide/frontend-hard-won, "Same-tick reads after writes lie"). A graph
+ * packages/aiui-viz/docs/frontend-hard-won, "Same-tick reads after writes lie"). A graph
  * module's `main.tsx` imports it and calls `render()` in that same tick, so a
  * signal-valued box reads `undefined` on the very first render — which is why
  * every hand-rolled version of this needed a `<Show when={graph()}>` guard for

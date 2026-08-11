@@ -68,7 +68,7 @@ export interface IntentPipelineConfig {
    * acronyms, code identifiers. A SLOT today (nothing in the UI writes it):
    * wired to ElevenLabs `keyterms` and the request-response engine's prompt
    * ("Keywords: …"); `gpt-realtime-whisper` does not support prompting, so
-   * the field is documented-inert there. See docs/guide/transcription.md.
+   * the field is documented-inert there. See docs/guide/intent-panel.md.
    */
   keywords?: string[];
   /**
@@ -221,7 +221,7 @@ export const DEFAULT_INTENT_CONFIG: IntentPipelineConfig = {
   realtimeModel: "gpt-realtime-whisper",
   // The delay dial trades latency for accuracy; the accumulator preview
   // absorbs slow finals gracefully (deltas keep it live), so default to the
-  // accuracy end. See docs/guide/transcription.md.
+  // accuracy end. See docs/guide/intent-panel.md.
   realtimeDelay: "xhigh",
   mockWordMs: 140,
   mockTypoRate: 0.07,

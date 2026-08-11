@@ -56,7 +56,7 @@ build taught, for folding back into that document.
    in the player's rAF loop for a while: re-reading `frameIndex` after `set`
    inside the drain advanced at most one frame per tick; the fix tracks the
    playhead in a local and writes once. Full rule + `flush()` escape hatch:
-   docs/guide/frontend-hard-won.md.)
+   packages/aiui-viz/docs/frontend-hard-won.md.)
 
 3. **HMR boundary: editing the *worker* or a *store* module forces a full page
    reload**, which resets the durable registry (fresh window). Editing

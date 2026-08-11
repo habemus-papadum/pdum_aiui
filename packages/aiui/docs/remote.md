@@ -48,7 +48,7 @@ tunneling dev-box:9222 → localhost:55007 — on dev-box, run:
 ```
 
 Paste that on the remote box and you're done. With `--aiui-browser-url` (or the durable
-equivalent, `chrome.browserUrl` in [config](./config)), the remote `aiui claude` skips everything
+equivalent, `chrome.browserUrl` in [config](/guide/config)), the remote `aiui claude` skips everything
 local-browser-shaped — no managed-browser sync or prompts, no profile creation, no extension
 loading, no browser launch — and hands chrome-devtools-mcp the URL. `aiui chrome status` on the
 remote box will say exactly that. Even `aiui open http://localhost:5173` works from the remote
@@ -124,7 +124,7 @@ breakpoints set in the editor hit when the page — the one you *and* the agent 
 executes that line.
 
 Fully local sessions get the same trick with no tunnel: pin the port once
-(`chrome.debugPort: 9222` in [config](./config), or `aiui browser --port 9222`) and the identical
+(`chrome.debugPort: 9222` in [config](/guide/config), or `aiui browser --port 9222`) and the identical
 launch config attaches to the local session browser.
 
 ## Fallback: headless on the remote box
@@ -144,4 +144,4 @@ The DevTools debug port is **unauthenticated** — whoever can reach it controls
 everything the profile is logged into). Locally it binds to loopback; the ssh tunnel extends that
 to processes on the remote box, which is precisely the point — the remote agent is supposed to
 drive it — but it means the remote machine's other users/processes could too. Use a dedicated
-profile, and read [⚠️ Read before running](./warning).
+profile, and read [⚠️ Read before running](/guide/warning).

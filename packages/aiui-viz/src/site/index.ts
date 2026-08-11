@@ -1,7 +1,7 @@
 /**
  * The `/site` subpath — **porcelain** for notebook pages: the page-chrome
  * components and theming machinery the frontend-for-agents methodology's
- * "page anatomy" calls for (docs/guide/frontend-style-guide in the repo docs).
+ * "page anatomy" calls for (packages/aiui-viz/docs/frontend-style-guide in the repo docs).
  *
  * - {@link SiteNav} — the primary navigation: a left sidebar on desktop that
  *   collapses to a top bar + drawer on a phone.

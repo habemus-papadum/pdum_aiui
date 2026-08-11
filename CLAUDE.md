@@ -20,12 +20,12 @@ transcript) at the center. Three layers:
    (`aiui-intent-client`): one client, three hosts — the channel-served plain page at
    `/intent/` (drives real tabs over CDP, no extension) and the MV3 side panel (`dist-ext`,
    the ONE extension `aiui claude` auto-loads; warm `tabCapture` video), both over the same
-   mode-engine core; `BEHAVIOR.md` in that package is the decided contract (the parity ledger is retired to `archive/intent-client/`). Its
+   mode-engine core; `BEHAVIOR.md` in that package is the decided contract (the parity ledger is retired — git history keeps it). Its
    host-agnostic capture/transport runtime lives in `aiui-intent-runtime` (mic capture, frame
    sampler, selection watcher, channel wire). The historical surfaces — `aiui-dev-overlay` (the
    original web intent tool), `aiui-extension` (the first browser extension), and the
-   `aiui-devtools-extension` panel — are DELETED (`docs/proposals/dev-overlay-retirement.md`;
-   read them in git history). Lowering runs are traced to the project's user-level cache
+   `aiui-devtools-extension` panel — are DELETED (the dev-overlay-retirement notes and the
+   code are both in git history). Lowering runs are traced to the project's user-level cache
    (`~/.cache/aiui/projects/<slug>-<hash8>/traces/`, keyed by the project's absolute path —
    the browser-profiles redesign moved the whole per-project cache out of the project tree);
    the trace debugger (`aiui-trace-ui`) is EMBEDDED in the intent panel and also
@@ -43,8 +43,8 @@ transcript) at the center. Three layers:
    intent tool.
 
 Longer form: `docs/guide/` (motivation, prompt-lowering, frontend-for-agents). Pre-implementation
-exploratory notes are retired to `archive/` — readable on GitHub, deliberately not part of the
-docs site.
+exploratory notes and finished proposals are retired outright — git history is the archive
+(the `archive/` directory itself was deleted in the 2026-08 docs slimdown).
 
 **Security posture (deliberate, documented — do not "fix" without being asked):** `aiui claude`
 passes `--dangerously-skip-permissions` only when it is present in the general `claude.args` list
@@ -65,7 +65,8 @@ enter the agent's environment — and by default attaches the Chrome DevTools
 MCP — by default **attached** to a shared, user-visible session browser (launched
 eagerly with an unauthenticated loopback debug port, project-local profile under
 `.aiui-cache/chrome/`; discovery via the profile's `DevToolsActivePort`; see
-`packages/aiui/src/util/browser.ts`, `chrome.ts`, and `docs/guide/chrome.md` + `remote.md`). Off
+`packages/aiui/src/util/browser.ts`, `chrome.ts`, and `packages/aiui/docs/chrome.md` +
+`remote.md`). Off
 under CI, `--aiui-no-chrome`, or `chrome.enabled: false`; `chrome.mode: "launch"` reverts to a
 lazy MCP-private browser. Interactive launches prefer a managed **Chrome for Testing** install
 (`~/.cache/aiui/chrome/`, offered/updated via prompts — `chrome.forTesting` in config;
@@ -246,7 +247,7 @@ The renderer is byte-identical between them; where it needs to know its shell it
 asks at *runtime* (`src/host.ts` sniffs the Electron user-agent) rather than
 through a `define`, precisely so "it runs the same in both" stays a claim
 anyone can check. `apps/cc-miner/electron/` stays in-package until the shape has
-earned a home of its own (see `docs/proposals/deployment-shapes.md`).
+earned a home of its own (see the deployment-shapes proposal, git history).
 
 They are full workspace members right now — `workspace:^` source-first editing,
 CI typecheck, version lockstep — because that is what makes iteration fast while
@@ -304,7 +305,7 @@ to the repo root), carry their **own semver** (never the lockstep `X.Y.Z+dev`), 
 workspace consumes them **via npm at a pinned version** — the one place this repo does not run on
 source. Why: aiui-registry's on-disk formats (registry entries, agents cache, native-messaging
 frames) are a wire protocol between independently-installed aiui versions, and pinning one
-published implementation is what keeps them coherent (docs/proposals/aiui-registry.md). Its own CI
+published implementation is what keeps them coherent (the aiui-registry proposal, git history). Its own CI
 is `.github/workflows/registry.yml` (path-filtered; includes a compiled-host smoke test and an
 installed-shape pack→install test). The compiled host binaries ship as per-platform packages
 (`…-host-<platform>-<arch>`, esbuild-style `optionalDependencies`, injected at stage time). The

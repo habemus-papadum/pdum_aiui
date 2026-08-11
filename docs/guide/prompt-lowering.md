@@ -61,7 +61,7 @@ The infrastructure that makes lowering *deliverable* is a **custom Claude Code c
    *running, interactive* session over the channel — the transcript you're already watching.
    What each captured item (screenshot, selection, navigation boundary, the context preamble)
    actually renders to is cataloged, with real outputs, in the
-   [Prompt Rendering Reference](./prompt-rendering).
+   [Prompt Rendering Reference](/packages/aiui-claude-channel/prompt-rendering).
 
 Utilities like `aiui mcp quick` (send a prompt to a chosen session) and the registry/selector
 library exist so tools — and test harnesses — can find and address the right session. See the
@@ -69,30 +69,18 @@ library exist so tools — and test harnesses — can find and address the right
 
 ## Concrete intent tools (layer 2)
 
-The lowering pipeline needs frontends. The first planned tool is a **browser overlay** for the page
-you are developing:
-
-- An overlay you add to your dev page (or inject via extension — [open
-  question](/questions)) with a mechanism to **speak** the change you want.
-- It captures **screenshots** and interesting **DOM data** — the selected element, its component,
-  relevant state — and sends the bundle through prompt lowering to your Claude Code session.
-- It is designed to work alongside a **Chrome DevTools MCP server**: the agent can install little
-  hooks on global state — giving *itself* debugging handles it can later call to query the live
-  app (see [Frontend for Agents](./frontend-for-agents)).
-- Inputs and forms get annotated in a superset of
-  [WebMCP](https://developer.chrome.com/docs/ai/webmcp), so an agent can interact with the running
-  site through declared affordances rather than blind DOM automation.
-- Everything stays mindful of hot-module reloading, so the loop survives the very edits it
-  triggers.
-
-::: tip Status
-The pipeline is live end to end: the **intent client** (`@habemus-papadum/aiui-intent-client` —
-the session browser's side panel and the channel-served `/intent/` page, over one mode-engine
-core) streams voice, screenshots, ink, and selections through lowering into the session, with
-server-side lowering **traces** and a debug viewer over them (embedded in the panel, and
-standalone via `aiui dashboard`). Custom per-modality debug views and dynamically shaped tool
-surfaces are still open — see [Questions](/questions).
-:::
+The lowering pipeline needs frontends, and the pipeline is live end to end through the current
+one: the **intent client** (`@habemus-papadum/aiui-intent-client` — the session browser's side
+panel and the channel-served `/intent/` page, over one mode-engine core) streams voice,
+screenshots, ink, and selections through lowering into the session, with server-side lowering
+**traces** and a debug viewer over them (embedded in the panel, and standalone via
+`aiui dashboard`). It cooperates with the **Chrome DevTools MCP** (the agent can give *itself*
+debugging handles to query the live app — see
+[Frontend for Agents](./frontend-for-agents)), reads affordances annotated in a superset of
+[WebMCP](https://developer.chrome.com/docs/ai/webmcp), and stays mindful of hot-module
+reloading, so the loop survives the very edits it triggers. The feature reference is
+[The Intent Panel](./intent-panel); custom per-modality debug views and dynamically shaped tool
+surfaces are still open.
 
 ## Instrumented apps (layer 3)
 
@@ -122,20 +110,20 @@ it:
 - **Data collection.** Instrument the pipeline so real usage produces data about what lowerings
   worked.
 - **Debugging tools.** When a lowered prompt goes wrong, you should be able to find *which stage*
-  lost the intent.
+  lost the intent. (This exists: the trace debugger, embedded in the panel and at
+  `/__aiui/debug`.)
 
 ## The prompts (the surfacing principle)
 
 **Every prompt this system sends is documented** — a lowering pipeline whose own model calls
 were secret would be an odd artifact. The live prompts today, and where each is published:
 
-- **The prompt-linter persona** — verbatim in [Prompt Linting](./prompt-linting#the-prompt)
-  (`LINTER_INSTRUCTIONS`, `live-session.ts`).
+- **The prompt-linter persona** — `LINTER_INSTRUCTIONS` in `live-session.ts`; see
+  [the panel's linter section](./intent-panel#the-prompt-linter).
 - **The injection label grammar** — `[image shot_N]`, `[selection sel_N: "…" — …]`
-  (`updated` / `retracted` variants), `[transcript seg_N: "…"]` — described in
-  [Prompt Linting](./prompt-linting#what-the-linter-sees-exactly) and
-  [Realtime Live Mode](./realtime-live); the labels are built in `live-resolve.ts` and the
-  linter sidecar.
+  (`updated` / `retracted` variants), `[transcript seg_N: "…"]` — built in `live-resolve.ts`
+  and the linter sidecar, cataloged in the
+  [Prompt Rendering Reference](/packages/aiui-claude-channel/prompt-rendering).
 - **The turn summarizer** — each sent turn is glossed for the trace list by `gpt-4o-mini`
   under exactly: *"Summarize this request to a coding agent in one line, ≤ 12 words, no
   quotes."* (`SUMMARY_SYSTEM_PROMPT`, `summarize.ts`; screenshots are stripped and the body
@@ -157,4 +145,3 @@ Deliberately unresolved — documentation stubs for later clarification:
 - What is the schema of the intermediate representations?
 - How is a lowering *evaluated* — what makes one lowering of the same intent better than another?
 - Where does lowering run (in the channel server, in the intent tool, in a sidecar)?
-- See also the running [Questions](/questions) note.

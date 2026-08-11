@@ -1,7 +1,7 @@
 # demo: walkthrough
 
 An in-repo demo wired to the workspace (`workspace:^`). **This one is a teaching artifact**: the
-playbook (docs/guide/frontend-playbook.md) built stage by stage, with steps 1-3 preserved as
+playbook (packages/aiui-viz/docs/frontend-playbook.md) built stage by stage, with steps 1-3 preserved as
 standing pages beside the finished app. Read WALKTHROUGH.md first.
 
 Ground rules beyond the usual (see the starter template's CLAUDE.md for those):

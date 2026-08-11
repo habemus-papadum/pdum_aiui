@@ -8,15 +8,15 @@ visualization. It began as an aspiration; it is now a working methodology with a
 `demos/gallery`), and a ledger of engineering findings.
 
 This page is the **concepts** — what the pieces are and what we demand of them. Three companion
-pages go deeper: [Design choices](./frontend-design-choices) explains, at
-framework-designer level, exactly what we built and why; [Hard-won details](./frontend-hard-won)
+pages go deeper: [Design choices](/packages/aiui-viz/frontend-design-choices) explains, at
+framework-designer level, exactly what we built and why; [Hard-won details](/packages/aiui-viz/frontend-hard-won)
 is the ledger of paid-for technical knowledge underneath it; the
-[Style guide](./frontend-style-guide) is the authoring conventions — page structure, TOC,
+[Style guide](/packages/aiui-viz/frontend-style-guide) is the authoring conventions — page structure, TOC,
 plotting, math — that make every notebook in a lab read as one publication.
 
 If you just want to *use* the library — write a cell, depend on another cell, stream a computation,
-display it — start at the [User guide](./frontend-user-guide) instead; when you're building a whole
-app, the [Playbook](./frontend-playbook) sequences the work. Both assume none of this page.
+display it — start at the [User guide](/packages/aiui-viz/frontend-user-guide) instead; when you're building a whole
+app, the [Playbook](/packages/aiui-viz/frontend-playbook) sequences the work. Both assume none of this page.
 
 ## The premise
 
@@ -55,8 +55,8 @@ Two ideas inside this deserve their own names:
   next. Even the explicit "cancel" button is just "hold this cell until further notice."
 
 The substrate is SolidJS 2.0 (beta), whose async-first reactive core absorbed most of what this
-model needs — the archived solid-cells design notes (`archive/reactive-flows/` in the repo) trace
-that history. The code reads as mainstream TypeScript, not a notebook dialect.
+model needs — the retired solid-cells design notes (git history) trace that history. The code
+reads as mainstream TypeScript, not a notebook dialect.
 
 ### The durable/disposable line: why edits don't destroy state
 
@@ -130,7 +130,7 @@ nothing is hand-called, so nothing can be forgotten. The two rules are one mecha
 `flush(fn)` also runs effect handlers before it returns, so a committed dispatch leaves state,
 derived values, *and* every effect-driven surface current by its next line. The full ledger
 entry (with the seven live bites that paid for it) is in
-[Hard-won details](./frontend-hard-won); the contract itself is pinned by
+[Hard-won details](/packages/aiui-viz/frontend-hard-won); the contract itself is pinned by
 `packages/aiui-viz/src/solid-semantics.test.ts`.
 
 The reference implementation of a correct inbound crossing is the intent client's activation
@@ -168,7 +168,7 @@ dispatches — the agent's write and the key take the identical path, which stru
 the control-mirror desync class.
 
 The deep rationale — including what was deliberately left out (entry/exit effects, history
-states, XState) — is `docs/proposals/intent-client/01-mode-engine.md`; the worked example is
+states, XState) — is the mode-engine design note (git history); the worked example is
 the intent client's spec (`packages/aiui-intent-client/src/spec.ts`): a real machine as one
 data structure — regions, commands, excludes, the Esc order, and availability overrides.
 
@@ -220,11 +220,11 @@ better instrumented than a human team would ever bother to make it.
   machine as data (`src/spec.ts`), claims (`src/claims.ts`), bar caps (`src/caps.ts`), the
   imperative-boundary reference (`src/activation.ts`); `BEHAVIOR.md` records the decided
   interaction contract, each rule pinned by a test.
-- **Design choices** — [the level-2 page](./frontend-design-choices); **ledger** —
-  [the level-3 page](./frontend-hard-won).
+- **Design choices** — [the level-2 page](/packages/aiui-viz/frontend-design-choices); **ledger** —
+  [the level-3 page](/packages/aiui-viz/frontend-hard-won).
 - **Skill** — the `frontend-design` Claude plugin
   (`packages/aiui-claude-plugin/marketplace/plugins/frontend-design`) teaches this to a coding
   agent; the docs here are its source of truth.
 - **Background notes** — the pre-implementation explorations (solid-cells, HMR for agentic
-  coding, agentic frontend debugging, observable web workers) are retired to the repo's
-  `archive/` folder; these pages are their distillation.
+  coding, agentic frontend debugging, observable web workers) are retired to git history;
+  these pages are their distillation.

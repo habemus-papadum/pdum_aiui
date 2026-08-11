@@ -5,9 +5,9 @@ repo documentation, which is now the **single source of truth**:
 
 - **Concepts & desiderata** — [`docs/guide/frontend-for-agents.md`](../../docs/guide/frontend-for-agents.md)
 - **Design choices** (framework-designer level, with code references) —
-  [`docs/guide/frontend-design-choices.md`](../../docs/guide/frontend-design-choices.md)
+  [`packages/aiui-viz/docs/frontend-design-choices.md`](../../packages/aiui-viz/docs/frontend-design-choices.md)
 - **Hard-won technical details** (the paid-for findings ledger) —
-  [`docs/guide/frontend-hard-won.md`](../../docs/guide/frontend-hard-won.md)
+  [`packages/aiui-viz/docs/frontend-hard-won.md`](../../packages/aiui-viz/docs/frontend-hard-won.md)
 
 The reusable utilities described there live in `@habemus-papadum/aiui-viz`
 (`packages/aiui-viz`); this package keeps only the science and the app code.

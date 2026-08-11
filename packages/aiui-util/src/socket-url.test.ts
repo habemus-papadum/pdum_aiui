@@ -4,7 +4,7 @@ import { rehostSocketUrl } from "./socket-url.ts";
 describe("rehostSocketUrl", () => {
   it("keeps the browser's session path, takes the authority we reached it on", () => {
     // Chrome always reports 127.0.0.1 plus ITS port — true only on its own
-    // machine. A tunneled browser (docs/guide/remote) answers on the forwarded
+    // machine. A tunneled browser (packages/aiui/docs/remote) answers on the forwarded
     // port, and dialing what it said would reach nothing.
     expect(
       rehostSocketUrl("ws://127.0.0.1:9222/devtools/browser/2f1c-4b8e", "http://127.0.0.1:57873"),

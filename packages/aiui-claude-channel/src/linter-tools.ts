@@ -13,7 +13,7 @@
  *    code do" genuinely needs to find the code first.
  *
  * The execution policy, deliberate and documented
- * (docs/guide/prompt-linting.md):
+ * (docs/guide/intent-panel.md):
  *
  *  - **Anything readable, fully recorded.** The path resolves against the
  *    prompt cwd (the project the human is composing about) but is NOT

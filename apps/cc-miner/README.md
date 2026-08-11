@@ -224,7 +224,7 @@ app report that you have no usage.
 Why not `ATTACH` the remote catalog and query it like a local table? Because
 `ATTACH` does no pushdown at all — a bare `count(*)` over a 272 MB table moved
 5.26 GB — while sending the SQL with `quack_query` answered it in 5 ms with ~0
-bytes. See [the DuckDB guide](../../docs/guide/duckdb-mosaic).
+bytes. See [the DuckDB guide](../../packages/aiui-viz/docs/duckdb-mosaic.md).
 
 The two can run at the same time; the Electron one suffixes its title with `· electron` so the
 windows are tellable apart. `pnpm dev:electron` opens a Chrome DevTools Protocol port on **9333**

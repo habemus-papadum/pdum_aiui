@@ -106,7 +106,7 @@ export function durableSignal<T>(
           `[aiui] "${key}" was written earlier in this same tick and is being read outside a ` +
             `reactive scope — this read returns the PRE-write value (${JSON.stringify(value)}, ` +
             `not ${JSON.stringify(lastWritten)}). Branch on the value you wrote (or the ` +
-            "setter's return), or flush() first. See docs/guide/frontend-hard-won.md",
+            "setter's return), or flush() first. See packages/aiui-viz/docs/frontend-hard-won.md",
         );
       }
       return value;

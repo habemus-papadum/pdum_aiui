@@ -179,8 +179,8 @@ core in `aiui-viz/modal`):
 - Imperative events from outside (global shortcuts, sockets) cross in as sequential idempotent
   dispatches, re-reading committed state between steps — copy
   `packages/aiui-intent-client/src/activation.ts`. Spec worked example:
-  `packages/aiui-intent-client/src/spec.ts`; rationale:
-  `docs/proposals/intent-client/01-mode-engine.md`.
+  `packages/aiui-intent-client/src/spec.ts`; rationale: the mode-engine design
+  note (git history).
 
 ## Solid 2.0 (beta) instant-bite gotchas
 

@@ -7,7 +7,7 @@
  * session ({@link LiveSession}, Gemini or OpenAI in linter mode) and speaks
  * one short diagnostic at each pause (see
  * {@link ./live-session}.LINTER_INSTRUCTIONS — published verbatim in
- * docs/guide/prompt-linting.md). Its whole product is advisory:
+ * docs/guide/intent-panel.md). Its whole product is advisory:
  * `linter-note` events (+ reply audio), `linter-tool-call`/`-result` events,
  * and trace stages. Nothing here touches the chronicle's content or the
  * committed prompt.

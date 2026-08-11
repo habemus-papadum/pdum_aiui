@@ -3,7 +3,7 @@
  *
  * Chrome reports its browser socket as `ws://127.0.0.1:<its own port>/…`, which
  * is a lie from anywhere but that machine — a tunneled remote browser
- * (docs/guide/remote) is reached at the forwarded host:port we just fetched
+ * (packages/aiui/docs/remote) is reached at the forwarded host:port we just fetched
  * from. Keep the path (the browser's session id) and take the authority from
  * the endpoint that answered.
  */

@@ -29,7 +29,7 @@ channel-served plain page at `/intent/` — driving the page you're developing: 
 you want, capture screenshots, draw on the page, select the thing you mean, and send it all
 through lowering to your session. It cooperates with the Chrome DevTools MCP and annotates the
 app's affordances in a superset of [WebMCP](https://developer.chrome.com/docs/ai/webmcp).
-→ [Getting Started](./getting-started)
+→ [The Intent Panel](./intent-panel)
 
 **3. Frontend code for agents.** Principles, utilities, examples, and workflows — a TypeScript
 library plus Claude skills — for the kind of code agents should *write* in this loop: SolidJS 2.0
@@ -58,14 +58,14 @@ guides, and a TypeDoc API reference automatically.
 ## Where to go next
 
 - [Motivation — a personal workflow](./motivation) — why this exists, in first person.
-- [Getting Started](./getting-started) — run the whole loop: session, app, intent tool.
+- [Getting Started](./getting-started) — keys, then the three run modes.
+- [The Intent Panel](./intent-panel) — the feature reference: dictation, capture, the linter,
+  the oracle, the pencil, the trace debugger.
 - [Prompt Lowering](./prompt-lowering) — the core idea, mechanism, and research program.
-- [VS Code Integration](./vscode) — send editor selections into the turn; double-click the page to jump to source.
-- [The Agent's Browser](./chrome) — the shared session browser, the managed browser (Chromium / Chrome for Testing), profiles.
-- [Remote Development](./remote) — session on a remote box, browser on yours.
 - [Configuration](./config) — config.json: locations, keys, precedence.
-- [DuckDB in the Browser](./duckdb-mosaic) — Parquet into Wasm, the Quack remote protocol, Mosaic wiring, and measured numbers. Standalone; no aiui required.
-- [Frontend for Agents](./frontend-for-agents) — how the code itself should be written.
+- [Frontend for Agents](./frontend-for-agents) — how the code itself should be written (the
+  library's own guides live [with the package](/packages/aiui-viz/)).
 - [⚠️ Read before running](./warning) — the security posture, plainly.
-- [Packages](/packages/) — the package index and per-package API references.
-- [Developing pdum_aiui](./development) — working on this repo (docs system: [here](./documentation)).
+- [Packages](/packages/) — the package index, per-package guides (the agent's browser, remote
+  development, DuckDB, VS Code), and API references.
+- [Developing pdum_aiui](./development) — working on this repo: workspace, docs system, releasing.

@@ -27,7 +27,7 @@
  *     the runtime fails loudly when it is missing.
  *
  * The principles this framework holds itself to (each one ratified, most paid
- * for — see the proposal §2a and docs/guide/frontend-hard-won.md):
+ * for — see the proposal §2a and packages/aiui-viz/docs/frontend-hard-won.md):
  *
  *  - **Compile time injects identity and location only.** No behavior may
  *    depend on the transform beyond naming: with the plugin off, cells go

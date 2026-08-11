@@ -2,7 +2,7 @@
  * The prompt-LINTER vendor seam.
  *
  * Where {@link ./realtime}'s STT session speaks one vendor's dialect
- * directly, the prompt linter (docs/guide/prompt-linting.md) can run on
+ * directly, the prompt linter (docs/guide/intent-panel.md) can run on
  * either **Gemini Live** (video-capable, the reference) or **OpenAI
  * realtime** (frames as turn-boundary items). Both hide behind one interface
  * the linter sidecar drives; the vendor differences (audio rate, image
@@ -28,7 +28,7 @@ import type { CallCost } from "./cost";
 /**
  * The **prompt-linter persona** — the authoritative system-instruction text for
  * linter-mode sessions, shared by both engines. Published VERBATIM in
- * docs/guide/prompt-linting.md (the "every prompt is documented" principle) —
+ * docs/guide/intent-panel.md (the "every prompt is documented" principle) —
  * edits here must be mirrored there. Overridable per-hello via
  * `linterInstructions`. Kept terse — instructions are billed as input tokens
  * on every turn.

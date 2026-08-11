@@ -203,7 +203,6 @@ function main() {
         items: [
           { text: "Introduction", link: "/guide/" },
           { text: "Getting Started", link: "/guide/getting-started" },
-          { text: "Installation", link: "/guide/installation" },
           { text: "The Intent Panel", link: "/guide/intent-panel" },
           { text: "Configuration", link: "/guide/config" },
           { text: "⚠️ Read Before Running", link: "/guide/warning" },
@@ -214,19 +213,13 @@ function main() {
         items: [
           { text: "Motivation & Workflow", link: "/guide/motivation" },
           { text: "Prompt Lowering", link: "/guide/prompt-lowering" },
-          { text: "The Agent's Browser", link: "/guide/chrome" },
-          { text: "Remote Development", link: "/guide/remote" },
           { text: "Frontend for Agents", link: "/guide/frontend-for-agents" },
         ],
       },
       {
         text: "Developers",
         collapsed: true,
-        items: [
-          { text: "Developing pdum_aiui", link: "/guide/development" },
-          { text: "Documentation System", link: "/guide/documentation" },
-          { text: "Releasing & Publishing", link: "/guide/releasing" },
-        ],
+        items: [{ text: "Developing pdum_aiui", link: "/guide/development" }],
       },
       { text: "Packages", link: "/packages/", items: packageNodes },
     ],

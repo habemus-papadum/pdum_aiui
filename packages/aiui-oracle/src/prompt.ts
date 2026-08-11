@@ -1,7 +1,7 @@
 /**
  * prompt.ts — the woven instructions: a standard persona plus the
  * integrator's app-specific portion. Seeded from the persona of record
- * (docs/guide/oracle.md), re-registered for the new role: the oracle is an
+ * (packages/aiui-oracle/docs/oracle.md), re-registered for the new role: the oracle is an
  * APP's voice control surface now, not a briefing side-channel.
  *
  * The sync rule (documented vendor failure mode): the persona stays GENERIC

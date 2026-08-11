@@ -1,9 +1,9 @@
 /**
  * Micro-e2e for the intent pipeline's REAL realtime (streaming) transcription
- * path (archive/streaming-turns.md §3, L1). The sibling `openai-pipeline.e2e.ts` smokes
- * the REST wire; this one smokes the realtime wire — a single ~2 s WebSocket
- * session against the live GA endpoint, asserting round-trip **shape**, never
- * output quality:
+ * path (the streaming-turns notes §3, L1 — git history). The sibling
+ * `openai-pipeline.e2e.ts` smokes the REST wire; this one smokes the realtime
+ * wire — a single ~2 s WebSocket session against the live GA endpoint,
+ * asserting round-trip **shape**, never output quality:
  *
  *  - the checked-in `test/fixtures/segment.wav` (16 kHz mono PCM16) is resampled
  *    in-test to 24 kHz (the realtime session's input rate — a simple linear

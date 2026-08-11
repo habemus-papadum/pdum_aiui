@@ -67,7 +67,7 @@ session. Install it **on the remote box** (run the commands above from the remot
 integrated terminal; `vscode:link` links into `~/.vscode-server/extensions/` there). Selection
 chips deep-link back through `vscode://vscode-remote/…` instead of `vscode://file/…`, so
 clicking one in your local browser reopens the file in the remote workspace. The rest of the
-remote story is [Remote Development](/guide/remote).
+remote story is [Remote Development](/packages/aiui/remote).
 
 ## From the page back to the editor: VS Code jump mode
 

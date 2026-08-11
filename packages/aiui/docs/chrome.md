@@ -4,13 +4,13 @@
 [Chrome DevTools MCP](https://github.com/ChromeDevTools/chrome-devtools-mcp) to the session by
 default, so the agent can drive a real Chrome: navigate, click, fill forms, screenshot, read the
 console, evaluate JavaScript. See
-[⚠️ Read before running](./warning#_3-the-agent-gets-a-browser-by-default) for what that implies
+[⚠️ Read before running](/guide/warning#_3-the-agent-gets-a-browser-by-default) for what that implies
 before deciding it's on.
 
 The design goal is one **session browser**: a single, user-visible Chrome that you and the agent
 share — you click around in the same tabs the agent drives, the agent screenshots the page you're
-looking at, and the [aiui DevTools panel](./devtools) is loaded in it. That's what makes deictic
-work ("make *this* wider") possible.
+looking at, and the [intent client's extension](/guide/intent-panel) is loaded in it. That's what
+makes deictic work ("make *this* wider") possible.
 
 Sharing a browser needs manners, so whenever the Chrome DevTools MCP is attached, `aiui claude`
 also loads the **session-browser skill** from the bundled
@@ -26,7 +26,7 @@ review. Sessions without the browser skip the skill entirely.
 | Default                                            | Attached                                   |
 | `CI` set in the environment                        | Off (`--aiui-chrome` forces it back on)    |
 | `--aiui-no-chrome`                                 | Off, beats everything                      |
-| `chrome.enabled: false` in [config](./config)      | Off (a per-launch `--aiui-chrome` still wins) |
+| `chrome.enabled: false` in [config](/guide/config)      | Off (a per-launch `--aiui-chrome` still wins) |
 
 ## How the browser connects: attach vs launch
 
@@ -86,7 +86,7 @@ do for you, flip the default (below).
 aiui config set chrome.managed chrome-for-testing
 ```
 
-(or set `chrome.managed` in [config.json](./config)). Flip it back with
+(or set `chrome.managed` in [config.json](/guide/config)). Flip it back with
 `aiui config set chrome.managed chromium`, or `aiui config unset chrome.managed`. The two flavors
 keep **separate** installs and **separate** profiles, so switching never mixes their state.
 
@@ -104,7 +104,7 @@ dev-server port is a distinct origin — and Chrome never persists screen-share 
 picker and auto-selects the *entire screen*, which fails with `NotReadableError` when the managed
 binary lacks the macOS Screen Recording permission — it silently broke the paint host's screen
 share.) This is a deliberate posture choice for a dev browser that already runs an
-unauthenticated debug port (see [the warning](./warning)): treat every page you open in it as
+unauthenticated debug port (see [the warning](/guide/warning)): treat every page you open in it as
 able to hear the mic and see the tab without asking.
 
 ### The managed install
@@ -127,7 +127,7 @@ whatever is already installed:
 - **Installed and current** → it's simply used. This also holds with `manage: "off"` — "off"
   silences checks and prompts, it doesn't un-prefer an install you made deliberately.
 
-The knob is `chrome.manage` in [config.json](./config): `"prompt"` (default) / `"auto"` / `"off"`.
+The knob is `chrome.manage` in [config.json](/guide/config): `"prompt"` (default) / `"auto"` / `"off"`.
 Prompt answers are persisted to the **user-level** config, never the project file. (The old name
 `chrome.forTesting` still works as a deprecated alias when `chrome.manage` is unset.)
 
@@ -164,9 +164,10 @@ opts out, and headless environments get a printed URL instead of a window.)
 `aiui chrome status` is the diagnostic to reach for first: the managed-browser installs (both
 flavors) and their freshness, which flavor is preferred, how *this* directory would connect
 (attach/launch, any running session browser), which browser and user data dir it would use, the
-profiles that exist here, and whether the intent client will auto-load. For a *running* session, the [DevTools panel](./devtools)'s
-Server tab shows the same wiring **as the session actually saw it at launch** — `aiui claude`
-hands the channel server a launch summary (`--launch-info`), surfaced at `/debug/api/info`.
+profiles that exist here, and whether the intent client will auto-load. For a *running* session,
+the console (`aiui dashboard`) shows the same wiring **as the session actually saw it at
+launch** — `aiui claude` hands the channel server a launch summary (`--launch-info`), surfaced
+at `/debug/api/info`.
 
 One aside on `--help`/`--version`: they're inert on the wrapper commands. `aiui claude --help`
 prints aiui's own flag summary and then claude's help (two outputs, back to back) without
@@ -180,7 +181,7 @@ touching config, the browser, or Chrome for Testing — same idea for `--version
 | Chrome **user data dirs** (profiles)   | `.aiui-cache/chrome/<variant>/<profile>` under the directory `aiui claude` runs in, partitioned by browser variant (`chromium`, `chrome-for-testing`, `chrome-<channel>`, or `custom-<hash>`; default profile: `default`); gitignored, project-local |
 | The session browser's **debug port**   | `DevToolsActivePort` inside the profile dir — written by Chrome itself; aiui's discovery reads it (plus an informational `aiui-browser.json` breadcrumb) |
 | Managed **browser** builds             | `~/.cache/aiui/chromium/` and `~/.cache/aiui/chrome/` (one per flavor) — user-level (respects `AIUI_CACHE`/`XDG_CACHE_HOME`), shared across projects, each with its own `update-state.json` bookkeeping |
-| [Config](./config)                     | `~/.cache/aiui/config.json` (user) and `.aiui-cache/config.json` (project) |
+| [Config](/guide/config)                     | `~/.cache/aiui/config.json` (user) and `.aiui-cache/config.json` (project) |
 | chrome-devtools-mcp's own default      | `~/.cache/chrome-devtools-mcp/chrome-profile` — only if you run it *without* aiui; aiui always pins the profile |
 
 ## Profiles: persistent and project-local
@@ -201,7 +202,7 @@ clean profile rather than inheriting the other's logins.
 - `--aiui-chrome-data-dir <path>` — use an explicit directory anywhere on disk, e.g. to share one
   profile across projects.
 - The same choices can be made durable with `chrome.profile` / `chrome.dataDir` in
-  [config.json](./config); flags win over config for a single launch.
+  [config.json](/guide/config); flags win over config for a single launch.
 
 Two things to keep in mind: whatever you log into *inside* that browser stays in the profile and
 is reachable by the agent in later sessions; and concurrent `aiui claude` sessions in the same

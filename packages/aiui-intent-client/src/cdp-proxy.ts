@@ -22,7 +22,7 @@
  *      session's, and mistaking it for one produced a phantom "endpoint moved"
  *      warning (2026-07-20).
  *
- * **Loopback only.** The CDP port is root of the browser (docs/guide/chrome.md),
+ * **Loopback only.** The CDP port is root of the browser (packages/aiui/docs/chrome.md),
  * so this proxy refuses to bridge to anything but 127.0.0.1/::1 — a tunneled or
  * remote browser (`chrome.browserUrl`) deliberately gets no bridge. That is a
  * check on WHERE WE DIAL, not on who dialed us: like every other route on the

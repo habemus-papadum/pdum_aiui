@@ -9,7 +9,7 @@
  * relative to the app root, `data-cell="name"`) — the same handles
  * `selection.ts` reads — so this exercises the exact screenshot-rect →
  * components → source path a real app has. The concepts-level write-up is
- * docs/guide/attribution.md. When `window.__AIUI__.sourceRoot` is known the
+ * packages/aiui-viz/docs/attribution.md. When `window.__AIUI__.sourceRoot` is known the
  * stamp is resolved to an absolute path (what the agent opens); otherwise the
  * relative stamp rides through and the channel resolves it.
  *

@@ -32,12 +32,14 @@ import { describe, expect, it } from "vitest";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-// The models the workbench lab settled on as defaults (archive/workbench/openai-audio-stack.md,
-// field-notes.md): mini transcribe for STT, mini chat at temperature 0 for the
-// correction diff. Cheapest tokens that still exercise the real request shape.
+// The models the workbench lab settled on as defaults (its openai-audio-stack
+// and field notes, in git history): mini transcribe for STT, mini chat at
+// temperature 0 for the correction diff. Cheapest tokens that still exercise
+// the real request shape.
 const TRANSCRIBE_MODEL = "gpt-4o-mini-transcribe";
 const CORRECT_MODEL = "gpt-4o-mini";
-// The premium tier's TTS-ack model (archive/model-tiers.md T2). A one-word ack is a few KB.
+// The premium tier's TTS-ack model (the model-tiers notes T2, git history). A
+// one-word ack is a few KB.
 const TTS_MODEL = "gpt-4o-mini-tts";
 
 const wavPath = new URL("./fixtures/segment.wav", import.meta.url);
@@ -48,7 +50,8 @@ describe.skipIf(!OPENAI_API_KEY)("openai intent pipeline · real round-trip (e2e
     const form = new FormData();
     form.append("model", TRANSCRIBE_MODEL);
     // The filename EXTENSION is load-bearing: OpenAI sniffs the container by
-    // name, not content-type (archive/workbench/field-notes.md). ".wav" must match the file.
+    // name, not content-type (the workbench field notes, git history). ".wav"
+    // must match the file.
     form.append("file", new File([bytes], "segment.wav", { type: "audio/wav" }));
 
     const started = performance.now();

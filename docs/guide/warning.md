@@ -36,7 +36,7 @@ into your live, permission-skipping Claude Code session (loaded via
   default — they cost nothing until something connects).
 - **So does the intent client, and it bridges the browser.** The channel serves the panel at
   `/intent/`, and — so the panel can drive real tabs without a browser extension — proxies the
-  Chrome DevTools protocol at `/intent/cdp` to the [session browser](./chrome). The browser's own
+  Chrome DevTools protocol at `/intent/cdp` to the [session browser](/packages/aiui/chrome). The browser's own
   debug port stays loopback-bound (the proxy refuses to bridge anywhere else), but the *bridge*
   is on the channel port. Whoever can reach that port can therefore drive the browser: read any
   open tab, screenshot it, run JavaScript in it. Same trust boundary as prompt injection, and the
@@ -69,7 +69,7 @@ understand about how it's wired:
 - The sharing works over Chrome's **DevTools debug port, which is unauthenticated**: any process
   that can reach it has full control of that browser. It binds to loopback only, so "any process"
   means anything running on your machine — and if you tunnel it for
-  [remote development](./remote), anything on the remote machine too. Note the channel's
+  [remote development](/packages/aiui/remote), anything on the remote machine too. Note the channel's
   `/intent/cdp` bridge above: it re-exposes that control on the channel port, under
   `channel.bind`.
 - The session browser also launches with **media prompts pre-answered**
@@ -79,7 +79,7 @@ understand about how it's wired:
   dev-server port — but it applies to every page in that browser, so don't browse the open web
   in it.
 
-Details: [The Agent's Browser](./chrome).
+Details: [The Agent's Browser](/packages/aiui/chrome).
 
 ## The actual recommendation
 

@@ -72,7 +72,7 @@ export function adopt(setup: (host: HTMLElement) => Release): Adoption {
     console.error(
       "[aiui] adopt() was called with no reactive owner, so its cleanup can never run. " +
         "Call it in the component BODY (`ref={adopt(…)}`), never inside another ref callback " +
-        "or at module scope. See docs/guide/frontend-hard-won.md",
+        "or at module scope. See packages/aiui-viz/docs/frontend-hard-won.md",
     );
   }
 

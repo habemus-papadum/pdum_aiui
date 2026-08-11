@@ -112,7 +112,7 @@ export async function connectCdpBus(options: CdpBusOptions): Promise<CdpBus> {
   if (!LOOPBACK.test(options.cdpUrl)) {
     throw new Error(
       `the CdpBus refuses a non-loopback bridge (${options.cdpUrl}) — CDP is root of the ` +
-        "browser and stays a this-machine-only dev affordance (docs/guide/chrome.md)",
+        "browser and stays a this-machine-only dev affordance (packages/aiui/docs/chrome.md)",
     );
   }
   const log = options.log ?? (() => {});

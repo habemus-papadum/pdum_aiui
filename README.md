@@ -85,9 +85,9 @@ pnpm docs:gen       # regenerate package pages + API + sidebar only
 
 The site is generated from the same `packages/*` glob everything else uses, so **adding a package
 needs no doc-config changes** — its pages and API reference appear automatically on the next
-`docs:gen`. `scripts/docs-gen.mjs` is the generator; `docs/guide/documentation.md` explains the
-system in full. The generated tree (`docs/packages/**`, the sidebar, VitePress `cache/`/`dist/`) is
-gitignored.
+`docs:gen`. `scripts/docs-gen.mjs` is the generator; the docs-system section of
+`docs/guide/development.md` explains it in full. The generated tree (`docs/packages/**`, the
+sidebar, VitePress `cache/`/`dist/`) is gitignored.
 
 ## Releasing
 

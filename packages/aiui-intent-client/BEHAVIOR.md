@@ -466,7 +466,7 @@ pipeline vocabulary, and the journeys' XOR (oracle ⊕ linter) died with it. It 
 2026-07-30 as something else entirely — not a route onto the turn but a **second SINK**
 (`packages/aiui-oracle` in the panel, O3a above): it still contributes NOTHING to turns or
 prompt lowering, and the pause bracket an oracle detour leaves in the stream is deliberately
-reason-free. `docs/guide/oracle.md` keeps the persona of record.
+reason-free. `packages/aiui-oracle/docs/oracle.md` keeps the persona of record.
 
 **Reply audio STREAMS (owner, 2026-07-19: "we don't want whole playback anything").** Every
 live consumer's spoken reply reaches the client as `seq`-ordered PCM chunks the moment the
