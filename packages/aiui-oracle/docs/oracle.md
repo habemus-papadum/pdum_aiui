@@ -10,8 +10,8 @@ It is deliberately simple: one session, one tool surface, one conversation. The 
 no navigation and no page content, and contributes **nothing** to intent turns or prompt
 lowering — it is an app feature, like the pencil, not part of the briefing
 pipeline. (An earlier, entirely different oracle lived inside the intent client and channel;
-it was deleted end to end on 2026-07-25 — git history keeps it, and
-`docs/proposals/aiui-oracle.md` records the research and decisions behind this rebuild.)
+it was deleted end to end on 2026-07-25 — git history keeps it, along with the `aiui-oracle`
+proposal recording the research and decisions behind this rebuild.)
 
 ## Developer setup
 
@@ -187,7 +187,8 @@ per-tool toggles, and the viewer. The lab is where every capability lands first.
 
 ## Status
 
-V1 (2026-07-26): WebRTC transport, OpenAI only, live-verified end to end. Deliberately
-parked, with their seams in place: the WebSocket transport, the sideband control channel,
-session resume-by-replay, and the intent-panel embedding (the "intent oracle"). Gemini
-follows once the OpenAI shapes settle.
+V1 (2026-07-26): WebRTC transport, OpenAI only, live-verified end to end. The intent-panel
+embedding (the "intent oracle") has since landed — see
+[the intent panel](/guide/intent-panel#the-oracle). Still deliberately parked, with their
+seams in place: the WebSocket transport, the sideband control channel, and
+session resume-by-replay. Gemini follows once the OpenAI shapes settle.
