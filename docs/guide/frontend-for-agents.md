@@ -222,8 +222,8 @@ better instrumented than a human team would ever bother to make it.
   interaction contract, each rule pinned by a test.
 - **Design choices** — [the level-2 page](/packages/aiui-viz/frontend-design-choices); **ledger** —
   [the level-3 page](/packages/aiui-viz/frontend-hard-won).
-- **Skill** — the `frontend-design` Claude plugin
-  (`packages/aiui-claude-plugin/marketplace/plugins/frontend-design`) teaches this to a coding
+- **Skill** — the `aiui-architecture` Claude plugin
+  (`packages/aiui-claude-plugin/marketplace/plugins/aiui-architecture`) teaches this to a coding
   agent; the docs here are its source of truth.
 - **Background notes** — the pre-implementation explorations (solid-cells, HMR for agentic
   coding, agentic frontend debugging, observable web workers) are retired to git history;

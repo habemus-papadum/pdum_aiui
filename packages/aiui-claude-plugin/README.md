@@ -5,14 +5,11 @@ small CLI/library to locate them.
 
 ## The plugins
 
-| Plugin            | What it carries                                                                                        | Loaded by `aiui claude`        |
-| ----------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------ |
-| `aiui`            | Workflow slash commands (`/aiui:aiui-status`, `/aiui:aiui-scaffold`), a placeholder skill, a helper script. | Always                         |
-| `frontend-design` | Frontend-for-agents design principles for scientific/technical UI code. **Stub** — proposed content is parked in `drafts/` pending review. | Always                         |
-| `session-browser` | Etiquette for driving the **shared session browser** through the Chrome DevTools MCP. **Stub** — proposed content (announce-before-acting, preserve the user's tabs; later, in-page visual indication tools) is parked in `drafts/` pending review. | Only when the Chrome DevTools MCP is attached |
-
-The `drafts/` directory at the package root holds the full proposed skill texts; they ship
-nowhere and load nowhere until they're reviewed and folded back into the plugins.
+| Plugin              | What it carries                                                                                        | Loaded by `aiui claude`        |
+| ------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------ |
+| `aiui`              | The `aiui-workflow` skill — live introspection of the running aiui system (channel, browser, config).  | Always                         |
+| `aiui-architecture` | How an aiui app is architected — the four-layer playbook and design principles for aiui-viz frontends. | Always                         |
+| `session-browser`   | Etiquette and mechanics for driving the **shared session browser** through the Chrome DevTools MCP.    | Only when the Chrome DevTools MCP is attached |
 
 `aiui claude` loads plugins **directly**, with one `--plugin-dir` flag per plugin — no marketplace
 install required. The `marketplace/.claude-plugin/marketplace.json` manifest makes the same
@@ -24,14 +21,15 @@ directory usable as a Claude Code plugin marketplace later.
 marketplace/
   .claude-plugin/marketplace.json
   plugins/
-    aiui/               .claude-plugin/plugin.json + commands/ + skills/ + scripts/
-    frontend-design/    .claude-plugin/plugin.json + skills/
-    session-browser/    .claude-plugin/plugin.json + skills/
+    aiui/                .claude-plugin/plugin.json + skills/
+    aiui-architecture/   .claude-plugin/plugin.json + skills/
+    session-browser/     .claude-plugin/plugin.json + skills/
 ```
 
 ### Doc links: relative in dev, bundled at pack time
 
-Skill markdown links into the repo's `docs/guide/` with ordinary **relative links** — in a
+Skill markdown links into the repo's docs (`docs/guide/`, `packages/*/docs/`) with ordinary
+**relative links** — in a
 checkout they are the live docs, so there is no build step and nothing to go stale (the same
 source-first rule as the workspace's editable installs). Self-containment happens at **pack
 time**: the package's `prepack` hook (`scripts/bundle-skill-docs.mjs pack`) finds every
@@ -65,6 +63,6 @@ claude --plugin-dir "$(aiui-claude-plugin path session-browser)"
 ```ts
 import { listPlugins, marketplaceDir, pluginDir } from "@habemus-papadum/aiui-claude-plugin";
 
-listPlugins(); // → ["aiui", "frontend-design", "session-browser"]
+listPlugins(); // → ["aiui", "aiui-architecture", "session-browser"]
 pluginDir("session-browser"); // → absolute plugin directory
 ```

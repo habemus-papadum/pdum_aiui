@@ -1,5 +1,5 @@
 ---
-name: frontend-design
+name: aiui-architecture
 description: How to write reactive scientific-visualization frontends in aiui projects — the four-layer playbook (pure functions → cells → components → application), SolidJS 2.0 cells, durable/disposable HMR structure, worker streaming, agent tool surfaces. Use when creating, PLANNING, or refactoring frontend/visualization code in a project that uses @habemus-papadum/aiui-viz (or when asked to follow the aiui frontend methodology). The repo docs are the source of truth; this skill is the operational digest.
 ---
 

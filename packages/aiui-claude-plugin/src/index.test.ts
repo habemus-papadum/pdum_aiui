@@ -11,7 +11,7 @@ describe(name, () => {
   });
 
   it("lists the bundled plugins", () => {
-    expect(listPlugins()).toEqual(["aiui", "frontend-design", "session-browser"]);
+    expect(listPlugins()).toEqual(["aiui", "aiui-architecture", "session-browser"]);
   });
 
   it("resolves each bundled plugin to a directory with a plugin manifest", () => {

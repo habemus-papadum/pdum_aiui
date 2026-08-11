@@ -230,11 +230,11 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
 
   const mcpConfig = JSON.stringify({ mcpServers });
 
-  // The base aiui plugin and the frontend-design principles always load. The
+  // The base aiui plugin and the aiui-architecture principles always load. The
   // session-browser skill is an add-on for the Chrome DevTools MCP — etiquette
   // for driving the *shared* browser — so the session is lightened by leaving
   // it out whenever that MCP isn't attached.
-  const plugins = [join(pluginsRoot, "aiui"), join(pluginsRoot, "frontend-design")];
+  const plugins = [join(pluginsRoot, "aiui"), join(pluginsRoot, "aiui-architecture")];
   if (chromeInfo.enabled) {
     plugins.push(join(pluginsRoot, "session-browser"));
   }

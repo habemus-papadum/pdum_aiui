@@ -1,9 +1,0 @@
-{
-  "name": "frontend-design",
-  "description": "The aiui frontend methodology as a skill: SolidJS 2.0 cells, durable/disposable HMR structure, worker streaming, and agent tool surfaces. Digest of docs/guide/frontend-*.md (the source of truth).",
-  "version": "0.0.0",
-  "author": {
-    "name": "Nehal Patel",
-    "email": "nehal@alum.mit.edu"
-  }
-}

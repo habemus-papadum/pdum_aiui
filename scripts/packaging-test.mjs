@@ -133,7 +133,7 @@ check(
   existsSync(join(marketplace, ".claude-plugin", "marketplace.json")) &&
     existsSync(join(marketplace, "plugins", "aiui", ".claude-plugin", "plugin.json")) &&
     existsSync(
-      join(marketplace, "plugins", "frontend-design", "skills", "frontend-design", "SKILL.md"),
+      join(marketplace, "plugins", "aiui-architecture", "skills", "aiui-architecture", "SKILL.md"),
     ) &&
     existsSync(
       join(marketplace, "plugins", "session-browser", "skills", "session-browser", "SKILL.md"),
