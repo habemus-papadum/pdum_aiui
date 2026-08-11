@@ -130,7 +130,7 @@ describe("PageToolDirectory registration", () => {
   });
 });
 
-describe("namespace activity + shadow marking (docs/proposals/page-tools.md)", () => {
+describe("namespace activity + shadow marking (the page-tools proposal, git history)", () => {
   it("records the parked bit; a re-register with the same hash updates it silently", () => {
     const { dir, log } = makeDirectory();
     const page = connectPage(dir);

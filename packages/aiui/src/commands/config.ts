@@ -8,11 +8,10 @@
  *   aiui config set <key> <value>   validated write
  *   aiui config unset <key>         remove a key (e.g. to be re-asked on first run)
  *
- * The project config layer retired with the browser-profiles redesign
- * (docs/proposals/browser-profiles.md) — there is exactly one file, in the
- * user cache. Keys, types, defaults, and docs all come from
- * `util/config-schema.ts` — the same table validation uses, so what these
- * commands print is what the loader enforces.
+ * The project config layer retired with the browser-profiles redesign — there
+ * is exactly one file, in the user cache. Keys, types, defaults, and docs all
+ * come from `util/config-schema.ts` — the same table validation uses, so what
+ * these commands print is what the loader enforces.
  */
 import { existsSync } from "node:fs";
 import chalk from "chalk";

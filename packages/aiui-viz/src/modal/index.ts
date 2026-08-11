@@ -18,10 +18,9 @@
  * operations with per-claim status; the end of hand-called `sync*`
  * functions), and the **bar projection** (bar.ts — caps as renders of the
  * spec). Apps that want the engine give it their state wholesale; apps with
- * their own architecture keep using the modules à la carte. Design doc:
- * docs/proposals/intent-client/01-mode-engine.md. The Solid adapter
- * (`solidModeEngine`) lives in the package root, keeping this subpath
- * framework-free.
+ * their own architecture keep using the modules à la carte. Design doc: the
+ * mode-engine spec (git history). The Solid adapter (`solidModeEngine`) lives
+ * in the package root, keeping this subpath framework-free.
  *
  * Realm rules: no Solid import, no DOM access at module scope (DOM only
  * inside install/render functions), so this subpath is safe to import from

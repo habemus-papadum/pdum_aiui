@@ -82,7 +82,7 @@ const PREVIEW_EXT = /\.(png|jpe?g|gif|webp|svg)$/i;
  * Resolve a preview request to a servable file, or undefined.
  *
  * Lowered prompts reference attachments by **absolute path** (see
- * archive/channel-attachment-path-encoding.md — the session reads them with
+ * the channel attachment-path-encoding notes in git history — the session reads them with
  * its own tools), and the debug viewer wants to show those images on hover.
  * Serving arbitrary filesystem paths from a web endpoint is a real hole even
  * on loopback, so this is deliberately narrow: absolute, image extension, and
@@ -153,7 +153,7 @@ export interface DebugHooks {
    * The page-tools ledger for GET /debug/api/page-tools — the CHANNEL's view
    * of every registered namespace (what the agent actually sees:
    * registrations with activity + shadow marks), the ground truth when
-   * page-side and channel-side disagree (docs/proposals/page-tools.md).
+   * page-side and channel-side disagree (the page-tools proposal, git history).
    */
   pageTools?: () => unknown;
 }

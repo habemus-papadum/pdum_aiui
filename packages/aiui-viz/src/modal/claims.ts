@@ -1,6 +1,6 @@
 /**
  * claims.ts — operations, derived: the async half of the mode engine
- * (docs/proposals/intent-client/01-mode-engine.md §3.4).
+ * (the mode-engine spec §3.4, git history).
  *
  * A **claim** is a pure function from (state, context) to a *desired
  * operation* keyed by identity — "ink pointer on tab 42", "tab stream warm

@@ -39,8 +39,8 @@ the majority of cell renders. (2) *The declared path*: a render outside `CellVie
 `data-cell="name"` — a name, not a location, so it cannot drift; a forgotten declaration is a
 false negative only, because the element still carries its compiler-injected `data-source-loc`
 and an agent is one file-read from identifying the cell itself. A runtime-internals mechanism
-that derived stamps automatically was built, measured, and retired (see the retired proposal
-`docs/proposals/solid-cell-attribution.md` for the findings and the reasoning); compile-time
+that derived stamps automatically was built, measured, and retired (the solid-cell-attribution
+notes in git history carry the findings and the reasoning); compile-time
 detection of cell reads in JSX was rejected because real components read cells non-lexically.
 The division of labor: compile time owns *locations*, declarations own *identity*, runtime owns
 *live state and topology*.

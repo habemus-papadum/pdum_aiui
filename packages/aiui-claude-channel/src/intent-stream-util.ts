@@ -27,7 +27,7 @@ export const MIN_REALTIME_COMMIT_MS = 100;
  * Exported so a test ties it to the channel's `REALTIME_VOICE_RATE` (pcm.ts). */
 export const REALTIME_PCM_BYTES_PER_MS = 48;
 
-// ── the cleanup passes (archive/workbench/openai-audio-stack.md) ─────────────
+// ── the cleanup passes (the workbench openai-audio-stack notes, git history) ─
 // Condition passes shrink/clean an upload *before* the expensive hop. The
 // named slots keep the attachment path (and the trace's stage sequence) shaped
 // for real trimming/downscaling when it ships; identity today, with no config

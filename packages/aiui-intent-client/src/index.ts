@@ -1,6 +1,6 @@
 /**
  * @habemus-papadum/aiui-intent-client — the greenfield intent client
- * (docs/proposals/intent-client/README.md): a detached plain-page panel
+ * (see the intent-client proposal in git history): a detached plain-page panel
  * built Solid-native on the aiui-viz mode engine, host-agnostic behind the
  * PageTransport/SurfaceTargeting/CaptureSource seam. The MV3 extension is a
  * shell added LAST (ExtensionBus + a static build); the FakeBus makes every

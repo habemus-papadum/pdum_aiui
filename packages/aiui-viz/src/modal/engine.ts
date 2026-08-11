@@ -1,6 +1,6 @@
 /**
  * engine.ts — the mode engine: the composition layer the kit's modules were
- * waiting for (docs/proposals/intent-client/01-mode-engine.md).
+ * waiting for (the mode-engine spec, git history).
  *
  * The kit has vocabulary — ladder columns (mode.ts), key layers (keys.ts),
  * per-event reconciliation (reconcile.ts), guarded effects (effect.ts) — but

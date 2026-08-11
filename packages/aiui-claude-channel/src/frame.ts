@@ -38,7 +38,7 @@ export type EnvelopeKind = "hello" | "data";
  * the CDP tier's tab hints. All ids are **correlation hints** for an agent:
  * the Chrome DevTools MCP accepts only its own `pageId` from `list_pages` —
  * match by URL/title and verify (the session-browser skill teaches the
- * workflow; background in archive/chrome-devtools-mcp-tab-routing-notes.md).
+ * workflow; background in the chrome-devtools-mcp tab-routing notes, git history).
  * Re-exported here so this module's consumers keep one import site.
  */
 export type { TabInfo };
@@ -107,8 +107,8 @@ export interface HelloMeta {
  *  - `attachment` — payload is raw bytes (a shot PNG or a whole audio segment),
  *    identified by `id` (`shot_N` / `seg_N`) and `mime`;
  *  - `audio` — payload is raw bytes: **one streamed PCM frame** of segment
- *    `seg_N`, in `seq` order (the streaming-transcriber path, archive/streaming-turns.md
- *    §3): the segment arrives as many frames *while you talk*; its existing
+ *    `seg_N`, in `seq` order (the streaming-transcriber path, the streaming-turns
+ *    notes §3 in git history): the segment arrives as many frames *while you talk*; its existing
  *    `talk-start`/`talk-end` events remain the boundaries (talk-end commits
  *    the upstream buffer). An `attachment seg_N` — one whole segment in one
  *    frame, the retired REST wire shape — is still tolerated and blob-saved,

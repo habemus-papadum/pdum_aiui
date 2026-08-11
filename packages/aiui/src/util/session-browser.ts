@@ -9,7 +9,7 @@
  * browser via the immutable marker, and Chrome's own `DevToolsActivePort`
  * file inside it is how a running instance is discovered — the same way
  * `aiui claude` attaches. All sessions share the "default" profile unless a
- * `--profile` says otherwise (docs/proposals/browser-profiles.md).
+ * `--profile` says otherwise.
  */
 import {
   decideBrowserAction,

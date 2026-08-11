@@ -1,7 +1,8 @@
 /**
  * The oracle — a realtime voice control surface for aiui apps: a chromeless
  * session engine (pluggable transport + key source, one normalized ledger)
- * plus opt-in widgets. Contract of record: docs/proposals/aiui-oracle.md.
+ * plus opt-in widgets. Contract of record: the aiui-oracle proposal (pdum_aiui
+ * git history).
  */
 
 export type { ControlSurfaceToolsOptions, RegistryToolsOptions } from "./aiui-tools";

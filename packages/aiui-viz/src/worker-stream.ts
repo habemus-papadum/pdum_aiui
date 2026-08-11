@@ -1,6 +1,6 @@
 /**
  * worker-stream.ts — dependency-free request/stream protocol for Web Workers
- * (from archive/reactive-flows/solid-cells-solidjs_v2.md).
+ * (from the solid-cells design notes, git history).
  *
  * `workerStream()` returns an async generator, so a cell can consume a worker
  * directly. Partials stream into the cell, progress messages drive

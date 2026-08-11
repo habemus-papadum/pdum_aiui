@@ -1,7 +1,7 @@
 /**
  * durable.ts — a registry for resources that must outlive a module reload.
  *
- * The HMR discipline (archive/agentic_ui_workflow/hmr_for_agentic_coding.md):
+ * The HMR discipline (the HMR-for-agentic-coding notes, git history):
  * draw a bright line between *durable state* (the WebGL field, the running
  * worker, accumulated history, the user's parameter settings) and *disposable
  * logic* (render functions, cell computes, shaders). A module re-evaluation

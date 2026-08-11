@@ -279,7 +279,8 @@ export type IntentEvent =
        * `chrome.tabs` ids), `from`/`to` the two tabs' `location.href`. Like
        * `navigation`, it is context riding a turn — emitted only while a thread
        * is open, and its POSITION is the attribution (content above it belongs
-       * to the tab you left). See docs/proposals/browser-extension-intent-tool.md §2.
+       * to the tab you left). See the browser-extension intent-tool proposal §2
+       * (git history).
        */
       at: number;
       type: "tab-switch";

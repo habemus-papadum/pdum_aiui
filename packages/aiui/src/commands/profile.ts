@@ -1,5 +1,5 @@
 /**
- * `aiui profile` — manage browser profiles (docs/proposals/browser-profiles.md).
+ * `aiui profile` — manage browser profiles.
  *
  *   aiui profile list                 name · browser · size · running?
  *   aiui profile new <name> [...]     create (marker written; immutable after)

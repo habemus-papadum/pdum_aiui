@@ -3,9 +3,8 @@
  * (`<user cache>/config.json`, e.g. `~/.cache/aiui/config.json`, respecting
  * AIUI_CACHE / XDG_CACHE_HOME). The former project-level layer
  * (`.aiui-cache/config.json`) and the per-key merge are retired with the
- * browser-profiles redesign (docs/proposals/browser-profiles.md): browser
- * identity lives in the profile marker now, and what remains in config are
- * per-user machine facts.
+ * browser-profiles redesign: browser identity lives in the profile marker now,
+ * and what remains in config are per-user machine facts.
  *
  * CLI flags override config. Everything is optional; a missing file is an
  * empty config. A *malformed* file is a hard error, not a warning — these

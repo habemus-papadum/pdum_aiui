@@ -7,7 +7,7 @@
  * endpoint and streams a segment's PCM *while you talk*:
  * `input_audio_buffer.append` per frame, `input_audio_buffer.commit` at
  * talk-end, partial `…delta` events echoed back as they arrive, a
- * `…completed` event as the segment's final (archive/streaming-turns.md §3).
+ * `…completed` event as the segment's final (the streaming-turns notes §3, git history).
  *
  * ### Verified GA surface (developers.openai.com, re-verified live 2026-07-05)
  *

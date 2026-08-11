@@ -1,6 +1,5 @@
 /**
- * Browser profiles — the unit of browser identity
- * (docs/proposals/browser-profiles.md).
+ * Browser profiles — the unit of browser identity.
  *
  * A profile is a Chrome user-data directory under the USER cache
  * (`~/.cache/aiui/userdata/<name>`; the profile named "default" is the

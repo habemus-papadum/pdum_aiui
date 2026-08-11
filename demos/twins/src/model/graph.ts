@@ -69,7 +69,7 @@ const kit = agentToolkit("app");
 
 // `locate` (element → source) and the `cells` attribution table: app-independent,
 // and every aiui app should have them. The composing kit DECLARES the slices
-// it serves (docs/proposals/page-tools.md): a kit's default view is its own
+// it serves (the page-tools proposal, git history): a kit's default view is its own
 // scope subtree, and `left`/`right` are not under `app` — without this, the
 // slices' controls and `kick` actions would vanish from the surface.
 registerStandardTools(kit, { scopes: [leftScope, rightScope] });

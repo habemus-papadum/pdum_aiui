@@ -2,7 +2,7 @@
  * cell-view.tsx — the notebook feel for every visualization, in one wrapper:
  * spinner + progress before the first value, an error box with retry, and
  * keep-the-last-render (dimmed, progress stripe) while a new run streams or
- * refreshes. From archive/reactive-flows/solid-cells-solidjs_v2.md.
+ * refreshes. From the solid-cells design notes (git history).
  *
  * Styling is the consumer's: the markup emits stable class names
  * (`cell-body`, `cell-body-loading`, `cell-pending`, `cell-error`,

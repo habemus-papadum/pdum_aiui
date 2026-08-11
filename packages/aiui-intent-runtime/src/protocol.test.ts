@@ -213,8 +213,8 @@ describe("connection-loss detection (the client-detected half of the error surfa
 // dependency-free twin of the channel's frame/channel/intent-v1 types) can only
 // drift silently — a comment says "change both together", nothing enforces it.
 // These type-level assertions (checked at `tsc`, not runtime) turn every mirror
-// into a compile error the moment the two sides disagree. See docs/proposals/
-// code-review-pass2-s1-mirrors.md.
+// into a compile error the moment the two sides disagree. See the code-review
+// pass-2 S1 mirrors note (git history).
 describe("wire-mirror drift guards (compile-time; the channel is a devDependency)", () => {
   it("ChunkDescriptor ≡ the runtime's FrameChunk union", () => {
     expectTypeOf<FrameChunk>().toEqualTypeOf<ChunkDescriptor>();

@@ -5,7 +5,7 @@
  * the retired extension panel grew (its `main.tsx` §13.6 machine — git
  * history) reduce to this spec plus
  * the claims (./claims.ts) and the verb effects (./client.ts). Every row
- * traces to docs/proposals/intent-client/04-parity-inventory.md; every
+ * traces to the retired parity inventory (git history); every
  * decided semantic from the salvage list is a reduction or an exclude here,
  * and a test in spec.test.ts.
  *
@@ -48,7 +48,7 @@ import type { CdpAlignment } from "./cdp-align";
  * drag, selection pulls, sampled frames, a hold-to-talk press — gates on this,
  * not on the phase. `undefined` = nothing is collecting.
  *
- * The ORACLE WINS when it is on (O3a, docs/proposals/intent-oracle.md): an
+ * The ORACLE WINS when it is on (O3a of the intent-oracle proposal, git history): an
  * open turn is therefore paused *by construction* — the sink is simply
  * elsewhere — and leaving the oracle restores whatever that turn's own state
  * was, because the oracle never writes the manual `paused` region. No memory,

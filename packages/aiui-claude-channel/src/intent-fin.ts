@@ -197,7 +197,8 @@ export async function finishTurn(
     } satisfies LoweredPromptMessage);
     await ctx.sendPrompt(prompt);
     // Premium tier: a spoken "sent" once the notification landed (the send-
-    // received ack — the minimal recommended trigger set, archive/streaming-turns.md §4).
+    // received ack — the minimal recommended trigger set, per the streaming-turns
+    // notes §4 in git history).
     await speakAck();
     // Gloss the turn for the trace list — detached, so the fin ack does not
     // wait on a chat round-trip. `composed.prompt` is the body only (the

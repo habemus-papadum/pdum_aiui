@@ -185,8 +185,8 @@ describe("createToolsLink", () => {
   // The page→panel tool descriptor (page-script's PageToolDescriptorReport, the
   // rows this link relays) IS the channel's PageToolDescriptor — the wire the
   // link speaks to the channel devDep. Pinned at typecheck so a field drift on
-  // either side breaks the build instead of the socket. See docs/proposals/
-  // code-review-pass2-s1-mirrors.md.
+  // either side breaks the build instead of the socket. See the code-review
+  // pass-2 S1 mirrors note (git history).
   it("the relayed tool descriptor is the channel's PageToolDescriptor (drift guard)", () => {
     expectTypeOf<PageToolDescriptorReport>().toEqualTypeOf<PageToolDescriptor>();
   });

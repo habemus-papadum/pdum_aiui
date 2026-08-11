@@ -1,8 +1,8 @@
 # @habemus-papadum/aiui-stt
 
 Realtime speech-to-text as a **pencil-shaped component**: start a session, feed it audio, watch a
-stream of cumulative text deltas, and know when a segment is final. Contract of record:
-`docs/proposals/aiui-stt.md` in the pdum_aiui repo; the wire facts underneath are the aiui
+stream of cumulative text deltas, and know when a segment is final. Contract of record: the
+aiui-stt proposal (pdum_aiui git history); the wire facts underneath are the aiui
 channel's, hard-won against both live vendors and ported verbatim.
 
 **The default engine is ElevenLabs Scribe v2 realtime.** The OpenAI `transcription`-type realtime

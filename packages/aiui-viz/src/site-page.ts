@@ -63,10 +63,10 @@ export interface SitePage {
    * The app's agent-toolkit namespace (its `agentToolkit(ns)` / scope slug).
    * A shell that drives activate/deactivate flips this namespace's ACTIVITY
    * bit on the page-tools registry in the same breath
-   * (`__AIUI__.tools.setActive` — docs/proposals/page-tools.md), so
-   * route-following consumers (the oracle, the linter) see only the page in
-   * view while the full inventory stays enumerable. Omit for pages with no
-   * toolkit; apps that route internally flip their kit's bit themselves.
+   * (`__AIUI__.tools.setActive`), so route-following consumers (the oracle,
+   * the linter) see only the page in view while the full inventory stays
+   * enumerable. Omit for pages with no toolkit; apps that route internally
+   * flip their kit's bit themselves.
    */
   toolsNs?: string;
   /** Resume continuous work (rAF loops). Called before mount; idempotent. */

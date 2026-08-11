@@ -63,7 +63,7 @@
  * ### Scribe COMMITS UTTERANCES ITSELF — a segment is many utterances
  *
  * The single most important fact about this wire, and the one that cost us a
- * user's two-minute prompt (live-verified; `archive/scribe-realtime-spike.mjs`):
+ * user's two-minute prompt (live-verified by the scribe-realtime spike, git history):
  *
  * **Scribe closes an utterance on its own, unprompted, and there is no way to
  * stop it.** Around 40 s of a continuous utterance it emits `committed_transcript`

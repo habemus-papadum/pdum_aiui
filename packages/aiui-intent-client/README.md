@@ -1,7 +1,7 @@
 # @habemus-papadum/aiui-intent-client
 
-The greenfield intent client (plan of record:
-[docs/proposals/intent-client](../../docs/proposals/intent-client/README.md)): a detached
+The greenfield intent client (plan of record: the intent-client proposal, in git
+history): a detached
 plain-page panel built Solid-native on the aiui-viz **mode engine**, host-agnostic behind a
 small transport seam. The MV3 extension is a *shell* — one more transport plus a static build,
 added last on purpose — not the app's home. Never published (`--no-publish`); it graduates when
@@ -23,7 +23,7 @@ paying out.
 
 | Layer | File | What it is |
 | --- | --- | --- |
-| The machine | `src/spec.ts` | Regions, commands, esc/blur, excludes — the old panel's 1,500-line conductor as ~150 lines of data. Every row traces to the [parity inventory](../../docs/proposals/intent-client/04-parity-inventory.md). |
+| The machine | `src/spec.ts` | Regions, commands, esc/blur, excludes — the old panel's 1,500-line conductor as ~150 lines of data. Every row traces to the parity inventory (git history). |
 | Operations | `src/claims.ts` | The five hand-called `sync*` functions of the old panel, re-expressed as derived claims a reconciler drives. Per-claim status is the UI's warming/live/failed truth. |
 | Keyboard | `src/keys.ts` | The salvaged in-turn grammar on the modal-kit resolver; every binding resolves to an engine command. Unknown in-turn keys swallow + blip. |
 | Command bar | `src/caps.ts` | Caps as projections (lit/enabled/shown/reveals derived); a tap dispatches the same command as the key. |
@@ -83,9 +83,8 @@ the salvaged SW broker and warm-shot capture path, a static build, a new extensi
 
 The launcher is flipped (2026-07-14): `aiui claude` / `aiui browser` auto-load this client and
 nothing else; the frozen extension is retired to safety-net status. The **parity gate is
-closed** (2026-07-19): the ledger that walked the port row by row is retired to
-[archive/intent-client/PARITY.md](../../archive/intent-client/PARITY.md); the living
-interaction contract is [BEHAVIOR.md](./BEHAVIOR.md).
+closed** (2026-07-19): the ledger that walked the port row by row is retired (read it in git
+history); the living interaction contract is [BEHAVIOR.md](./BEHAVIOR.md).
 
 ## Open items (carried from the parity ledger at its retirement, 2026-07-19)
 

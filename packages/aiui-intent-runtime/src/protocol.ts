@@ -43,7 +43,7 @@ export interface Ack {
  * `shot`/`talk` event already on the wire; `audio` carries **one streamed PCM
  * frame** of `seg_N` (the realtime transcriber path), in `seq` order, while
  * the segment's `talk-start`/`talk-end` events stay the boundaries. See the
- * `intent-v1` contract (archive/streaming-turns.md). Mirrors
+ * `intent-v1` contract (the streaming-turns notes, git history). Mirrors
  * `ChunkDescriptor` in the channel's `frame.ts` — the source of truth; change
  * both together.
  */

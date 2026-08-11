@@ -2,8 +2,8 @@
  * Absolute-path affordances shared by the debug panes.
  *
  * The lowering convention hands the session attachments as **absolute paths**
- * (archive/channel-attachment-path-encoding.md), so wherever a path shows up
- * in a rendered stage — a lowered-prompt string, a stage payload — the debug
+ * (the attachment path-encoding notes, git history), so wherever a path shows
+ * up in a rendered stage — a lowered-prompt string, a stage payload — the debug
  * UI makes it tangible: highlighted, and for images under a previewable root,
  * hover to peek, click to open. Hosts that poll a channel cross-origin inject
  * a resolver carrying the channel origin (see traces-pane.ts); the default

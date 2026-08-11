@@ -16,9 +16,9 @@
  * `quack_serve` rejects port 0, so there is no OS-assigned port to ask for. We
  * therefore pick a free one HERE (bind, read, release) and hand quack the
  * number — but the port is never the thing anyone looks up. Discovery is the
- * runtime file this writes, for the reason recorded in
- * docs/proposals/deployment-shapes.md §1.9: a hardcoded port does not fail
- * loudly when contended, it silently routes callers to whoever got there first.
+ * runtime file this writes, for the reason recorded in the deployment-shapes
+ * proposal (git history): a hardcoded port does not fail loudly when contended,
+ * it silently routes callers to whoever got there first.
  */
 import { randomBytes } from "node:crypto";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";

@@ -32,8 +32,8 @@ demos/
 ```
 
 The gallery is a **single-document SPA** (it began as one Vite entry per notebook — "Level 1" —
-and moved to client-side routing so an open intent turn survives switching pages; see
-`docs/proposals/spa-navigation-and-turn-continuity.md`). Each notebook is a self-contained
+and moved to client-side routing so an open intent turn survives switching pages; see the
+SPA-navigation-and-turn-continuity proposal in git history). Each notebook is a self-contained
 package, discovered through its `aiui.sitePage` marker (demo-discovery.ts), lazily imported and
 code-split; leaving a route parks its rAF loops and disposes its components while every durable
 survives for the return visit — and every demo also runs standalone from its own directory.

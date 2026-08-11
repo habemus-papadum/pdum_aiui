@@ -92,4 +92,4 @@ it models cache writes as one bucket, and Anthropic's 1-hour cache tier costs
 1.6× the 5-minute one — 54.8% of cache-creation tokens here, so flat-rating
 understates total spend by 6.9%. See `src/pricing.ts` and the proposal, §3.
 
-Full design: [`docs/proposals/claude-code-usage-analytics.md`](../../docs/proposals/claude-code-usage-analytics.md).
+Full design: the claude-code-usage-analytics proposal (git history).

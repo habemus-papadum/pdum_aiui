@@ -15,8 +15,8 @@
  * session the user is about to start is quietly broken — transcription 401s,
  * a Gemini Live socket that closes on open — and the honest move is to stop
  * at the door with the fix in hand, not to boot degraded. The historical
- * trigger is a stale shell export shadowing the real key
- * (archive/workbench/field-notes.md, "Keys & config").
+ * trigger is a stale shell export shadowing the real key (the workbench field
+ * notes, "Keys & config" — git history).
  *
  * Everything short of a rejection stays non-fatal: `missing`/skip degrade the
  * affected tier (round one's interview is where absence gets fixed), and an

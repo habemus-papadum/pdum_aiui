@@ -1,10 +1,11 @@
 # @habemus-papadum/aiui-remote-bar
 
-The command bar as its **own channel** — the [aiui-pencil plan](../../docs/proposals/aiui-pencil-plan.md)'s
-decision **D5**. The mode engine of a host page, projected over its own websocket, mounted as a
-channel sidecar at its own URL, with a Solid client that renders the projected bar and dispatches
-taps back. A remote client that is *just the bar* — no pencil, no video — is a first-class thing, and
-any app with a mode engine gets a remote control surface by binding one socket.
+The command bar as its **own channel** — the aiui-pencil plan's decision **D5** (that plan lives
+in the pdum_aiui git history). The mode engine of a host page, projected over its own websocket,
+mounted as a channel sidecar at its own URL, with a Solid client that renders the projected bar and
+dispatches taps back. A remote client that is *just the bar* — no pencil, no video — is a
+first-class thing, and any app with a mode engine gets a remote control surface by binding one
+socket.
 
 Internal, `--no-publish`. It ships as source to its in-workspace consumers (the pencil iPad app, a
 bar-only remote page); there is no bundle step.

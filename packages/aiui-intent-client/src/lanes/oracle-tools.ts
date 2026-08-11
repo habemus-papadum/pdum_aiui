@@ -1,6 +1,6 @@
 /**
- * oracle-tools.ts — the oracle's two NON-page tool groups (O3c,
- * docs/proposals/intent-oracle.md). The page's own tools live in
+ * oracle-tools.ts — the oracle's two NON-page tool groups (O3c of the
+ * intent-oracle proposal, git history). The page's own tools live in
  * `oracle.ts`/`page-tools.ts`; these are the panel's and the project's.
  *
  *  - **files** — `read_file`, `list_files`, `grep`, executed CHANNEL-side over

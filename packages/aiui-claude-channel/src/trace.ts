@@ -8,7 +8,7 @@
  * prompt-lowering research: inspectable IRs between pipeline stages, like
  * dumping a compiler's passes.
  *
- * Since the browser-profiles redesign (docs/proposals/browser-profiles.md §4)
+ * Since the browser-profiles redesign (§4 of that proposal, in git history)
  * the per-project cache lives in the USER cache, keyed by the project's full
  * absolute path — `~/.cache/aiui/projects/<slug>-<hash8>/` — so the project
  * directory itself stays pristine (no `.aiui-cache/`, nothing to gitignore).

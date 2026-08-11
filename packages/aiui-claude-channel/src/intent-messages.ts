@@ -48,9 +48,9 @@ export interface LoweredPromptMessage {
 /**
  * A base64 audio clip pushed to the client to play — the `premium` tier's spoken
  * TTS ack and the `flagship` tier's model reply share this one additive message
- * (archive/streaming-turns.md §4, archive/model-tiers.md T2/T3). Distinguished from a per-frame
- * ack and a {@link LoweredMessage} by its `kind`. `label` (when present) is the
- * spoken text, for the widget's speaker line and the trace.
+ * (the streaming-turns notes §4 and the model-tiers notes T2/T3, both in git history).
+ * Distinguished from a per-frame ack and a {@link LoweredMessage} by its `kind`. `label`
+ * (when present) is the spoken text, for the widget's speaker line and the trace.
  */
 export interface SpeechMessage {
   kind: "speech";

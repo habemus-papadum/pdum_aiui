@@ -1,7 +1,7 @@
 /**
  * The on-disk registry of running aiui channel servers — this package's façade
  * over `@habemus-papadum/aiui-registry`, the npm-pinned bootstrap package that
- * single-sources the whole thing (docs/proposals/aiui-registry.md): schema-v2
+ * single-sources the whole thing (the aiui-registry proposal, git history): schema-v2
  * entries, atomic writes, liveness with recycled-pid detection, and the
  * ENRICHED listing (live session names via the shared 4 s `claude agents`
  * cache, `resolvedName`, loud claude-missing status).

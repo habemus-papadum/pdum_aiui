@@ -9,8 +9,8 @@
  * they can usefully absorb, and the 60 Hz world stays imperative.
  *
  * The loop also keeps simple health counters (fps, cadence) that feed the HUD
- * and `window.__morpho.report()` — instrument the seams, per
- * archive/agentic_ui_workflow/agentic_frontend_debugging.md.
+ * and `window.__morpho.report()` — instrument the seams, per the
+ * agentic-frontend-debugging notes (git history).
  */
 import type { GrayScottEngine } from "./gray-scott";
 import { computeFieldStats, type FieldStats } from "./stats";

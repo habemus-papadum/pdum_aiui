@@ -1,5 +1,5 @@
 /**
- * oracle.ts — the panel's oracle session (O3a, docs/proposals/intent-oracle.md).
+ * oracle.ts — the panel's oracle session (O3a of the intent-oracle proposal, git history).
  *
  * ONE `OracleSession` is constructed with the lanes and lives as long as they
  * do; the mode engine's `oracleSession` CLAIM starts and stops it. That split
@@ -95,7 +95,7 @@ function vendorToolName(prefix: string, name: string): string {
  * tools that would fire into nothing.
  */
 /** The tab's ACTIVE namespaces — the oracle's projection is route-following
- * (docs/proposals/page-tools.md): a parked page's tools (a gallery notebook
+ * (the page-tools proposal, git history): a parked page's tools (a gallery notebook
  * off-route) stay enumerable to the agent but are withheld from the realtime
  * session, whose tool budget and attention belong to the page in view. */
 function activeNamespaces(registry: PageToolsRegistry, tab: number): PageToolNamespace[] {

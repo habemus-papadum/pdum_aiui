@@ -55,7 +55,7 @@ describe("the rose (controls + cell + derived tools)", () => {
 
     // A kit serves ITS OWN scope subtree by default — this probe kit's name is
     // not the app's scope, so it must DECLARE the scope it serves (the same
-    // opt-in a composing shell uses; docs/proposals/page-tools.md).
+    // opt-in a composing shell uses).
     const kit = agentToolkit("starterTest");
     registerStandardTools(kit, { scopes: [appScope] });
 

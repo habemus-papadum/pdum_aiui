@@ -1,8 +1,8 @@
 /**
  * standard-tools.ts — the derived agent interface: the tools every aiui app
  * gets from its declarations, so nobody hand-writes `get-params`/`set-params`
- * boilerplate (the extraction that motivated the control surface — see
- * docs/proposals/front_end_controls_guide_and_more.md).
+ * boilerplate (the extraction that motivated the control surface — see the
+ * front-end controls design notes, git history).
  *
  * From one `registerStandardTools(kit)` call an app's agent surface is
  * ASSEMBLED from the reflection layer — restricted to the KIT'S VIEW of the
@@ -45,11 +45,10 @@ const LOCATE_LIMIT = 20;
 export interface StandardToolsOptions {
   /**
    * Extra scopes this kit SERVES, beyond its default view (see
-   * {@link kitView}) — the composition escape hatch
-   * (docs/proposals/page-tools.md). The twins shape: a kit named `app`
-   * hosting slices scoped `left`/`right` declares them here, and their
-   * actions surface as `left/kick` / `right/kick`. Accepts Scope objects or
-   * bare scope names.
+   * {@link kitView}) — the composition escape hatch. The twins shape: a kit
+   * named `app` hosting slices scoped `left`/`right` declares them here, and
+   * their actions surface as `left/kick` / `right/kick`. Accepts Scope objects
+   * or bare scope names.
    */
   scopes?: readonly (Scope | string)[];
 }

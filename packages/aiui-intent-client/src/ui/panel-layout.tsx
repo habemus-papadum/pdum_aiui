@@ -285,7 +285,7 @@ function OraclePanes(props: { client: IntentClient; lanes: ChannelLanes }) {
 }
 
 /**
- * The page-tools LEDGER pane (docs/proposals/page-tools.md, step 3): what the
+ * The page-tools LEDGER pane (the page-tools proposal, step 3, git history): what the
  * tab in view advertises — namespace · tool · active/parked — from the
  * panel's own descriptor registry (the same one the oracle projects from).
  * This is the PAGE-side view; the channel's twin (what the agent sees, shadow

@@ -1,8 +1,8 @@
 /**
  * stt.ts — the credential side of both STT engine flavors (the coming
- * `aiui-stt` component's seam; see docs/proposals/aiui-stt.md). Its contract
- * with this module is "give me something I can open a socket with" — nothing
- * more.
+ * `aiui-stt` component's seam; see the aiui-stt proposal in git history). Its
+ * contract with this module is "give me something I can open a socket with" —
+ * nothing more.
  *
  * **The DEFAULT engine is ElevenLabs Scribe** ({@link scribeConnectUrl}) —
  * the stack-wide decision (the aiui-stt proposal's primary engine; the intent

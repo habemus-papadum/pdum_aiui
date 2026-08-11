@@ -4,8 +4,8 @@
  *
  * Where {@link ./gemini-live} is the reference (video, one streaming image path,
  * session resumption), OpenAI realtime runs the same linter without video and
- * with images injected as **turn-boundary items**, not a stream (§2/§8 of
- * archive/transcription-and-realtime-submodes.md). It is structurally the retired
+ * with images injected as **turn-boundary items**, not a stream (§2/§8 of the
+ * transcription-and-realtime-submodes notes, git history). It is structurally the retired
  * flagship voice session (git history: realtime-voice.ts) — same PCM-append /
  * manual-commit shape, same WAV-wrapped reply clips — plus the two additions
  * the linter needs: the `read_file` tool and `input_image` injection.

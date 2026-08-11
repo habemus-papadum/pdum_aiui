@@ -1,8 +1,8 @@
 /**
  * @habemus-papadum/aiui-stt — realtime speech-to-text as a pencil-shaped
- * component. Contract of record: docs/proposals/aiui-stt.md; the wire facts
- * underneath are the channel's, hard-won and ported verbatim (see each
- * engine module's header).
+ * component. Contract of record: the aiui-stt proposal (pdum_aiui git
+ * history); the wire facts underneath are the channel's, hard-won and ported
+ * verbatim (see each engine module's header).
  *
  * The contract is the pencil's, with text in place of ink: start a session,
  * feed it audio, watch a stream of CUMULATIVE text deltas, and know when a

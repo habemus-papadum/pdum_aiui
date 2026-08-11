@@ -15,8 +15,8 @@ export type FetchLike = typeof fetch;
 
 /**
  * OpenAI sniffs an uploaded audio file by its **filename extension**, not the
- * content-type header (an archive/workbench/field-notes.md finding that cost a round of confusing
- * 400s): name the multipart file to match the container or transcription
+ * content-type header (a workbench field-notes finding, git history, that cost a round of
+ * confusing 400s): name the multipart file to match the container or transcription
  * rejects it. Map the leading MIME type to the extension OpenAI expects.
  */
 export function audioExtensionForMime(mime: string): string {

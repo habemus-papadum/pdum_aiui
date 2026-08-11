@@ -18,9 +18,8 @@
  *
  * Registration is idempotent by name (a re-evaluated module replaces its own
  * tools rather than duplicating them), which makes the registry HMR-safe for
- * free. The `report()` convention comes from
- * archive/agentic_ui_workflow/agent_observable_web_workers.md: one bounded,
- * JSON-serializable call for the whole picture.
+ * free. The `report()` convention comes from the observable-web-workers notes
+ * (git history): one bounded, JSON-serializable call for the whole picture.
  *
  * The page also carries a shared registry at `window.__AIUI__.tools`
  * (AiuiToolsRegistry, installed unconditionally by this package's own
@@ -68,9 +67,9 @@ export interface AgentToolkit {
   registerReporter(name: string, reporter: () => unknown): void;
   /**
    * Flip this namespace's ACTIVITY bit on the shared registry (see
-   * AiuiToolsRegistry.setActive — docs/proposals/page-tools.md). For apps
-   * that drive their own client-side routing; pages mounted by a shell
-   * declare `toolsNs` on their SitePage and let the shell flip it.
+   * AiuiToolsRegistry.setActive). For apps that drive their own client-side
+   * routing; pages mounted by a shell declare `toolsNs` on their SitePage and
+   * let the shell flip it.
    */
   setActive(active: boolean): void;
   handle(): AgentToolkitHandle;

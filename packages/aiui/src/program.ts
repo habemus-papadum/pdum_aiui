@@ -91,7 +91,8 @@ export function buildProgram(): Command {
 
   // The whole local half of remote development: local browser + one ssh
   // connection carrying both forwards + a kind:"remote" registry entry that
-  // lives as long as this command (docs/proposals/aiui-registry.md §5).
+  // lives as long as this command (the aiui-registry design notes §5, git
+  // history).
   program
     .command("remote")
     .description(
@@ -118,8 +119,8 @@ export function buildProgram(): Command {
 
   // Browser profiles: user-data dirs under ~/.cache/aiui/userdata/<name>,
   // each carrying an immutable marker that names its browser — the ONLY
-  // browser-selection input (docs/proposals/browser-profiles.md). `chrome`
-  // manages binaries; `profile` manages the dirs that reference them.
+  // browser-selection input. `chrome` manages binaries; `profile` manages the
+  // dirs that reference them.
   program
     .command("profile")
     .description("manage browser profiles: list | new <name> | rm <name> | adopt <name>")

@@ -2,7 +2,7 @@
  * capture.ts — the extension tier's pixels. **Salvaged, near-verbatim, from the
  * retired extension panel** (git history: aiui-extension/src/panel/capture.ts):
  * it is measured code, and the measurements are the reason it looks like this
- * (archive/extension-spikes/RESULTS.md M10).
+ * (the extension-spike results, M10, git history).
  *
  * The service worker mints a `tabCapture` stream id — it alone can, that API
  * being privileged and invocation-gated — and THIS document consumes it with

@@ -1,7 +1,7 @@
 /**
  * mode-solid.ts — the Solid adapter for the mode engine
- * (docs/proposals/intent-client/01-mode-engine.md §3.3/§3.6; the modal/
- * subpath stays framework-free, so the Solid wiring lives here).
+ * (the mode-engine spec §3.3/§3.6, git history; the modal/ subpath stays
+ * framework-free, so the Solid wiring lives here).
  *
  * What the adapter adds to the pure core:
  *

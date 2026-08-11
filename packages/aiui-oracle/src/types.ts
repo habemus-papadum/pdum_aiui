@@ -4,11 +4,11 @@
  * record of everything a session did — the single source every widget and the
  * raw-JSON view render from).
  *
- * Contract of record: docs/proposals/aiui-oracle.md. Two decisions show up
- * structurally here: transports diverge on exactly three seams (input audio,
- * output audio, interrupt) and advertise capability flags rather than faking
- * parity; and unrecognized vendor events are RETAINED as `raw` ledger entries,
- * never dropped (the trace-stages total-parse lesson).
+ * Contract of record: the aiui-oracle proposal (pdum_aiui git history). Two
+ * decisions show up structurally here: transports diverge on exactly three
+ * seams (input audio, output audio, interrupt) and advertise capability flags
+ * rather than faking parity; and unrecognized vendor events are RETAINED as
+ * `raw` ledger entries, never dropped (the trace-stages total-parse lesson).
  */
 
 /** A tool the model may call — executed locally, in the page. */

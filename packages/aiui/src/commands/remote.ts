@@ -1,7 +1,7 @@
 /**
  * `aiui remote <host>` — the whole local half of remote development, in one
- * foreground command (docs/proposals/aiui-registry.md §5, evolved to the
- * ControlMaster + registry-poll design):
+ * foreground command (the aiui-registry design notes §5 in git history,
+ * evolved to the ControlMaster + registry-poll design):
  *
  *  1. Finds **or starts** the local session browser (the shared
  *     util/session-browser pipeline; first-run prompts included).
@@ -403,7 +403,7 @@ export async function runRemote(target: string, opts: RemoteOptions): Promise<vo
   let browser: Awaited<ReturnType<typeof findOrStartSessionBrowser>>;
   try {
     // Not special: joins the shared "default" profile like every other
-    // session (docs/proposals/browser-profiles.md) — --profile to differ.
+    // session — --profile to differ.
     browser = await findOrStartSessionBrowser({
       flags: { chromeProfile: opts.profile, chromeDataDir: opts.dataDir },
       config: chromeCfg,

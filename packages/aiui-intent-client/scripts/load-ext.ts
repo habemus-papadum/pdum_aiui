@@ -11,10 +11,10 @@
  *
  * Why this is a separate act rather than something `aiui claude` does for you:
  * the frozen client is still auto-loaded, and installing this one is a decision
- * to drive with it (see the retired parity ledger's switchover row, archive/intent-client/PARITY.md), so it stays a command you
- * run. (No chord collision to worry about anymore: this client's activation
- * chord is retired — owner, 2026-07-20 — so the frozen extension's ⌘B has the
- * keyboard to itself.)
+ * to drive with it (see the retired parity ledger's switchover row, in git
+ * history), so it stays a command you run. (No chord collision to worry about
+ * anymore: this client's activation chord is retired — owner, 2026-07-20 — so
+ * the frozen extension's ⌘B has the keyboard to itself.)
  */
 
 import { dirname, join } from "node:path";

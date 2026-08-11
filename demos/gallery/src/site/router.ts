@@ -8,7 +8,8 @@
  * Why an SPA at all: one document means the intent tool — its open turn, its
  * websocket, its capture grant — survives switching notebooks. The old
  * multi-entry layout killed the turn on every header click
- * (docs/proposals/spa-navigation-and-turn-continuity.md traces the loss).
+ * (the SPA-navigation-and-turn-continuity proposal, in git history, traces
+ * the loss).
  *
  * Routes are DATA: the slugs come from the discovered demo packages
  * (site/registry.ts ← virtual:demo-pages), so a new demo's marker adds its

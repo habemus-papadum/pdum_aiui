@@ -1,9 +1,9 @@
 /**
  * cell.ts — Observable-style async dataflow cells for SolidJS 2.0 (beta).
  *
- * Taken from the repo's reactive-flows design (archive/reactive-flows/
- * solid-cells-solidjs_v2.md), where every behavior here was established by
- * probe against solid-js 2.0.0-beta.15. Solid 2.0 made async first-class:
+ * Taken from the repo's reactive-flows design (the solid-cells design notes,
+ * git history), where every behavior here was established by probe against
+ * solid-js 2.0.0-beta.15. Solid 2.0 made async first-class:
  * memos accept promises and async iterables, the graph suspends/resumes
  * consumers, commits are transactional, stale values are served while new
  * work is pending, superseded runs are discarded and their `onCleanup`s fire.

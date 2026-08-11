@@ -38,7 +38,7 @@
  * diffs — was retired with correct mode in the append-only pivot; legacy
  * correction events in old traces still fold at compose time.)
  *
- * **Incremental lowering (archive/streaming-turns.md §2).** The cheap, pure, and
+ * **Incremental lowering (the streaming-turns notes §2, git history).** The cheap, pure, and
  * pre-warmable work happens as events arrive, not at `fin`, so `fin` is a
  * near-empty commit of the one observable side effect (the session
  * notification). Concretely: attachment blobs are saved and shot paths wired on
@@ -314,7 +314,8 @@ function intentProcessor(ctx: ThreadContext, options: IntentV1Options): StreamPr
 
   // Pre-warm the prompt skeleton: the tab/source preamble is fully known at
   // thread-open, so assemble it once here — fin only concatenates the body and
-  // the late-arriving selection (archive/streaming-turns.md §2). Empty for a bare client.
+  // the late-arriving selection (the streaming-turns notes §2, git history). Empty for a
+  // bare client.
   const staticSections = promptContextSections(ctx.hello);
   if (staticSections.length > 0) {
     trace?.record({ kind: "info", label: stageLabel.promptPreamble(), data: staticSections });

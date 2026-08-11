@@ -53,7 +53,7 @@ export interface IntentPipelineConfig {
    * Which transcriber runs. `elevenlabs` (Scribe v2, the default when keyed)
    * and `openai-realtime` are the **streaming** engines: the client streams
    * PCM to a per-thread channel-held session and partial deltas fill the
-   * preview as you speak (archive/streaming-turns.md §3). Transcription is
+   * preview as you speak (the streaming-turns notes §3, git history). Transcription is
    * STREAMING-ONLY. `mock` is the explicit offline/developer choice: local,
    * no key, no network, canned output. Two LEGACY values are tolerated and
    * coerced at hello time: `openai` (the retired per-segment REST engine →
@@ -113,7 +113,7 @@ export interface IntentPipelineConfig {
   // ── research knobs (shipped without UI; measured in the lab) ────────────────
   /**
    * Silence gating before a segment is sent to transcription
-   * (archive/workbench/openai-audio-stack.md):
+   * (the workbench openai-audio-stack notes, git history):
    * trim dead air / suppress empty segments. Off by default.
    */
   silenceGate?: { enabled: boolean; thresholdDb?: number; minSilenceMs?: number };
@@ -122,7 +122,7 @@ export interface IntentPipelineConfig {
    * transcriber as a bias prompt. Toggled per source; none by default.
    */
   priming?: { sources?: string[] };
-  // ── the prompt linter (archive/realtime_prompt_linter_design.md) ────────────
+  // ── the prompt linter (the realtime prompt-linter design, git history) ──────
   /**
    * The realtime **prompt linter** — on/off plus a vendor, orthogonal to the
    * tier. While on, the channel holds a live conversational session (Gemini
@@ -185,8 +185,8 @@ export const LINTER_VENDORS = [
 
 /**
  * The `lint` control-chunk vocabulary — the CONVERSE turn strategy's two
- * control-driven entry points (archive/capture-bus-and-consumers.md §6
- * Phase 1): `"now"` ends the linter's turn at the button (and arms the
+ * control-driven entry points (the capture-bus-and-consumers notes §6
+ * Phase 1, git history): `"now"` ends the linter's turn at the button (and arms the
  * after-reply auto-off), `"stop"` cancels the in-flight reply (the button
  * barge-in) and disarms the auto-off. Lives beside {@link LinterVendor} for
  * the same reason it does: the channel's untrusted-wire revalidation and the

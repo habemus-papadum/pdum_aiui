@@ -46,8 +46,8 @@ export interface CacheDirOptions {
  *
  * KEEP IN SYNC: `bootstrap/aiui-registry/src/paths.ts` carries an exact,
  * deliberate duplicate of this resolution (the one accepted duplication in the
- * registry design — docs/proposals/aiui-registry.md §7). A change here that
- * isn't mirrored there would make the two read different registries.
+ * registry design notes §7, git history). A change here that isn't mirrored
+ * there would make the two read different registries.
  *
  * @example
  * const dir = cacheDir("screenshots"); // created, ready to write into

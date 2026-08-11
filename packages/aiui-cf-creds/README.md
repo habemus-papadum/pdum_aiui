@@ -3,8 +3,8 @@
 Broker-backed ephemeral credentials for aiui apps: adapters from the
 [`cf_browser_credentials`](https://github.com/habemus-papadum/cf_browser_credentials) kit
 (`@habemus-papadum/cf-*`) to aiui's existing credential seams. A bridge in the strict sense — it
-implements one contract against the other and adds no seam of its own. Contract of record:
-`docs/proposals/aiui-cf-creds.md` in the pdum_aiui repo.
+implements one contract against the other and adds no seam of its own. Contract of record: the
+aiui-cf-creds proposal (pdum_aiui git history).
 
 The target apps are **serverless/static aiui deployments** behind a broker-fronted origin (a small
 Cloudflare Worker owning `/api/credentials/*`, static site and broker both behind Cloudflare

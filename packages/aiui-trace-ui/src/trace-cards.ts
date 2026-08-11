@@ -381,7 +381,8 @@ function classifyParsed(parsed: ParsedStage, stage: TraceStageLike): StageClass 
     // ── the retired realtime submode (HISTORICAL traces still render) ─────────
     // A realtime turn's cards ride the same lanes, read one conversation further
     // upstream — the vantage is still the browser, but "the server" is now the
-    // live model (Gemini/OpenAI). See archive/transcription-and-realtime-submodes.md.
+    // live model (Gemini/OpenAI). See the transcription-and-realtime-submodes
+    // notes in git history.
     case "live-open":
       // Session opened: config-ish, always shown like `intent config`. 🛰 marks
       // it as the *live* session's config.

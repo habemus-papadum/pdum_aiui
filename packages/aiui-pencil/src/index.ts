@@ -6,9 +6,8 @@
  * Textured strokes, a real eraser, and vanishing ink, on a raster surface that
  * keeps stroke identity exactly as long as it needs to and not one frame longer.
  *
- * Design: `docs/proposals/aiui-pencil.md`. Plan and status:
- * `docs/proposals/aiui-pencil-plan.md`. Supersedes the retired `aiui-ink` and
- * `aiui-paint` (git history).
+ * Design, plan, and status: the aiui-pencil proposal and its plan, in git
+ * history. Supersedes the retired `aiui-ink` and `aiui-paint` (git history).
  *
  * **The core is layer 1: the pure stroke pipeline** — everything from a
  * `PointerEvent` to a list of dabs, with no DOM anywhere in it. Layered on top,

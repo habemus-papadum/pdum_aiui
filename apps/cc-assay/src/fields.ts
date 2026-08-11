@@ -2,7 +2,7 @@
  * Everything we know about Claude Code's transcript schema, encoded as accessor
  * functions rather than as a validating type system.
  *
- * The design bet (docs/proposals/claude-code-usage-analytics.md §5.1): Claude
+ * The design bet (the claude-code-usage-analytics proposal, git history): Claude
  * Code ships a new build every few days and adds fields freely — 28 builds in
  * the five weeks of the baseline corpus. A validating parser turns every such
  * addition into a crash or a silent record drop. What we need instead is a

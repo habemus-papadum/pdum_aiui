@@ -6,8 +6,8 @@ DOM-free (host-agnostic cores + injected browser edges) so it tests in plain Nod
 multiple hosts — today the intent client's CDP tier and its MV3 side panel.
 
 Lineage: this is the live runtime of the retired `aiui-dev-overlay` (its "B2.4 / C1"
-extraction), copied out in the overlay retirement
-(`docs/proposals/dev-overlay-retirement.md`). The original is deleted; read it in git history.
+extraction), copied out in the overlay retirement. The original and its retirement proposal
+are deleted; read them in git history.
 
 ## Entries
 

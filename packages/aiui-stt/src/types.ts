@@ -1,7 +1,7 @@
 /**
  * types.ts — the package's shared vocabulary: the session seam both engines
  * implement, the callbacks results ride back on, and the injected audio
- * contract. Contract of record: docs/proposals/aiui-stt.md.
+ * contract. Contract of record: the aiui-stt proposal (pdum_aiui git history).
  *
  * The seam is a browser-side port of the channel's proven two-engine
  * interface (`aiui-claude-channel/src/realtime.ts` — `RealtimeSession` /

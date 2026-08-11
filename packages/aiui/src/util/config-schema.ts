@@ -180,11 +180,11 @@ export const CONFIG_SECTIONS: ConfigSectionSchema[] = [
       },
       // NOTE (browser-profiles migration, 2026-07-20): browser IDENTITY moved
       // out of config into the profile marker (~/.cache/aiui/userdata/<name>/
-      // aiui-profile.json — docs/proposals/browser-profiles.md). The retired
-      // keys — enabled, mode, browserUrl, debugPort, profile, dataDir,
-      // executablePath, channel, managed, forTesting (plus the older
-      // buildExtension/autoCapture) — are tolerated-and-dropped, not hard
-      // errors; see DEPRECATED_FIELDS in util/config.ts.
+      // aiui-profile.json). The retired keys — enabled, mode, browserUrl,
+      // debugPort, profile, dataDir, executablePath, channel, managed,
+      // forTesting (plus the older buildExtension/autoCapture) — are
+      // tolerated-and-dropped, not hard errors; see DEPRECATED_FIELDS in
+      // util/config.ts.
     ],
   },
   {

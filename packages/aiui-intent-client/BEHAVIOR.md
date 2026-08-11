@@ -3,8 +3,8 @@
 The interaction contract, as decided with the owner (2026-07-13 review rounds on the detached
 page). Where this deviates from the old extension/overlay, the deviation is deliberate and
 noted. This file records *how it behaves* — the living interaction contract (the parity
-ledger that tracked feature coverage during the port is retired to
-`archive/intent-client/PARITY.md`). Every rule here
+ledger that tracked feature coverage during the port is retired — read it in git
+history). Every rule here
 is pinned by a test (spec.test.ts, client.test.ts, panel.test.tsx).
 
 ## The machine
@@ -142,8 +142,8 @@ hold-to-talk press — gates on `sink(state)` (spec.ts), not on the phase. Two s
 `"turn"` (an open, **unpaused** turn) and `"oracle"`, which WINS while it is on. Entering
 the oracle therefore pauses the turn *by construction* — the sink is elsewhere — and leaving
 restores whatever the turn's own state was, because the oracle never writes the manual
-`paused` region. No memory, no restore logic, anywhere. See "The oracle" below and
-docs/proposals/intent-oracle.md.
+`paused` region. No memory, no restore logic, anywhere. See "The oracle" below and the
+intent-oracle proposal (git history).
 
 **A suspended turn is one that exists but is not collecting** (`turnSuspended`), whichever
 cause suspended it. The lanes gate on THAT, not on the `paused` region: an oracle detour
@@ -207,7 +207,7 @@ stay immediate, as before.
 
 ## The oracle — the second sink (O3a, owner 2026-07-30)
 
-The full contract is docs/proposals/intent-oracle.md; what the client guarantees:
+The full contract is the intent-oracle proposal (git history); what the client guarantees:
 
 - **A region AND a claim.** `oracle` (`🔮`, `o`, armed-scope, durable, `remote: true`) is the
   DESIRE; the `oracleSession` claim is the reconciled reality, so connecting / live / failed

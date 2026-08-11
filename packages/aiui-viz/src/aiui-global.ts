@@ -32,7 +32,7 @@ export interface AiuiToolsRegistry {
   /** Invoke one tool by namespace + name. Rejects on unknown. */
   call(ns: string, name: string, args?: unknown): Promise<unknown>;
   /**
-   * Flip a namespace's ACTIVITY bit (proposal: docs/proposals/page-tools.md).
+   * Flip a namespace's ACTIVITY bit (the page-tools design notes, git history).
    * Default **true** — a standalone app never calls this. A multi-page shell
    * flips it with the SitePage activate/deactivate lifecycle (`toolsNs`); an
    * app with its own client-side routing calls it directly (or through its

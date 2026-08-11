@@ -2,10 +2,9 @@
  * The aiui compiler — compile-time identity, description, and source-location
  * injection. It began as a one-off stamper in the gallery demo
  * (`babel-source-locator.mjs`, git history), passed through the retired dev
- * overlay, and grew into a table-driven pass
- * (docs/proposals/front_end_controls_guide_and_more.md §2a).
- * Node-side only (behind the `./vite` subpath): the browser bundle never
- * imports this.
+ * overlay, and grew into a table-driven pass (the front-end controls design
+ * notes §2a, git history). Node-side only (behind the `./vite` subpath): the
+ * browser bundle never imports this.
  *
  * Two halves with DIFFERENT lifecycles:
  *

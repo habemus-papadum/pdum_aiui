@@ -20,8 +20,8 @@
  * (`composeIntent`) assembles the prompt in every configuration; a live
  * session only observes the turn and speaks short diagnostics. (The
  * composer-era `submit_intent` machinery — the nudge sentinel, the tool
- * drain — was deleted with the model-composes submode; see
- * archive/realtime_pivot_plan.md.)
+ * drain — was deleted with the model-composes submode; see the realtime
+ * pivot plan in git history.)
  */
 import type { CallCost } from "./cost";
 
@@ -135,7 +135,7 @@ export interface LiveSessionCallbacks {
    * after the tool result fires its own `response.done`). Gemini:
    * `serverContent.turnComplete` — for parity. The concrete "the model is
    * done" signal the CONVERSE turn strategy's after-reply policy keys on
-   * (archive/capture-bus-and-consumers.md §3); overhear callers may
+   * (the capture-bus-and-consumers notes §3, git history); overhear callers may
    * ignore it. Optional.
    */
   onTurnComplete?(): void;

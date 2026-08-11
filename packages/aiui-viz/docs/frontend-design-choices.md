@@ -99,8 +99,8 @@ attributes plus a registry would serve an agent identically.
 ## 3 · HMR: durable roots, a disposable graph, and a box
 
 The architecture that makes "edit under a running experiment" safe has three parts
-(reference: `demos/morphogen/src/model/store.ts` and `graph.ts`; background: the archived
-*HMR for agentic coding* notes in the repo's `archive/`):
+(reference: `demos/morphogen/src/model/store.ts` and `graph.ts`; background: the retired
+*HMR for agentic coding* notes, readable in the repo's git history):
 
 **Durable roots** are owned by a keyed, idempotent registry:
 
@@ -263,8 +263,7 @@ and a **pause-not-destroy** page lifecycle — leaving a route disposes the page
 for the return visit. Event-driven resources need no handling: a worker between jobs costs
 nothing. The motive is **turn continuity**: one document means an open intent turn, its socket,
 and its capture grant survive switching notebooks, and the overlay's navigation watcher records
-each switch as a `navigation` event
-(docs/proposals/spa-navigation-and-turn-continuity.md). A shell-level delegated click
+each switch as a `navigation` event. A shell-level delegated click
 interceptor turns every same-origin in-base anchor into a client-side navigation, so no link can
 hard-navigate the document and kill a turn. At larger scale the suspend ladder continues:
 `hibernate` reads GPU state back to CPU and releases the context — mandatory eventually because

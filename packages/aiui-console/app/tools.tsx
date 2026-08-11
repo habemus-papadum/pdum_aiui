@@ -1,8 +1,8 @@
 /**
  * The page-tools ledger — the CHANNEL's view of every registered namespace
- * (docs/proposals/page-tools.md, step 3). This is what the agent's
- * `page_tools_list` actually sees: registrations with their activity bits and
- * shadow marks, one row per (registration, tool). The page-side twin is
+ * (the page-tools design notes, step 3 — git history). This is what the
+ * agent's `page_tools_list` actually sees: registrations with their activity
+ * bits and shadow marks, one row per (registration, tool). The page-side twin is
  * `window.__AIUI__.tools.ledger()` in the app's own console; when the two
  * disagree, THIS one is the truth the agent acts on.
  *

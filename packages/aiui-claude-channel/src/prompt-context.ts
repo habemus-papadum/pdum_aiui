@@ -90,7 +90,8 @@ export function cdpAlignmentNote(cdp: CdpAlignmentInfo | undefined): string | un
  * time. Split out from {@link augmentTextPrompt} so a processor can
  * **pre-warm** this skeleton once at thread-open and only concatenate the
  * body + turn-dependent sections at `fin` (the incremental-lowering seam; see
- * archive/streaming-turns.md §2). Empty for a bare client with no tab/source context.
+ * the streaming-turns notes §2 in git history). Empty for a bare client with no tab/source
+ * context.
  *
  * Honesty rules (2026-07-17 render audit):
  * - "web app under development" and the relative-paths line appear only when

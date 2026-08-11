@@ -225,7 +225,7 @@ describe("resolveToolTab — the eye, else the last app (owner, 2026-07-30)", ()
   it("PARKED namespaces don't count — the oracle's surface is route-following", () => {
     // A tab whose only namespaces are parked (a gallery notebook off-route)
     // reads as toolless: the projection withholds it and the resolution falls
-    // through to the remembered app (docs/proposals/page-tools.md).
+    // through to the remembered app (the page-tools proposal, git history).
     const parked = {
       toolsFor: (tab?: number) =>
         tab === 9

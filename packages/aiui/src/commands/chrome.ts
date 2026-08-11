@@ -9,8 +9,7 @@
  * both names exist because both questions get asked. Without a flavor they act
  * on the default (Chromium); pass `chromium` or `chrome-for-testing` to target
  * the other explicitly. Which browser a LAUNCH uses is the profile's business
- * (`aiui profile`, docs/proposals/browser-profiles.md) — profiles reference
- * the binaries this command manages.
+ * (`aiui profile`) — profiles reference the binaries this command manages.
  */
 import { existsSync, readdirSync } from "node:fs";
 import { discoverSessionBrowser } from "@habemus-papadum/aiui-util";

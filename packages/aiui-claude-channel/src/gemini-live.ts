@@ -7,7 +7,7 @@
  * answers aloud, and can be interrupted — but it never composes: the compiler
  * assembles every prompt, and the session's one tool is `read_file` (the
  * seam's invariant; see live-session.ts). The RT0 spike proved the path end-to-end
- * (archive/gemini-live-spike.mjs); this is that spike, refactored under the seam
+ * (the gemini-live spike, git history); this is that spike, refactored under the seam
  * with the house injectable-socket pattern so the tests drive a scripted fake.
  *
  * ### Wire surface (v1beta BidiGenerateContent; findings from the spike)

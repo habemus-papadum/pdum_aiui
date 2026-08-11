@@ -12,7 +12,7 @@
  * The companion rule: this file is the guarded, rarely-edited wiring; the
  * cell graph (graph.ts) and the components (ui/) are the disposable logic
  * edited constantly. Splitting the two along module lines is what gives HMR
- * an easy job — see archive/agentic_ui_workflow/hmr_for_agentic_coding.md.
+ * an easy job — see the HMR-for-agentic-coding notes (git history).
  */
 import { control, durableCanvas, scope } from "@habemus-papadum/aiui-viz";
 import { type Accessor, createSignal } from "solid-js";

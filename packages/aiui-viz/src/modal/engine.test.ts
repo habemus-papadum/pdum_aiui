@@ -1,7 +1,7 @@
 /**
  * engine.test.ts — spec-first tests for the mode engine kernel
- * (docs/proposals/intent-client/01-mode-engine.md §5): table tests for the
- * reducer, property tests for esc/blur/excludes, commit/queue semantics.
+ * (the mode-engine spec §5, git history): table tests for the reducer,
+ * property tests for esc/blur/excludes, commit/queue semantics.
  *
  * The test spec is a miniature of the intent panel's real shape (phase
  * ladder with an esc floor, standing toggles, a talk choice, transient

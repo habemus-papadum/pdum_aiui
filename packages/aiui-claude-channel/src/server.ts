@@ -79,7 +79,7 @@ export const INSTRUCTIONS = [
  * declared so the channel may send `notifications/tools/list_changed` when the
  * page-tool directory changes; the advertised MCP tool list itself stays the
  * static meta-tools — the notification's value is the refresh cycle it triggers
- * (measured safe cross- and mid-turn: archive/extension-spikes/RESULTS.md M3).
+ * (measured safe cross- and mid-turn: the extension-spike results, M3, git history).
  * It is returned unconnected so callers (and tests) can inspect it without
  * wiring up a transport.
  */

@@ -1,6 +1,6 @@
 /**
  * oracle-contributions.ts — shots and selections routed to the ORACLE sink
- * (O3d, docs/proposals/intent-oracle.md).
+ * (O3d of the intent-oracle proposal, git history).
  *
  * The two things the owner wanted carried into oracle mode. The caps and keys
  * are the same ones a turn uses — 🖼 shot, ⛶ area, 📋 selection, `s`/`a`/`p` —

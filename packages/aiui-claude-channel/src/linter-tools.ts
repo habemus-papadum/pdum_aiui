@@ -3,7 +3,7 @@
  * one execution policy.
  *
  * Two consumers advertise DIFFERENT subsets of it, which is the point of
- * keeping the policy in one module (O3c, docs/proposals/intent-oracle.md):
+ * keeping the policy in one module (O3c, the intent-oracle proposal in git history):
  *
  *  - the **prompt linter** offers `read_file` alone — its brief is "verify a
  *    suspicion before flagging it", and a linter that browses a repository is

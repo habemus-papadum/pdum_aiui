@@ -602,7 +602,7 @@ describe("spec-level properties", () => {
 // tools + the index signature) and the runtime READS it (PageInstrumentation).
 // The client prod-deps both, the one point on the graph that sees each — so a
 // `v` bump or a `sourceRoot` retype on either side must break the build here.
-// See docs/proposals/code-review-pass2-s1-mirrors.md.
+// See the code-review pass-2 S1 mirrors note (git history).
 describe("__AIUI__ global: viz's AiuiGlobal stays assignable to the runtime's reader view", () => {
   it("AiuiGlobal satisfies PageInstrumentation (compile-time)", () => {
     expectTypeOf<AiuiGlobal>().toMatchTypeOf<PageInstrumentation>();

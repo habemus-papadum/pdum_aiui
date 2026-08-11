@@ -297,7 +297,7 @@ Found building the seismos notebook (full detail: `demos/seismos/src/NOTES.md`):
   design that keeps several GPU notebooks warm.
 - **Readback and screenshot disagree diagnostically** — a blank canvas with healthy readback is a
   compositing problem; blank both is a produce/draw problem. (The full decision table lives in
-  the archived *observable web workers* notes, `archive/agentic_ui_workflow/` in the repo.)
+  the retired *observable web workers* notes, readable in the repo's git history.)
 
 ## Driving a live app from an agent
 

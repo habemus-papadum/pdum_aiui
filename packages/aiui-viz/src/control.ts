@@ -9,7 +9,8 @@
  * agent reads instead of spelunking source — while `loc` on every entry still
  * points at the code when it wants to dig.
  *
- * The division of labor (ratified; docs/proposals/front_end_controls_guide_and_more.md):
+ * The division of labor (ratified in the front-end controls design notes, git
+ * history):
  * compile time owns LOCATIONS (the aiui compiler injects `name` from the
  * binding, `loc`, and `description` from the doc comment), declarations own
  * IDENTITY, runtime owns LIVE STATE AND TOPOLOGY. Two consequences here:

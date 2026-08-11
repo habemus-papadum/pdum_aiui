@@ -65,8 +65,8 @@ export const fetchChannelInfo = (): Promise<ChannelInfo | undefined> =>
 export const fetchHealth = (): Promise<HealthInfo | undefined> => getJson<HealthInfo>("/health");
 
 /** One page-tools registration as `/debug/api/page-tools` lists it — the
- * channel's own view (what the AGENT sees), activity + shadow marks included
- * (docs/proposals/page-tools.md). */
+ * channel's own view (what the AGENT sees), activity + shadow marks
+ * included. */
 export interface PageToolRegistrationInfo {
   clientId?: string;
   ns?: string;

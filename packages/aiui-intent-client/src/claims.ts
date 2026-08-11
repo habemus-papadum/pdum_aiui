@@ -221,7 +221,7 @@ export function intentClaims(
     },
 
     /**
-     * The oracle SESSION (O3a, docs/proposals/intent-oracle.md) — the mode
+     * The oracle SESSION (O3a of the intent-oracle proposal, git history) — the mode
      * region is the desire, this claim is the reconciled reality. Deriving it
      * is what buys the async story: `pending` while the mint and the WebRTC
      * offer/answer are in flight, `active` once live, and **`error`** when the

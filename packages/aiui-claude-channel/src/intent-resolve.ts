@@ -40,8 +40,8 @@ export const GEMINI_KEY_HINT =
  * The premium tier's spoken-ack trigger table, keyed by lowering milestone → the
  * deterministic phrase the channel synthesizes (no LLM). Data-driven so acks are
  * tuneable; v1 ships the minimal recommended set — one send-received ack on a
- * successful `fin` (archive/streaming-turns.md §4). Add a milestone here (and a call site)
- * to speak at another point.
+ * successful `fin` (the streaming-turns notes §4, git history). Add a milestone here
+ * (and a call site) to speak at another point.
  */
 export const ACK_PHRASES: Record<"sent", string> = {
   sent: "sent",
@@ -56,7 +56,7 @@ export interface ResolvedIntent {
    * everything the classic processor does; `realtime` (retired) once held a
    * live conversational session where the MODEL composed — a hello asking for
    * it is coerced to `transcription` plus the prompt linter (see
-   * resolveIntent). History: archive/transcription-and-realtime-submodes.md.
+   * resolveIntent). History: the transcription-and-realtime-submodes notes (git history).
    */
   submode: "transcription" | "realtime";
   /** Realtime engine (submode=realtime): the reference `gemini` or degraded `openai`. */
@@ -118,7 +118,7 @@ export const OPENAI_KEY_HINT =
  * fields are already concrete; but as a **defensive fallback** for a hello that
  * carries only `tier` (or a sparse partial), each field's default is the tier's
  * preset value — the shared `expandTier` from the pipeline package, so both sides
- * agree on what a tier means (archive/model-tiers.md, "Channel side"). Absent tier →
+ * agree on what a tier means (the model-tiers notes, "Channel side", git history). Absent tier →
  * `rapid` (streaming Realtime Whisper — the REST retirement, 2026-07-18);
  * legacy names (standard, flagship, live-*) expand via the shared alias table
  * and their REST/voice choices coerce onto the streaming world below.

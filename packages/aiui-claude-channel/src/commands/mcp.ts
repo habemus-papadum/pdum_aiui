@@ -30,9 +30,9 @@ export interface McpOptions extends CommonChannelOptions {
   /**
    * Push a terse "page tools changed: ns/name, …" note into the session when
    * the page-tool directory changes — rung 2 of the notification ladder
-   * (docs/proposals/browser-extension-intent-tool.md §7). Named tools ride the
-   * push because a *listed* tool is not necessarily one the model looks up
-   * (archive/extension-spikes/RESULTS.md, M3). Defaults ON (`false` disables;
+   * (the browser-extension intent-tool proposal §7, git history). Named tools
+   * ride the push because a *listed* tool is not necessarily one the model looks
+   * up (the extension-spike results, M3, git history). Defaults ON (`false` disables;
    * the CLI's `--no-page-tools-notify`). The spec-blessed
    * `notifications/tools/list_changed` (rung 3) is sent regardless.
    */
@@ -134,7 +134,7 @@ export async function runMcp(options: McpOptions = {}): Promise<void> {
   // One debounced directory change drives both notification rungs of the
   // browser-extension proposal (§7): `tools/list_changed` makes the client
   // re-fetch the tool list (measured to work cross-turn AND mid-turn on CLI
-  // 2.1.206 — archive/extension-spikes/RESULTS.md M3; the advertised list is
+  // 2.1.206 — the extension-spike results, M3, in git history; the advertised list is
   // still the static meta-tools, so its value is the refresh cycle), and the
   // channel push *names* the tools, because a re-listed tool is not
   // necessarily one a weak model looks up. Subscribed after connect(), so a

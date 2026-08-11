@@ -2,7 +2,7 @@
  * main.tsx — the SPA shell: ONE document hosting the landing page and every
  * notebook behind client-side routing, so the aiui intent tool (its open turn,
  * its socket, its capture grant) survives switching pages — the whole point of
- * the rewrite (docs/proposals/spa-navigation-and-turn-continuity.md).
+ * the rewrite (the SPA-navigation-and-turn-continuity proposal, git history).
  *
  * The layout is a left SIDEBAR (`<SiteNav>`, which collapses to a top bar +
  * drawer on a phone) plus the content area. The site HOME is the LANDING page
@@ -59,7 +59,8 @@ function Shell() {
     const prev = untrack(view);
     // setSitePageActive drives BOTH lifecycles — the rAF park/resume and the
     // page-tools activity bit (page.toolsNs) — so route-following consumers
-    // (the oracle) see only the notebook in view (docs/proposals/page-tools.md).
+    // (the oracle) see only the notebook in view (the page-tools proposal,
+    // git history).
     if (prev?.route !== r && prev !== undefined) setSitePageActive(prev.page, false);
     setSitePageActive(page, true);
     document.title = page.title;

@@ -527,8 +527,8 @@ function loadManifest(): void {
  * app did at ~20 call sites — creates a second path to the data that agrees
  * with the first only while both happen to end at the same in-page instance.
  * Swap the connector and one path follows while the other keeps talking to a
- * database that no longer has the rows. See docs/proposals/deployment-shapes.md
- * §2.1.
+ * database that no longer has the rows. See the deployment-shapes proposal in
+ * git history.
  *
  * Arrow, not `{ type: 'json' }`. It is Mosaic's default and its typed result,
  * and under a socket connector the result encoding IS the wire format — JSON

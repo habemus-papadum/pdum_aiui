@@ -1,6 +1,6 @@
 /**
  * tools-link.ts — the panel's half of the page-tools bridge (T2 of the
- * plugin restructure, docs/proposals/plugin-restructure.md).
+ * plugin-restructure proposal, git history).
  *
  * Pages populate `window.__AIUI__.tools` and dial NOTHING; the page scripts
  * relay descriptor changes up as `pageTools` events. This module represents

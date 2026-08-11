@@ -1,7 +1,7 @@
 /**
  * bar.ts — the command bar as a projection of the mode-engine spec
- * (docs/proposals/intent-client/01-mode-engine.md §3.5, extended per owner
- * review 2026-07-13).
+ * (the mode-engine spec §3.5, git history; extended per owner review
+ * 2026-07-13).
  *
  * The bar is a **tree presented linearly**: root caps are the standing
  * surface (arm · step out · help); a cap that is SHOWN and LIT reveals its

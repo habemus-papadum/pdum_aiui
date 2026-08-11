@@ -7,7 +7,7 @@ button produces: the engine's append-only `IntentEvent[]` for one session (see
 pipeline extraction (P1) and, later, the channel lowering processor (P2) — replayed
 through `composeIntent` in `packages/aiui-dev-overlay/src/intent-pipeline/fixtures.test.ts`.
 
-**Contract reminder** (see `archive/workbench/field-notes.md` at the repo root): these event shapes *are* the
+**Contract reminder** (see the workbench field notes in git history): these event shapes *are* the
 wire format, and segments-as-lines is the document shape `composeIntent` and the
 corrector share. If a fixture stops replaying, a contract drifted — fix the pass,
 don't rewrite the fixture.
@@ -45,7 +45,7 @@ hand-composed. Two accommodations for headless driving, none of which touch even
 fidelity:
 
 - **`getUserMedia` / `getDisplayMedia` stubbed to reject** — the documented "no mic /
-  no capture grant" degraded path (`archive/workbench/field-notes.md`). The mock transcriber
+  no capture grant" degraded path (the workbench field notes, git history). The mock transcriber
   ignores audio, so transcript text is unchanged; shots land in their degraded
   (no-pixels) shape, which is exactly what fixture 3 is meant to capture.
 - **Region shots stub only the veil's `setPointerCapture`** — it is unguarded against

@@ -33,10 +33,9 @@
  *
  * - **The PROFILE picks the browser.** The profile's immutable marker
  *   (aiui-profile.json) names a managed flavor, a branded channel, or an
- *   explicit binary; there is no other browser-selection input
- *   (docs/proposals/browser-profiles.md). `--aiui-browser-url` says "don't
- *   launch anything, attach here" (how `aiui remote`'s printed invocation
- *   works).
+ *   explicit binary; there is no other browser-selection input.
+ *   `--aiui-browser-url` says "don't launch anything, attach here" (how
+ *   `aiui remote`'s printed invocation works).
  */
 import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -98,9 +97,8 @@ export function sessionBrowserEnabled(
 
 /**
  * The launch-relevant Chrome settings after flags and config are reconciled.
- * The PROFILE picks the browser (docs/proposals/browser-profiles.md): identity
- * comes from the user-data dir's marker, headless from config; there is no
- * other browser-selection input.
+ * The PROFILE picks the browser: identity comes from the user-data dir's
+ * marker, headless from config; there is no other browser-selection input.
  */
 export interface ChromeSettings {
   /** Absolute user data dir for this launch. */

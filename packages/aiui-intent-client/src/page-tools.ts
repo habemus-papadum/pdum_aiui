@@ -1,6 +1,6 @@
 /**
- * page-tools.ts — the panel's own LOCAL view of the driven page's tools (O3b,
- * docs/proposals/intent-oracle.md).
+ * page-tools.ts — the panel's own LOCAL view of the driven page's tools (O3b of
+ * the intent-oracle proposal, git history).
  *
  * The page-tools bridge already exists twice over: pages populate
  * `window.__AIUI__.tools` and the page scripts relay descriptor changes up as

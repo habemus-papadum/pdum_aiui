@@ -263,8 +263,8 @@ without sending anything.
 `intent-v1` is the multimodal intent tool's format. Where `text-concat` accumulates a
 string, `intent-v1` accumulates the intent tool's **event log** plus binary attachments
 (audio segments, screenshot PNGs), and on `fin` **lowers** the whole turn into one
-Option-C prompt — a body with `{shot_N}` tokens and the image paths in `meta` (see
-[`archive/channel-attachment-path-encoding.md`](../../../archive/channel-attachment-path-encoding.md)).
+Option-C prompt — a body with `{shot_N}` tokens and the image paths in `meta` (see the
+channel attachment-path-encoding notes in git history).
 The lowering — transcription, the correction diff, the pass structure, `composeIntent`,
 Option-C assembly — runs **in the channel**, keyed by the channel process's environment;
 the pipeline core is shared with the browser modality
@@ -585,7 +585,7 @@ an activation flip that re-flags an entry. The signal is gated by a content sign
 (`ns|hash|active` per registration — deliberately excluding the connection id), so same-hash HMR
 re-registrations stay silent and a reload's close-plus-reconnect that restores an identical set
 within the window nets to nothing. The `mcp` command wires the signal to two agent-facing
-notifications ([browser-extension proposal §7](../../../docs/proposals/browser-extension-intent-tool.md)):
+notifications (the browser-extension intent-tool proposal §7, in git history):
 the spec-blessed MCP `notifications/tools/list_changed` (the advertised tool list is still the
 static meta-tools; the notification's value is the client's refresh cycle), and a terse
 `page tools changed: <ns>/<name>, … (active tab: <title|url>)` push over the channel

@@ -163,7 +163,7 @@ export function intentSidecar(options: IntentSidecarOptions = {}): Sidecar {
         // The node `ws` client speaks the CdpSocket surface the tagger needs.
         socketFactory: (url) => new WebSocket(url) as unknown as CdpSocket,
       });
-      // The oracle's credential mint (O3a, docs/proposals/intent-oracle.md):
+      // The oracle's credential mint (O3a of the intent-oracle proposal, git history):
       // `POST /intent/oracle/mint`. The panel's oracle needs an ephemeral `ek_`
       // to open a realtime session, and this is the honest end of the
       // installed-keys posture — the PARENT key stays in the channel process

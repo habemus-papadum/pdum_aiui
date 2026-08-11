@@ -5,8 +5,7 @@ panes mount anywhere: the intent client's panel embeds `TracesPane` as a Solid i
 `./vite` plugin serves the full page at `/__aiui/debug` (what `aiui dashboard` runs).
 
 Lineage: this is the `debug-ui` third of the retired `aiui-dev-overlay`, copied out in the
-overlay retirement (`docs/proposals/dev-overlay-retirement.md`). The original is deleted; read
-it in git history.
+overlay retirement. The original is deleted; read it in git history.
 
 ## The pieces
 

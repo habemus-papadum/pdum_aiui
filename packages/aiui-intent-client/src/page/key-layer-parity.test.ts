@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
  * key-layer-parity.test.ts — the in-turn wholesale key layer is one of the two
- * page surfaces deliberately NOT collapsed (docs/proposals/
- * code-review-pass2-s1-mirrors.md, guarded): the CDP bootstrap listens on
+ * page surfaces deliberately NOT collapsed (the code-review pass-2 S1 mirrors
+ * note, git history — guarded): the CDP bootstrap listens on
  * `document` with `stopPropagation`, the MV3 content script on `window` with
  * `stopImmediatePropagation`. That divergence stays until it is ruled
  * deliberate or accidental. Until then, this pins the SHARED surface — both

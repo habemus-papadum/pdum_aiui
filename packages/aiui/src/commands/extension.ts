@@ -6,10 +6,10 @@
  * `chrome-extension://…`, so unlike the channel-served page it cannot read
  * its port off its own URL).
  *
- * Since the aiui-registry migration (docs/proposals/aiui-registry.md §9) the
- * host is a COMPILED binary shipped by `@habemus-papadum/aiui-registry`'s
- * platform packages — not a Node subcommand. Installation, idempotent on
- * every launch:
+ * Since the aiui-registry migration (that package's design notes §9, in git
+ * history) the host is a COMPILED binary shipped by
+ * `@habemus-papadum/aiui-registry`'s platform packages — not a Node
+ * subcommand. Installation, idempotent on every launch:
  *
  *  1. Copy the platform binary into the user cache under a VERSION-SUFFIXED
  *     name (`native-host/aiui-registry-host-<version>`). Never overwrite a

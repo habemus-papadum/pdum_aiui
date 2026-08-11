@@ -13,7 +13,7 @@
  * socket, which flags/pre-orders the active tab's entries and steers
  * ambiguous calls; the directory's debounced change signal ({@link
  * PageToolDirectory.onChange}) is what drives the agent-facing notifications
- * (docs/proposals/browser-extension-intent-tool.md §7).
+ * (the browser-extension intent-tool proposal §7, git history).
  *
  * This module is transport-agnostic — a connection is just an id plus a `send`
  * function — so the whole thing is unit-testable without a real websocket (see
@@ -54,7 +54,7 @@ export interface PageToolRegistration {
   /** ISO timestamp of the (latest) registration. */
   registeredAt: string;
   /**
-   * The NAMESPACE's activity bit (docs/proposals/page-tools.md): false when
+   * The NAMESPACE's activity bit (the page-tools proposal, git history): false when
    * the page parked this app (a gallery notebook off-route). Parked tools
    * stay listed and callable — the agent sees the flag; route-following
    * consumers (the panel's oracle) filter page-side. Deliberately NOT in the
@@ -72,7 +72,7 @@ export interface PageToolRegistration {
    * Derived at {@link PageToolDirectory.list} time: this registration's
    * namespace collides with another connection's, and call routing would
    * pick the OTHER one. Advisory — the honest rendering of a duplicate
-   * instead of two identical rows (docs/proposals/page-tools.md).
+   * instead of two identical rows (the page-tools proposal, git history).
    */
   shadowed?: true;
 }
@@ -151,9 +151,9 @@ const asRecord = (value: unknown): Record<string, unknown> | undefined =>
 
 /**
  * Render the terse session-push line for a changed directory — rung 2 of the
- * notification ladder (docs/proposals/browser-extension-intent-tool.md §7).
+ * notification ladder (the browser-extension intent-tool proposal §7, git history).
  * Names every tool because a listed tool is not necessarily one the model
- * looks up (archive/extension-spikes/RESULTS.md, M3's model-behavior nuance).
+ * looks up (the extension-spike results, M3's model-behavior nuance, git history).
  */
 export function formatPageToolsChanged(entries: PageToolRegistration[]): string {
   if (entries.length === 0) {
