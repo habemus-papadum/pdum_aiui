@@ -1,6 +1,17 @@
 # aiui-stt — realtime speech-to-text as a pencil-shaped component
 
-Status: PROPOSED — drafted 2026-08-08. Companion to `aiui-cf-creds.md` (the credential
+Status: IMPLEMENTED — `packages/aiui-stt`, 2026-08-11 (V1: both engines, the handle, the
+signals adapter, `/mic`). Deltas from the sketch below: `SttTransport.open(callbacks)` takes no
+separate session-config argument (each transport factory carries its own options);
+`createStt` grew the push-to-talk verbs (`beginSegment`/`endSegment`/`cancelSegment`) with
+ordinals stamped by the handle, plus a mint-window op queue so talking during the credential
+round-trip loses nothing; `AudioSource` gained an optional `flush()` (a warm mic buffers ~120 ms
+frames, and the tail must land before the commit); `SttFinal` carries no `cost` (pricing stays
+channel-side). Open question 3 resolved: the token→word fold is COPIED (~40 lines, both sides
+pinned by tests); open question 5 resolved: `segment` stays. Open questions 1 (Scribe session
+ceiling — needs a live probe) and 2 (vendor VAD) remain.
+
+Originally drafted 2026-08-08. Companion to `aiui-cf-creds.md` (the credential
 side). Grounded in the channel's shipped two-engine STT path — the wire facts
 hard-won and recorded in `aiui-claude-channel/src/{elevenlabs-realtime,realtime,
 intent-stt}.ts` — plus `exploration/ephemeral-keys/` (2026-07-20) and the 2026-08-07

@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "declarationDir": "dist",
+    "jsx": "preserve",
+    "jsxImportSource": "@solidjs/web",
+    // The mic capture path talks to WebAudio/getUserMedia; the engines use the
+    // browser WebSocket. DOM lib comes from the base config.
+    "types": []
+  },
+  "include": ["src"],
+  "exclude": ["dist", "node_modules", "src/**/*.test.ts"]
+}
