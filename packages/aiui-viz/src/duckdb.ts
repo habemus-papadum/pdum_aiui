@@ -38,16 +38,33 @@ import * as duckdb from "@duckdb/duckdb-wasm";
  * Build an AsyncDuckDB from the app's bundles. The worker files are served
  * same-origin, so a plain `new Worker(url)` is enough — no cross-origin Blob
  * shim (which is only why duckdb-wasm's jsDelivr path wraps a Blob).
+ *
+ * `workerFactory` is the instrumentation seam: an app that must wrap the
+ * worker (scratch's mosaic-taxi patches XHR/fetch inside it to meter DuckDB's
+ * S3 traffic honestly; a test can hand back a scripted stand-in) receives the
+ * selected bundle's worker URL and returns the Worker to use. Module URLs are
+ * passed to `instantiate` ABSOLUTE for the factory's sake: a factory that
+ * boots the real worker through a `blob:` bootstrap has no usable base URL,
+ * and absolute URLs cost a plain `new Worker` nothing.
  */
 export async function instantiateDuckDB(
   bundles: duckdb.DuckDBBundles,
-  options: { logger?: duckdb.Logger } = {},
+  options: {
+    logger?: duckdb.Logger;
+    workerFactory?: (workerUrl: string) => Worker;
+  } = {},
 ): Promise<duckdb.AsyncDuckDB> {
   const bundle = await duckdb.selectBundle(bundles);
   if (!bundle.mainWorker) throw new Error("duckdb: no worker in selected bundle");
-  const worker = new Worker(bundle.mainWorker);
+  const worker = options.workerFactory?.(bundle.mainWorker) ?? new Worker(bundle.mainWorker);
   const db = new duckdb.AsyncDuckDB(options.logger ?? new duckdb.VoidLogger(), worker);
-  await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+  const absolute = (url: string): string => new URL(url, location.href).href;
+  await db.instantiate(
+    absolute(bundle.mainModule),
+    bundle.pthreadWorker === null || bundle.pthreadWorker === undefined
+      ? null
+      : absolute(bundle.pthreadWorker),
+  );
   return db;
 }
 

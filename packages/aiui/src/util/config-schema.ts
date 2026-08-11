@@ -35,8 +35,8 @@ export { CHROME_CHANNELS, type ChromeChannel } from "@habemus-papadum/aiui-util"
  * and take the media auto-accept flags; the trade-off is Chromium's open-source
  * build dodges the "verify you're human" reCAPTCHA that Google serves to the
  * Chrome-for-Testing automation build, at the cost of Widevine/DRM + proprietary
- * codecs and Google account sign-in. Chromium is the default; flip the global
- * default with `chrome.managed`.
+ * codecs and Google account sign-in. Chromium is the default; a profile can
+ * pick the other flavor (`aiui profile new <name> --cft`).
  */
 export const MANAGED_FLAVORS = ["chromium", "chrome-for-testing"] as const;
 export type ManagedFlavor = (typeof MANAGED_FLAVORS)[number];
@@ -122,7 +122,9 @@ export const CONFIG_SECTIONS: ConfigSectionSchema[] = [
         key: "enterNudge",
         type: "boolean",
         default: true,
-        defaultText: "true (unset: the first interactive launch asks, then persists the answer)",
+        defaultText:
+          "true (inert while the nudge mechanism is disabled — util/enter-nudge.ts; " +
+          "when re-enabled, the first interactive launch asks)",
         summary: "Auto-dismiss Claude Code's development-channel acknowledgement prompt.",
         doc:
           "aiui loads a custom development channel, so Claude Code shows a one-key " +
@@ -141,8 +143,7 @@ export const CONFIG_SECTIONS: ConfigSectionSchema[] = [
         type: "enum",
         values: CHANNEL_BINDS,
         default: "loopback",
-        defaultText:
-          '"loopback" (unset: the first interactive launch asks, then persists the answer)',
+        defaultText: '"loopback" (never prompted; `aiui config yolo` is the only opt-in to host)',
         summary: "Which interface the channel web server binds: loopback, or host (LAN).",
         doc:
           '"host" (0.0.0.0) makes the session\'s whole web surface — the iPad pencil page, but ' +
@@ -150,9 +151,9 @@ export const CONFIG_SECTIONS: ConfigSectionSchema[] = [
           "network, UNAUTHENTICATED. That is the trusted-LAN posture (docs/guide/warning): " +
           'right on a network that is yours alone, wrong on shared Wi-Fi. "loopback" keeps ' +
           "everything this-machine-only; reaching the pencil page from an iPad is then up to " +
-          "you — tunnel the channel port however you like (Tailscale, `ssh -L`). The first " +
-          "interactive launch asks and persists the answer at the user level. Per-launch " +
-          "flag: --aiui-bind.",
+          "you — tunnel the channel port however you like (Tailscale, `ssh -L`). Deliberately " +
+          "never a first-run question: the only opt-in is the explicit, warned `aiui config " +
+          "yolo`. Per-launch flag: --aiui-bind.",
       },
     ],
   },

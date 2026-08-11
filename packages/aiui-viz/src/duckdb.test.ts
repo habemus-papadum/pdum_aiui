@@ -1,5 +1,31 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchWithProgress } from "./duckdb";
+import { fetchWithProgress, instantiateDuckDB } from "./duckdb";
+
+// instantiateDuckDB's collaborators, captured through a module mock: the
+// selected bundle is fixed, AsyncDuckDB records the worker it was handed and
+// every instantiate() call's arguments.
+const captured = vi.hoisted(() => ({
+  instantiateArgs: [] as unknown[][],
+  workers: [] as unknown[],
+}));
+vi.mock("@duckdb/duckdb-wasm", () => ({
+  selectBundle: async () => ({
+    mainWorker: "assets/w.js",
+    mainModule: "assets/m.wasm",
+    pthreadWorker: null,
+  }),
+  VoidLogger: class {},
+  AsyncDuckDB: class {
+    worker: unknown;
+    constructor(_logger: unknown, worker: unknown) {
+      this.worker = worker;
+      captured.workers.push(worker);
+    }
+    async instantiate(...args: unknown[]): Promise<void> {
+      captured.instantiateArgs.push(args);
+    }
+  },
+}));
 
 /** A streamed Response of `chunks` with an optional Content-Length header. */
 function streamed(chunks: Uint8Array[], contentLength?: number): Response {
@@ -55,5 +81,42 @@ describe("fetchWithProgress", () => {
       vi.fn(async () => new Response(null, { status: 404, statusText: "Not Found" })),
     );
     await expect(fetchWithProgress("http://x/missing", () => {})).rejects.toThrow(/404/);
+  });
+});
+
+// A minimal bundles value — selection is mocked, so the content is inert.
+const BUNDLES = { eh: { mainModule: "x", mainWorker: "y" } } as Parameters<
+  typeof instantiateDuckDB
+>[0];
+
+describe("instantiateDuckDB", () => {
+  afterEach(() => {
+    captured.instantiateArgs.length = 0;
+    captured.workers.length = 0;
+  });
+
+  it("hands the selected bundle's worker URL to workerFactory and adopts its Worker", async () => {
+    const worker = { theInstrumentedOne: true };
+    const factory = vi.fn(() => worker as unknown as Worker);
+    await instantiateDuckDB(BUNDLES, { workerFactory: factory });
+    expect(factory).toHaveBeenCalledWith("assets/w.js");
+    expect(captured.workers).toEqual([worker]);
+  });
+
+  it("defaults to new Worker(url) when no factory is given", async () => {
+    class FakeWorker {
+      constructor(public url: string) {}
+    }
+    vi.stubGlobal("Worker", FakeWorker);
+    await instantiateDuckDB(BUNDLES);
+    expect(captured.workers).toHaveLength(1);
+    expect((captured.workers[0] as FakeWorker).url).toBe("assets/w.js");
+  });
+
+  it("absolutizes module URLs for instantiate — a blob:-bootstrapped worker has no base", async () => {
+    await instantiateDuckDB(BUNDLES, { workerFactory: () => ({}) as Worker });
+    const [mainModule, pthreadWorker] = captured.instantiateArgs[0];
+    expect(mainModule).toBe(new URL("assets/m.wasm", location.href).href);
+    expect(pthreadWorker).toBeNull();
   });
 });
