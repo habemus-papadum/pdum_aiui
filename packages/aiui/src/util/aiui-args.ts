@@ -57,8 +57,8 @@ export interface AiuiArgs {
   /**
    * The `--aiui-browser-url <url>` value, if provided — attach the Chrome
    * DevTools MCP to this endpoint and manage no browser locally. This is the
-   * flag `aiui remote` prints for the remote side; it overrides
-   * `chrome.browserUrl` in config for this launch.
+   * flag `aiui remote` prints for the remote side; flag-only (the old
+   * `chrome.browserUrl` config key is retired).
    */
   browserUrl?: string;
   /**

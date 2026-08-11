@@ -105,8 +105,8 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
     return;
   }
 
-  // Settings from ~/.cache/aiui/config.json + .aiui-cache/config.json (project
-  // wins per key; flags win over both) — see util/config and docs/guide/config.
+  // Settings from the one user-level ~/.cache/aiui/config.json (flags win
+  // over config) — see util/config and docs/guide/config.
   let config = loadAiuiConfig();
 
   // A real TTY on both ends, not print mode, not CI: the only context where
@@ -217,8 +217,8 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
     chromeInfo = chrome.info;
   }
   // Tell the channel server how this session was assembled. It surfaces this
-  // at /debug/api/info, and the DevTools panel's Server tab renders it — the
-  // first place to look when browser/MCP connectivity misbehaves.
+  // at /debug/api/info, and the console dashboard renders it — the first
+  // place to look when browser/MCP connectivity misbehaves.
   const launchInfo: LaunchInfo = {
     launcher: "aiui claude",
     chromeDevtools: chromeInfo,
@@ -329,7 +329,7 @@ aiui's own flags (everything else forwards to claude verbatim):
 
 Every channel hosts the same session sidecars — the intent panel at /intent/,
 the remote bar, the remote pencil, and the console — reachable per --aiui-bind.
-Durable settings live in config.json (project .aiui-cache/ + user cache) — see the
+Durable settings live in the user-level ~/.cache/aiui/config.json — see the
 Configuration guide. What follows is claude's own --help:
 `);
 }

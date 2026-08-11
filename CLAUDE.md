@@ -34,7 +34,8 @@ transcript) at the center. Three layers:
    session browser. The channel serves **no HTML of its own** — JSON/data routes only
    (`/debug/api/*`, `/health`); every page belongs to a sidecar frontend. (The page-serving
    sidecars: the console at `/` + `/__aiui`; the intent client's panel under `/intent/`; the
-   pencil client at `/pencil/`; the remote bar at `/bar/`.)
+   pencil client at `/pencil/`. The remote bar's sidecar mounts data/WS routes under `/bar`
+   but serves no page.)
 3. **Frontend for agents** — principles/utilities/Claude skills for agent-written scientific UI:
    SolidJS 2.0 (beta), Observable-style async dataflow in mainstream syntax, code debuggable by
    the agent's future self (source locators, self-installed debug hooks, HMR-mindful,

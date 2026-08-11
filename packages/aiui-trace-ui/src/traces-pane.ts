@@ -4,7 +4,7 @@
  * live-follow for the selection.
  *
  * Graduated from the retired workbench lab so every home of the trace
- * debugger — the console's `/__aiui/debug` page (`aiui debug` opens the
+ * debugger — the console's `/__aiui/debug` page (`aiui dashboard` opens the
  * console), and the intent client's embedded panel pane — renders traces
  * off one implementation. Only page chrome stays host-local.
  *

@@ -106,7 +106,7 @@ exactly what degrades.
   `http://127.0.0.1:<port>/__aiui/debug` (the console's trace debugger, also embedded in
   the intent panel). `GET /debug` on the channel returns JSON pointers, not a page — the
   channel serves no HTML; every page is a sidecar on the same port (`/__aiui`, `/intent/`,
-  `/pencil/`, `/bar/`).
+  `/pencil/`; the bar relay's `/bar` routes are data/WS only).
 - If the channel's own source was edited, the `channel_reload` MCP tool rebuilds its
   lowering layer in place — see the session-browser skill for its depth boundary.
 - `aiui clean` resets aiui's user-level cache — config, registry, profiles, managed

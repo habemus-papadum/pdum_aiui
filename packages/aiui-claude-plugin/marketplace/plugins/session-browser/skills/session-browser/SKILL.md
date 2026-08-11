@@ -54,9 +54,10 @@ that port:
   ledger), `traces`, `frames`, `stats`.
 - **The channel serves no HTML.** Pages are sidecars on the same port: the console at `/`
   (302 → `/__aiui/` — dashboard, `/__aiui/debug` trace debugger, `/__aiui/tools` page-tools
-  ledger), the intent panel at `/intent/`, the pencil at `/pencil/`, the remote bar at
-  `/bar/`. The channel **auto-opens its console dashboard as a tab** in the session browser
-  at boot — one tab you didn't open but shouldn't be surprised by.
+  ledger), the intent panel at `/intent/`, the pencil at `/pencil/` (the remote bar's relay
+  mounts data/WS routes under `/bar` but serves no page). The channel **auto-opens its
+  console dashboard as a tab** in the session browser at boot — one tab you didn't open but
+  shouldn't be surprised by.
 
 If you edit the channel's own source, the `channel_reload` MCP tool (or
 `POST /debug/api/reload`) rebuilds its lowering layer in place — live sockets drop and

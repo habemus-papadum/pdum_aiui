@@ -27,6 +27,25 @@ import { createEffect } from "solid-js";
 export type Directive = (plot: Plot) => void;
 
 /**
+ * The slice of a Selection clause / interactor this bridge's disposal needs —
+ * structural (like {@link MosaicCoordinator}) so nothing here depends on
+ * `@uwdata/mosaic-core`'s types. Every clause-publishing vgplot interactor
+ * (Interval1D/2D, Toggle, Nearest, Region, Highlight) carries `.selection`;
+ * ones that publish nothing (PanZoom) simply lack it and are skipped.
+ */
+interface SelectionClauseLike {
+  source: unknown;
+  value?: unknown;
+  predicate?: unknown;
+}
+interface InteractorLike {
+  selection?: {
+    clauses: readonly SelectionClauseLike[];
+    update(clause: SelectionClauseLike): unknown;
+  };
+}
+
+/**
  * The slice of a Mosaic `Coordinator` this bridge drives — structural, so the
  * core barrel takes no dependency on `@uwdata/mosaic-core`; pass the real
  * coordinator your app holds as a durable root.
@@ -63,6 +82,22 @@ export function MosaicView(props: {
       host.replaceChildren(p.element);
       return () => {
         for (const mark of p.marks) coordinator.disconnect(mark);
+        // Interactors are NOT marks, and their published clauses live in the
+        // SURVIVING selection keyed by interactor instance — Mosaic only
+        // replaces a clause arriving from the same source object, so a view
+        // disposed mid-brush would otherwise leave a ghost clause AND-ing
+        // every future brush, with no rectangle on screen to explain it.
+        // Publishing the clause back with a null predicate from its own
+        // source is the retraction the interactors themselves use for an
+        // empty brush (Interval1D.publish with a cleared extent).
+        for (const interactor of p.interactors as InteractorLike[]) {
+          const selection = interactor.selection;
+          if (selection === undefined) continue;
+          const clause = selection.clauses.find((c) => c.source === interactor);
+          if (clause !== undefined) {
+            selection.update({ ...clause, value: null, predicate: null });
+          }
+        }
         p.element.remove();
       };
     },

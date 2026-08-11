@@ -2,7 +2,7 @@
  * The shared trace-debugger UI: framework-free DOM panes for inspecting the
  * multimodal intent pipeline, live. Multiple homes, one implementation — the
  * intent client's panel (TracesPane as a Solid island) and the console's
- * `/__aiui/debug` page (`aiui debug`). Prototyped in the retired workbench
+ * `/__aiui/debug` page (`aiui dashboard`). Prototyped in the retired workbench
  * lab; graduated so every home renders intent debugging identically, off the
  * same fixtures.
  *

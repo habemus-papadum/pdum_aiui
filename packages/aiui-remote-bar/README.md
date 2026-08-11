@@ -37,7 +37,8 @@ Two message types cross a joined socket, and nothing else — no ink, no video, 
 | host → remote | `bar` | `rows: WireCap[]` (the `barModel()` projection), `claims` (per-name status phase), `phase?` |
 | remote → host | `command` | `command: string`, `payload?` — the same verb a key or the agent dispatches |
 
-Plus the relay-level session plumbing mirrored from `aiui-paint`: `register` / `join` / `leave` /
+Plus the relay-level session plumbing mirrored from `aiui-paint` (since retired — `aiui-pencil`
+carries the pattern now): `register` / `join` / `leave` /
 `sessions` / `joined` / `joinRejected` / `hostGone` / `clientJoined` / `clientLeft`. `encode`/`decode`
 frame JSON text and **drop a malformed frame** (return `undefined`) rather than throw — one bad client
 must not sink a relay serving others.
@@ -60,7 +61,9 @@ aiui-pencil's convention, which excludes `*.test.ts` — see *Judgment calls*.)
 import { bindRemoteBar } from "@habemus-papadum/aiui-remote-bar";
 import { encode, decode } from "@habemus-papadum/aiui-remote-bar";
 
-const ws = new WebSocket(`ws://127.0.0.1:${window.__AIUI__.port}/bar/host`);
+// channelPort: however the host page knows its channel — the intent client
+// resolves it from its own discovery (there is no page-side port global).
+const ws = new WebSocket(`ws://127.0.0.1:${channelPort}/bar/host`);
 const bound = bindRemoteBar(client /* IntentClient-shaped */, {
   send: (message) => ws.send(encode(message)),
   filter: (cap) => cap.command !== "disarm", // D5: the remote may see only a subset
@@ -105,9 +108,9 @@ import { barSidecar } from "@habemus-papadum/aiui-remote-bar/sidecar";
 
 It rides the channel's one port (no process, no extra listener). Whether a remote can **reach** it is
 the channel's bind decision (`channel.bind` / `--aiui-bind`), never this sidecar's — the same posture
-as paint. There is **no HTML route**: the channel serves no pages, and the bar's client is a
-frontend-process component (paint's `/paint/` page is a documented exception for an iPad with no
-frontend process; a bar remote is an ordinary app).
+as the pencil. There is **no HTML route**: the channel serves no pages, and the bar's client is a
+frontend-process component (the pencil's `/pencil/` page is a documented exception for an iPad with
+no frontend process; a bar remote is an ordinary app).
 
 ## Verified
 

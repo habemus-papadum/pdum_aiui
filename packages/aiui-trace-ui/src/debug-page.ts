@@ -74,7 +74,7 @@ export function mountDebugPage(opts: MountDebugPageOptions = {}): void {
     note.style.cssText =
       "margin: auto; color: #9aa0aa; font: 13px/1.6 ui-sans-serif, system-ui, sans-serif;";
     note.textContent =
-      "no channel port — open this page through the console (`aiui debug`) so it knows which channel to poll";
+      "no channel port — open this page through the console (`aiui dashboard`) so it knows which channel to poll";
     host.appendChild(note);
     return;
   }

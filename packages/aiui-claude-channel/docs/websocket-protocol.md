@@ -353,7 +353,7 @@ pure, and pre-warmable stages run as events arrive so `fin` is a near-empty comm
 observable side effect (the session notification). As each frame lands the processor:
 
 - **saves each attachment to the trace blob store on arrival**
-  (`.aiui-cache/traces/<id>/shot_N.png`, `seg_N.<ext>`) — a `shot_N`'s absolute path is wired
+  (`~/.cache/aiui/projects/<slug>-<hash8>/traces/<id>/shot_N.png`, `seg_N.<ext>`) — a `shot_N`'s absolute path is wired
   into its shot event the moment the bytes arrive (the correlated event was flushed first), so
   `fin` does no disk I/O;
 - **runs the condition passes on arrival** (silence-trim on each audio segment, image-downscale

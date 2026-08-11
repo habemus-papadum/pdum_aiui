@@ -68,9 +68,11 @@ Grouped by role. Each line names the file(s) that own it.
 - **standard set** (`standard-sidecars.ts`): `standardSidecars(root)` imports
   and builds the four by ordinary import. This is the one place that names the
   implementations; `runMcp`/`runServe` default to it.
-- The concrete four (each in its own package, now a real dependency): **paint**
-  (`/paint/*`, iPad stream), **intent** (`/intent/*`, the detached panel + the
-  CDP proxy), **bar** (`/bar/*`), **pencil** (`/pencil/*`, WebRTC signaling).
+- The concrete four (each in its own package, now a real dependency): **intent**
+  (`/intent/*`, the detached panel + the CDP proxy), **bar** (`/bar/*`),
+  **pencil** (`/pencil/*`, WebRTC signaling), and — mounted last, so siblings
+  win their own routes — the **console** (`/__aiui/*` + the `GET /` dashboard
+  redirect). (The paint sidecar retired in favor of the pencil.)
 
 ### 8. Upstream proxies — the "relays"
 - **CDP proxy** (in the intent sidecar, `aiui-intent-client/src/cdp-proxy.ts`):

@@ -1,8 +1,7 @@
 #!/bin/sh
 # The source-run `aiui` for this checkout: no build, no global install — it
-# execs the workspace CLI through the repo's own tsx. On PATH after
-# `eval "$(./aiui env)"` (which prepends this bin/ dir); the repo-root ./aiui
-# symlink points here so that bootstrap line works before any activation.
+# execs the workspace CLI through the repo's own tsx. Run it as ./bin/aiui
+# (or `pnpm aiui`, the package-script twin).
 self="$0"
 resolved="$(readlink -f -- "$self" 2>/dev/null || echo "$self")"
 root="$(CDPATH='' cd -- "$(dirname -- "$resolved")/.." && pwd)"

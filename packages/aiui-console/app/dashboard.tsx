@@ -222,8 +222,8 @@ export function Dashboard(): JSX.Element {
                 <Show when={loopbackOnly()}>
                   <p class="pencil-note">
                     Bound to <strong>loopback</strong> — reachable only on this machine. Relaunch
-                    with <code>--aiui-bind host</code> (or pick “host” at first-run setup) to reach
-                    it from an iPad.
+                    with <code>--aiui-bind host</code> (or opt in durably with{" "}
+                    <code>aiui config yolo</code>) to reach it from an iPad.
                   </p>
                 </Show>
                 <div class="copy-list">

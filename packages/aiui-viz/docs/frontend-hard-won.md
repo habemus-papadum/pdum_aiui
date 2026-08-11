@@ -103,7 +103,7 @@ Versions these were established against: `solid-js@2.0.0-beta.15`, `@solidjs/web
   `Record<Mode, Palette>` indexed access ("'#2f6fce' not assignable to '#4a86dd'"); type
   palettes with an explicit interface instead.
 
-## Mosaic / DuckDB-WASM (versions: @uwdata/vgplot 0.28.1, @duckdb/duckdb-wasm 1.33.1-dev45.0)
+## Mosaic / DuckDB-WASM (@uwdata/vgplot 0.28.1; the exact @duckdb/duckdb-wasm pin lives in pnpm-workspace.yaml — 1.33.1-dev61.0 today; live compatibility table: duckdb-mosaic.md)
 
 Found building the seismos notebook (full detail: `demos/seismos/src/NOTES.md`):
 

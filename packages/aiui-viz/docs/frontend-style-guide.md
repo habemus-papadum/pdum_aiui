@@ -22,7 +22,7 @@ The library splits along a deliberate seam:
 
 **Porcelain grows by extraction, not speculation.** A pattern is first built and proven inside a
 reference notebook (where it may be rough), then promoted to the library once a second page
-wants it. `TeX`, `TocRail`, `SiteHeader`, and the Mosaic/DuckDB pair (proven in seismos) all
+wants it. `TeX`, `TocRail`, `SiteNav`, and the Mosaic/DuckDB pair (proven in seismos) all
 followed that path. One package holds both layers for now — if porcelain ever outgrows it, the
 seam is already drawn.
 
@@ -59,17 +59,18 @@ IntersectionObserver, and hides below ~1280px. Conventions:
 - Section titles are short and lowercase (`theory`, not `The Underlying Theory`) — the rail is
   a map, not a syllabus.
 - 4–6 sections is the sweet spot; if a page needs more, it probably wants to be two pages.
-- The rail is the page's *outline*; the site header is the *collection's* nav. Don't mix the
-  levels — no cross-page links in the rail, no section links in the header tabs.
+- The rail is the page's *outline*; the site nav is the *collection's* nav. Don't mix the
+  levels — no cross-page links in the rail, no section links in the nav items.
 - Layout: the rail is a sticky grid column beside the content (not fixed-position), so it never
   overlaps and needs no coordinate math.
 
-## The site header
+## The site nav
 
-`SiteHeader` (`aiui-viz/site`) on every page, fed from one app-level module (the demo's
-`src/site/nav.ts`): brand, the tab list, GitHub/docs links. Rules:
+`SiteNav` (`aiui-viz/site`) on every page — a left sidebar on desktop, collapsing to a top
+bar + drawer on a phone — fed from one app-level module (in the gallery, the nav items derive
+from the demo-discovery registry): brand, the item list, GitHub/docs links. Rules:
 
-- **Every tab carries a one-line descriptor** ("reaction–diffusion lab") — the tabs are how a
+- **Every item carries a one-line descriptor** ("reaction–diffusion lab") — the nav is how a
   visitor learns the site has more than one experiment; a bare name doesn't teach that.
 - Hrefs are **relative** (`./`, `./aztec.html`) so pages survive a hosting prefix (the demo
   publishes under `/aiui/`).
@@ -168,11 +169,12 @@ render on a phone from the same markup the desktop uses.
 
 Covered in depth in [design choices §8](./frontend-design-choices); the style-guide rules:
 
-- Pages follow the **system** color scheme; no toggle — the default. A *page* may deviate
-  deliberately when its content demands it (seismos defaults to light with a persisted toggle
-  because its epicenter map reads best on a light surface — the other notebooks follow the
-  system); the deviation is documented where it was decided, in that page's NOTES.md, and the
-  policy anchor is the page's own head script.
+- The in-repo notebooks are **dark-only** by owner decision: the shared journal theme
+  (`demos/journal`) has no light mode and no toggle, and each page's head stamps
+  `data-theme="dark"` pre-paint. An app that wants system-following instead keys on
+  `colorMode()` and the token pattern below (the facility exists; nothing in-repo currently
+  exercises it). Either way there is no user-facing toggle, and a deviation is documented
+  where it was decided.
 - All stylesheet color goes through `:root` tokens (dark default, light under the media query).
   Literal colors (charts, SVG strokes) read the app's theme module, keyed on `colorMode()` from
   `aiui-viz/site`.
