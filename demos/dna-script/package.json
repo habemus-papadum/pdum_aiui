@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/demo-dna-script",
-  "version": "0.16.0",
+  "version": "0.16.0+dev",
   "description": "In-repo aiui demo: dna-script.",
   "private": true,
   "type": "module",
