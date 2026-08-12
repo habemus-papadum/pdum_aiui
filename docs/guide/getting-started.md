@@ -110,8 +110,6 @@ console, which links the same viewer at `/__aiui/debug`. Traces and screenshots 
 project's user-level cache (`~/.cache/aiui/projects/<slug>-<hash>/`), so the project tree stays
 pristine.
 
-![The lowering debugger showing a trace's input and output stages](/lowering-debugger.png)
-
 ## Scripted sends (no browser)
 
 ```sh
