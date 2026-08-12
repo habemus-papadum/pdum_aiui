@@ -18,14 +18,15 @@
  * beside the capabilities they expose.
  */
 import {
+  action,
   agentToolkit,
   type Cell,
   cell,
   hotCellGraph,
   registerStandardTools,
 } from "@habemus-papadum/aiui-viz";
-import { clauseInterval, clausePoint, type Selection } from "@uwdata/mosaic-core";
-import { column } from "@uwdata/mosaic-sql";
+import { selectionDimReport } from "@habemus-papadum/aiui-viz/mosaic-selection";
+import type { Selection } from "@uwdata/mosaic-core";
 import { type Accessor, createMemo } from "solid-js";
 import {
   bValue,
@@ -101,33 +102,12 @@ export const seismosGraph = hotCellGraph<SeismosGraph>(
 
 // --- agent tools --------------------------------------------------------------
 
-/**
- * Stable per-kind clause source objects (a Selection keys clauses by source
- * identity), so re-setting a kind replaces its prior clause rather than stacking.
- */
-const SRC = {
-  mag: { name: "agent:mag" },
-  depth: { name: "agent:depth" },
-  year: { name: "agent:year" },
-  type: { name: "agent:type" },
-  depthClass: { name: "agent:depthClass" },
-  // A geographic box is two independent 1-D interval clauses. A single 2-D
-  // clauseIntervals clause needs scale metadata to resolve in a crossfilter; two
-  // 1-D clauseInterval clauses (like the histogram brushes) always propagate.
-  regionLon: { name: "agent:regionLon" },
-  regionLat: { name: "agent:regionLat" },
-};
-
 function clauseCount(brush: Selection): number {
   return brush.clauses.length;
 }
 
 function activeFilters(brush: Selection): string[] {
   return brush.clauses.map((c) => String(c.predicate ?? "")).filter((s) => s.length > 0);
-}
-
-function num(v: unknown, fallback: number): number {
-  return typeof v === "number" && Number.isFinite(v) ? v : fallback;
 }
 
 function round(x: number, digits: number): number {
@@ -139,106 +119,42 @@ function registerTools(): void {
   const kit = agentToolkit("seismos");
   const { registerTool, registerReporter } = kit;
   const brush = store.brush;
-  // The derived surface: report/set/locate (+ actions, when declared). The old
-  // set-mc tool dissolved into the `mc` control — declaring IS exposing.
+  // The derived surface: report/set/locate (+ actions — one `set-<dim>` tool
+  // per filter dimension declared in store.ts, the four view verbs from
+  // selectionViews, and clear-filters below). The old hand-written set-filter
+  // tool dissolved into the dims — declaring IS exposing.
   registerStandardTools(kit);
+
+  /** Remove every cross-filter clause — filter dimensions, map/histogram
+   * brushes, and facet menus alike. Returns the clause count left (0). */
+  action({
+    scope: seismosScope,
+    name: "clear-filters",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    run: () => ({ activeClauses: store.clearFilters() }),
+  });
 
   registerTool({
     name: "suggest-mc",
     description:
       "Return the data-driven completeness magnitude (max-curvature of the filtered FMD); does not apply it.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
     run: () => ({ mcSuggested: mcMaxCurvature(store.histo()) }),
-  });
-
-  registerTool({
-    name: "set-filter",
-    description:
-      "Add or replace cross-filter clauses on the shared selection (drives every view). Combine any: magnitude/depth/year ranges, an event type or depth class, or a lon/lat box. Each kind replaces its own prior clause. Read report() after a tick for updated counts.",
-    params: {
-      minMag: "number — lower magnitude bound",
-      maxMag: "number — upper magnitude bound",
-      minDepth: "number km",
-      maxDepth: "number km",
-      minYear: "integer",
-      maxYear: "integer",
-      type: "'earthquake' | 'nuclear explosion' | 'volcanic eruption' | …",
-      depthClass: "'shallow' | 'intermediate' | 'deep'",
-      west: "lon °",
-      east: "lon °",
-      south: "lat °",
-      north: "lat °",
-    },
-    run: (args = {}) => {
-      const s = store.summary();
-      if (args.minMag != null || args.maxMag != null) {
-        brush.update(
-          clauseInterval(
-            column("mag"),
-            [num(args.minMag, s?.magMin ?? 0), num(args.maxMag, s?.magMax ?? 10)],
-            { source: SRC.mag },
-          ),
-        );
-      }
-      if (args.minDepth != null || args.maxDepth != null) {
-        brush.update(
-          clauseInterval(
-            column("depth"),
-            [num(args.minDepth, s?.depthMin ?? 0), num(args.maxDepth, s?.depthMax ?? 800)],
-            { source: SRC.depth },
-          ),
-        );
-      }
-      if (args.minYear != null || args.maxYear != null) {
-        brush.update(
-          clauseInterval(
-            column("year"),
-            [num(args.minYear, s?.yearMin ?? 1976), num(args.maxYear, s?.yearMax ?? 2024)],
-            { source: SRC.year },
-          ),
-        );
-      }
-      if (typeof args.type === "string") {
-        brush.update(clausePoint(column("type"), args.type, { source: SRC.type }));
-      }
-      if (typeof args.depthClass === "string") {
-        brush.update(
-          clausePoint(column("depth_class"), args.depthClass, { source: SRC.depthClass }),
-        );
-      }
-      if (args.west != null || args.east != null) {
-        brush.update(
-          clauseInterval(column("longitude"), [num(args.west, -180), num(args.east, 180)], {
-            source: SRC.regionLon,
-          }),
-        );
-      }
-      if (args.south != null || args.north != null) {
-        brush.update(
-          clauseInterval(column("latitude"), [num(args.south, -90), num(args.north, 90)], {
-            source: SRC.regionLat,
-          }),
-        );
-      }
-      return { activeClauses: clauseCount(brush), filters: activeFilters(brush) };
-    },
-  });
-
-  registerTool({
-    name: "clear-filters",
-    description: "Remove every cross-filter clause (from views, inputs, and the agent).",
-    run: () => {
-      for (const c of [...brush.clauses]) {
-        brush.update({ ...c, value: null, predicate: null });
-      }
-      return { activeClauses: clauseCount(brush) };
-    },
   });
 
   registerTool({
     name: "query",
     description:
       "Run a bounded, read-only SQL SELECT against the `quakes` table (columns: time, year, longitude, latitude, depth, mag, magtype, type, depth_class). Row-capped.",
-    params: { sql: "a single SELECT/WITH statement", limit: "optional row cap (≤5000)" },
+    inputSchema: {
+      type: "object",
+      properties: {
+        sql: { type: "string", description: "a single SELECT/WITH statement" },
+        limit: { type: "number", description: "row cap (≤5000, default 1000)" },
+      },
+      required: ["sql"],
+      additionalProperties: false,
+    },
     run: (args) => {
       const sql = String(args?.sql ?? "");
       const limit = typeof args?.limit === "number" ? args.limit : 1000;
@@ -251,6 +167,9 @@ function registerTools(): void {
   registerReporter("rowsFiltered", () => seismosGraph().grStats().rowsFiltered ?? null);
   registerReporter("activeClauses", () => clauseCount(brush));
   registerReporter("filters", () => activeFilters(brush));
+  // The declared dimensions with their semantic values (null = inactive but
+  // available) — the agent-facing view of what set-<dim> can move.
+  registerReporter("dimensions", () => selectionDimReport(seismosScope));
   registerReporter("mc", () => store.mc.get());
   registerReporter("bValue", () => {
     const fit = seismosGraph().grStats().fit;

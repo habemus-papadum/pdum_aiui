@@ -94,6 +94,40 @@ describe("the scope option — the composed-document guard", () => {
     const unscoped = toolsFromControlSurface().map((tool) => tool.name);
     expect(unscoped).toContain("set_orother_x");
   });
+
+  it("a scope's surface INCLUDES unscoped declarations — the toolkit's view", () => {
+    // aiui-viz's surfaceViewFor is the one definition of "this scope's
+    // surface": own subtree + unscoped. An app that declares no scope at all
+    // (the common single-app shape) must still reach its own oracle when a
+    // sibling app mounts beside it and forces a scoped projection.
+    control({ name: "ortheme", value: "dark", options: ["dark", "light"] });
+    action({ name: "orping", description: "ping the app", run: () => "pong" });
+    control({ name: "orother/x", value: 1 });
+
+    const scoped = toolsFromControlSurface({ scope: "orlab" }).map((tool) => tool.name);
+    expect(scoped).toContain("set_ortheme"); // unscoped control
+    expect(scoped).toContain("orping"); // unscoped action
+    expect(scoped).toContain("set_orlab_freq"); // own scope, unchanged
+    expect(scoped).toContain("orlab_kick");
+    expect(scoped).not.toContain("set_orother_x"); // a sibling scope, still out
+  });
+
+  it("the scoped `report` and the user filter compose over the same view", async () => {
+    control({ name: "ortheme", value: "dark", options: ["dark", "light"] });
+    const tools = toolsFromControlSurface({ scope: "orlab" });
+    const report = (await byName(tools, "report").execute({})) as Array<Record<string, unknown>>;
+    const named = report.map((row) => row.control ?? row.action);
+    expect(named).toContain("ortheme");
+    expect(named).not.toContain("orother/x");
+
+    // `filter` narrows the scoped view rather than replacing it.
+    const narrowed = toolsFromControlSurface({
+      scope: "orlab",
+      filter: (entry) => entry.kind === "control",
+    }).map((tool) => tool.name);
+    expect(narrowed).toContain("set_ortheme");
+    expect(narrowed).not.toContain("orlab_kick");
+  });
 });
 
 describe("toolsFromAiuiRegistry", () => {

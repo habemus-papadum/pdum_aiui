@@ -27,6 +27,7 @@ import {
   controlSurface,
   ensureAiuiGlobal,
   subscribeControlSurface,
+  surfaceViewFor,
 } from "@habemus-papadum/aiui-viz";
 import type { OracleTool } from "./types";
 
@@ -78,11 +79,17 @@ function controlDescription(entry: Extract<ControlSurfaceEntry, { kind: "control
 
 export interface ControlSurfaceToolsOptions {
   /**
-   * Keep only one scope's entries (an aiui `Scope` or its name). The control
+   * Keep only one scope's SURFACE (an aiui `Scope` or its name). The control
    * surface is DOCUMENT-global — in a composed document (the gallery mounting
    * many demos) an unscoped projection hands this oracle EVERY app's
    * controls, so a per-app oracle passes its own scope. Omit deliberately for
    * a host-level oracle that drives the whole document.
+   *
+   * "A scope's surface" is aiui-viz's {@link surfaceViewFor} — the scope's own
+   * subtree PLUS unscoped declarations — so an embedded oracle sees exactly
+   * what the equivalent agent toolkit (`registerStandardTools`) serves. An app
+   * whose declarations carry no scope at all keeps working when a sibling app
+   * mounts beside it, which a bare `<scope>/` prefix test silently broke.
    */
   scope?: string | { name: string };
   /** Arbitrary extra filtering (composes with `scope`). */
@@ -95,9 +102,9 @@ function surfaceFilter(
   options: ControlSurfaceToolsOptions,
 ): (entry: ControlSurfaceEntry) => boolean {
   const scopeName = typeof options.scope === "string" ? options.scope : options.scope?.name;
-  return (entry) =>
-    (scopeName === undefined || entry.name.startsWith(`${scopeName}/`)) &&
-    (options.filter?.(entry) ?? true);
+  // One membership rule, defined in aiui-viz and shared with the toolkit path.
+  const view = scopeName === undefined ? undefined : surfaceViewFor(scopeName);
+  return (entry) => (view?.owns(entry.name) ?? true) && (options.filter?.(entry) ?? true);
 }
 
 /** Project the page's control surface into typed oracle tools — a SNAPSHOT.

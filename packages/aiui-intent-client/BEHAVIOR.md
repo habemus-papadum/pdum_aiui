@@ -274,6 +274,12 @@ The full contract is the intent-oracle proposal (git history); what the client g
   than a snapshot of the last connection. Off, the params rows disable with a reason and the
   mind strip says "off" — true statements, not absences. The one thing still gated is the
   tool-source line: which app's tools the oracle can see is only a live-session question.
+- **The woven prompt rides the ledger fold, COLLAPSED** — one row above the transcript per
+  weave (`startup prompt · N chars`, then `prompt re-woven · N chars` each time the tab
+  prelude re-weaves mid-session), the whole text on click. A projection of the `config`
+  entries the session already records (`sent.instructions` is the woven whole), never a
+  second record and never a write: an unchanged re-send adds no row, and a reconnect opens a
+  new startup prompt even when the text is the one the last connection ended on.
 - **The usage strip reads from ZERO**, not from the first charge. A fixed set of five chips
   plus the cost, present the moment the panel is, so nothing has been spent is a statement
   rather than an empty space — and the number you are watching does not move as each kind of

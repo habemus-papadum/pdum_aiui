@@ -169,12 +169,17 @@ render on a phone from the same markup the desktop uses.
 
 Covered in depth in [design choices §8](./frontend-design-choices); the style-guide rules:
 
-- The in-repo notebooks are **dark-only** by owner decision: the shared journal theme
-  (`demos/journal`) has no light mode and no toggle, and each page's head stamps
-  `data-theme="dark"` pre-paint. An app that wants system-following instead keys on
-  `colorMode()` and the token pattern below (the facility exists; nothing in-repo currently
-  exercises it). Either way there is no user-facing toggle, and a deviation is documented
+- The in-repo notebooks are **system-following** (owner, 2026-08-12 — restoring design-choices
+  §8 after a dark-only period from 2026-07-19): the shared journal theme (`demos/journal`)
+  carries dark tokens as the base plus one `prefers-color-scheme: light` block, `mode()`
+  delegates to the reactive `colorMode()` from `aiui-viz/site/color-mode`, and there is **no
+  head stamp and no `data-theme`** — the media query is the single source of truth, resolved
+  by the UA before first paint. There is no user-facing toggle, and a deviation is documented
   where it was decided.
+- **The plate rule is absolute**: simulation canvases and boards render on `--figure-bg`, a
+  cross-mode dark constant deliberately absent from the light block — a WebGL shader, canvas
+  island, or worker raster never repaints on a theme flip. Do not give one demo's plate a
+  light variant; the convention is only cheap while it has no exceptions.
 - All stylesheet color goes through `:root` tokens (dark default, light under the media query).
   Literal colors (charts, SVG strokes) read the app's theme module, keyed on `colorMode()` from
   `aiui-viz/site`.

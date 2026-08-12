@@ -290,6 +290,44 @@ If you use the `ATTACH` route, bridge it with an unqualified local view (this co
 CREATE VIEW events AS SELECT * FROM remote.events;   -- then api.from("events")
 ```
 
+### Driving the crossfilter programmatically — selection dimensions
+
+Mouse interactors are not the only writers a Selection should have. The
+`aiui-viz/mosaic-selection` subpath gives one logical filter the `control()`
+treatment — declared in the store, compiler-named, validated once, durable,
+and surfaced to agents as a real `set-<name>` tool (via `action()`, so the
+standard tools, the page-tools relay, and the oracle all see a real JSON
+Schema):
+
+```ts
+import { selectionDim, selectionSignal } from "@habemus-papadum/aiui-viz/mosaic-selection";
+
+/** Magnitude window — the completeness bracket every view filters by. */
+export const mag = selectionDim({
+  scope: appScope,
+  kind: "interval",
+  targets: [{ selection: brush, field: "mag", table: "quakes" }],
+  min: 0, max: 10,
+});
+mag.set({ lo: 5 });          // one-sided; publishes exactly like a brush drag
+```
+
+Setting a dimension publishes clauses with a stable per-(dimension, target)
+source, so re-sets replace rather than stack — the same semantics as a
+re-dragged brush. A dimension with several targets fans one semantic value
+out as a table-appropriate clause per Selection ("time" as `epoch_ms(ts)` on
+one table, `started_at` on another) — necessary because Mosaic itself routes
+nothing: every clause reaches every filtered client verbatim, and a clause
+naming a column a client's table lacks is a binder error Mosaic logs and
+swallows. The read side is `selectionSignal(brush)` — a version counter over
+the Selection's own value event, with reactive `clauses()`/`active()`/`sql()`
+views that track *every* producer (mouse, menu, agent), not just dimensions.
+
+The module docblock in `src/mosaic-selection.ts` carries the full contract
+and the encoded gotchas (2×1-D over 2-D boxes, preagg vs. cross-table
+clauses, report-after-a-task-boundary); `src/mosaic-selection.test.ts` pins
+the behaviors against the real pinned mosaic-core.
+
 ---
 
 ## Part 5 — Choosing

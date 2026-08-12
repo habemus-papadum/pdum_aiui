@@ -135,3 +135,36 @@
 .vg-input select:hover {
   background: var(--btn-hover);
 }
+/* the named-views bar (aiui-viz SelectionViewsBar — class contract only) */
+.selection-views {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.selection-views select,
+.selection-views input,
+.selection-views button {
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--btn-bg);
+  border: 1px solid var(--btn-border);
+  border-radius: 7px;
+  padding: 3px 7px;
+}
+.selection-views select,
+.selection-views button {
+  cursor: pointer;
+}
+.selection-views select:hover,
+.selection-views button:not(:disabled):hover {
+  background: var(--btn-hover);
+}
+.selection-views button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.selection-views input {
+  width: 130px;
+}

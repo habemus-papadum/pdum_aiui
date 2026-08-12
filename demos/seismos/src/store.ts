@@ -28,6 +28,19 @@
  */
 import type { AsyncDuckDB, AsyncDuckDBConnection } from "@duckdb/duckdb-wasm";
 import { type ControlBox, control, scope } from "@habemus-papadum/aiui-viz";
+import {
+  clearAllSelectionDims,
+  type IntervalValue,
+  type PointValue,
+  type SelectionDim,
+  type SelectionSignal,
+  selectionDim,
+  selectionSignal,
+} from "@habemus-papadum/aiui-viz/mosaic-selection";
+import {
+  type SelectionViewsStore,
+  selectionViews,
+} from "@habemus-papadum/aiui-viz/selection-views";
 import { Coordinator, loadParquet, Selection, wasmConnector } from "@uwdata/vgplot";
 import { type Accessor, createSignal } from "solid-js";
 // The bundled catalog + optional border overlay, as hashed Vite assets — NOT
@@ -123,10 +136,35 @@ export interface Summary {
   depthMax: number;
 }
 
+/** The declared filter dimensions — the agent-drivable half of the crossfilter
+ * (mouse interactors publish into the same brush; these are the named,
+ * validated, tool-surfaced writers). */
+export interface SeismosDims {
+  mag: SelectionDim<IntervalValue>;
+  depth: SelectionDim<IntervalValue>;
+  year: SelectionDim<IntervalValue>;
+  type: SelectionDim<PointValue>;
+  depthClass: SelectionDim<PointValue>;
+  lon: SelectionDim<IntervalValue>;
+  lat: SelectionDim<IntervalValue>;
+}
+
 export interface SeismosStore {
   coordinator: Coordinator;
   /** The one crossfilter selection every view publishes into and filters by. */
   brush: Selection;
+  /** Reactive window onto the brush (every producer: dims, plots, menus). */
+  brushSignal: SelectionSignal;
+  /** The declared filter dimensions (one `set-<name>` tool each). */
+  dims: SeismosDims;
+  /** Named cross-filter views (localStorage; save/load/list/delete-view tools). */
+  views: SelectionViewsStore;
+  /** Clear EVERY crossfilter clause — dimensions, plot brushes, and facet
+   * menus alike. Returns the clause count still visible at return time: the
+   * brush's `clauses` reflects EMITTED state, so mid-cascade this can read
+   * above zero and settles to 0 once the coordinator's re-queries drain
+   * (measured live; same reason report() reads want a task boundary). */
+  clearFilters(): number;
   table: string;
   /** Completeness magnitude control (durable interaction state). */
   mc: ControlBox<number>;
@@ -163,6 +201,85 @@ function sanitize(row: Record<string, unknown>): Record<string, unknown> {
 export const store: SeismosStore = seismosScope.durable("store", () => {
   const coordinator = new Coordinator();
   const brush = Selection.crossfilter();
+  const brushSignal = selectionSignal(brush);
+
+  // ---- the filter dimensions: declared writers over the shared brush --------
+  // Each publishes clauses exactly like a plot brush (stable source, replace-
+  // by-source) and surfaces as a validated `set-<name>` agent tool. Mouse
+  // interactors (map/histogram brushes, the facet menus) remain separate
+  // producers into the same Selection.
+
+  /** Magnitude window (moment magnitude) — one side alone is open-ended. */
+  const mag = selectionDim({
+    scope: seismosScope,
+    kind: "interval",
+    min: 0,
+    max: 10,
+    targets: [{ selection: brush, field: "mag", table: TABLE }],
+  });
+  /** Hypocenter depth window (the catalog spans ~0–700 km). */
+  const depth = selectionDim({
+    scope: seismosScope,
+    kind: "interval",
+    min: 0,
+    max: 800,
+    unit: "km",
+    targets: [{ selection: brush, field: "depth", table: TABLE }],
+  });
+  /** Origin-year window (the catalog spans 1976–2024). */
+  const year = selectionDim({
+    scope: seismosScope,
+    kind: "interval",
+    targets: [{ selection: brush, field: "year", table: TABLE }],
+  });
+  /** Event type — e.g. "earthquake", "nuclear explosion", "volcanic eruption". */
+  const eventType = selectionDim({
+    name: "type",
+    scope: seismosScope,
+    kind: "point",
+    targets: [{ selection: brush, field: "type", table: TABLE }],
+  });
+  /** Depth class of the hypocenter. */
+  const depthClass = selectionDim({
+    scope: seismosScope,
+    kind: "point",
+    options: ["shallow", "intermediate", "deep"],
+    targets: [{ selection: brush, field: "depth_class", table: TABLE }],
+  });
+  /** Longitude window, degrees east — pair with lat for a geographic box
+   * (two 1-D clauses; a 2-D clause would not propagate — NOTES.md). */
+  const lon = selectionDim({
+    scope: seismosScope,
+    kind: "interval",
+    min: -180,
+    max: 180,
+    unit: "°",
+    targets: [{ selection: brush, field: "longitude", table: TABLE }],
+  });
+  /** Latitude window, degrees north. */
+  const lat = selectionDim({
+    scope: seismosScope,
+    kind: "interval",
+    min: -90,
+    max: 90,
+    unit: "°",
+    targets: [{ selection: brush, field: "latitude", table: TABLE }],
+  });
+  const dims: SeismosDims = { mag, depth, year, type: eventType, depthClass, lon, lat };
+
+  // Named views over the dims (localStorage) + their four agent actions.
+  const views = selectionViews({ scope: seismosScope });
+
+  function clearFilters(): number {
+    // Dimensions first (nulls their semantic values AND retracts their
+    // clauses), then every remaining producer's clause — plot brushes and
+    // facet menus publish into the same Selection with their own sources.
+    clearAllSelectionDims(seismosScope);
+    for (const c of [...brush.clauses]) {
+      brush.update({ ...c, value: null, predicate: null });
+    }
+    return brush.clauses.length;
+  }
 
   /** Magnitude of completeness Mc for the live Gutenberg-Richter b-value fit. */
   const mc = control({
@@ -314,6 +431,10 @@ export const store: SeismosStore = seismosScope.durable("store", () => {
   return {
     coordinator,
     brush,
+    brushSignal,
+    dims,
+    views,
+    clearFilters,
     table: TABLE,
     mc,
     loadState,

@@ -1,13 +1,18 @@
-/* The dark-journal notebook chrome shared by the demos and the gallery shell —
- * **dark only**. One dark journal: there is no light mode and no toggle
- * (owner, 2026-07-19 — a single consistent surface reads better than two, even
- * if a light reader would have preferred the epicenter map on white). Every
- * color is a design token on :root; the host page's head stamps
- * `data-theme="dark"` before first paint purely so theme.ts's `mode()` reads
- * dark for the literal SVG/Plot colors. The per-mode chart palettes live in
- * ./theme.ts (dark validated with the dataviz procedure against the panel
- * surface). Simulation canvases and boards are self-contained dark figures
- * (--figure-bg), framed by the panel border like a journal plate.
+/* The journal notebook chrome shared by the demos and the gallery shell —
+ * **system-following** (design-choices §8, restored 2026-08-12; dark-only from
+ * 2026-07-19 until then): dark tokens are the base, light rides ONE
+ * `prefers-color-scheme` media block below, and there is no toggle and no
+ * `data-theme` stamp — `matchMedia` is the single source of truth, the UA
+ * resolves it before first paint (no flash, no head script). The per-mode
+ * chart palettes live in ./theme.ts (each validated with the dataviz
+ * procedure against its own panel surface), keyed on the same reactive mode.
+ *
+ * THE PLATE RULE (absolute, by design): simulation canvases and boards are
+ * self-contained dark figures — `--figure-bg` is a CROSS-MODE CONSTANT and is
+ * deliberately absent from the light block, so every WebGL shader, canvas
+ * island, and worker raster renders identically in both modes, framed by the
+ * panel border like a journal plate. Do not add a per-demo light variant; the
+ * convention is only cheap while it is absolute.
  *
  * What belongs here: the tokens and every class used by TWO OR MORE surfaces
  * (or by aiui-viz library components — CellView's cell/progress chrome,
@@ -16,11 +21,14 @@
  * page.css. */
 
 :root {
+  /* UA chrome (scrollbars, form controls) follows the page's scheme. */
+  color-scheme: light dark;
+
   /* surfaces */
   --bg: #0e1119;
   --panel: #171b25;
   --panel-border: #262c3a;
-  --figure-bg: #0e1119; /* the dark canvas/board plate */
+  --figure-bg: #0e1119; /* the canvas/board plate — CROSS-MODE dark (see header) */
 
   /* text ramp (primary → faint) */
   --text: #e8e8ea;
@@ -57,6 +65,63 @@
 
   /* site header */
   --header-bg: rgba(14, 17, 25, 0.72);
+}
+
+/* The light journal: same paper, lit. Every token that flips does so here —
+ * and ONLY here (--figure-bg deliberately absent: the plate rule above). */
+@media (prefers-color-scheme: light) {
+  :root {
+    /* surfaces */
+    --bg: #f5f7fb;
+    --panel: #ffffff;
+    --panel-border: #d9dee8;
+
+    /* text ramp (primary → faint) */
+    --text: #1d2430;
+    --text-heading: #2b3342;
+    --text-secondary: #4d5768;
+    --text-dim: #5d6779;
+    --text-muted: #77808f;
+    --text-faint: #98a0ad;
+
+    /* accents */
+    --accent: #2b5fb8;
+    --accent-strong: #3b74d6;
+
+    /* buttons */
+    --btn-bg: #e7ecf5;
+    --btn-text: #2b3648;
+    --btn-hover: #dbe3f0;
+    --btn-border: #c3cddd;
+
+    /* lines & rows */
+    --grid-line: #e3e7ef;
+    --row-border: #e9edf4;
+    --row-hover: #eef2f8;
+    --row-active: #dfe9f8;
+    --surface-hover: #eef2f8;
+
+    --progress-track: rgba(0, 0, 0, 0.08);
+
+    /* status */
+    --ok: #1e7a54;
+    --error-bg: #fbeeee;
+    --error-border: #d9a0a0;
+    --error-text: #a13c3c;
+
+    /* site header */
+    --header-bg: rgba(247, 249, 252, 0.78);
+  }
+
+  /* Framed plates: on light paper a dark figure gets a mat edge and a slight
+   * recess, so the landing's preview plates read as mounted figures rather
+   * than holes in the page. Light-only cosmetics — in dark mode the plate and
+   * the page share a surface family and need no frame. */
+  .demo-card-preview {
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.28),
+      inset 0 2px 8px rgba(0, 0, 0, 0.5);
+  }
 }
 
 * {

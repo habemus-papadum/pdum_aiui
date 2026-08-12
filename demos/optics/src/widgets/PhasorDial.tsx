@@ -114,7 +114,10 @@ export function PhasorDial(props: {
                   {props.arrows.map((a, i) => {
                     const p0 = c.pts[i];
                     const p1 = c.pts[i + 1];
-                    const col = a.color ?? "#8f97a6";
+                    // Defaults ride CSS tokens (per-mode in widgets.css) with the
+                    // dark literal as fallback; var() only resolves in a style
+                    // PROPERTY, never an SVG attribute — hence style, not stroke=.
+                    const col = a.color ?? "var(--optix-phasor-arrow, #8f97a6)";
                     return (
                       <>
                         <line
@@ -122,11 +125,14 @@ export function PhasorDial(props: {
                           y1={p0.y * s}
                           x2={p1.x * s}
                           y2={p1.y * s}
-                          stroke={col}
+                          style={{ stroke: col }}
                           stroke-width={0.012}
                           stroke-linecap="round"
                         />
-                        <path d={head(p0.x * s, p0.y * s, p1.x * s, p1.y * s)} fill={col} />
+                        <path
+                          d={head(p0.x * s, p0.y * s, p1.x * s, p1.y * s)}
+                          style={{ fill: col }}
+                        />
                       </>
                     );
                   })}
@@ -135,13 +141,17 @@ export function PhasorDial(props: {
                     y1={0}
                     x2={c.sum.x * s}
                     y2={c.sum.y * s}
-                    stroke={props.resultantColor ?? "#e6d24a"}
+                    style={{
+                      stroke: props.resultantColor ?? "var(--optix-phasor-resultant, #e6d24a)",
+                    }}
                     stroke-width={0.02}
                     stroke-linecap="round"
                   />
                   <path
                     d={head(0, 0, c.sum.x * s, c.sum.y * s)}
-                    fill={props.resultantColor ?? "#e6d24a"}
+                    style={{
+                      fill: props.resultantColor ?? "var(--optix-phasor-resultant, #e6d24a)",
+                    }}
                   />
                 </>
               );

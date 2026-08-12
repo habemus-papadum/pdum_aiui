@@ -7,8 +7,8 @@
  * From one `registerStandardTools(kit)` call an app's agent surface is
  * ASSEMBLED from the reflection layer — restricted to the KIT'S VIEW of the
  * global registries (its own scope subtree + unscoped declarations, plus any
- * `scopes` the caller declares — see {@link KitView}; the reason: a multi-app
- * document like the gallery must not cross-pollinate kits):
+ * `scopes` the caller declares — see {@link surfaceViewFor}; the reason: a
+ * multi-app document like the gallery must not cross-pollinate kits):
  *
  *  - `report` — the whole picture in one call: controls (+values), cells
  *    (+states), actions, dependency edges, plus the app's custom reporter
@@ -45,45 +45,59 @@ const LOCATE_LIMIT = 20;
 export interface StandardToolsOptions {
   /**
    * Extra scopes this kit SERVES, beyond its default view (see
-   * {@link kitView}) — the composition escape hatch. The twins shape: a kit
-   * named `app` hosting slices scoped `left`/`right` declares them here, and
-   * their actions surface as `left/kick` / `right/kick`. Accepts Scope objects
-   * or bare scope names.
+   * {@link surfaceViewFor}) — the composition escape hatch. The twins shape: a
+   * kit named `app` hosting slices scoped `left`/`right` declares them here,
+   * and their actions surface as `left/kick` / `right/kick`. Accepts Scope
+   * objects or bare scope names.
    */
   scopes?: readonly (Scope | string)[];
 }
 
 /**
- * The kit's VIEW of the global registries: which declarations belong to it.
- * By default a kit serves its own scope subtree (`ns` or `ns/…`) plus
- * UNSCOPED declarations (a single-app document's common case); `scopes`
- * declares more (composition). A multi-app document (the gallery: N kits,
- * N scopes) is the reason this exists at all — a kit iterating the whole
- * global surface registered every app's actions on every kit (M×N
- * contamination, found live 2026-08-03).
+ * One scope's VIEW of the global registries: which declarations belong to it.
+ * See {@link surfaceViewFor} for the membership rule.
  */
-class KitView {
-  private readonly prefixes: readonly string[];
-  constructor(kit: AgentToolkit, options: StandardToolsOptions | undefined) {
-    const declared = (options?.scopes ?? []).map((s) => (typeof s === "string" ? s : s.name));
-    this.prefixes = [kit.ns, ...declared];
-  }
-  /** Does a declaration with this `scope` field belong to the kit? */
-  ownsScope(scope: string | undefined): boolean {
-    if (scope === undefined) {
-      return true; // unscoped declarations belong everywhere
-    }
-    return this.prefixes.some((p) => scope === p || scope.startsWith(`${p}/`));
-  }
-  /** Does a registry entry with this (scope-qualified) NAME belong to the
-   * kit? Cells carry no scope field in their snapshot — the qualified name
-   * is the identity — so ownership reads off the prefix. */
-  ownsName(name: string): boolean {
-    if (!name.includes("/")) {
-      return true; // unqualified = unscoped
-    }
-    return this.prefixes.some((p) => name.startsWith(`${p}/`));
-  }
+export interface SurfaceView {
+  /** The scopes this view serves — the owning scope first, then any extras. */
+  readonly scopes: readonly string[];
+  /** Does the declaration registered under this (scope-qualified) name belong
+   * to the view? */
+  owns(name: string): boolean;
+}
+
+/**
+ * The membership test for one scope's slice of the global registries — the
+ * SINGLE definition of "a surface", shared by the toolkit's standard tools
+ * (below) and by aiui-oracle's control-surface projection, so a scoped oracle
+ * and the equivalent kit never disagree about what an app's surface is.
+ *
+ * A view serves its own scope subtree (`ns/…`) plus UNSCOPED declarations
+ * (a single-app document's common case: an app whose declarations carry no
+ * scope still gets its own tools); `extraScopes` declares more (composition —
+ * the twins shape). A multi-app document (the gallery: N kits, N scopes) is
+ * the reason this exists at all — a kit iterating the whole global surface
+ * registered every app's actions on every kit (M×N contamination, found live
+ * 2026-08-03).
+ *
+ * Membership reads off the QUALIFIED NAME, which control.ts makes the identity
+ * of every declaration. Entries that also carry a `scope` field agree by
+ * construction — `control()`/`action()` build the name as `<scope>/<leaf>`, so
+ * name-prefix and scope-prefix ownership coincide — and reading the name is
+ * what lets the same rule cover cells, dependency edges and bridges, whose
+ * snapshots carry no scope field at all.
+ */
+export function surfaceViewFor(
+  ns: string,
+  extraScopes: readonly (Scope | string)[] = [],
+): SurfaceView {
+  const scopes = [ns, ...extraScopes.map((s) => (typeof s === "string" ? s : s.name))];
+  return {
+    scopes,
+    owns: (name) =>
+      !name.includes("/") // unqualified = unscoped = belongs everywhere
+        ? true
+        : scopes.some((p) => name.startsWith(`${p}/`)),
+  };
 }
 
 /** The `report` tool's payload for one format — the KIT's view, not the
@@ -91,13 +105,13 @@ class KitView {
  * gears' controls. */
 function buildReport(
   kit: AgentToolkit,
-  view: KitView,
+  view: SurfaceView,
   format: "brief" | "full",
 ): Record<string, unknown> {
-  const surface = controlSurface().filter((e) => view.ownsScope(e.scope));
-  const cells = cellRegistry().filter((c) => view.ownsName(c.name));
-  const edges = dependencyEdges().filter((e) => view.ownsName(e.cell));
-  const bridges = bridgeRegistry().filter((b) => view.ownsName(b.name));
+  const surface = controlSurface().filter((e) => view.owns(e.name));
+  const cells = cellRegistry().filter((c) => view.owns(c.name));
+  const edges = dependencyEdges().filter((e) => view.owns(e.cell));
+  const bridges = bridgeRegistry().filter((b) => view.owns(b.name));
 
   if (format === "brief") {
     return {
@@ -201,7 +215,7 @@ export function registerStandardTools(
   kit: AgentToolkit,
   options?: StandardToolsOptions,
 ): () => void {
-  const view = new KitView(kit, options);
+  const view = surfaceViewFor(kit.ns, options?.scopes);
   kit.registerTool({
     name: "report",
     description:
@@ -240,9 +254,9 @@ export function registerStandardTools(
       // OWNED controls only — same view as report, so a kit cannot write a
       // sibling app's control in a multi-app document (and the error's
       // control list stays the kit's own, not the document's).
-      if (!c || !view.ownsScope(c.scope)) {
+      if (!c || !view.owns(c.name)) {
         const known = controlSurface()
-          .filter((e) => e.kind === "control" && view.ownsScope(e.scope))
+          .filter((e) => e.kind === "control" && view.owns(e.name))
           .map((e) => e.name)
           .join(", ");
         throw new Error(`no control "${name}" — controls: ${known || "(none declared)"}`);
@@ -274,16 +288,16 @@ export function registerStandardTools(
   // DOM. (Kept as a reporter so handle.report() aggregations and older
   // consumers keep working; the `report` tool above is the format-aware
   // superset.)
-  kit.registerReporter("cells", () => cellRegistry().filter((c) => view.ownsName(c.name)));
+  kit.registerReporter("cells", () => cellRegistry().filter((c) => view.owns(c.name)));
   // The airlock table: named bridgeEffect crossings and their failure history
   // (a bridge failure is recorded, not thrown — this is where it surfaces).
-  kit.registerReporter("bridges", () => bridgeRegistry().filter((b) => view.ownsName(b.name)));
+  kit.registerReporter("bridges", () => bridgeRegistry().filter((b) => view.owns(b.name)));
 
   // ---- actions become real tools, whatever order they were declared in -----
   // OWNED actions only: the control surface is global, the kit's view is not.
   const syncActionTools = () => {
     for (const entry of controlSurface()) {
-      if (entry.kind !== "action" || !view.ownsScope(entry.scope)) continue;
+      if (entry.kind !== "action" || !view.owns(entry.name)) continue;
       const tool = toolOfAction(entry.name, kitRelativeName(kit, entry.name, entry.scope));
       if (tool) kit.registerTool(tool);
     }

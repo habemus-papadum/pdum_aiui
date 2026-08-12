@@ -8,11 +8,9 @@
  * otherwise provide: the stylesheet and the dark-theme stamp.
  */
 import "@habemus-papadum/aiui-journal/styles.css";
-import { initTheme } from "@habemus-papadum/aiui-journal";
 import { render } from "@solidjs/web";
 import { page } from "./page";
 
-initTheme(); // re-assert the head's pre-paint data-theme="dark"
 document.title = page.title;
 page.activate?.();
 render(() => <page.App />, document.getElementById("root") as HTMLElement);

@@ -1,37 +1,35 @@
 /**
- * theme.ts — the dark journal's palettes and Plot cosmetics, shared by every
+ * theme.ts — the journal's palettes and Plot cosmetics, shared by every
  * notebook demo and the gallery shell (the CSS half of the identity is
  * ./styles.css — design tokens + notebook chrome).
  *
- * The journal is **dark only** (owner, 2026-07-19): there is no light mode and
- * no toggle. `mode()` is a constant `"dark"`, kept as a function so the
- * chart/Plot option memos that read it don't change shape. The host page's
- * head stamps `data-theme="dark"` before first paint; `initTheme()` re-asserts
- * it defensively at module load. `mode()` remains the single source of truth
- * for the *literal* colors below (chart series, Plot cosmetics, SVG strokes);
- * CSS goes through the `:root` tokens (styles.css).
+ * The journal **follows the system color scheme** (design-choices §8, restored
+ * 2026-08-12 — it was dark-only from 2026-07-19 until then): no toggle, no
+ * `data-theme` stamp, one source of truth. CSS gets there through the `:root`
+ * tokens and one `prefers-color-scheme` media block (styles.css); the LITERAL
+ * colors below (chart series, Plot cosmetics, SVG strokes) key on `mode()`,
+ * which delegates to aiui-viz's reactive `colorMode()` — so a chart whose
+ * options memo reads `chart()`/`plot()` re-renders on a live theme change.
+ * Simulation canvases and boards are deliberately exempt: they are
+ * self-contained dark figures (`--figure-bg`, cross-mode), like journal
+ * plates, so nothing imperative ever needs to repaint on a theme flip.
  */
+import { colorMode } from "@habemus-papadum/aiui-viz/site/color-mode";
 
 export type ColorMode = "light" | "dark";
 export type Mode = ColorMode;
 
-/** The color mode. Constant `"dark"` — the journal has one surface. */
-export const mode = (): Mode => "dark";
-export const isDark = (): boolean => true;
-
-/** Re-assert the dark attribute at module load (the head already stamped it
- * pre-paint; this covers any environment where the head script didn't run). */
-export function initTheme(): void {
-  if (typeof document !== "undefined") {
-    document.documentElement.dataset.theme = "dark";
-  }
-}
+/** The live color mode — reactive: reading it in a chart's options memo
+ * re-renders that chart on a system theme change. */
+export const mode = (): Mode => colorMode();
+export const isDark = (): boolean => mode() === "dark";
 
 /**
- * The canonical categorical chart palette, validated against the dark panel
- * surface #171b25 (the dataviz six checks: band, chroma floor, adjacent CVD ΔE,
- * 3:1 contrast). Fixed assignment: color follows the series, never its rank.
- * morphogen reads all three; aztec's frozen-fraction line borrows `blue`.
+ * The canonical categorical chart palette, one per mode, each validated
+ * against its own panel surface with the dataviz six checks (band, chroma
+ * floor, adjacent CVD ΔE, 3:1 contrast) — never an automatic flip. Fixed
+ * assignment: color follows the series, never its rank. morphogen reads all
+ * three; aztec's frozen-fraction line borrows `blue`.
  */
 export interface ChartPalette {
   blue: string;
@@ -39,11 +37,21 @@ export interface ChartPalette {
   purple: string;
 }
 
-export const chart = (): ChartPalette => ({
-  blue: "#4a86dd",
-  green: "#2fa876",
-  purple: "#9b6fdb",
-});
+/** Both validated palettes, exported for tests and re-validation runs. */
+export const CHART_PALETTES: Record<Mode, ChartPalette> = {
+  dark: {
+    blue: "#4a86dd",
+    green: "#2fa876",
+    purple: "#9b6fdb",
+  },
+  light: {
+    blue: "#2f6bcb",
+    green: "#1e8a5e",
+    purple: "#7c4fc4",
+  },
+};
+
+export const chart = (): ChartPalette => CHART_PALETTES[mode()];
 
 /**
  * Observable Plot cosmetics that need literal values: `text` is the
@@ -56,14 +64,24 @@ export interface PlotCosmetics {
   strong: string;
 }
 
-export const plot = (): PlotCosmetics => ({
-  text: "#9aa0aa",
-  rule: "#3a4152",
-  strong: "#c3c9d4",
-});
+/** Both cosmetic sets, exported for tests and re-validation runs. */
+export const PLOT_COSMETICS: Record<Mode, PlotCosmetics> = {
+  dark: {
+    text: "#9aa0aa",
+    rule: "#3a4152",
+    strong: "#c3c9d4",
+  },
+  light: {
+    text: "#5a6472",
+    rule: "#c9d0da",
+    strong: "#333c4b",
+  },
+};
+
+export const plot = (): PlotCosmetics => PLOT_COSMETICS[mode()];
 
 /** The `style` object for a Plot figure on a panel surface — transparent
- * background, dark-surface ink. */
+ * background, that mode's panel ink. */
 export const plotStyle = (): { background: string; color: string; fontSize: string } => ({
   background: "transparent",
   color: plot().text,

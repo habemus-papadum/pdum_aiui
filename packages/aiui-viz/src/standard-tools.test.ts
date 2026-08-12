@@ -2,7 +2,9 @@
 import { describe, expect, it } from "vitest";
 import { agentToolkit } from "./agent-tools";
 import { cell, cellGraph } from "./cell";
-import { registerStandardTools } from "./standard-tools";
+import { action, control } from "./control";
+import { scope } from "./scope";
+import { registerStandardTools, surfaceViewFor } from "./standard-tools";
 
 describe("registerStandardTools", () => {
   it("registers `locate` and the `cells` report section", () => {
@@ -62,5 +64,48 @@ describe("registerStandardTools", () => {
     dispose();
     const after = kit.handle().report() as { cells: Array<{ name: string }> };
     expect(after.cells.map((c) => c.name)).not.toContain("temperature");
+  });
+});
+
+describe("surfaceViewFor — the shared membership test", () => {
+  it("owns its own subtree, and every UNSCOPED declaration", () => {
+    const view = surfaceViewFor("gears");
+    expect(view.owns("gears/spin")).toBe(true);
+    expect(view.owns("gears/inner/spin")).toBe(true);
+    // Unqualified = unscoped = belongs everywhere (the single-app case).
+    expect(view.owns("spin")).toBe(true);
+  });
+
+  it("excludes a sibling scope — including a near-miss prefix", () => {
+    const view = surfaceViewFor("gears");
+    expect(view.owns("aztec/spin")).toBe(false);
+    // "gearsX" is a different scope, not a child of "gears".
+    expect(view.owns("gearsX/spin")).toBe(false);
+  });
+
+  it("serves declared extra scopes — Scope objects or bare names", () => {
+    const view = surfaceViewFor("app", [scope("left"), "right"]);
+    expect(view.scopes).toEqual(["app", "left", "right"]);
+    expect(view.owns("left/freq")).toBe(true);
+    expect(view.owns("right/freq")).toBe(true);
+    expect(view.owns("app/freq")).toBe(true);
+    expect(view.owns("other/freq")).toBe(false);
+  });
+
+  it("is the view the standard tools actually project", () => {
+    control({ name: "spin", scope: scope("stdView"), value: 1 });
+    control({ name: "theme", value: "dark" }); // unscoped: belongs everywhere
+    control({ name: "spin", scope: scope("stdOther"), value: 2 });
+    action({ name: "reset", scope: scope("stdOther"), run: () => "other" });
+
+    const kit = agentToolkit("stdView");
+    registerStandardTools(kit);
+    const report = kit.handle().call("report") as {
+      controls: Record<string, unknown>;
+      actions: string[];
+    };
+    expect(Object.keys(report.controls)).toEqual(expect.arrayContaining(["stdView/spin", "theme"]));
+    expect(Object.keys(report.controls)).not.toContain("stdOther/spin");
+    expect(report.actions).not.toContain("stdOther/reset");
   });
 });

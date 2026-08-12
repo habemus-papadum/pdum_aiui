@@ -18,12 +18,23 @@ import { durable } from "../durable";
 
 export type ColorMode = "dark" | "light";
 
-const modeBox = durable("aiui:color-mode", () => {
-  const mql = window.matchMedia("(prefers-color-scheme: dark)");
-  const [get, set] = createSignal<ColorMode>(mql.matches ? "dark" : "light");
-  mql.addEventListener("change", (e) => set(e.matches ? "dark" : "light"));
-  return { get, set };
-});
+/** Non-browser realms (node test runs, jsdom without matchMedia) get a static
+ * default instead of a throw — the durable registry itself lives on `window`,
+ * so the guard must come BEFORE the durable call, not just around matchMedia. */
+function makeModeBox(): { get: Accessor<ColorMode> } {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    const [get] = createSignal<ColorMode>("dark");
+    return { get };
+  }
+  return durable("aiui:color-mode", () => {
+    const mql = window.matchMedia("(prefers-color-scheme: dark)");
+    const [get, set] = createSignal<ColorMode>(mql.matches ? "dark" : "light");
+    mql.addEventListener("change", (e) => set(e.matches ? "dark" : "light"));
+    return { get, set };
+  });
+}
+
+const modeBox = makeModeBox();
 
 /**
  * The live system color mode. Reading it in a chart's options memo re-renders

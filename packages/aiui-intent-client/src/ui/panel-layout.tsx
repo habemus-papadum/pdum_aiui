@@ -30,6 +30,7 @@ import { createSignal, For, onCleanup, Show } from "solid-js";
 import type { IntentClient } from "../client";
 import type { ChannelLanes } from "../lanes";
 import { CHANNEL_HEADER_STYLES, ChannelHeader, type ChannelListing } from "./channel-header";
+import { ORACLE_PROMPT_STYLES, OraclePromptWeaves } from "./oracle-prompt";
 import { Panel } from "./panel";
 import { PANES_STYLES } from "./panes";
 import { SESSION_NAME_STYLES, SessionNameChip, type SessionNameControl } from "./session-name-chip";
@@ -49,6 +50,7 @@ export const PANEL_LAYOUT_STYLES =
   // The oracle widgets ship their own (theme-neutral) rules — the same
   // host-concatenates-strings pattern as every strip above.
   ORACLE_WIDGET_STYLES +
+  ORACLE_PROMPT_STYLES +
   `.aiui-oracle-panes { margin: 4px 12px; max-width: 460px; }
   /* The section's own label — quiet, but unmistakably a heading, and set off
      by a rule so the folds below read as belonging to it. */
@@ -266,6 +268,12 @@ function OraclePanes(props: { client: IntentClient; lanes: ChannelLanes }) {
       </Show>
       <details class="aiui-pane" data-testid="oracle-ledger">
         <summary>oracle ledger</summary>
+        {/* The instructions the session is standing on, above the transcript
+            they produced — collapsed, because a persona is a page of text and
+            the ledger is what this fold is for. A tab change re-weaves them
+            mid-session, so each weave gets its own row rather than the first
+            one quietly becoming a lie. */}
+        <OraclePromptWeaves session={props.lanes.oracle} />
         <OracleViewer session={props.lanes.oracle} mind={false} />
       </details>
       {/* The same two knob-boards the oracle lab carries. Here because the

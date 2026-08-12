@@ -257,3 +257,48 @@ so the whole site committed to dark. `index.html`'s head stamps
 constant `"dark"`) is the source of truth for the literal chart/Plot colors; CSS
 goes through the `:root` tokens. The epicenter map keeps working on dark — it was
 always a supported mode — it just no longer gets the light surface it preferred.
+
+## Filters are selection dimensions now (2026-08-12)
+
+The hand-written `set-filter` tool (twelve prose-documented args, per-kind
+`SRC` source objects, data-bound defaults) is retired. Its seven filter kinds
+are declared `selectionDim()`s in store.ts (`aiui-viz/mosaic-selection`):
+each is a named, validated writer over the SAME brush — stable per-dimension
+clause sources, one-sided ranges built as `>=`/`<=` (so no more filling the
+open side from the data summary), a real JSON-Schema'd `set-<dim>` tool each,
+and semantic values that survive hot edits alongside the durable brush.
+Finding 2's rule (a geographic box = two 1-D clauses) is encoded in the lon +
+lat pair. `clear-filters` is now an `action()` backed by `store.clearFilters`,
+which clears the dims first (their VALUES too, not just their clauses) and
+then retracts every remaining producer's clause — plot brushes and facet menus
+included. The reset button's clause count reads `store.brushSignal` (the
+`selectionSignal` bridge), fixing the untracked `brush.clauses.length` read
+that only refreshed by accident. Named views (`aiui-viz/selection-views`,
+localStorage under `aiui:views:seismos`) snapshot dimension VALUES — never
+clauses — with `save/load/list/delete-view` tools and the `SelectionViewsBar`
+in Controls; what a view cannot capture is a clause from a non-dimension
+producer (a map brush, a menu) — those have no serializable identity.
+
+## Theming, reversed: the journal follows the system now (2026-08-12)
+
+The dark-only decision above is superseded. The journal (demos/journal) follows
+`prefers-color-scheme` — dark tokens as the base, one light media block, no
+toggle, no `data-theme` stamp (the head script and `initTheme()` are deleted;
+the UA resolves the media query pre-paint, so nothing flashes). `mode()` is now
+REACTIVE (it delegates to aiui-viz's `colorMode()`), which makes every
+`seismic()` read inside this demo's spec thunks live: a system theme flip
+rebuilds each MosaicView against the surviving coordinator and selections —
+the light `palette.ts` block (including the YlOrRd density scheme this page
+always wanted on white) finally runs. Plates stay dark in both modes
+(`--figure-bg` is a cross-mode constant — the plate rule in the journal's
+styles.css header). Verified live across a flip with active filters: a
+selection-dimension clause (`mag >= 6`) and a facet-menu clause
+(`type IN ('earthquake')`) both survive the MosaicView rebuilds — their
+sources (the durable dim source; the Menu client, which lives outside any
+MosaicView) are never disposed — with identical filtered counts on the other
+side, and zero console errors on a clean load→filter→flip→clear pass. The one
+producer that does NOT survive a flip, by design: an in-flight PLOT brush.
+The rebuild disposes its interactor, and mosaic.tsx's ghost-clause protection
+retracts the disposed interactor's clause (the alternative is a filter with
+no rectangle on screen). An OS theme flip is rare enough that losing an
+active brush rectangle to it is the right trade.

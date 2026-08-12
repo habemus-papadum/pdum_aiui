@@ -119,13 +119,15 @@ export function optionsFactory(callee: string): FactorySpec {
 }
 
 /** The default table: `cell` (and its shape-sharing sibling `bridgeEffect`),
- * plus the control-surface factories. */
+ * plus the control-surface factories (`selectionDim` — aiui-viz's Mosaic
+ * cross-filter dimension — shares control's single-options-object shape). */
 export function defaultFactories(): FactorySpec[] {
   return [
     cellFactory(),
     cellFactory("bridgeEffect"),
     optionsFactory("control"),
     optionsFactory("action"),
+    optionsFactory("selectionDim"),
   ];
 }
 

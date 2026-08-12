@@ -29,6 +29,9 @@
  */
 
 import { render } from "@solidjs/web";
+// The shared journal chrome (tokens, body, panels, CellView) — imported by the
+// HOST, before the page's own styles.css (which is scoped under `.dna`).
+import "@habemus-papadum/aiui-journal/styles.css";
 import { page } from "./page";
 
 document.title = page.title;

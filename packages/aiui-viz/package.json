@@ -14,8 +14,11 @@
     ".": "./src/index.ts",
     "./plot": "./src/plot.tsx",
     "./mosaic": "./src/mosaic.tsx",
+    "./mosaic-selection": "./src/mosaic-selection.ts",
+    "./selection-views": "./src/selection-views.tsx",
     "./duckdb": "./src/duckdb.ts",
     "./site": "./src/site/index.ts",
+    "./site/color-mode": "./src/site/color-mode.ts",
     "./modal": "./src/modal/index.ts",
     "./testing": "./src/testing.ts"
   },
@@ -47,6 +50,16 @@
         "import": "./dist/mosaic.js",
         "default": "./dist/mosaic.js"
       },
+      "./mosaic-selection": {
+        "types": "./dist/mosaic-selection.d.ts",
+        "import": "./dist/mosaic-selection.js",
+        "default": "./dist/mosaic-selection.js"
+      },
+      "./selection-views": {
+        "types": "./dist/selection-views.d.ts",
+        "import": "./dist/selection-views.js",
+        "default": "./dist/selection-views.js"
+      },
       "./duckdb": {
         "types": "./dist/duckdb.d.ts",
         "import": "./dist/duckdb.js",
@@ -56,6 +69,11 @@
         "types": "./dist/site/index.d.ts",
         "import": "./dist/site.js",
         "default": "./dist/site.js"
+      },
+      "./site/color-mode": {
+        "types": "./dist/site/color-mode.d.ts",
+        "import": "./dist/color-mode.js",
+        "default": "./dist/color-mode.js"
       },
       "./modal": {
         "types": "./dist/modal/index.d.ts",
@@ -78,7 +96,9 @@
     "@duckdb/duckdb-wasm": ">=1.29",
     "@observablehq/plot": "^0.6",
     "@solidjs/web": ">=2.0.0-beta.32 <2.0.0-experimental.0",
+    "@uwdata/mosaic-core": ">=0.28",
     "@uwdata/mosaic-plot": ">=0.28",
+    "@uwdata/mosaic-sql": ">=0.28",
     "solid-js": ">=2.0.0-beta.32 <2.0.0-experimental.0",
     "katex": "^0.16 || ^0.17"
   },
@@ -89,7 +109,13 @@
     "@observablehq/plot": {
       "optional": true
     },
+    "@uwdata/mosaic-core": {
+      "optional": true
+    },
     "@uwdata/mosaic-plot": {
+      "optional": true
+    },
+    "@uwdata/mosaic-sql": {
       "optional": true
     },
     "katex": {
@@ -101,7 +127,9 @@
     "@habemus-papadum/aiui-build-config": "workspace:^",
     "@observablehq/plot": "catalog:",
     "@solidjs/web": "catalog:solid",
+    "@uwdata/mosaic-core": "^0.28.1",
     "@uwdata/mosaic-plot": "^0.28.1",
+    "@uwdata/mosaic-sql": "^0.28.1",
     "katex": "^0.17.0",
     "solid-js": "catalog:solid",
     "vite": "catalog:",

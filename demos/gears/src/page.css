@@ -10,6 +10,10 @@
 .gears {
   --line: var(--panel-border);
   --muted: var(--text-secondary);
+  /* inset "well" chrome (readout boxes, empty swatches) — per-mode, unlike the
+   * --gear-* figure constants below (the stage, hubs, and tooth canvas are
+   * journal plates: dark in both modes) */
+  --well: #0b0d13;
 
   /* gear figure palette (figure constants — dark plate in both modes) */
   --gear-a: #7aa2f7;
@@ -23,6 +27,12 @@
   max-width: 900px;
   margin: 0 auto;
   padding: 28px 20px 60px;
+}
+
+@media (prefers-color-scheme: light) {
+  .gears {
+    --well: #eef1f7;
+  }
 }
 
 .gears .muted {
@@ -131,7 +141,7 @@
   margin: 14px 0 4px;
 }
 .gears .readouts > div {
-  background: #0b0d13;
+  background: var(--well);
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 10px 12px;
@@ -245,7 +255,7 @@
   border: 1px solid var(--gear-a);
 }
 .gears .sw.space {
-  background: #0b0d13;
+  background: var(--well);
   border: 1px solid var(--line);
 }
 

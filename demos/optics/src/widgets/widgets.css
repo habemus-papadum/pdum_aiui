@@ -6,7 +6,9 @@
 .optix-map {
   position: relative;
   width: 100%;
-  background: #05070c;
+  /* the journal's cross-mode plate token, with the literal as the fallback
+   * for a consumer without the journal loaded */
+  background: var(--figure-bg, #05070c);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -26,22 +28,38 @@
   pointer-events: none;
 }
 
+/* The phasor dial sits on the PANEL (no plate behind it), so its inks carry
+ * per-mode values — scoped tokens here, read by the CSS below and (via var()
+ * style properties) by PhasorDial's arrow/resultant defaults. */
 .optix-phasor {
+  --optix-phasor-line: rgba(140, 150, 170, 0.25);
+  --optix-phasor-axis: rgba(140, 150, 170, 0.18);
+  --optix-phasor-arrow: #8f97a6;
+  --optix-phasor-resultant: #e6d24a;
+
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
+}
+@media (prefers-color-scheme: light) {
+  .optix-phasor {
+    --optix-phasor-line: rgba(70, 80, 100, 0.35);
+    --optix-phasor-axis: rgba(70, 80, 100, 0.22);
+    --optix-phasor-arrow: #5a6472;
+    --optix-phasor-resultant: #8a7500;
+  }
 }
 .optix-phasor svg {
   display: block;
 }
 .optix-phasor-ring {
   fill: none;
-  stroke: rgba(140, 150, 170, 0.25);
+  stroke: var(--optix-phasor-line);
   stroke-width: 0.004;
 }
 .optix-phasor-axis {
-  stroke: rgba(140, 150, 170, 0.18);
+  stroke: var(--optix-phasor-axis);
   stroke-width: 0.004;
 }
 .optix-phasor-readout {

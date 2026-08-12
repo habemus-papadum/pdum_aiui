@@ -22,7 +22,6 @@
  */
 import { render } from "@solidjs/web";
 import "@habemus-papadum/aiui-journal/styles.css";
-import { initTheme } from "@habemus-papadum/aiui-journal";
 import { PageBoundary, setSitePageActive } from "@habemus-papadum/aiui-viz";
 import { SiteNav } from "@habemus-papadum/aiui-viz/site";
 import { createEffect, createSignal, Show, untrack } from "solid-js";
@@ -31,7 +30,6 @@ import { BRAND, LINKS, NAV_ITEMS } from "./site/nav";
 import { type GalleryPage, loadPage } from "./site/pages";
 import { interceptLocalLinks, LANDING, type Route, route } from "./site/router";
 
-initTheme(); // dark-only journal — re-assert the head's data-theme="dark"
 interceptLocalLinks();
 
 interface View {

@@ -241,6 +241,21 @@ action({ name: "re-seed", run: () => reseed() });`,
     expect(out).toContain('loc: "src/s.ts:1"');
   });
 
+  it("selectionDim() is in the default table with control()'s semantics", async () => {
+    const out = await run(
+      `/** Magnitude window every view filters by. */
+export const mag = selectionDim({ scope: s, kind: "interval", targets: [t] });`,
+      "src/model/store.ts",
+    );
+    expect(out).toContain('name: "mag"');
+    expect(out).toContain('loc: "src/model/store.ts:2"');
+    expect(out).toContain('description: "Magnitude window every view filters by."');
+    // Anonymous is a compile error, like control — the name is a durable key.
+    await expect(
+      run(`register(selectionDim({ kind: "point", targets: [] }));`, "src/s.ts"),
+    ).rejects.toThrow(/needs a name/);
+  });
+
   it("stampJsx: false keeps identity injection while skipping instrumentation", async () => {
     const out = await run(
       `const v = <div/>;\nexport const kappa = control({ value: 1 });`,

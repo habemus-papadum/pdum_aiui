@@ -119,7 +119,7 @@ function Readout() {
 
 export function App() {
   return (
-    <div class="app">
+    <div class="dna">
       <header class="app-head">
         <h1 class="app-title">DNA scripts</h1>
         <p class="lede">

@@ -1,7 +1,7 @@
 {
   "name": "@habemus-papadum/aiui-journal",
   "version": "0.16.0+dev",
-  "description": "The dark-journal visual identity shared by the notebook demos and the gallery shell: design tokens + notebook chrome CSS, and the chart/Plot palette module. Internal, never published.",
+  "description": "The journal visual identity shared by the notebook demos and the gallery shell — system-following light/dark: design tokens + notebook chrome CSS, and the per-mode chart/Plot palette module. Internal, never published.",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -24,6 +24,10 @@
     "test": "vitest run"
   },
   "private": true,
+  "dependencies": {
+    "@habemus-papadum/aiui-viz": "workspace:^",
+    "solid-js": "catalog:solid"
+  },
   "devDependencies": {
     "typescript": "catalog:",
     "vitest": "catalog:"

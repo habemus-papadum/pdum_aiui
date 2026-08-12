@@ -297,6 +297,9 @@ importers:
 
   demos/dna-script:
     dependencies:
+      '@habemus-papadum/aiui-journal':
+        specifier: workspace:^
+        version: link:../journal
       '@habemus-papadum/aiui-source-processor':
         specifier: workspace:^
         version: link:../../packages/aiui-source-processor
@@ -508,6 +511,13 @@ importers:
         version: 3.2.6(@types/debug@4.1.13)(@types/node@26.1.0)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.3.0))(tsx@4.22.5)(yaml@2.9.0)
 
   demos/journal:
+    dependencies:
+      '@habemus-papadum/aiui-viz':
+        specifier: workspace:^
+        version: link:../../packages/aiui-viz
+      solid-js:
+        specifier: catalog:solid
+        version: 2.0.0-beta.32
     devDependencies:
       typescript:
         specifier: 'catalog:'
@@ -1292,7 +1302,13 @@ importers:
       '@solidjs/web':
         specifier: catalog:solid
         version: 2.0.0-beta.32(solid-js@2.0.0-beta.32)
+      '@uwdata/mosaic-core':
+        specifier: ^0.28.1
+        version: 0.28.1
       '@uwdata/mosaic-plot':
+        specifier: ^0.28.1
+        version: 0.28.1
+      '@uwdata/mosaic-sql':
         specifier: ^0.28.1
         version: 0.28.1
       katex:

@@ -305,18 +305,20 @@ actually demonstrates, via `TeX` from `aiui-viz/site` — never raw katex, you'd
 `data-tex` stamp), then experiments naming exact controls. `TocRail` + `SiteNav` from
 `aiui-viz/site`.
 
-Theming, current truth: the in-repo demos are **dark-only by owner decision** — the shared
-look lives in `demos/journal` (`@habemus-papadum/aiui-journal`: the theme literals — `chart()`,
-`plot()`, `mode()`, `isDark()` — plus `styles.css`, the `:root` tokens and notebook chrome),
-and the page head stamps `data-theme="dark"` pre-paint. `colorMode` (`aiui-viz/site`) is the
-system-following facility for an app that wants both modes — tokens on `:root` plus a
-`prefers-color-scheme` media query, a reactive theme signal for literal colors (charts/SVG),
-palettes validated per mode against each mode's surface — but note nothing in-repo currently
-exercises it. When an app does carry two modes, figure colors (a sim canvas + its legend
-chips) are cross-mode *constants* while panel-chart colors are *per-mode*: same hex in dark,
-they diverge in light. A demo's page CSS uses demo-prefixed class names (or is scoped under a
-root class, like `demos/gears`' `.gears`) so nothing leaks onto a sibling mounted in the same
-document.
+Theming, current truth: the in-repo demos are **system-following** (owner, 2026-08-12 —
+dark-only from 2026-07-19 until then; no toggle either way). The shared look lives in
+`demos/journal` (`@habemus-papadum/aiui-journal`: the per-mode theme literals — `chart()`,
+`plot()`, `mode()`, `isDark()` — plus `styles.css`, the `:root` tokens with dark as the base
+and one `prefers-color-scheme: light` block). `mode()` delegates to the reactive `colorMode()`
+(`aiui-viz/site/color-mode`), so a `chart()`/`plot()` read inside a Plot/Mosaic spec thunk
+re-renders that chart on a live system theme change. There is **no head stamp and no
+`data-theme`** — the media query is the single source of truth, resolved pre-paint by the UA.
+**The plate rule is absolute**: figure colors (a sim canvas + its legend chips) are cross-mode
+*constants* on `--figure-bg`, which deliberately has no light value — never give one demo's
+plate a light variant — while panel-chart colors are *per-mode*, each palette validated
+against its own surface (the dataviz procedure). A demo's page CSS uses demo-prefixed class
+names (or is scoped under a root class, like `demos/gears`' `.gears`) so nothing leaks onto a
+sibling mounted in the same document.
 
 **Phones and desktops** (full section in the style-guide doc): one component tree reflowed with
 CSS — never a mobile fork or a JS `isMobile` branch (a media query IS the device-conditional

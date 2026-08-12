@@ -96,8 +96,11 @@ const session = new OracleSession({
 
 `toolsFromControlSurface()` synthesizes one typed tool per control — `options` become an
 `enum`, `min`/`max` become schema bounds, and every `set_*` tool answers with the value
-**actually applied** (snapped and clamped), so the model reports honestly ("8 hertz, which is
-the maximum"). Actions become tools too; custom tools are just more entries in the array. The
+**actually applied** (snapped and clamped), which is what the model is told to believe over its
+own intent. It stays quiet when that value is what was asked for and speaks only the difference
+when it is not ("capped at 8 hertz") — a clean set gets no spoken confirmation at all, because
+narrating every successful change is what makes a voice assistant tiresome. Actions become tools
+too; custom tools are just more entries in the array. The
 surface is **live**: `session.setTools(…)` / `setInstructions(…)` update mid-session, and
 `sendText(…)` / `sendImage(…)` inject ad-hoc context into the running conversation.
 
@@ -155,9 +158,13 @@ pieces are designed to already do the right thing, and the idiom is about **plac
   detection — the layer that renders the widget is the decision.
 - **Per-app oracles scope their tools.** The control surface is document-global, so a
   composed document makes an unscoped projection see every app's controls. An embedded
-  oracle passes its own scope — `toolsFromControlSurface({ scope: appScope })`. (Omitting
-  the scope deliberately is the seed of a *host-level* oracle that drives the whole
-  site — possible, not yet built.)
+  oracle passes its own scope — `toolsFromControlSurface({ scope: appScope })`. "A scope's
+  surface" is aiui-viz's `surfaceViewFor` — the scope's own subtree **plus unscoped
+  declarations** — the same membership test `registerStandardTools` gives an agent toolkit,
+  so an app's oracle and its agent tools see one surface, and an app that declares no scope
+  at all keeps its own tools when a sibling mounts beside it. (Omitting the scope
+  deliberately is the seed of a *host-level* oracle that drives the whole site — possible,
+  not yet built.)
 - **Park rides `deactivate`.** The site shell's pause-not-destroy contract maps directly
   onto the oracle's free park: park on page-switch away, resume on return, conversation
   intact, $0 while parked.
@@ -170,10 +177,15 @@ persona, published verbatim (`ORACLE_BASE_PERSONA` in `packages/aiui-oracle/src/
 > You are the oracle: a real-time voice assistant embedded in an interactive app. You answer
 > questions about the app and drive it on the user's behalf through the tools you are given.
 > Speak plainly and briefly — a few spoken sentences, no lists, no preamble. When the user
-> asks for a change, make it with a tool call and confirm what you actually applied (tools
-> return the applied value — trust it over your intent). Only use tools that are currently
-> available; if something asked for has no tool, say so plainly. If unsure what the app
-> currently shows, consult your tools before guessing.
+> asks for a change, make it with a tool call. Tools return the value actually applied — trust
+> it over your intent, but do not announce it: when the change landed as asked, say nothing
+> about it at all (answer any question that came with it; otherwise stay silent, or at most a
+> bare "done"). Speak up only when the outcome differs from the request — a clamped, snapped,
+> or coerced value, or a change that only partly landed — and then give just the difference,
+> briefly: "capped at 8 hertz". When the divergence is too tangled to put in a phrase, say you
+> couldn't fully apply the change. If a tool fails, say what went wrong. Only use tools that
+> are currently available; if something asked for has no tool, say so plainly. If unsure what
+> the app currently shows, consult your tools before guessing.
 
 The woven prompt stays **generic about which tools exist** — the `tools` array is the single
 source of truth (a prompt naming an absent tool makes realtime models invent or pretend; the

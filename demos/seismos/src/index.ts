@@ -38,6 +38,7 @@ export {
   type LoadState,
   MC_MAX,
   MC_MIN,
+  type SeismosDims,
   type SeismosStore,
   type Summary,
   seismosScope,
