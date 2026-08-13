@@ -19,7 +19,12 @@ import {
   registerMosaicInput,
   registerMosaicPlot,
 } from "./mosaic-registry";
-import { clearSelectionDimRegistry, type IntervalValue, selectionDim } from "./mosaic-selection";
+import {
+  categorySelection,
+  clearSelectionDimRegistry,
+  type IntervalValue,
+  selectionDim,
+} from "./mosaic-selection";
 import { scope } from "./scope";
 import { tick } from "./testing";
 
@@ -403,6 +408,85 @@ describe("point adoption (menu)", () => {
     await tick();
     expect(picked.at(-1)).toBe("");
     expect(sel.clauses).toHaveLength(0);
+  });
+
+  it("an adopted set over a categorySelection KEEPS the clause in the origin (the highlight seam)", async () => {
+    // The measured live bug this pins: adoption publishes the component
+    // clause, then retracts the dim's headless clause — under single
+    // resolution that second (different-source, null-predicate) update
+    // displaced the component clause from the origin while the relayed copy
+    // kept filtering the crossfilter. categorySelection is intersect for
+    // exactly this sequence.
+    const cat = categorySelection();
+    const brush = Selection.crossfilter({ include: [cat] });
+    const dc = selectionDim({
+      name: "dc",
+      scope: fx(),
+      kind: "point",
+      targets: [{ selection: cat, field: "depth_class" }],
+    });
+    const toggle = {
+      selection: cat,
+      fields: ["depth_class"],
+      as: ["depth_class"],
+      value: null as unknown,
+      mark: { plot: { markSet: new Set([{}]) } },
+    };
+    disposers.push(
+      registerMosaicPlot({ scope: "fx", name: "dc", plot: { interactors: [toggle] } }),
+    );
+    const { dispose } = bindSelectionComponents({
+      bindings: [{ dim: dc, producer: "fx/dc" }],
+    });
+    disposers.push(dispose);
+
+    dc.set(["shallow"]);
+    await tick();
+    expect(cat.clauses).toHaveLength(1); // the origin keeps it — highlight stays truthful
+    expect(cat.clauses[0].source).toBe(toggle);
+    expect(brush.clauses).toHaveLength(1);
+    expect(brush.clauses[0]).toBe(cat.clauses[0]);
+
+    dc.clear();
+    await tick();
+    expect(cat.clauses).toHaveLength(0);
+    expect(brush.clauses).toHaveLength(0);
+  });
+
+  it("an external clear nulls a Toggle's stale internal value (Toggle has no reset)", async () => {
+    const sel = Selection.crossfilter();
+    const dc = selectionDim({
+      name: "dc",
+      scope: fx(),
+      kind: "point",
+      targets: [{ selection: sel, field: "depth_class" }],
+    });
+    const toggle = {
+      selection: sel,
+      fields: ["depth_class"],
+      as: ["depth_class"],
+      value: null as unknown,
+      mark: { plot: { markSet: new Set([{}]) } },
+    };
+    disposers.push(
+      registerMosaicPlot({ scope: "fx", name: "dc", plot: { interactors: [toggle] } }),
+    );
+    const { dispose } = bindSelectionComponents({
+      bindings: [{ dim: dc, producer: "fx/dc" }],
+    });
+    disposers.push(dispose);
+
+    dc.set(["shallow"]);
+    await tick();
+    expect(toggle.value).toEqual([["shallow"]]); // drivePoint keeps the toggle honest
+
+    // A whole-state reset removes the clause but cannot reach the Toggle
+    // (no reset() in mosaic 0.28) — the mirror must null its value, or the
+    // next click on "shallow" would read as a deselect.
+    sel.reset();
+    await tick();
+    expect(dc.get()).toBeNull();
+    expect(toggle.value).toBeNull();
   });
 });
 

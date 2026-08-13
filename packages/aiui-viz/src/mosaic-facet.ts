@@ -349,8 +349,21 @@ function onSelectionValue(state: BindingState): void {
   } else if (state.hadClause) {
     state.hadClause = false;
     state.lastDriven = null;
+    clearPointVisual(state);
     applySemantic(state, null);
   }
+}
+
+/** External clear (a per-component or whole-state reset): mosaic's Toggle
+ * implements no `reset()` (verified 0.28 — Interval1D/2D, Region, Menu, and
+ * Search do), so its internal `value` would survive the clause and make the
+ * NEXT click read as a deselect. Null it the way drivePoint does; menus
+ * re-sync through their own reset/valueFor machinery. */
+function clearPointVisual(state: BindingState): void {
+  if (state.kind !== "point") return;
+  const src = state.entry?.source as InteractorLike | undefined;
+  if (src === undefined || typeof src.selectedValue === "function") return;
+  if ("value" in src) src.value = null;
 }
 
 /** Idempotent re-assert of a menu's select (no-op for anything else). */

@@ -25,7 +25,10 @@ import {
   hotCellGraph,
   registerStandardTools,
 } from "@habemus-papadum/aiui-viz";
-import { selectionDimReport } from "@habemus-papadum/aiui-viz/mosaic-selection";
+import {
+  registerClearSelection,
+  selectionDimReport,
+} from "@habemus-papadum/aiui-viz/mosaic-selection";
 import { selectionInspectorModel } from "@habemus-papadum/aiui-viz/selection-inspector";
 import type { Selection } from "@uwdata/mosaic-core";
 import { type Accessor, createMemo } from "solid-js";
@@ -130,6 +133,11 @@ function registerTools(): void {
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
     run: () => ({ activeClauses: store.clearFilters() }),
   });
+
+  // The per-component companion: `clear-selection { name }` — one dimension
+  // ("mag") or one component ("seismos/map", the whole 2-D box) — clause and
+  // visual both; everything else stays. Same code path as the inspector's ✕.
+  registerClearSelection(seismosScope);
 
   registerTool({
     name: "suggest-mc",

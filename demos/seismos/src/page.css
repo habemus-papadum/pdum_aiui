@@ -225,6 +225,24 @@
   font-size: 11px;
   overflow-wrap: anywhere;
 }
+.inspector-clear {
+  margin-left: auto;
+  align-self: center;
+  width: 18px;
+  height: 18px;
+  line-height: 1;
+  padding: 0;
+  border: 1px solid var(--btn-border);
+  border-radius: 4px;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+.inspector-clear:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
 .inspector-empty {
   color: var(--text-muted);
   font-style: italic;

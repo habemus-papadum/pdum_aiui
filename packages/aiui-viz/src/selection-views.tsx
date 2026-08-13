@@ -36,7 +36,11 @@ import type { JSX } from "@solidjs/web";
 import { createSignal, For } from "solid-js";
 import { action } from "./control";
 import { durable } from "./durable";
-import { selectionDimByName, selectionDimReport } from "./mosaic-selection";
+import {
+  resetSelectionDimTargets,
+  selectionDimByName,
+  selectionDimReport,
+} from "./mosaic-selection";
 import type { Scope } from "./scope";
 
 /** One saved view: a complete dimension-value snapshot under a name. */
@@ -157,17 +161,7 @@ export function selectionViews(options: {
         // visuals via source.reset()); dimensions the snapshot names are then
         // re-set — their boxes take the reset's null and the applied value in
         // the same staged tick, applied last, so the applied value wins.
-        const seen = new Set<object>();
-        for (const dimName of Object.keys(selectionDimReport(scopeName))) {
-          const dim = selectionDimByName(dimName);
-          if (dim === undefined) continue;
-          for (const t of dim.targets) {
-            if (!seen.has(t.selection)) {
-              seen.add(t.selection);
-              t.selection.reset?.();
-            }
-          }
-        }
+        resetSelectionDimTargets(scopeName);
         const applied: Record<string, unknown> = {};
         const missing: string[] = [];
         for (const [dimName, value] of Object.entries(record.values)) {

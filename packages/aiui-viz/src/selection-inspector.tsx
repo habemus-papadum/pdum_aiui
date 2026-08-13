@@ -26,6 +26,7 @@ import type { JSX } from "@solidjs/web";
 import { For, Show } from "solid-js";
 import { type MosaicProducerEntry, mosaicProducers } from "./mosaic-registry";
 import {
+  clearSelectionFor,
   type SelectionDimSurfaceEntry,
   type SelectionSignal,
   selectionDimSurface,
@@ -172,12 +173,16 @@ export function formatInspectorValue(v: unknown): string {
 
 /**
  * The panel: active clauses with provenance and SQL, the resolved WHERE,
- * and the capability map. No styles ship — the class contract is
- * `selection-inspector` on the root; `inspector-clause` rows (stamped
- * `data-origin="dim|component|unknown"`) with `inspector-producer` /
- * `inspector-fields` / `inspector-value` / `inspector-sql` inside;
- * `inspector-where`; `inspector-capability` rows (`data-active` on live
- * members) with `capability-fields` / `capability-member`.
+ * and the capability map. Attributed rows carry a clear button — the mouse
+ * half of the per-component clear, driving the same {@link clearSelectionFor}
+ * the `clear-selection` action runs (voice and mouse stay equals); unknown
+ * rows get none, having no resolvable name. No styles ship — the class
+ * contract is `selection-inspector` on the root; `inspector-clause` rows
+ * (stamped `data-origin="dim|component|unknown"`) with `inspector-producer` /
+ * `inspector-fields` / `inspector-value` / `inspector-sql` /
+ * `inspector-clear` (the button) inside; `inspector-where`;
+ * `inspector-capability` rows (`data-active` on live members) with
+ * `capability-fields` / `capability-member`.
  */
 export function SelectionInspector(props: {
   signal: SelectionSignal;
@@ -199,6 +204,22 @@ export function SelectionInspector(props: {
                 <span class="inspector-fields">{row.fields.join(", ")}</span>
                 <span class="inspector-value">{formatInspectorValue(row.value)}</span>
                 <code class="inspector-sql">{row.sql}</code>
+                <Show when={row.origin !== "unknown"}>
+                  <button
+                    type="button"
+                    class="inspector-clear"
+                    title={`clear ${row.producer}`}
+                    onClick={() => {
+                      try {
+                        clearSelectionFor(row.producer, props.scope);
+                      } catch (err) {
+                        console.warn("selection-inspector: clear failed", err);
+                      }
+                    }}
+                  >
+                    ×
+                  </button>
+                </Show>
               </div>
             )}
           </For>

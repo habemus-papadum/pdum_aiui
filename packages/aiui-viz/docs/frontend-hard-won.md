@@ -118,6 +118,26 @@ Found building the seismos notebook (full detail: `demos/seismos/src/NOTES.md`):
   explicitly.
 - **A mosaic-inputs Menu bound to a Selection is write-only** (no back-sync); reset the
   `<select>` yourself when its clause clears elsewhere.
+- **`highlight({ by })` over a crossfilter Selection is a silent no-op for the chart's own
+  clause** — the crossfilter resolver unconditionally drops every clause whose `clients`
+  contain the mark being tested, which is exactly the clause `toggleY` publishes
+  (`clients: plot.markSet`). The marimo-style gray-out of unselected categories therefore
+  needs the toggle/legend to publish into its OWN non-cross Selection
+  (`categorySelection()` in `aiui-viz/mosaic-selection`), include-relayed into the
+  crossfilter at construction (`Selection.crossfilter({ include: [origin] })`), with
+  `highlight({ by: origin })` beside the toggle.
+- **The include relay is one-way** (origin → includer): resetting the crossfilter never
+  reaches the origin, whose Highlight then keeps the chart grayed over an unfiltered page.
+  Whole-state clears reset every dim-target Selection (`resetSelectionDimTargets`);
+  per-component clears reset the clause subset on the producer's OWN selection
+  (`clearSelectionFor` / the `clear-selection` action / the inspector's ✕).
+- **A category origin must be `intersect`, never `single`**: adoption follows each component
+  publish with a headless retraction from the dimension's source, and single resolution lets
+  that different-source, null-predicate update displace the component clause — the origin
+  goes empty (chart un-grays) while the relayed copy keeps filtering (measured live).
+- **mosaic's `Toggle` implements no `reset()`** (Interval1D/2D, Region, Menu, Search do): an
+  external clear strands its internal `value`, so the next click reads as a deselect. The
+  facet binding nulls it when the clause vanishes (`mosaic-facet.ts`).
 - Pin `@duckdb/duckdb-wasm` to the exact version `@uwdata/mosaic-core` depends on, so one
   deduped copy exists; build DuckDB from locally `?url`-imported wasm/worker assets (no CDN) —
   it survives a hosting prefix and works offline.

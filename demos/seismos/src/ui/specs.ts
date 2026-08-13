@@ -24,6 +24,7 @@ import {
   count,
   from,
   height,
+  highlight,
   intervalX,
   intervalXY,
   line,
@@ -233,8 +234,16 @@ export function timeHistSpec(w = 320, h = 168): Directive[] {
 
 /**
  * Depth class as a categorical bar (shallow / intermediate / deep), color-keyed
- * to the ordered palette, click-to-toggle into the crossfilter. The one view
- * where color carries meaning — identity backed by the fixed y-order too.
+ * to the ordered palette, click-to-toggle. The one view where color carries
+ * meaning — identity backed by the fixed y-order too.
+ *
+ * The toggle publishes into its OWN selection (store.depthClassSel, relayed
+ * into the crossfilter), because the highlight companion — the marimo-style
+ * gray-out of unselected categories — cannot ride the crossfilter: its
+ * resolver hides the chart's own clause from the chart's marks, making
+ * `highlight({ by: brush })` a silent no-op (categorySelection's docblock in
+ * aiui-viz has the verified mechanism). The bars' data stays filtered by the
+ * brush like every view; only the toggle's clause takes the detour.
  */
 export function depthClassSpec(w = 320, h = 132): Directive[] {
   const p = seismic();
@@ -245,7 +254,8 @@ export function depthClassSpec(w = 320, h = 132): Directive[] {
       fill: "depth_class",
       inset: 1,
     }),
-    toggleY({ as: BRUSH() }),
+    toggleY({ as: store.depthClassSel }),
+    highlight({ by: store.depthClassSel, opacity: 0.25 }),
     width(w),
     height(h),
     yDomain(["shallow", "intermediate", "deep"]),

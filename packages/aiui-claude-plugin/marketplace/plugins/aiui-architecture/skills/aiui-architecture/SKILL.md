@@ -347,6 +347,22 @@ in the store; specs are reactive thunks (theme reads rebuild views against the s
 coordinator). Pin `@duckdb/duckdb-wasm` to the exact version `@uwdata/mosaic-core` uses (one
 deduped copy), and read the hard-won doc's Mosaic section before writing a custom MosaicClient.
 
+Cross-filter conventions (the seismos reference implements all three):
+- **Declare a `selectionDim` per logical filter** (`aiui-viz/mosaic-selection`) and bind it to
+  its on-screen component (`bindSelectionComponents`) — each dim is a validated `set-<name>`
+  tool, saved views serialize its value, and voice/mouse share one clause source.
+- **A category-filter producer (click-to-toggle bar, interactive legend) must gray out its
+  unselected categories** — full bars, muted when excluded. `highlight({ by })` cannot ride the
+  crossfilter (its resolver hides the chart's own clause from the chart's marks — a silent
+  no-op). Mint the producer its own origin with `categorySelection()`, include-relay it
+  (`Selection.crossfilter({ include: [origin] })`), pair `toggleY({ as: origin })` with
+  `highlight({ by: origin })`, and target the dim at the origin.
+- **Per-component clearing ships with the surface**: register `registerClearSelection(scope)`
+  (the `clear-selection { name }` tool — a dim name, or a component name to clear a 2-D box
+  whole) and the SelectionInspector's per-row ✕ drives the same `clearSelectionFor`. Whole-state
+  clears go through `resetSelectionDimTargets(scope)` — never `brush.reset()` alone, which
+  cannot reach include-relayed origins.
+
 ## Composing and reusing (slices + scopes)
 
 Scoping is the default posture (the app itself is a scope); a **slice** extends it to reuse.

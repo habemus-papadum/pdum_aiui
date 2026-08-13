@@ -340,3 +340,46 @@ Consequences worth naming:
   clause's shape, not tuples; and a menu's late options-query `update()`
   re-syncs from `valueFor` BEFORE our clause's emit settles on a fresh load —
   the binding re-asserts the `<select>` when its own publish echoes back.
+
+## Category filters gray out now: the toggle's own selection (2026-08-13)
+
+The depth-class bar renders unselected categories muted (the marimo pattern:
+full bars, faded when excluded) via mosaic's `highlight` interactor — which
+CANNOT ride the shared crossfilter. Verified in mosaic-core 0.28.1:
+`highlight({ by })` tests rows with `selection.predicate(mark)`, and the
+crossfilter resolver unconditionally drops every clause whose `clients`
+contain the mark — precisely the toggle's own clause (`toggleY` publishes
+`clients: plot.markSet`). Highlight over the crossfilter is a silent no-op
+for the one clause it exists to render; mosaic's own examples never pair the
+two. The wiring (aiui-viz `categorySelection`, whose docblock carries the
+mechanism): the toggle publishes into its OWN non-cross selection
+(`store.depthClassSel`), created BEFORE the brush and include-relayed into it
+(`Selection.crossfilter({ include: [...] })` — construction is mosaic's one
+hookup point); the chart pairs `toggleY({ as: depthClassSel })` with
+`highlight({ by: depthClassSel })`; the `depthClass` dim retargets to the
+origin selection, and the relay carries its clause into `brush.clauses` for
+every other view, the inspector, and the signal — clients intact, so the
+producing chart still self-excludes. Two traps the include relay sets:
+
+- **The relay is one-way** (origin → crossfilter), so `brush.reset()` alone
+  leaves the origin holding its clause — the chart stays grayed over an
+  unfiltered page. Every whole-state clear (`clearFilters`, load-view) goes
+  through `resetSelectionDimTargets`: one reset per unique dim-target
+  Selection, origins included. Per-component clears resolve the origin
+  through the producer registry (`clearSelectionFor`).
+- **`Toggle` implements no `reset()`** (Interval1D/2D, Region, Menu, Search
+  do), so an external clear leaves its internal `value` stale and the next
+  click reads as a deselect. The facet mirror nulls it when the clause
+  vanishes (mosaic-facet.ts `clearPointVisual`).
+- **The origin must be `intersect`, not `single`** (measured live in this
+  page): adoption publishes the component clause and then retracts the dim's
+  headless clause — under single resolution that different-source,
+  null-predicate update DISPLACED the just-published component clause from
+  the origin, which went empty (chart un-grayed) while the relayed copy kept
+  filtering the crossfilter. Replace-by-source is the semantics both writers
+  assume; `categorySelection()` encodes it.
+
+Per-component clearing landed with it: `clear-selection { name }` (a
+dimension, or a component name — "seismos/map" clears the 2-D box WHOLE,
+where clearing `lon` alone would widen that side to full extent) and the
+inspector's per-row ✕, both over the same `clearSelectionFor`.

@@ -64,12 +64,13 @@
  * Mosaic consumers install — unlike `./mosaic` (structural on purpose), this
  * module genuinely constructs clauses, so it imports the real builders.
  */
-import { clauseInterval, clausePoints } from "@uwdata/mosaic-core";
+import { clauseInterval, clausePoints, Selection } from "@uwdata/mosaic-core";
 import type { ExprNode } from "@uwdata/mosaic-sql";
 import { column, gte, lte } from "@uwdata/mosaic-sql";
 import { createSignal } from "solid-js";
 import { type ActionSpec, action } from "./control";
 import { durable, durableSignal } from "./durable";
+import { mosaicProducerByName, mosaicProducers } from "./mosaic-registry";
 import type { Scope } from "./scope";
 import { surfaceViewFor } from "./standard-tools";
 
@@ -100,13 +101,15 @@ export interface SelectionLike {
   /** Present on real Selections: the resolved WHERE for a client (undefined
    * client = all clauses). Used by {@link selectionPredicateSql}. */
   predicate?(client?: unknown, noSkip?: boolean): unknown;
-  /** Present on real Selections: drop every clause AND invoke `reset()` on
-   * each clause's source — the one call that also clears producer VISUALS
-   * (mosaic's Interval1D/2D, Region, Menu, and Search implement it; this
-   * module's dimension sources null their semantic value through it). The
-   * whole-state clear ("reset filters", load-view) goes through this, never
-   * through per-clause retraction, precisely for those visuals. */
-  reset?(): void;
+  /** Present on real Selections: drop clauses AND invoke `reset()` on each
+   * dropped clause's source — the one call that also clears producer VISUALS
+   * (mosaic's Interval1D/2D, Region, Menu, and Search implement it; Toggle
+   * does NOT — see {@link clearSelectionFor}; this module's dimension sources
+   * null their semantic value through it). No argument drops the whole state;
+   * a clause ARRAY drops just those — the per-component clear. Clearing goes
+   * through this, never through per-clause retraction, precisely for those
+   * visuals. */
+  reset?(clauses?: readonly SelectionClauseLike[]): void;
   addEventListener(type: string, callback: (value: unknown) => void): void;
   removeEventListener(type: string, callback: (value: unknown) => void): void;
 }
@@ -559,6 +562,160 @@ export function selectionDimReport(scope?: Scope | string): Record<string, unkno
 export function clearAllSelectionDims(scope?: Scope | string): void {
   for (const e of selectionDimSurface(scope)) {
     dims.get(e.name)?.clear();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Category producers (toggle bars, interactive legends)
+
+/**
+ * Mint the dedicated Selection for ONE category-filter producer — a
+ * click-to-toggle bar, an interactive legend: any component whose own chart
+ * must keep showing every category while rendering the unselected ones muted.
+ *
+ * Why a separate Selection at all (verified in mosaic-core/-plot 0.28.1):
+ * `highlight({ by })` tests rows with `selection.predicate(mark)`, and a
+ * CROSSFILTER resolver unconditionally drops every clause whose `clients`
+ * contain the mark — which is exactly the toggle's own clause (`toggleY`
+ * publishes `clients: plot.markSet`). Highlight over the shared crossfilter
+ * is therefore a silent no-op for the one clause it exists to render; mosaic's
+ * own examples never pair the two. The wiring that works:
+ *
+ * ```ts
+ * const depthClassSel = categorySelection();          // BEFORE the crossfilter
+ * const brush = Selection.crossfilter({ include: [depthClassSel] });
+ * // spec:  toggleY({ as: depthClassSel }), highlight({ by: depthClassSel })
+ * // dim:   targets: [{ selection: depthClassSel, field, table }]
+ * ```
+ *
+ * The include relay forwards the clause object verbatim (clients intact), so
+ * every OTHER view cross-filters exactly as before, the producing chart still
+ * self-excludes, and the clause appears in `brush.clauses` — one meeting
+ * point for the inspector, reports, and signals. One producer per
+ * categorySelection.
+ *
+ * INTERSECT resolution, deliberately not `single` (measured live): the origin
+ * has TWO writers — the component and the dimension's headless clause, which
+ * adoption retracts right after each component publish — and single
+ * resolution lets that null-predicate retraction (a different source)
+ * DISPLACE the component clause it just published. The origin goes empty and
+ * un-grays while the relayed copy keeps filtering the crossfilter: the exact
+ * divergence this module exists to prevent. Intersect replaces by source,
+ * which is the semantics both writers assume.
+ *
+ * Two consequences of the relay being ONE-WAY (origin → crossfilter):
+ * clearing must reset the ORIGIN ({@link clearSelectionFor} resolves this;
+ * removing only the relayed copy leaves the origin — and its Highlight —
+ * stale), and a whole-state clear must reset origins alongside the
+ * crossfilter ({@link resetSelectionDimTargets} covers both when a dimension
+ * targets this selection, as it should).
+ */
+export function categorySelection(): Selection {
+  return Selection.intersect();
+}
+
+/** What {@link clearSelectionFor} resolved and cleared. */
+export interface ClearedSelection {
+  /** The resolved identity — the dimension's or producer's qualified name. */
+  cleared: string;
+  via: "dim" | "component";
+}
+
+/**
+ * Clear ONE filter by name — a declared dimension or a live producer
+ * (component) — retracting its clause(s) AND resetting its visual state,
+ * leaving every other filter alone. The per-component companion to the
+ * whole-state {@link resetSelectionDimTargets}. Accepts qualified and leaf
+ * names alike; resolution order:
+ *
+ *  1. a dimension → `dim.clear()` — under component adoption this routes
+ *     through the component's own publish path, so the visual clears too;
+ *  2. a producer → `selection.reset(its clauses)` on the Selection the
+ *     producer PUBLISHES INTO — the origin, never a crossfilter's relayed
+ *     copy (see {@link categorySelection}). `reset` invokes `source.reset()`,
+ *     clearing a brush rectangle or menu pick; mosaic's Toggle implements no
+ *     reset, so bound toggles are kept honest by the facet mirror instead
+ *     (mosaic-facet.ts) — one more reason a category producer should have a
+ *     dimension bound. Naming the producer clears a multi-dimension
+ *     component (a 2-D map box) WHOLE — clearing just one of its paired
+ *     dimensions instead widens that side to the full extent.
+ *
+ * Throws — listing what IS clearable — when the name matches nothing.
+ */
+export function clearSelectionFor(name: string, scope?: Scope | string): ClearedSelection {
+  const s = typeof scope === "string" ? scope : scope?.name;
+  const candidates = s !== undefined && !name.includes("/") ? [name, `${s}/${name}`] : [name];
+  for (const n of candidates) {
+    const dim = dims.get(n);
+    if (dim !== undefined) {
+      dim.clear();
+      return { cleared: dim.name, via: "dim" };
+    }
+  }
+  for (const n of candidates) {
+    const entry = mosaicProducerByName(n);
+    if (entry !== undefined) {
+      const sel = entry.selection as SelectionLike;
+      const mine = sel.clauses.filter((c) => c.source === entry.source);
+      if (mine.length > 0) sel.reset?.(mine);
+      return { cleared: entry.name, via: "component" };
+    }
+  }
+  const dimNames = selectionDimSurface(scope).map((e) => e.name);
+  const producerNames = mosaicProducers(scope).map((e) => e.name);
+  throw new Error(
+    `clear-selection: "${name}" matches no dimension or component. ` +
+      `Dimensions: ${dimNames.join(", ") || "(none)"}. ` +
+      `Components: ${producerNames.join(", ") || "(none)"}.`,
+  );
+}
+
+/**
+ * Register the `clear-selection` action for a scope: the agent-facing verb
+ * over {@link clearSelectionFor}, registered beside the app's other tools.
+ * PREBUILT spec — the sanctioned dynamic-registration path (see
+ * registerDimAction's note).
+ */
+export function registerClearSelection(scope?: Scope): void {
+  const spec: ActionSpec = {
+    name: "clear-selection",
+    ...(scope !== undefined ? { scope } : {}),
+    description:
+      'Clear ONE cross-filter by name, leaving the rest: a dimension ("mag") or an ' +
+      'on-screen component ("<scope>/map") — its clause retracts and its visual (brush ' +
+      "rectangle, menu pick, toggle highlight) resets. Name the COMPONENT to clear a " +
+      "multi-dimension producer (a 2-D map box) whole. report()'s filters section names " +
+      "what is active; capabilities names everything clearable. Counts refresh after a " +
+      "task boundary; re-read report() then.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "a dimension or component name (qualified or leaf)" },
+      },
+      required: ["name"],
+      additionalProperties: false,
+    },
+    run: (args) => clearSelectionFor(String(args?.name ?? ""), scope),
+  };
+  action(spec);
+}
+
+/**
+ * Reset every Selection the (scope's) dimensions target — ONE reset per
+ * unique Selection, dropping every producer's clause and clearing visuals
+ * via `source.reset()`. This is the whole-state clear behind "reset filters"
+ * and load-view: category selections ({@link categorySelection} — include
+ * origins the crossfilter's own reset cannot reach, the relay being one-way)
+ * are covered because their dimensions target them.
+ */
+export function resetSelectionDimTargets(scope?: Scope | string): void {
+  const seen = new Set<object>();
+  for (const e of selectionDimSurface(scope)) {
+    for (const t of dims.get(e.name)?.targets ?? []) {
+      if (seen.has(t.selection)) continue;
+      seen.add(t.selection);
+      t.selection.reset?.();
+    }
   }
 }
 

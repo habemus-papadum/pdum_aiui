@@ -7,14 +7,19 @@
  * (the HMR shape), the derived set-<name> action, and the Selection→signal
  * read-back bridge.
  */
-import { Selection } from "@uwdata/mosaic-core";
-import { sql } from "@uwdata/mosaic-sql";
+import { clauseInterval, clausePoints, Selection } from "@uwdata/mosaic-core";
+import { column, sql } from "@uwdata/mosaic-sql";
 import { afterEach, describe, expect, it } from "vitest";
 import { actionByName, clearControlSurface } from "./control";
 import { disposeDurable } from "./durable";
+import { clearMosaicProducerRegistry, registerMosaicInput } from "./mosaic-registry";
 import {
+  categorySelection,
   clearAllSelectionDims,
   clearSelectionDimRegistry,
+  clearSelectionFor,
+  registerClearSelection,
+  resetSelectionDimTargets,
   type SelectionClauseLike,
   selectionDim,
   selectionDimReport,
@@ -26,6 +31,8 @@ import { scope } from "./scope";
 import { tick } from "./testing";
 
 afterEach(() => {
+  clearMosaicProducerRegistry();
+  disposeDurable("mosaic-producers:registry");
   for (const key of clearSelectionDimRegistry().durableKeys) disposeDurable(key);
   for (const key of clearControlSurface().durableKeys) disposeDurable(key);
 });
@@ -317,6 +324,156 @@ describe("the report surface and the scope-wide clear", () => {
       targets: [{ selection: sel, field: "g" }],
     });
     expect(Object.keys(selectionDimReport("a"))).toEqual(["a/mag", "global"]);
+  });
+});
+
+describe("categorySelection: the toggle/legend origin and its include relay", () => {
+  it("relays the clause verbatim into the crossfilter, and back out on clear", () => {
+    const s = scope("selx");
+    const cat = categorySelection();
+    const brush = Selection.crossfilter({ include: [cat] });
+    const dc = selectionDim({
+      name: "dc",
+      scope: s,
+      kind: "point",
+      targets: [{ selection: cat, field: "depth_class" }],
+    });
+    dc.set(["shallow"]);
+    expect(cat.clauses).toHaveLength(1);
+    expect(brush.clauses).toHaveLength(1);
+    expect(brush.clauses[0]).toBe(cat.clauses[0]); // the same object, clients intact
+    dc.clear();
+    expect(cat.clauses).toHaveLength(0);
+    expect(brush.clauses).toHaveLength(0);
+  });
+
+  it("the crossfilter hides a clause from its own marks; the origin shows it — the highlight seam", () => {
+    const cat = categorySelection();
+    const brush = Selection.crossfilter({ include: [cat] });
+    const mark = {};
+    const toggle = {};
+    cat.update(
+      clausePoints([column("depth_class")], [["shallow"]], {
+        source: toggle,
+        clients: new Set([mark]) as never,
+      }),
+    );
+    // The verified mechanism (mosaic-core 0.28.1): the crossfilter resolver
+    // skips clauses whose clients contain the mark, so highlight({ by: brush })
+    // would test against nothing — while the non-cross origin serves the
+    // clause, which is why highlight must listen to the categorySelection.
+    expect(brush.predicate(mark as never)).toBeUndefined();
+    expect(cat.predicate(mark as never)).toHaveLength(1);
+  });
+});
+
+describe("clearSelectionFor: the per-component clear", () => {
+  it("resolves a dimension by leaf or qualified name and clears value + clause", async () => {
+    const s = scope("selx");
+    const sel = Selection.crossfilter();
+    const mag = selectionDim({
+      name: "mag",
+      scope: s,
+      kind: "interval",
+      targets: [{ selection: sel, field: "mag" }],
+    });
+    mag.set({ lo: 5 });
+    await tick();
+    expect(clearSelectionFor("mag", s)).toEqual({ cleared: "selx/mag", via: "dim" });
+    await tick();
+    expect(mag.get()).toBeNull();
+    expect(sel.clauses).toHaveLength(0);
+  });
+
+  it("resets a producer's clauses on its ORIGIN selection — the relayed copy follows", () => {
+    const cat = categorySelection();
+    const brush = Selection.crossfilter({ include: [cat] });
+    const toggle = { value: [["shallow"]] as unknown };
+    cat.update(
+      clausePoints([column("depth_class")], [["shallow"]], {
+        source: toggle,
+        clients: new Set() as never,
+      }),
+    );
+    brush.update(clauseInterval(column("mag"), [5, 6] as never, { source: {} }));
+    registerMosaicInput({
+      scope: "selx",
+      name: "depth-class",
+      input: toggle,
+      selection: cat,
+      fields: ["depth_class"],
+      kind: "point",
+    });
+
+    const r = clearSelectionFor("selx/depth-class");
+    expect(r).toEqual({ cleared: "selx/depth-class", via: "component" });
+    expect(cat.clauses).toHaveLength(0); // origin cleared — a Highlight there un-grays
+    expect(brush.clauses).toHaveLength(1); // only the other producer's clause remains
+    expect(String(brush.clauses[0].predicate)).toContain("mag");
+  });
+
+  it("throws with the clearable names when nothing matches", () => {
+    const s = scope("selx");
+    const sel = Selection.crossfilter();
+    selectionDim({
+      name: "mag",
+      scope: s,
+      kind: "interval",
+      targets: [{ selection: sel, field: "mag" }],
+    });
+    expect(() => clearSelectionFor("nope", s)).toThrow(/matches no dimension.*selx\/mag/s);
+  });
+
+  it("registerClearSelection registers the scope-qualified action over the same path", async () => {
+    const s = scope("selx");
+    const sel = Selection.crossfilter();
+    const mag = selectionDim({
+      name: "mag",
+      scope: s,
+      kind: "interval",
+      targets: [{ selection: sel, field: "mag" }],
+    });
+    registerClearSelection(s);
+    const a = actionByName("selx/clear-selection");
+    expect(a).toBeDefined();
+    mag.set({ lo: 5 });
+    await tick();
+    expect(a?.run?.({ name: "mag" })).toEqual({ cleared: "selx/mag", via: "dim" });
+    await tick();
+    expect(sel.clauses).toHaveLength(0);
+  });
+});
+
+describe("resetSelectionDimTargets: the whole-state clear", () => {
+  it("resets every unique target Selection — category origins included", async () => {
+    const s = scope("selx");
+    const cat = categorySelection();
+    const brush = Selection.crossfilter({ include: [cat] });
+    const mag = selectionDim({
+      name: "mag",
+      scope: s,
+      kind: "interval",
+      targets: [{ selection: brush, field: "mag" }],
+    });
+    const dc = selectionDim({
+      name: "dc",
+      scope: s,
+      kind: "point",
+      targets: [{ selection: cat, field: "depth_class" }],
+    });
+    mag.set({ lo: 5 });
+    dc.set(["shallow"]);
+    // A mouse-ish clause from an unregistered producer, straight into the brush.
+    brush.update(clauseInterval(column("depth"), [0, 70] as never, { source: {} }));
+    await tick();
+    expect(brush.clauses.length).toBeGreaterThanOrEqual(3);
+
+    resetSelectionDimTargets(s);
+    await tick();
+    expect(brush.clauses).toHaveLength(0);
+    expect(cat.clauses).toHaveLength(0); // brush.reset() alone could not reach this
+    expect(mag.get()).toBeNull();
+    expect(dc.get()).toBeNull();
   });
 });
 

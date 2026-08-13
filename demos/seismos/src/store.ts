@@ -30,8 +30,10 @@ import type { AsyncDuckDB, AsyncDuckDBConnection } from "@duckdb/duckdb-wasm";
 import { type ControlBox, control, scope } from "@habemus-papadum/aiui-viz";
 import {
   bindSelectionComponents,
+  categorySelection,
   type IntervalValue,
   type PointValue,
+  resetSelectionDimTargets,
   type SelectionDim,
   type SelectionSignal,
   selectionDim,
@@ -237,8 +239,14 @@ export interface SeismosDims {
 
 export interface SeismosStore {
   coordinator: Coordinator;
-  /** The one crossfilter selection every view publishes into and filters by. */
+  /** The one crossfilter selection every view filters by. Most producers
+   * publish straight into it; the depth-class toggle publishes into
+   * `depthClassSel`, whose clauses relay in (include). */
   brush: Selection;
+  /** The depth-class toggle's own Selection (categorySelection): non-cross so
+   * the chart's `highlight` can see its own clause — the crossfilter resolver
+   * hides it from the chart's marks. Include-relayed into `brush`. */
+  depthClassSel: Selection;
   /** Reactive window onto the brush (every producer: dims, plots, menus). */
   brushSignal: SelectionSignal;
   /** The declared filter dimensions (one `set-<name>` tool each). */
@@ -286,7 +294,12 @@ function sanitize(row: Record<string, unknown>): Record<string, unknown> {
 
 export const store: SeismosStore = seismosScope.durable("store", () => {
   const coordinator = new Coordinator();
-  const brush = Selection.crossfilter();
+  // The depth-class toggle's origin selection, minted BEFORE the crossfilter
+  // so the include relay can be wired at construction (mosaic's one hookup
+  // point). See categorySelection's docblock for the why; NOTES.md, "Category
+  // filters gray out now".
+  const depthClassSel = categorySelection();
+  const brush = Selection.crossfilter({ include: [depthClassSel] });
   const brushSignal = selectionSignal(brush);
 
   // ---- the filter dimensions: declared writers over the shared brush --------
@@ -336,7 +349,10 @@ export const store: SeismosStore = seismosScope.durable("store", () => {
     scope: seismosScope,
     kind: "point",
     options: ["shallow", "intermediate", "deep"],
-    targets: [{ selection: brush, field: "depth_class", table: TABLE }],
+    // The toggle's ORIGIN selection, not the crossfilter: adoption publishes
+    // where the component publishes, and the include relay carries it into
+    // the brush for every other view.
+    targets: [{ selection: depthClassSel, field: "depth_class", table: TABLE }],
   });
   /** Longitude window, degrees east — pair with lat for a geographic box
    * (two 1-D clauses; a 2-D clause would not propagate — NOTES.md). */
@@ -414,8 +430,11 @@ export const store: SeismosStore = seismosScope.durable("store", () => {
     // visuals (a plot brush rectangle, a menu's picked option) and nulls the
     // dimensions' semantic values (their durable sources hook reset). The
     // old retraction walk left rectangles painted over an unfiltered page —
-    // the measured "clearing didn't work" confusion.
-    brush.reset();
+    // the measured "clearing didn't work" confusion. The helper resets ONE
+    // reset per unique dim-target Selection — the brush AND the category
+    // origins (depthClassSel), which the brush's own reset cannot reach: the
+    // include relay is one-way, and a stale origin keeps its chart grayed.
+    resetSelectionDimTargets(seismosScope);
     return brush.clauses.length;
   }
 
@@ -569,6 +588,7 @@ export const store: SeismosStore = seismosScope.durable("store", () => {
   return {
     coordinator,
     brush,
+    depthClassSel,
     brushSignal,
     dims,
     views,

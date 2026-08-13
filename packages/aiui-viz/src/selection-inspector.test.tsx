@@ -111,4 +111,28 @@ describe("SelectionInspector: the widget", () => {
     const active = host.querySelectorAll(".capability-member[data-active]");
     expect(active.length).toBeGreaterThanOrEqual(2); // the dim and the brush
   });
+
+  it("attributed rows carry a clear button that retracts JUST that clause", async () => {
+    const { s, sel, mag, signal } = await build();
+    const host = document.createElement("div");
+    document.body.append(host);
+    dispose = render(() => <SelectionInspector signal={signal} scope={s} />, host);
+    await tick();
+
+    // The unknown row has no resolvable name — no button.
+    const unknownRow = host.querySelector('.inspector-clause[data-origin="unknown"]');
+    expect(unknownRow?.querySelector(".inspector-clear")).toBeNull();
+
+    const componentRow = host.querySelector('.inspector-clause[data-origin="component"]');
+    (componentRow?.querySelector(".inspector-clear") as HTMLButtonElement).click();
+    await tick();
+    expect(sel.clauses.map((c) => String(c.predicate))).not.toContain("depth BETWEEN 10 AND 20");
+    expect(mag.get()).toEqual({ lo: 5 }); // the dim's filter untouched
+
+    const dimRow = host.querySelector('.inspector-clause[data-origin="dim"]');
+    (dimRow?.querySelector(".inspector-clear") as HTMLButtonElement).click();
+    await tick();
+    expect(mag.get()).toBeNull();
+    expect(sel.clauses.map((c) => String(c.predicate))).toEqual(["x = 1"]); // the stranger stays
+  });
 });
