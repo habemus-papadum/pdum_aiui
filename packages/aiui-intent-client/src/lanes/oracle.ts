@@ -283,6 +283,17 @@ export function createOracleLanes(ctx: OracleLaneContext): OracleLanes {
           turn_detection: { type: "semantic_vad", eagerness: "low" },
         },
       },
+      // Echo-canceller PRIMING (owner, 2026-08-13). The guard above cannot
+      // actually protect the first reply's audio: the vendor clears the
+      // WebRTC output buffer on detected speech regardless of
+      // `interrupt_response` (community-reported), and the canceller needs a
+      // few seconds of far-end audio before the mic stops leaking the
+      // speakers. So the session opens by SPENDING those seconds on a
+      // disposable line — if the echo clips it, nothing is lost, and the
+      // first real answer plays against a converged canceller. Long enough
+      // to be worth something as training audio, short enough not to be a
+      // speech.
+      greeting: "Hi there — I'm connected and listening.",
     },
     // The chain's order is the standard one (a pasted key TRUMPS everything),
     // with the channel's mint standing in for a deployed app's endpoint. The

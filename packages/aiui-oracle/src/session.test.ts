@@ -478,7 +478,14 @@ describe("the first-reply echo window", () => {
     // Still not instantly — `stopped` means the SERVER stopped sending.
     expect(rig.sent).toEqual([]);
     await vi.advanceTimersByTimeAsync(400);
-    expect(turnDetection(rig.sent[0])).toEqual({ type: "server_vad", threshold: 0.75 });
+    // The restore is EXPLICIT: `interrupt_response` was sent as false, so it
+    // must be re-stated, not omitted — under the vendor's (unverified) merge
+    // semantics an omitted key keeps its last sent value.
+    expect(turnDetection(rig.sent[0])).toEqual({
+      type: "server_vad",
+      threshold: 0.75,
+      interrupt_response: true,
+    });
     // …and arming is attributable: a barge-in after this line is the vendor's.
     const armed = session.ledger().filter((e) => e.kind === "sent");
     expect((armed[0] as { type: string }).type).toContain("interrupts armed");
@@ -506,7 +513,11 @@ describe("the first-reply echo window", () => {
     await vi.advanceTimersByTimeAsync(8_999);
     expect(rig.sent).toEqual([]);
     await vi.advanceTimersByTimeAsync(1);
-    expect(turnDetection(rig.sent[0])).toEqual({ type: "server_vad", threshold: 0.75 });
+    expect(turnDetection(rig.sent[0])).toEqual({
+      type: "server_vad",
+      threshold: 0.75,
+      interrupt_response: true,
+    });
   });
 
   it("a reply that never SPOKE closes the window immediately — no echo to guard", async () => {
@@ -515,7 +526,11 @@ describe("the first-reply echo window", () => {
     rig.sent.length = 0;
     rig.emit({ type: "response.created" });
     rig.emit({ type: "response.done", response: { id: "r1", status: "failed", output: [] } });
-    expect(turnDetection(rig.sent[0])).toEqual({ type: "server_vad", threshold: 0.75 });
+    expect(turnDetection(rig.sent[0])).toEqual({
+      type: "server_vad",
+      threshold: 0.75,
+      interrupt_response: true,
+    });
   });
 
   it("the reply's audio lifecycle is LEDGERED — it used to be dropped as chatter", async () => {
@@ -548,6 +563,51 @@ describe("the first-reply echo window", () => {
     speakAReply(manual.rig);
     await vi.advanceTimersByTimeAsync(60_000);
     expect(manual.rig.sent).toEqual([]);
+  });
+
+  it("a GREETING speaks first, and the window carries BOTH suppressions for it", async () => {
+    const { session, rig } = guarded({ greeting: "Hi there — connected and listening." });
+    await session.start();
+    // With a greeting the echo cannot truncate the reply OR be answered as a
+    // user turn — safe only because the reply is created explicitly below.
+    expect(turnDetection(rig.sent[0])).toEqual({
+      type: "server_vad",
+      threshold: 0.75,
+      interrupt_response: false,
+      create_response: false,
+    });
+    const create = rig.sent[1] as { type: string; response: { instructions: string } };
+    expect(create.type).toBe("response.create");
+    expect(create.response.instructions).toContain("Hi there — connected and listening.");
+    // Attributable in the ledger: a response.create with no user turn before
+    // it is OURS, and named as the greeting.
+    const sent = session.ledger().filter((e) => e.kind === "sent");
+    expect(sent.map((e) => (e as { type: string }).type)).toEqual(["greeting", "response.create"]);
+  });
+
+  it("the greeting reply CLOSES the window — the explicit create dodges the deadlock", async () => {
+    const { session, rig } = guarded({ greeting: "Hi." });
+    await session.start();
+    rig.sent.length = 0;
+    speakAReply(rig);
+    await vi.advanceTimersByTimeAsync(400);
+    // Armed: both suppressions restored EXPLICITLY to true, never dropped by
+    // omission — the live failure this pins was the server keeping
+    // `create_response: false` after an armed update that merely omitted it,
+    // which left every later utterance heard, committed, and never answered.
+    expect(turnDetection(rig.sent[0])).toEqual({
+      type: "server_vad",
+      threshold: 0.75,
+      interrupt_response: true,
+      create_response: true,
+    });
+  });
+
+  it("a greeting WITHOUT the guard still speaks — priming is independent of suppression", async () => {
+    const { session, rig } = guarded({ greeting: "Hi.", firstReplyGuard: false });
+    await session.start();
+    expect(turnDetection(rig.sent[0])).toEqual({ type: "server_vad", threshold: 0.75 });
+    expect(rig.sent.some((event) => event.type === "response.create")).toBe(true);
   });
 
   it("a RECONNECT re-opens it — a new peer connection has learned nothing", async () => {

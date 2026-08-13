@@ -22,6 +22,8 @@
     "docs:shots": "tsx scripts/docs-shots.ts",
     "evict": "node scripts/evict.mjs",
     "evict:check": "node scripts/evict.mjs --check",
+    "ext:build": "pnpm -C packages/aiui-intent-client build:ext",
+    "ext:watch": "pnpm -C packages/aiui-intent-client ext:watch",
     "format": "biome check --write .",
     "lint": "biome check .",
     "new-demo": "tsx scripts/new-demo.ts",

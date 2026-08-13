@@ -95,6 +95,10 @@ export class OracleSession {
    * {@link audioSession}, which is what makes the window a property of the
    * config we send rather than a flag anyone has to remember to apply. */
   private guard: { padMs: number; maxMs: number } | undefined;
+  /** Whether THIS connection ever had the window open — what obligates the
+   * explicit restore of the suppressed fields on every send after arming
+   * (a value we once sent `false` must be re-stated, not omitted). */
+  private guardWasOpen = false;
   private guardTimer: ReturnType<typeof setTimeout> | undefined;
   /** The unattended-session stopwatch — restarted by every activity entry. */
   private idleTimer: ReturnType<typeof setTimeout> | undefined;
@@ -210,6 +214,20 @@ export class OracleSession {
       phase: "live",
       ...(liveBits.length > 0 ? { detail: liveBits.join(" · ") } : {}),
     });
+    // The greeting — echo-canceller priming (see OracleConfig.greeting). Sent
+    // AFTER the opening update so the window's suppressions are in force
+    // before the model speaks; the explicit create is also what makes those
+    // suppressions safe (the window's exit is this very reply).
+    const greeting = this.greetingText();
+    if (greeting !== undefined) {
+      this.record({ kind: "sent", type: "greeting" });
+      this.send({
+        type: "response.create",
+        response: {
+          instructions: `Open the conversation by saying exactly: "${greeting}". Say nothing else.`,
+        },
+      });
+    }
     // Connecting is not activity, but it IS the moment the mic opens — so the
     // stopwatch starts here. A session opened and then abandoned before a word
     // is said is the same hazard as one abandoned mid-conversation.
@@ -493,25 +511,52 @@ export class OracleSession {
     // `turn_detection` defaults to server_vad at the vendor's own settings;
     // an explicit `null` means no turn detection, and must survive as null
     // rather than being read as "unset".
+    const configured: Partial<NonNullable<typeof input.turn_detection>> =
+      input.turn_detection ?? {};
     const turnDetection =
       input.turn_detection === null
         ? null
         : {
             type: "server_vad",
-            ...input.turn_detection,
+            ...configured,
             // …and the echo window wins over the configured values while
             // open: the first reply may not be truncated by what the mic
             // hears. Arming re-sends this block without the suppression.
             //
-            // ONLY the interrupt. `create_response: false` also rode here for
-            // one commit and deadlocked the session mute: the window closes
-            // when a reply happens, and suppressing response CREATION means
-            // the human's first utterance never makes one — so
-            // `response.created` never fires, the cap never starts, and
-            // nothing can ever close the window. Every exit hangs off a
-            // response that cannot exist. The echo committing itself as a
-            // user turn is the lesser evil.
-            ...(this.guard !== undefined ? { interrupt_response: false } : {}),
+            // ONLY the interrupt — unless a greeting is configured.
+            // `create_response: false` alone rode here for one commit and
+            // deadlocked the session mute: the window closes when a reply
+            // happens, and suppressing response CREATION means the human's
+            // first utterance never makes one — so `response.created` never
+            // fires, the cap never starts, and nothing can ever close the
+            // window. Every exit hangs off a response that cannot exist.
+            // Without a greeting, the echo committing itself as a user turn
+            // is the lesser evil. WITH one, the first reply is created
+            // explicitly by us (see start), so the exit no longer depends on
+            // the VAD being allowed to create it — and the suppression stops
+            // the greeting's own echo from being answered.
+            ...(this.guard !== undefined
+              ? {
+                  interrupt_response: false,
+                  ...(this.greetingText() !== undefined ? { create_response: false } : {}),
+                }
+              : this.guardWasOpen
+                ? {
+                    // Closing the window restores the suppressed fields
+                    // EXPLICITLY, never by omission. Nested merge semantics
+                    // are unverified (see setSessionParam) — and under merge
+                    // an omitted key keeps its last sent value. Found live
+                    // 2026-08-13: the armed update omitted create_response,
+                    // the server kept `false`, and no utterance was ever
+                    // answered again. Explicit values are correct under
+                    // either semantics, and the drift check then covers the
+                    // restore like any other field.
+                    interrupt_response: configured.interrupt_response ?? true,
+                    ...(this.greetingText() !== undefined
+                      ? { create_response: configured.create_response ?? true }
+                      : {}),
+                  }
+                : {}),
           };
     return {
       audio: {
@@ -530,6 +575,13 @@ export class OracleSession {
     };
   }
 
+  /** The greeting, or undefined when there is none (empty string counts as
+   * none — a session cannot speak nothing). */
+  private greetingText(): string | undefined {
+    const greeting = this.options.config.greeting;
+    return greeting === undefined || greeting === "" ? undefined : greeting;
+  }
+
   // ── the first-reply echo window ────────────────────────────────────────────
 
   /** Open the window, if the config wants one and there is a VAD to suppress
@@ -537,6 +589,7 @@ export class OracleSession {
   private openGuard(): void {
     this.clearGuardTimer();
     this.replyAudioStarted = false;
+    this.guardWasOpen = false;
     const wanted = this.options.config.firstReplyGuard ?? true;
     // No `turn_detection` object means no `interrupt_response` to suppress.
     if (wanted === false || this.options.config.audio?.input?.turn_detection === null) {
@@ -548,6 +601,7 @@ export class OracleSession {
       padMs: tuning.padMs ?? DEFAULT_FIRST_REPLY_PAD_MS,
       maxMs: tuning.maxMs ?? DEFAULT_FIRST_REPLY_MAX_MS,
     };
+    this.guardWasOpen = true;
   }
 
   /** Close the window: re-send the audio block with the configured values. */

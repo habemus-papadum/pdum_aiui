@@ -155,8 +155,13 @@ export interface OracleConfig {
    * The fix is a window, not a setting: until the first reply has finished
    * speaking, `turn_detection` carries `interrupt_response: false`, so what
    * the mic hears cannot truncate that reply. Then the complete block is
-   * re-sent with the configured values, and the session behaves normally for
-   * the rest of its life.
+   * re-sent with the configured values — the suppressed fields restored
+   * EXPLICITLY, never by omission: the vendor's nested merge semantics are
+   * unverified, and under merge an omitted key keeps its last sent value
+   * (found live 2026-08-13 — an armed update that omitted `create_response`
+   * left the server holding `false`, and no utterance was ever answered
+   * again). After that the session behaves normally for the rest of its
+   * life.
    *
    * That field and no other. `create_response: false` also rode here for one
    * commit — to stop the echo being committed as a user turn and generating a
@@ -167,6 +172,11 @@ export interface OracleConfig {
    * here must leave the session able to produce the very reply this window
    * waits for.
    *
+   * The one exception rides {@link greeting}: a greeting IS the first reply,
+   * created explicitly by us rather than by the VAD — so the window's exit no
+   * longer depends on reply creation being allowed, and `create_response:
+   * false` becomes safe to carry for exactly as long as the window is open.
+   *
    * Closing the window needs a real end-of-speech signal, and `response.done`
    * is not one (the transcript finishes seconds ahead of the audio, and on
    * WebRTC the reply is a track we cannot time). {@link LedgerBody}'s
@@ -174,6 +184,28 @@ export interface OracleConfig {
    * events, which this package used to discard as chatter.
    */
   firstReplyGuard?: boolean | FirstReplyGuard;
+  /**
+   * Speak this line, verbatim, the moment the session opens — before the
+   * human has said anything. Off unless set.
+   *
+   * This is echo-canceller PRIMING, not decoration. The canceller is adaptive
+   * and needs a few seconds of far-end audio before it can subtract the
+   * speakers from the mic — which is why the first thing a session says is
+   * the one thing it cannot protect (see {@link firstReplyGuard}). A greeting
+   * spends that convergence time on words that are DISPOSABLE: if the echo
+   * clips it or trips the VAD, nothing of value is lost, and the first real
+   * answer plays against a canceller that has already heard the room.
+   *
+   * While the echo window is open, a configured greeting also lets the window
+   * carry `create_response: false` — so the greeting's own echo cannot commit
+   * as a user turn and be ANSWERED (the model chatting with itself at open).
+   * That suppression is only safe because the greeting reply is created
+   * explicitly; see the deadlock note on {@link firstReplyGuard}. The trade,
+   * stated honestly: a human who talks OVER the greeting is heard and
+   * committed but not answered until the window closes and they speak again.
+   * The window is the greeting's own length plus {@link FirstReplyGuard.padMs}.
+   */
+  greeting?: string;
   /**
    * PARK the session after this many seconds with no activity. `0` disables.
    * Default {@link DEFAULT_PARK_AFTER_IDLE_SECONDS}.
