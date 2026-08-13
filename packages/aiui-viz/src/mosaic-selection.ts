@@ -354,14 +354,25 @@ export function selectionDim(spec: SelectionDimSpec): SelectionDim<IntervalValue
     return [...next];
   };
 
+  const publish = (applied: IntervalValue | PointValue): void => {
+    if (spec.kind === "interval") publishInterval(applied as IntervalValue);
+    else publishPoint(applied as PointValue);
+  };
+
+  // The publish-override seam (mosaic-facet.ts): while a component binding
+  // has ADOPTED this dimension, writes route through the component's own
+  // publish path — one clause, the component's source — instead of the
+  // headless clause below. The headless path stays reachable for handoffs.
+  let publishOverride: ((applied: IntervalValue | PointValue) => void) | undefined;
+
   const set = (next: IntervalValue | PointValue): IntervalValue | PointValue => {
     const applied =
       spec.kind === "interval"
         ? validateInterval(spec, next as IntervalValue)
         : validatePoint(spec, next as PointValue);
     box.set(applied);
-    if (spec.kind === "interval") publishInterval(applied as IntervalValue);
-    else publishPoint(applied as PointValue);
+    if (publishOverride !== undefined) publishOverride(applied);
+    else publish(applied);
     return applied;
   };
 
@@ -379,6 +390,22 @@ export function selectionDim(spec: SelectionDimSpec): SelectionDim<IntervalValue
       return null;
     },
   };
+
+  // @internal contract with mosaic-facet.ts (same package): non-enumerable so
+  // the public surface, reports, and JSON stay clean.
+  Object.defineProperties(dim, {
+    __publishHeadless: { value: publish },
+    __setPublishOverride: {
+      value: (fn: ((applied: IntervalValue | PointValue) => void) | undefined) => {
+        publishOverride = fn;
+      },
+    },
+    __setBoxQuiet: {
+      value: (v: IntervalValue | PointValue) => {
+        box.set(v);
+      },
+    },
+  });
 
   // Same collision semantics as control(): same loc (or unknowable) is the
   // HMR shape; a different definition site is two declarations fighting.
@@ -604,6 +631,17 @@ export function selectionSignal(sel: SelectionLike): SelectionSignal {
     dispose: () => sel.removeEventListener("value", bump),
   };
 }
+
+// Component adoption (mosaic-facet.ts) rides this subpath: bind a dimension
+// to a live component and voice/mouse share ONE clause source — see the
+// module docblock there for the model.
+export {
+  bindSelectionComponents,
+  type FacetBinding,
+  type IntervalFacetBinding,
+  type PairFacetBinding,
+  type PointFacetBinding,
+} from "./mosaic-facet";
 
 /**
  * One Selection's whole predicate as SQL text — `"TRUE"` when nothing

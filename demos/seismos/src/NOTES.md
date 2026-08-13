@@ -302,3 +302,41 @@ The rebuild disposes its interactor, and mosaic.tsx's ghost-clause protection
 retracts the disposed interactor's clause (the alternative is a filter with
 no rectangle on screen). An OS theme flip is rare enough that losing an
 active brush rectangle to it is the right trade.
+
+## Voice and mouse are one producer now: component adoption (2026-08-13)
+
+The two-producer era above (dimensions AND interactors publishing separate
+clauses into the brush) is over. Every dimension in store.ts now BINDS to the
+on-screen component that speaks its column (`bindSelectionComponents`,
+`aiui-viz/mosaic-selection`): a spoken `set-mag` publishes through the mag
+histogram's own Interval1D — its source identity, its clients set, its brush
+rectangle (moveSilent post-init; the `value` seed pre-render) — and a mouse
+drag mirrors quietly back into the dimension's durable value. One clause per
+bound dimension, always; the empty-intersection trap (a mouse brush AND'd
+under a voice range on the same column) is structurally impossible now.
+Consequences worth naming:
+
+- **Saved views capture mouse state.** A drag lands in the dimension, so
+  `save-view` snapshots it and `load-view` REDRAWS the rectangle. The
+  2026-08-12 caveat ("a view cannot capture a menu or map brush") is void for
+  every bound producer — which is all of them here (`magtype` gained a dim so
+  the second menu is covered).
+- **A brush now SURVIVES a theme flip.** MosaicView unregisters before the
+  ghost-clause retraction, so the binding republishes headlessly across the
+  gap and re-drives the reborn interactor (value-seeded pre-render). The
+  2026-08-12 "in-flight plot brush is lost" trade above is void too.
+- **The map is WYSIWYG, not exact.** `lon`/`lat` bind jointly to the
+  Interval2D over projected `eq_x`/`eq_y` (transforms in store.ts:
+  `degreesToEqBox` corner-samples — equator included when spanned — and
+  `eqBoxToDegrees` inverts via `equalEarthInverse`, a Newton solve). A spoken
+  region draws the bounding eq-box of the requested degrees and THAT box
+  filters — matching what a mouse drag means, superset near poleward corners.
+  Unbound (pre-render), the dims still publish exact lon/lat SQL.
+- **One-sided ranges have no honest rectangle** (a half-open d3 brush doesn't
+  exist), so `set-mag {lo: 7}` clears the brush visual while the `>=` clause
+  filters; the inspector carries the truth.
+- Two paid-for findings live in mosaic-facet.ts: a menu's native clause value
+  is a SCALAR (`clausePoint`), so the mirror's loop guard must store the
+  clause's shape, not tuples; and a menu's late options-query `update()`
+  re-syncs from `valueFor` BEFORE our clause's emit settles on a fresh load —
+  the binding re-asserts the `<select>` when its own publish echoes back.

@@ -74,6 +74,7 @@ interface RegistryBox {
   regs: Map<string, Registration>;
   version: () => number;
   bump: () => void;
+  listeners: Set<() => void>;
 }
 
 /** Lazy so importing the barrel never touches `window` (durable needs it). */
@@ -82,12 +83,40 @@ function registry(): RegistryBox {
     // ownedWrite: registration happens inside MosaicView's effect handler (an
     // owned scope) — this is internal bookkeeping, the sanctioned exception.
     const [version, setVersion] = createSignal(0, { ownedWrite: true });
+    const listeners = new Set<() => void>();
     return {
       regs: new Map<string, Registration>(),
       version,
-      bump: () => setVersion((v) => v + 1),
+      bump: () => {
+        setVersion((v) => v + 1);
+        for (const l of [...listeners]) l();
+      },
+      listeners,
     };
   });
+}
+
+/**
+ * Plain (non-reactive) change subscription — for engines that live outside
+ * any reactive owner (the facet binder runs from a durable store factory).
+ * Callbacks fire synchronously on every register/unregister; keep them cheap
+ * and NEVER read Solid signals inside one (the bump may originate inside an
+ * owned scope). Returns the unsubscribe.
+ */
+export function onMosaicProducersChange(cb: () => void): () => void {
+  const box = registry();
+  box.listeners.add(cb);
+  return () => {
+    box.listeners.delete(cb);
+  };
+}
+
+/** Non-reactive lookup of one producer entry by its qualified name. */
+export function mosaicProducerByName(name: string): MosaicProducerEntry | undefined {
+  for (const { entries } of registry().regs.values()) {
+    for (const e of entries) if (e.name === name) return e;
+  }
+  return undefined;
 }
 
 function scopeName(scope: Scope | string | undefined): string | undefined {

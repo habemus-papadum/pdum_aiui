@@ -29,6 +29,7 @@
 import type { AsyncDuckDB, AsyncDuckDBConnection } from "@duckdb/duckdb-wasm";
 import { type ControlBox, control, scope } from "@habemus-papadum/aiui-viz";
 import {
+  bindSelectionComponents,
   type IntervalValue,
   type PointValue,
   type SelectionDim,
@@ -118,6 +119,91 @@ export function equalEarth(lonDeg: number, latDeg: number): { x: number; y: numb
 export const EQ_X_MAX = equalEarth(180, 0).x;
 export const EQ_Y_MAX = equalEarth(0, 90).y;
 
+/**
+ * Equal Earth inverse: projected (x, y) → (lon°, lat°). θ from y by Newton
+ * (the polynomial is gentle — a dozen iterations converge to machine
+ * precision), then lat from sin θ = M sin lat and lon from the x equation.
+ * Needed by the map facet binding: a mouse-drawn box arrives in projected
+ * units and the lon/lat dimensions speak degrees.
+ */
+export function equalEarthInverse(x: number, y: number): { lon: number; lat: number } {
+  let theta = y / EE_A1;
+  for (let i = 0; i < 12; i++) {
+    const t2 = theta * theta;
+    const t6 = t2 * t2 * t2;
+    const f = theta * (EE_A1 + EE_A2 * t2 + t6 * (EE_A3 + EE_A4 * t2)) - y;
+    const fp = EE_A1 + 3 * EE_A2 * t2 + t6 * (7 * EE_A3 + 9 * EE_A4 * t2);
+    theta -= f / fp;
+  }
+  const t2 = theta * theta;
+  const t6 = t2 * t2 * t2;
+  const deg = 180 / Math.PI;
+  const lat = Math.asin(Math.min(1, Math.max(-1, Math.sin(theta) / EE_M))) * deg;
+  const lon =
+    ((x * 3 * (EE_A1 + 3 * EE_A2 * t2 + t6 * (7 * EE_A3 + 9 * EE_A4 * t2))) /
+      (2 * Math.sqrt(3) * Math.cos(theta))) *
+    deg;
+  return { lon, lat };
+}
+
+/**
+ * A lon/lat degree box → the projected box that BOUNDS it (the map facet's
+ * `to`). x depends on both lon and |lat| (widest at the equator), so the box
+ * samples the corner latitudes plus the equator when spanned — the drawn
+ * rectangle is the tightest eq-space box containing the requested region,
+ * and it is exactly what filters (the on-screen rectangle IS the filter,
+ * matching what a mouse drag means; edges beyond the degree box near the
+ * poleward corners ride along).
+ */
+export function degreesToEqBox(
+  lonV: IntervalValue,
+  latV: IntervalValue,
+): [[number, number], [number, number]] | null {
+  if (lonV == null && latV == null) return null;
+  const lonLo = lonV?.lo ?? -180;
+  const lonHi = lonV?.hi ?? 180;
+  const latLo = latV?.lo ?? -90;
+  const latHi = latV?.hi ?? 90;
+  const lats = [latLo, latHi];
+  if (latLo < 0 && latHi > 0) lats.push(0);
+  const xs: number[] = [];
+  for (const la of lats) {
+    xs.push(equalEarth(lonLo, la).x, equalEarth(lonHi, la).x);
+  }
+  const y0 = equalEarth(0, latLo).y;
+  const y1 = equalEarth(0, latHi).y;
+  return [
+    [Math.min(...xs), Math.max(...xs)],
+    [Math.min(y0, y1), Math.max(y0, y1)],
+  ];
+}
+
+/** The map facet's `from`: a projected box (mouse-drawn) → the degree box
+ * bounding it, one decimal — what the lon/lat dimensions report and views
+ * serialize. */
+export function eqBoxToDegrees(cv: unknown): [IntervalValue, IntervalValue] {
+  if (cv == null || !Array.isArray(cv)) return [null, null];
+  const [xr, yr] = cv as [[number, number], [number, number]];
+  const corners = [
+    equalEarthInverse(xr[0], yr[0]),
+    equalEarthInverse(xr[0], yr[1]),
+    equalEarthInverse(xr[1], yr[0]),
+    equalEarthInverse(xr[1], yr[1]),
+  ];
+  if (yr[0] < 0 && yr[1] > 0) {
+    corners.push(equalEarthInverse(xr[0], 0), equalEarthInverse(xr[1], 0));
+  }
+  const r1 = (n: number) => Math.round(n * 10) / 10;
+  const lon = (n: number) => Math.min(180, Math.max(-180, r1(n)));
+  const lat = (n: number) => Math.min(90, Math.max(-90, r1(n)));
+  const lons = corners.map((c) => c.lon);
+  const lats = corners.map((c) => c.lat);
+  return [
+    { lo: lon(Math.min(...lons)), hi: lon(Math.max(...lons)) },
+    { lo: lat(Math.min(...lats)), hi: lat(Math.max(...lats)) },
+  ];
+}
+
 /** Default magnitude of completeness — global M4.5+ completeness sits near here. */
 export const DEFAULT_MC = 4.7;
 export const MC_MIN = 4.5;
@@ -143,6 +229,7 @@ export interface SeismosDims {
   depth: SelectionDim<IntervalValue>;
   year: SelectionDim<IntervalValue>;
   type: SelectionDim<PointValue>;
+  magtype: SelectionDim<PointValue>;
   depthClass: SelectionDim<PointValue>;
   lon: SelectionDim<IntervalValue>;
   lat: SelectionDim<IntervalValue>;
@@ -238,6 +325,12 @@ export const store: SeismosStore = seismosScope.durable("store", () => {
     kind: "point",
     targets: [{ selection: brush, field: "type", table: TABLE }],
   });
+  /** Magnitude type (mww, mb, ms, …) — the scale the magnitude was measured on. */
+  const magtype = selectionDim({
+    scope: seismosScope,
+    kind: "point",
+    targets: [{ selection: brush, field: "magtype", table: TABLE }],
+  });
   /** Depth class of the hypocenter. */
   const depthClass = selectionDim({
     scope: seismosScope,
@@ -264,7 +357,53 @@ export const store: SeismosStore = seismosScope.durable("store", () => {
     unit: "°",
     targets: [{ selection: brush, field: "latitude", table: TABLE }],
   });
-  const dims: SeismosDims = { mag, depth, year, type: eventType, depthClass, lon, lat };
+  const dims: SeismosDims = { mag, depth, year, type: eventType, magtype, depthClass, lon, lat };
+
+  // Component adoption (stage 3): each dimension binds to the on-screen
+  // component that speaks its column, and writes route through the
+  // COMPONENT's own publish path — a spoken "magnitude 7 and up" draws the
+  // histogram brush, a mouse drag updates the dimension (so saved views
+  // capture it), and there is exactly ONE clause per bound dimension with
+  // the component's own crossfilter self-exclusion. Producer names come from
+  // the MosaicView `name` props (Dashboard) and the Facets menu
+  // registrations; while a component is unmounted the dimension publishes
+  // headlessly, exactly as before. The map pair trades exact lon/lat SQL for
+  // WYSIWYG: the drawn eq-space box IS the filter (a superset of the degree
+  // box near poleward corners), matching what a mouse drag means.
+  bindSelectionComponents({
+    bindings: [
+      { dim: mag, producer: "seismos/mag-hist" },
+      { dim: depth, producer: "seismos/depth-hist" },
+      {
+        dim: year,
+        producer: "seismos/time-hist",
+        to: (v: IntervalValue) =>
+          v == null
+            ? null
+            : [
+                v.lo != null ? new Date(Date.UTC(v.lo, 0, 1)) : null,
+                v.hi != null ? new Date(Date.UTC(v.hi + 1, 0, 1) - 1) : null,
+              ],
+        from: (cv) => {
+          if (cv == null || !Array.isArray(cv)) return null;
+          const yr = (x: unknown): number | undefined =>
+            x instanceof Date
+              ? x.getUTCFullYear()
+              : typeof x === "number"
+                ? new Date(x).getUTCFullYear()
+                : undefined;
+          const lo = yr(cv[0]);
+          const hi = yr(cv[1]);
+          if (lo === undefined && hi === undefined) return null;
+          return { ...(lo !== undefined ? { lo } : {}), ...(hi !== undefined ? { hi } : {}) };
+        },
+      },
+      { dim: eventType, producer: "seismos/type-menu" },
+      { dim: magtype, producer: "seismos/magtype-menu" },
+      { dim: depthClass, producer: "seismos/depth-class" },
+      { dims: [lon, lat], producer: "seismos/map", to: degreesToEqBox, from: eqBoxToDegrees },
+    ],
+  });
 
   // Named views over the dims (localStorage) + their four agent actions.
   const views = selectionViews({ scope: seismosScope });

@@ -82,7 +82,9 @@ export {
   type MosaicPlotLike,
   type MosaicProducerEntry,
   type MosaicProducerKind,
+  mosaicProducerByName,
   mosaicProducers,
+  onMosaicProducersChange,
   registerMosaicInput,
   registerMosaicPlot,
 } from "./mosaic-registry";
