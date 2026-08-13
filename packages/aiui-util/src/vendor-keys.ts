@@ -68,25 +68,29 @@ export interface VendorKeySpec {
 
 export type VendorProvider = "openai" | "gemini" | "elevenlabs";
 
-/** The channel's three vendors. */
+/** The channel's three vendors, in priority order — the interview asks and
+ * `aiui keys status` lists in this order (ElevenLabs is the critical one:
+ * Scribe is dictation itself). */
 export const VENDOR_KEYS: readonly VendorKeySpec[] = [
+  {
+    provider: "elevenlabs",
+    envVar: "ELEVEN_LABS_API_KEY",
+    label: "ElevenLabs",
+    purpose: "Scribe v2 speech transcription — the default transcriber, i.e. dictation itself",
+  },
   {
     provider: "openai",
     envVar: "OPENAI_API_KEY",
     label: "OpenAI",
-    purpose: "speech transcription, dictation correction, and the default linter",
+    purpose:
+      "the oracle (the panel's realtime voice assistant), dictation correction, " +
+      "the fallback transcriber, and the default linter",
   },
   {
     provider: "gemini",
     envVar: "GEMINI_API_KEY",
     label: "Gemini",
     purpose: "the Gemini Live realtime engine and the Gemini linter option",
-  },
-  {
-    provider: "elevenlabs",
-    envVar: "ELEVEN_LABS_API_KEY",
-    label: "ElevenLabs",
-    purpose: "Scribe v2 speech transcription (the default transcriber)",
   },
 ] as const;
 

@@ -26,8 +26,9 @@ pdum_aiui itself, `pnpm aiui <cmd>` or `./bin/aiui <cmd>` are the same CLI run f
 - **`GET http://127.0.0.1:<port>/debug/api/info`** — the full self-description: channel
   info plus `launch`, the launcher's own record of how this session was assembled — how
   the Chrome DevTools MCP was wired (`launch.chromeDevtools`: attach vs launch, browserUrl,
-  profile, extensions) and all three key preflight outcomes (`launch.openaiKey`,
-  `launch.geminiKey`, `launch.elevenlabsKey`: valid / invalid / missing / unverified).
+  profile, extensions) and all three key presence outcomes (`launch.openaiKey`,
+  `launch.geminiKey`, `launch.elevenlabsKey`: present / missing — presence only, validity is
+  never probed at launch).
   This is the first place to look when browser tooling or the voice pipeline misbehaves.
 - **The console dashboard** — `aiui dashboard` (or open `http://127.0.0.1:<port>/`, which
   redirects to `/__aiui/`) renders the same facts as a page: channel + launch + browser

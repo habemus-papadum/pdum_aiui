@@ -19,6 +19,7 @@
     "docs:gen": "node scripts/docs-gen.mjs",
     "docs:lint": "node scripts/docs-lint.mjs",
     "docs:preview": "vitepress preview docs",
+    "docs:shots": "tsx scripts/docs-shots.ts",
     "evict": "node scripts/evict.mjs",
     "evict:check": "node scripts/evict.mjs --check",
     "format": "biome check --write .",

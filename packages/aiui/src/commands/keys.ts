@@ -1,5 +1,6 @@
 /**
- * `aiui keys` — manage the vendor API keys (OpenAI · Gemini · ElevenLabs).
+ * `aiui keys` — manage the vendor API keys (ElevenLabs · OpenAI · Gemini,
+ * in priority order — ElevenLabs' Scribe is dictation itself).
  *
  * The secrets live in the OS vault (macOS login keychain / freedesktop Secret
  * Service — aiui-util/vault.ts); the per-provider DECISION ("vault" = in use,

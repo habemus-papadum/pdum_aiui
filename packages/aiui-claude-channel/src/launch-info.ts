@@ -39,21 +39,20 @@ export interface ChromeDevtoolsInfo {
 }
 
 /**
- * The status of the `OPENAI_API_KEY` the intent pipeline needs, as the launcher
- * found it at startup. A *status*, never the key itself (or any prefix of it) —
- * the console dashboard uses this to explain a degraded pipeline without ever
- * seeing the secret. See `aiui`'s vendor-key-preflight for how it's determined.
+ * The status of one vendor key as the launcher resolved it at startup. A
+ * *status*, never the key itself (or any prefix of it) — the console dashboard
+ * uses this to explain a degraded pipeline without ever seeing the secret. See
+ * `aiui`'s vendor-key-preflight for how it's determined.
  *
- *  - "valid"      — present and accepted by OpenAI (authenticated check passed).
- *  - "invalid"    — present but rejected (401/403) — usually a stale shell export.
- *  - "missing"    — not set in the launcher's environment.
- *  - "unverified" — present but not checked (CI/non-interactive) or the check
- *                   couldn't complete (offline, timeout, transient error).
- *
- * `GEMINI_API_KEY` (the realtime submode's Gemini Live engine) reports through
- * the same status vocabulary — see {@link LaunchInfo.geminiKey}.
+ *  - "present" — a key resolved (the environment in a source checkout, else
+ *                the OS vault). Presence only: validity is deliberately NOT
+ *                probed at launch (the network check was removed 2026-08-12 —
+ *                api.openai.com's intermittent stalls made it noise); a bad
+ *                key surfaces loudly at first use, in the intent client, with
+ *                the fix hint attached.
+ *  - "missing" — no key: never provided, a chosen skip, or a vault entry gone.
  */
-export type OpenAiKeyStatus = "valid" | "invalid" | "missing" | "unverified";
+export type VendorKeyStatus = "present" | "missing";
 
 /** The launcher-provided session summary (extensible envelope). */
 export interface LaunchInfo {
@@ -61,23 +60,23 @@ export interface LaunchInfo {
   launcher?: string;
   chromeDevtools?: ChromeDevtoolsInfo;
   /**
-   * How the launcher's OpenAI key preflight came out (status only, never the
+   * Whether the launcher resolved an OpenAI key (status only, never the
    * key). Absent when no launcher recorded it. Lets the console dashboard
    * explain why transcription is unavailable.
    */
-  openaiKey?: OpenAiKeyStatus;
+  openaiKey?: VendorKeyStatus;
   /**
-   * The GEMINI_API_KEY preflight's outcome (same vocabulary, status only) —
-   * the key the realtime submode's Gemini Live engine needs. Absent when no
-   * launcher recorded it.
+   * The GEMINI_API_KEY resolution (same vocabulary, status only) — the key
+   * the realtime submode's Gemini Live engine needs. Absent when no launcher
+   * recorded it.
    */
-  geminiKey?: OpenAiKeyStatus;
+  geminiKey?: VendorKeyStatus;
   /**
-   * The ELEVEN_LABS_API_KEY preflight's outcome (same vocabulary, status
-   * only) — the key the default Scribe transcriber needs. Absent when no
-   * launcher recorded it.
+   * The ELEVEN_LABS_API_KEY resolution (same vocabulary, status only) — the
+   * key the default Scribe transcriber needs. Absent when no launcher
+   * recorded it.
    */
-  elevenlabsKey?: OpenAiKeyStatus;
+  elevenlabsKey?: VendorKeyStatus;
 }
 
 /**

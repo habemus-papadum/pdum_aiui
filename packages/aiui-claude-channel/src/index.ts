@@ -47,7 +47,7 @@ export { defaultFormatLoader, type FormatLoader } from "./hot";
 export type {
   ChromeDevtoolsInfo,
   LaunchInfo,
-  OpenAiKeyStatus,
+  VendorKeyStatus,
 } from "./launch-info";
 export {
   type PageToolCall,

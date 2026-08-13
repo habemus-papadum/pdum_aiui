@@ -165,15 +165,17 @@ describe("ensureKeyDecisions — the launch gap-fill", () => {
 describe("runKeysInterview — the full keep/replace/skip pass", () => {
   it("keep marks vault; replace stores the new value; skip records the choice", async () => {
     const r = rig({ OPENAI_API_KEY: "sk-old", GEMINI_API_KEY: "g-old" });
+    // elevenlabs (asked first, keyless) gets the bare paste prompt — the empty
+    // first secret is its skip; then openai keeps, gemini replaces.
     await runKeysInterview(
       { keys: { openai: "vault", gemini: "vault", elevenlabs: "skip" } },
-      r.seams(["k", "r", "s"], ["g-new"]),
+      r.seams(["k", "r"], ["", "g-new"]),
       {},
     );
     expect(r.persisted).toEqual([
+      ["elevenlabs", "skip"],
       ["openai", "vault"],
       ["gemini", "vault"],
-      ["elevenlabs", "skip"],
     ]);
     expect(r.stored.get("OPENAI_API_KEY")).toBe("sk-old"); // kept, untouched
     expect(r.stored.get("GEMINI_API_KEY")).toBe("g-new"); // replaced
@@ -185,11 +187,11 @@ describe("runKeysInterview — the full keep/replace/skip pass", () => {
     // import there is no third answer, so all three are asked the same way the
     // gap-fill asks. Zero menu answers scripted — an `ask` would throw.
     await runKeysInterview({}, r.seams([], ["sk-new", "", ""]), {});
-    expect(r.stored.get("OPENAI_API_KEY")).toBe("sk-new");
+    expect(r.stored.get("ELEVEN_LABS_API_KEY")).toBe("sk-new");
     expect(r.persisted).toEqual([
-      ["openai", "vault"],
+      ["elevenlabs", "vault"],
+      ["openai", "skip"],
       ["gemini", "skip"],
-      ["elevenlabs", "skip"],
     ]);
     expect(r.asked.every((q) => q.includes("|skip "))).toBe(true);
   });
@@ -200,19 +202,20 @@ describe("runKeysInterview — the full keep/replace/skip pass", () => {
     // (the prompt offers exactly that) → back to the menu, where keep is taken.
     await runKeysInterview(
       { keys: { gemini: "skip", elevenlabs: "skip" } },
-      // Two menu answers (replace, then keep); the empty lines answer the paste
-      // prompt and then the other two providers' bare questions.
+      // Two menu answers (replace, then keep); the empty lines answer
+      // elevenlabs' bare question (asked first), then openai's paste prompt,
+      // then gemini's bare question.
       { ...r.seams(["r", "k"], ["", "", ""]), mode: "installed" },
       {},
     );
     expect(r.stored.get("OPENAI_API_KEY")).toBe("sk-old"); // untouched
-    expect(r.persisted[0]).toEqual(["openai", "vault"]);
+    expect(r.persisted[1]).toEqual(["openai", "vault"]);
     expect(r.warns).toEqual([]); // an offered answer is not an error
   });
 
   it("keeps the menu where there IS a third answer — an importable $VAR", async () => {
     const r = rig();
-    // openai and elevenlabs are keyless (bare paste prompt, answered with the
+    // elevenlabs and openai are keyless (bare paste prompt, answered with the
     // empty-line skip); gemini has an importable $VAR, so it — and only it —
     // gets the menu, which the single scripted answer proves.
     await runKeysInterview(
@@ -222,9 +225,9 @@ describe("runKeysInterview — the full keep/replace/skip pass", () => {
     );
     expect(r.stored.get("GEMINI_API_KEY")).toBe("g-from-env");
     expect(r.persisted).toEqual([
+      ["elevenlabs", "skip"],
       ["openai", "skip"],
       ["gemini", "vault"],
-      ["elevenlabs", "skip"],
     ]);
   });
 });

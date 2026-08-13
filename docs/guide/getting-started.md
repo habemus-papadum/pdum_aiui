@@ -11,7 +11,7 @@ and, if you opt in (`aiui config yolo`), launches Claude Code with permissions s
 you're still here, you've decided to trust this code.
 :::
 
-## Prerequisites and keys
+## Prerequisites
 
 - **Node ≥ 24** and a package manager.
 - The **[Claude Code](https://claude.com/claude-code) CLI** (`claude`) on your PATH, logged in.
@@ -19,13 +19,46 @@ you're still here, you've decided to trust this code.
   **Chromium** by default (version-pinned, auto-loads the intent client's extension) — so say
   yes; branded Chrome ≥ 137 won't auto-load the extension and restricts the debug-port setup.
   Details: [The Agent's Browser](/packages/aiui/chrome).
-- **Vendor keys.** Transcription/correction run against OpenAI (ElevenLabs Scribe is the default
-  STT engine when its key is present; Gemini only powers the linter). The first interactive
-  `aiui claude` asks once per provider — paste the key (stored in the
-  [OS vault](./config#vendor-api-keys-openai--gemini--elevenlabs)) or press Enter to skip;
-  `aiui keys` manages them later. A source checkout honors `OPENAI_API_KEY` etc. from the
-  environment first. Without keys everything still runs — the voice paths say plainly that
-  they're unavailable.
+
+## Vendor keys
+
+The intent tool is voice-first, and the voice pipeline runs on vendor APIs — there is no local
+fallback. Without keys the panel still opens, but dictation and the
+[oracle](./intent-panel#the-oracle) are dead; you're down to typing and screenshots, which
+defeats the point. Get the first two of these before going further:
+
+| Provider | What it powers | Where to get a key |
+| --- | --- | --- |
+| **ElevenLabs** — critical | Scribe v2 speech transcription: the default transcriber, i.e. dictation itself | [elevenlabs.io/app/settings/api-keys](https://elevenlabs.io/app/settings/api-keys) — a restricted key with only the speech-to-text permission is enough |
+| **OpenAI** — highly recommended | The [oracle](./intent-panel#the-oracle) (the panel's realtime voice assistant) rides OpenAI Realtime; also dictation correction, the fallback transcriber, and the default linter | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) — needs a funded API account |
+| **Gemini** — optional | The Gemini Live realtime engine and the Gemini linter option | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
+
+Two ways to hand them to aiui:
+
+- **Paste them at first launch.** The first interactive `aiui claude` asks once per provider —
+  paste the key, or press Enter to skip. Keys land in the
+  [OS vault](./config#vendor-api-keys-openai--gemini--elevenlabs) (macOS login keychain /
+  Secret Service), never in a config file; only the per-provider decision (`vault` / `skip`)
+  is recorded.
+- **Store them ahead of time** — or fix them later — with `aiui keys`:
+
+  ```sh
+  aiui keys status            # per-provider decision + effective source (never the values)
+  aiui keys set elevenlabs    # store one key (masked prompt; piped stdin for scripts)
+  aiui keys set openai
+  aiui keys interview         # revisit all three: keep / replace / skip
+  ```
+
+Working from a **source checkout** of this repo, the environment wins first — `ELEVEN_LABS_API_KEY`
+(note the underscore), `OPENAI_API_KEY`, and `GEMINI_API_KEY` from `.env`/direnv are honored,
+and the vault fills the gaps. An **installed** aiui ignores the environment for keys: the vault
+is the only source, so your keys never enter the agent's environment.
+
+At launch, aiui checks key **presence** only: a missing provider prints a warning naming
+exactly what's degraded (a chosen skip stays silent), and the session boots regardless. No key
+is validated against its vendor at launch — a bad key surfaces at first *use*, in the intent
+client, with the per-vendor fix hint. The full story:
+[Configuration](./config#vendor-api-keys-openai--gemini--elevenlabs).
 
 ## The three run modes
 
@@ -88,12 +121,12 @@ the intent client carries it. Optionally, `npm install @habemus-papadum/aiui-viz
 
 **Terminal one — `aiui claude`.** A normal interactive Claude Code session with the channel
 attached: the MCP server starts a loopback web backend on a random port and registers itself in
-the user cache. The first interactive launch asks the one-time questions (enter nudge,
-`channel.bind`, keys — answers persist to [config](./config)) and brings up the **session
-browser**: one visible window you and the agent share, project-local profile, Chrome DevTools
-MCP attached. [The Agent's Browser](/packages/aiui/chrome) covers modes, profiles, and the
-`aiui browser`/`aiui chrome` commands; working remotely (session on another machine, browser on
-yours) is [Remote Development](/packages/aiui/remote).
+the user cache. The first interactive launch runs the [key interview](#vendor-keys), offers the
+managed browser, and brings up the **session browser**: one visible window you and the agent
+share, on a managed profile of its own (shared across projects by default), Chrome DevTools
+MCP attached. [The Agent's Browser](/packages/aiui/chrome) covers attach-vs-launch, profiles,
+and the `aiui chrome`/`aiui profile` commands; working remotely (session on another machine,
+browser on yours) is [Remote Development](/packages/aiui/remote).
 
 **Terminal two — `vite dev`** (or the app's `pnpm dev`). Open the app in the session browser
 (not your default browser) with `aiui open http://localhost:5173`.

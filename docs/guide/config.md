@@ -149,8 +149,8 @@ shells out to Claude Code itself — those configure Claude Code, not aiui; see
 
 ## Vendor API keys (OpenAI · Gemini · ElevenLabs)
 
-The intent pipeline's model-backed features (transcription, correction, the linter) run in the
-**channel process** `aiui claude` spawns, against three vendors. Where their keys come from
+The intent pipeline's model-backed features (transcription, the oracle, correction, the linter)
+run in the **channel process** `aiui claude` spawns, against three vendors. Where their keys come from
 depends on how aiui itself is running:
 
 - **Source checkout (dev):** the environment wins — `.env`/direnv keep working exactly as
@@ -181,18 +181,18 @@ aiui keys unset openai      # remove the vault entry and mark the provider skipp
 Every store is verified by an immediate read-back — both platform CLIs' observed failure modes
 were *silent* corruption. Secrets never appear in argv, shell history, logs, or the config file.
 
-**Preflight.** On an interactive launch (a real TTY, not CI), `aiui claude` checks every
-**resolved** key (env or vault, per the mode above) against its vendor's cheapest authenticated
-endpoint — OpenAI `GET /v1/models`, Gemini's model list, ElevenLabs `GET /v1/user` — read for
-status only; **the keys are never printed, logged, or sent anywhere but their own vendor**. A
-*skipped* provider is a chosen absence and gets no note at all. Outcomes:
+**Preflight.** The launch checks **presence** only: did each provider resolve a key (env or
+vault, per the mode above)? Nothing is sent anywhere — no key is validated against its vendor
+at launch. (An earlier version probed each vendor's cheapest authenticated endpoint; that probe
+was removed 2026-08-12 because `api.openai.com` intermittently stalls, making half the launches
+report a spurious "couldn't verify" about a perfectly good key.) A bad key instead surfaces at
+first *use*: the intent client finalizes the failed dictation segment with the vendor error and
+the fix hint (`aiui keys set <provider>`; in dev, fix the shell export). Outcomes at launch:
 
-| Status       | What it means                                                     | What happens |
-| ------------ | ----------------------------------------------------------------- | ------------ |
-| `valid`      | Present and accepted.                                              | Nothing — the launcher stays quiet. |
-| `missing`    | No key resolved for the provider.                                  | A degradation warning naming exactly what's parked — no OpenAI key: transcription/dictation-correction unavailable; no ElevenLabs key: the default Scribe transcriber unavailable (falls back to the OpenAI realtime engine); no Gemini key: only the opt-in realtime tier parked. The launch continues. |
-| `invalid`    | Present but definitively rejected (401/403).                       | **The launch aborts** with the remedy (`aiui keys set <provider>` replaces a stale vault entry; in dev, fix the shell export). A rejected key would fail confusingly mid-session — better to stop at the door. |
-| `unverified` | Present but not checked (CI/non-interactive, offline, timeout).    | A quiet note; launch continues. |
+| Status    | What it means                     | What happens |
+| --------- | --------------------------------- | ------------ |
+| `present` | A key resolved for the provider.  | Nothing — the launcher stays quiet. |
+| `missing` | No key resolved for the provider. | A degradation warning naming exactly what's parked — no OpenAI key: transcription/dictation-correction unavailable; no ElevenLabs key: the default Scribe transcriber unavailable (falls back to the OpenAI realtime engine); no Gemini key: only the opt-in realtime tier parked. The launch continues. A *skipped* provider is a chosen absence and gets no note at all. |
 
 Either way each outcome (a *status*, never the key) is recorded in the channel's launch summary
 at `GET /debug/api/info` (`launch.openaiKey` / `launch.geminiKey` / `launch.elevenlabsKey`), so
