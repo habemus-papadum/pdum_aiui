@@ -26,6 +26,7 @@ import {
   registerStandardTools,
 } from "@habemus-papadum/aiui-viz";
 import { selectionDimReport } from "@habemus-papadum/aiui-viz/mosaic-selection";
+import { selectionInspectorModel } from "@habemus-papadum/aiui-viz/selection-inspector";
 import type { Selection } from "@uwdata/mosaic-core";
 import { type Accessor, createMemo } from "solid-js";
 import {
@@ -106,10 +107,6 @@ function clauseCount(brush: Selection): number {
   return brush.clauses.length;
 }
 
-function activeFilters(brush: Selection): string[] {
-  return brush.clauses.map((c) => String(c.predicate ?? "")).filter((s) => s.length > 0);
-}
-
 function round(x: number, digits: number): number {
   const p = 10 ** digits;
   return Math.round(x * p) / p;
@@ -166,7 +163,19 @@ function registerTools(): void {
   registerReporter("rowsTotal", () => store.summary()?.rowsTotal ?? null);
   registerReporter("rowsFiltered", () => seismosGraph().grStats().rowsFiltered ?? null);
   registerReporter("activeClauses", () => clauseCount(brush));
-  registerReporter("filters", () => activeFilters(brush));
+  // Attributed clauses (dim | component | unknown, with fields + SQL) — the
+  // same rows the on-page SelectionInspector renders; one computation, two
+  // audiences.
+  registerReporter("filters", () => {
+    return selectionInspectorModel({ signal: store.brushSignal, scope: seismosScope }).clauses;
+  });
+  // What COULD filter here, grouped by column: each group lists the declared
+  // dimensions and the live components (map/histogram brushes, menus) that
+  // speak it. One member = an unambiguous target for a spoken filter;
+  // several = worth a clarifying question.
+  registerReporter("capabilities", () => {
+    return selectionInspectorModel({ signal: store.brushSignal, scope: seismosScope }).capabilities;
+  });
   // The declared dimensions with their semantic values (null = inactive but
   // available) — the agent-facing view of what set-<dim> can move.
   registerReporter("dimensions", () => selectionDimReport(seismosScope));

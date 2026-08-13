@@ -6,9 +6,10 @@
  * MosaicView: construct, connect to the durable coordinator, disconnect on
  * cleanup (Menu extends MosaicClient, so `destroy()` disconnects).
  */
+import { registerMosaicInput } from "@habemus-papadum/aiui-viz";
 import { Menu } from "@uwdata/mosaic-inputs";
 import { For, onCleanup } from "solid-js";
-import { store } from "../store";
+import { seismosScope, store } from "../store";
 
 function menuHost(column: string, label: string) {
   // mosaic-inputs types `as` as Param<any>; a Selection is a Param subtype the
@@ -20,6 +21,15 @@ function menuHost(column: string, label: string) {
     label,
   } as ConstructorParameters<typeof Menu>[0]);
   store.coordinator.connect(menu);
+  // Enroll in the producer directory so the inspector (and the agent report)
+  // can attribute this menu's clause by name instead of "unknown source".
+  const unregister = registerMosaicInput({
+    scope: seismosScope,
+    name: `${column}-menu`,
+    input: menu,
+    selection: store.brush,
+    fields: [column],
+  });
 
   // A menu bound to a Selection is write-only — mosaic-inputs only back-syncs a
   // menu bound to a scalar Param, so clearing the crossfilter elsewhere (the
@@ -35,6 +45,7 @@ function menuHost(column: string, label: string) {
   };
   store.brush.addEventListener("value", reflect);
   onCleanup(() => {
+    unregister();
     store.brush.removeEventListener("value", reflect);
     menu.destroy();
   });

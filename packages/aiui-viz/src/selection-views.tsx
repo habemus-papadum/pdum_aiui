@@ -9,11 +9,15 @@
  * that go stale the moment code moves, while a dimension value is plain,
  * human-readable JSON whose restore path — `dim.set(value)` — is byte-
  * identical to an agent set. Nulls are stored too: a view is COMPLETE filter
- * state, so loading one also clears dimensions that were unfiltered when it
- * was saved (dimensions declared after the save are left untouched — a
- * snapshot cannot speak for them). What a view does NOT capture: clauses from
- * non-dimension producers (a vgplot brush, a mosaic-inputs menu) — those have
- * no serializable identity; attribute them to dimensions or accept the loss.
+ * state — and loading treats it that way: every selection the dimensions
+ * target is `reset()` FIRST (dropping every producer's clause, mouse brushes
+ * and menus included, and clearing their visuals through `source.reset()`),
+ * then the snapshot is applied. Loading a view therefore lands on exactly the
+ * saved state, not the saved state AND'd under whatever the mouse had piled
+ * on since (the measured confusion that forced this rule). What a view does
+ * NOT capture: non-dimension clause VALUES (a vgplot brush, a menu pick) —
+ * those have no serializable identity; until a dimension (or a stage-3 facet)
+ * speaks for them, saving loses them and loading clears them.
  *
  * Storage is localStorage, keyed per scope (`aiui:views:<scope>`). This is
  * deliberately the FIRST persist-across-reload state in aiui-viz — durables
@@ -55,9 +59,11 @@ export interface SelectionViewsStore {
   /** Snapshot the scope's current dimension values under `name` (replaces an
    * existing view of that name). Returns the record written. */
   save(name: string): SavedSelectionView;
-  /** Apply a saved view: every snapshotted dimension is set (null clears).
-   * Returns what was APPLIED per dimension, plus snapshot entries whose
-   * dimension no longer exists. Throws on an unknown view name. */
+  /** Restore a saved view: every selection the scope's dimensions target is
+   * reset (all producers' clauses AND visuals cleared), then every
+   * snapshotted dimension is set (null clears). Returns what was APPLIED per
+   * dimension, plus snapshot entries whose dimension no longer exists.
+   * Throws on an unknown view name. */
   load(name: string): { name: string; applied: Record<string, unknown>; missing: string[] };
   /** Delete a saved view. Returns whether it existed. */
   remove(name: string): boolean;
@@ -146,6 +152,22 @@ export function selectionViews(options: {
           const known = Object.keys(data).sort().join(", ");
           throw new Error(`no view "${name}" — saved views: ${known || "(none saved)"}`);
         }
+        // Reset-then-apply: a view is complete state. Resetting the target
+        // selections retracts EVERY producer's clause (and clears their
+        // visuals via source.reset()); dimensions the snapshot names are then
+        // re-set — their boxes take the reset's null and the applied value in
+        // the same staged tick, applied last, so the applied value wins.
+        const seen = new Set<object>();
+        for (const dimName of Object.keys(selectionDimReport(scopeName))) {
+          const dim = selectionDimByName(dimName);
+          if (dim === undefined) continue;
+          for (const t of dim.targets) {
+            if (!seen.has(t.selection)) {
+              seen.add(t.selection);
+              t.selection.reset?.();
+            }
+          }
+        }
         const applied: Record<string, unknown> = {};
         const missing: string[] = [];
         for (const [dimName, value] of Object.entries(record.values)) {
@@ -196,9 +218,11 @@ function registerViewActions(store: SelectionViewsStore, scope: Scope | undefine
     ...scoped,
     name: "load-view",
     description:
-      "Restore a saved view by name: every snapshotted dimension is applied (null clears " +
-      "that filter), so the page returns to exactly the saved filter state. Returns " +
-      "{ applied, missing }. Counts refresh after a task boundary; re-read report() then.",
+      "Restore a saved view by name: the cross-filter is reset first (every clause from " +
+      "every producer — mouse brushes and menus included — is dropped), then every " +
+      "snapshotted dimension is applied, so the page returns to exactly the saved filter " +
+      "state. Returns { applied, missing }. Counts refresh after a task boundary; re-read " +
+      "report() then.",
     inputSchema: nameArg,
     run: (args) => store.load(String(args?.name ?? "")),
   });

@@ -6,15 +6,17 @@
  * library now; the rationale stays documented there and in NOTES.md.
  */
 import { type Directive, MosaicView as VizMosaicView } from "@habemus-papadum/aiui-viz/mosaic";
-import { store } from "../store";
+import { seismosScope, store } from "../store";
 
 export type { Directive };
 
-export function MosaicView(props: { spec: () => Directive[]; class?: string }) {
+export function MosaicView(props: { spec: () => Directive[]; class?: string; name?: string }) {
   return (
     <VizMosaicView
       coordinator={store.coordinator}
       spec={() => props.spec()}
+      scope={seismosScope}
+      {...(props.name !== undefined ? { name: props.name } : {})}
       {...(props.class !== undefined ? { class: props.class } : {})}
     />
   );

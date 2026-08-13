@@ -47,6 +47,7 @@ export default defineConfig({
         mosaic: "src/mosaic.tsx",
         "mosaic-selection": "src/mosaic-selection.ts",
         "selection-views": "src/selection-views.tsx",
+        "selection-inspector": "src/selection-inspector.tsx",
         duckdb: "src/duckdb.ts",
         site: "src/site/index.ts",
         "color-mode": "src/site/color-mode.ts",

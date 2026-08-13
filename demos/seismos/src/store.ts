@@ -29,7 +29,6 @@
 import type { AsyncDuckDB, AsyncDuckDBConnection } from "@duckdb/duckdb-wasm";
 import { type ControlBox, control, scope } from "@habemus-papadum/aiui-viz";
 import {
-  clearAllSelectionDims,
   type IntervalValue,
   type PointValue,
   type SelectionDim,
@@ -271,13 +270,13 @@ export const store: SeismosStore = seismosScope.durable("store", () => {
   const views = selectionViews({ scope: seismosScope });
 
   function clearFilters(): number {
-    // Dimensions first (nulls their semantic values AND retracts their
-    // clauses), then every remaining producer's clause — plot brushes and
-    // facet menus publish into the same Selection with their own sources.
-    clearAllSelectionDims(seismosScope);
-    for (const c of [...brush.clauses]) {
-      brush.update({ ...c, value: null, predicate: null });
-    }
+    // Selection.reset() — never per-clause retraction: reset also invokes
+    // reset() on every clause's SOURCE, which is what clears the producers'
+    // visuals (a plot brush rectangle, a menu's picked option) and nulls the
+    // dimensions' semantic values (their durable sources hook reset). The
+    // old retraction walk left rectangles painted over an unfiltered page —
+    // the measured "clearing didn't work" confusion.
+    brush.reset();
     return brush.clauses.length;
   }
 

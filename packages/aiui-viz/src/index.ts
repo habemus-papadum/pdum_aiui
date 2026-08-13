@@ -74,6 +74,18 @@ export {
   type SolidModeEngineConfig,
   solidModeEngine,
 } from "./mode-solid";
+// mosaic-registry.ts — the live directory of Mosaic clause producers (which
+// component can filter what); structural, so the barrel stays mosaic-free.
+export {
+  clearMosaicProducerRegistry,
+  introspectInteractor,
+  type MosaicPlotLike,
+  type MosaicProducerEntry,
+  type MosaicProducerKind,
+  mosaicProducers,
+  registerMosaicInput,
+  registerMosaicPlot,
+} from "./mosaic-registry";
 // page-boundary.tsx — the mount-seam error boundary (one page's fault must
 // not halt a multi-app document); pairs with bridgeEffect for durable graphs.
 export { PageBoundary } from "./page-boundary";

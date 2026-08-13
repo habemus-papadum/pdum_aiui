@@ -100,6 +100,13 @@ export interface SelectionLike {
   /** Present on real Selections: the resolved WHERE for a client (undefined
    * client = all clauses). Used by {@link selectionPredicateSql}. */
   predicate?(client?: unknown, noSkip?: boolean): unknown;
+  /** Present on real Selections: drop every clause AND invoke `reset()` on
+   * each clause's source — the one call that also clears producer VISUALS
+   * (mosaic's Interval1D/2D, Region, Menu, and Search implement it; this
+   * module's dimension sources null their semantic value through it). The
+   * whole-state clear ("reset filters", load-view) goes through this, never
+   * through per-clause retraction, precisely for those visuals. */
+  reset?(): void;
   addEventListener(type: string, callback: (value: unknown) => void): void;
   removeEventListener(type: string, callback: (value: unknown) => void): void;
 }

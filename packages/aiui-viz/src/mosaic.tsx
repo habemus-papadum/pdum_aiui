@@ -22,6 +22,8 @@
  */
 import { Plot } from "@uwdata/mosaic-plot";
 import { createEffect } from "solid-js";
+import { type MosaicPlotLike, registerMosaicPlot } from "./mosaic-registry";
+import type { Scope } from "./scope";
 
 /** One vgplot directive (`vg.raster(...)`, `vg.width(...)`, …) applied to the Plot. */
 export type Directive = (plot: Plot) => void;
@@ -64,6 +66,11 @@ export function MosaicView(props: {
   coordinator: MosaicCoordinator;
   spec: () => Directive[];
   class?: string;
+  /** With `name`, register this view's interactors in the producer registry
+   * (mosaic-registry.ts) so the inspector and the agent surface can name
+   * them ("seismos/map"). Re-renders re-register; disposal unregisters. */
+  scope?: Scope | string;
+  name?: string;
 }) {
   let host!: HTMLDivElement;
   // The coordinator rides through the compute: a props read is reactive, and
@@ -71,8 +78,13 @@ export function MosaicView(props: {
   // STRICT_READ_UNTRACKED and would go stale if the prop ever changed —
   // consume what the source computed (frontend-hard-won.md).
   createEffect(
-    () => ({ directives: props.spec(), coordinator: props.coordinator }),
-    ({ directives, coordinator }) => {
+    () => ({
+      directives: props.spec(),
+      coordinator: props.coordinator,
+      scope: props.scope,
+      name: props.name,
+    }),
+    ({ directives, coordinator, scope, name }) => {
       const p = new Plot(document.createElement("div"));
       for (const d of directives.flat()) d(p);
       for (const mark of p.marks) coordinator.connect(mark);
@@ -80,7 +92,12 @@ export function MosaicView(props: {
       // the generated d.ts types the mark param as required, so pass undefined.
       p.update(undefined);
       host.replaceChildren(p.element);
+      const unregister =
+        name !== undefined
+          ? registerMosaicPlot({ scope, name, plot: p as unknown as MosaicPlotLike })
+          : undefined;
       return () => {
+        unregister?.();
         for (const mark of p.marks) coordinator.disconnect(mark);
         // Interactors are NOT marks, and their published clauses live in the
         // SURVIVING selection keyed by interactor instance — Mosaic only

@@ -70,6 +70,34 @@ describe("selectionViews: the store", () => {
     expect(sel.clauses).toHaveLength(1); // the type filter was cleared by the load
   });
 
+  it("load resets EVERY producer first: foreign (mouse) clauses drop and their reset() runs", async () => {
+    const { sel, mag } = declareDims();
+    const store = selectionViews({ scope: vx() });
+    mag.set({ lo: 5 });
+    await tick();
+    store.save("clean");
+
+    // A mouse-ish producer: a foreign source whose reset() is the visual-clear
+    // hook (what Interval1D/Menu implement). Loading must reach it.
+    let visualCleared = 0;
+    const brushish = {
+      reset: () => {
+        visualCleared += 1;
+      },
+    };
+    sel.update({ source: brushish, value: [1, 2], predicate: "mag BETWEEN 1 AND 2" } as never);
+    await tick();
+    expect(sel.clauses).toHaveLength(2);
+
+    const { applied } = store.load("clean");
+    await tick();
+    expect(visualCleared).toBe(1);
+    expect(applied["vx/mag"]).toEqual({ lo: 5 });
+    expect(mag.get()).toEqual({ lo: 5 });
+    // The dim's clause alone — no mouse residue AND'd under the loaded view.
+    expect(sel.clauses).toHaveLength(1);
+  });
+
   it("persists across store re-creation (localStorage), and remove deletes", () => {
     declareDims();
     const first = selectionViews({ scope: vx() });

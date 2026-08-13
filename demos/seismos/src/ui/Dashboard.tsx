@@ -11,7 +11,9 @@
  * singletons — each MosaicView builds its own Plot — so later sections may mount
  * their own copies of a spec, staying in lockstep through the shared brush.
  */
+import { SelectionInspector } from "@habemus-papadum/aiui-viz/selection-inspector";
 import type { JSX } from "@solidjs/web";
+import { seismosScope, store } from "../store";
 import { Controls } from "./Controls";
 import { Facets } from "./Facets";
 import { GutenbergRichter } from "./GutenbergRichter";
@@ -46,7 +48,7 @@ export function Dashboard() {
           title="epicenter density"
           sub="the Ring of Fire, drawn by the data — drag a box to filter by region"
         >
-          <MosaicView spec={() => mapSpec()} />
+          <MosaicView name="map" spec={() => mapSpec()} />
           <Facets />
         </Panel>
         <Panel
@@ -60,18 +62,25 @@ export function Dashboard() {
       </div>
       <div class="obs-charts">
         <Panel title="magnitude" sub="brush a range">
-          <MosaicView spec={() => magHistSpec()} />
+          <MosaicView name="mag-hist" spec={() => magHistSpec()} />
         </Panel>
         <Panel title="depth" sub="shallow spike + deep tail">
-          <MosaicView spec={() => depthHistSpec()} />
+          <MosaicView name="depth-hist" spec={() => depthHistSpec()} />
         </Panel>
         <Panel title="time" sub="1976–2024">
-          <MosaicView spec={() => timeHistSpec()} />
+          <MosaicView name="time-hist" spec={() => timeHistSpec()} />
         </Panel>
         <Panel title="depth class" sub="click to toggle">
-          <MosaicView spec={() => depthClassSpec()} />
+          <MosaicView name="depth-class" spec={() => depthClassSpec()} />
         </Panel>
       </div>
+      <Panel
+        class="obs-inspector"
+        title="selection state"
+        sub="every active clause with its producer, and everything that can filter here"
+      >
+        <SelectionInspector signal={store.brushSignal} scope={seismosScope} />
+      </Panel>
     </div>
   );
 }

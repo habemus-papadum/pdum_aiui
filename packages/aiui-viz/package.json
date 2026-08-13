@@ -16,6 +16,7 @@
     "./mosaic": "./src/mosaic.tsx",
     "./mosaic-selection": "./src/mosaic-selection.ts",
     "./selection-views": "./src/selection-views.tsx",
+    "./selection-inspector": "./src/selection-inspector.tsx",
     "./duckdb": "./src/duckdb.ts",
     "./site": "./src/site/index.ts",
     "./site/color-mode": "./src/site/color-mode.ts",
@@ -59,6 +60,11 @@
         "types": "./dist/selection-views.d.ts",
         "import": "./dist/selection-views.js",
         "default": "./dist/selection-views.js"
+      },
+      "./selection-inspector": {
+        "types": "./dist/selection-inspector.d.ts",
+        "import": "./dist/selection-inspector.js",
+        "default": "./dist/selection-inspector.js"
       },
       "./duckdb": {
         "types": "./dist/duckdb.d.ts",

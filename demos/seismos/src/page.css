@@ -168,3 +168,98 @@
 .selection-views input {
   width: 130px;
 }
+
+/* --- selection inspector (aiui-viz/selection-inspector class contract) ------
+ * Origin chips: dim = a declared dimension (voice/agent), ui = a registered
+ * on-screen component (mouse), ? = a live clause from an unregistered source.
+ * Capability chips: solid border = a live component, dashed = a declared
+ * dimension; lit border = currently filtering. */
+.selection-inspector {
+  display: grid;
+  gap: 10px;
+  font-size: 12px;
+}
+.inspector-clause {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--row-border);
+}
+.inspector-clause::before {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border: 1px solid var(--btn-border);
+  border-radius: 4px;
+  padding: 0 5px;
+  color: var(--text-secondary);
+}
+.inspector-clause[data-origin="dim"]::before {
+  content: "dim";
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.inspector-clause[data-origin="component"]::before {
+  content: "ui";
+}
+.inspector-clause[data-origin="unknown"]::before {
+  content: "?";
+  color: var(--error-text);
+  border-color: var(--error-border);
+}
+.inspector-producer {
+  color: var(--text);
+  font-weight: 600;
+}
+.inspector-fields {
+  color: var(--text-secondary);
+}
+.inspector-value {
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.inspector-sql {
+  color: var(--text-muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.inspector-empty {
+  color: var(--text-muted);
+  font-style: italic;
+}
+.inspector-where {
+  display: block;
+  color: var(--text-dim);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.inspector-capabilities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  border-top: 1px solid var(--row-border);
+  padding-top: 8px;
+}
+.inspector-capability {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.capability-fields {
+  color: var(--text-secondary);
+}
+.capability-member {
+  border: 1px solid var(--btn-border);
+  border-radius: 999px;
+  padding: 1px 8px;
+  color: var(--text-dim);
+}
+.capability-member[data-kind="dim"] {
+  border-style: dashed;
+}
+.capability-member[data-active] {
+  color: var(--text);
+  border-color: var(--accent);
+}
