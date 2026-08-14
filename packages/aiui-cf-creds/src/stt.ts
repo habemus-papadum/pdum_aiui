@@ -48,8 +48,8 @@ export interface ScribeConnectOptions extends BrokerOptions, ScribeSocketOptions
  * EVERY connect — the token dies at first use; there is nothing to reuse.
  */
 export function scribeConnectUrl(options: ScribeConnectOptions = {}): Promise<string> {
-  const { brokerUrl, ...socket } = options;
-  return connectUrl(brokerRoute(ELEVENLABS_CREDENTIALS_PATH, brokerUrl), socket);
+  const { brokerUrl, key, ...socket } = options;
+  return connectUrl(brokerRoute(ELEVENLABS_CREDENTIALS_PATH, brokerUrl, key), socket);
 }
 
 export interface TranscriptionKeySourceOptions extends FederatedMintOptions {

@@ -20,9 +20,10 @@
  *  - `aiui-cf-creds/mosaic` — `brokerConnector`: the app's Mosaic connector
  *    wrapped so every query runs with current credentials installed.
  *
- * This root holds only what the bridges share: the broker-origin convention
- * and the app-wide AWS credential manager (create ONE, pass it to each
- * bridge's `manager` option).
+ * This root holds only what the bridges share: the broker-origin convention,
+ * the key-contract `key` option (kit ≥0.4 — the app names ITSELF and every
+ * id rides the broker's mint response), and the app-wide AWS credential
+ * manager (create ONE, pass it to each bridge's `manager` option).
  */
 export type { BrokerAwsManagerOptions, BrokerOptions } from "./shared";
 export { brokerAwsManager, brokerRoute } from "./shared";

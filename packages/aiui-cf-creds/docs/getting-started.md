@@ -23,18 +23,19 @@ import { cachingKeySource } from "@habemus-papadum/aiui-oracle";
 import { federatedKeySource } from "@habemus-papadum/aiui-cf-creds/oracle";
 
 const keySource = cachingKeySource(
-  federatedKeySource({
-    region: "us-east-1",              // your STS region
-    identityProviderId: "idp_…",      // from the OpenAI provider registration
-    serviceAccountId: "user-…",       // the keyless service account
-  }),
+  federatedKeySource({ key: "app" }),  // the app's own name, nothing else
 );
 ```
 
-Those three values are per-deployment, non-secret facts — bake them at the composition root the
-same way you already bake asset URLs. In production no other configuration exists; for
-cross-origin dev pass `brokerUrl: "https://your-app.example.com"` (the deployed broker's origin)
-and log in to Access in another tab.
+Under the broker's **key contract** (kit ≥0.4) that is the whole composition root: the broker
+maps `(key, identity)` to the role, region, audience, and OpenAI federation ids, and returns
+them with the mint — no deployment identity in the page. For cross-origin dev pass
+`brokerUrl: "https://creds.example.com"` (the deployed broker's origin) alongside and log in to
+Access in another tab.
+
+Against a broker predating the contract, the legacy explicit form still works (deprecated):
+`federatedKeySource({ region, identityProviderId, serviceAccountId })` — three per-deployment,
+non-secret facts baked at the composition root.
 
 ## Species rules worth knowing
 

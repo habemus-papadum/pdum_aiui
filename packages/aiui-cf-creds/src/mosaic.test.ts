@@ -92,6 +92,30 @@ describe("brokerConnector", () => {
     expect(installs[1]?.sql).toContain("AKIAFIXTURE2");
   });
 
+  it("under the key contract, needs no region: it rides the broker envelope", async () => {
+    const { base, queries } = fakeBase();
+    const urls: string[] = [];
+    vi.stubGlobal("fetch", async (url: string) => {
+      urls.push(url);
+      return new Response(
+        JSON.stringify({
+          accessKeyId: "AKIAFIXTURE1",
+          secretAccessKey: "invented-secret",
+          sessionToken: "invented-session",
+          expiration: new Date(Date.now() + 3_600_000).toISOString(),
+          region: "yy-envelope-9",
+        }),
+        { status: 200 },
+      );
+    });
+    const connector = brokerConnector(base, { key: "app-fixture" });
+
+    await connector.query({ type: "arrow", sql: "SELECT 1" } as never);
+
+    expect(urls).toEqual(["/api/credentials/aws?key=app-fixture"]);
+    expect(queries[0]?.sql).toContain("yy-envelope-9");
+  });
+
   it("falls back to SET s3_* and reports the mode through onInstall", async () => {
     const { base, queries } = fakeBase({ rejectCreateSecret: true });
     stubAwsBroker();

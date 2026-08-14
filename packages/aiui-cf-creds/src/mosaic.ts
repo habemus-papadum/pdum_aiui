@@ -28,11 +28,14 @@ import { type BrokerOptions, brokerAwsManager } from "./shared";
 export type { InstallMode } from "@habemus-papadum/cf-creds-mosaic";
 
 export interface BrokerConnectorOptions extends BrokerOptions, CredentialAwareOptions {
-  /** Reuse the app's manager; default constructs one against `brokerUrl`. */
+  /** Reuse the app's manager; default constructs one against `brokerUrl`
+   * (and `key`, when the broker speaks the key contract). */
   manager?: CredentialManager<AwsCredentials>;
-  /** The S3 region installed with each credential set — a baked
-   * per-deployment fact (D3), like the bucket endpoint the app already owns. */
-  region: string;
+  /** The S3 region installed with each credential set. With `key` it rides
+   * the broker's envelope and this override is unnecessary; without one it
+   * stays a baked per-deployment fact (D3), like the bucket endpoint the
+   * app already owns. */
+  region?: string;
 }
 
 /**
@@ -41,11 +44,11 @@ export interface BrokerConnectorOptions extends BrokerOptions, CredentialAwareOp
  *
  * ```ts
  * coordinator.databaseConnector(
- *   brokerConnector(wasmConnector({ duckdb: db, connection }), { region }),
+ *   brokerConnector(wasmConnector({ duckdb: db, connection }), { key: "app" }),
  * );
  * ```
  */
-export function brokerConnector(base: Connector, options: BrokerConnectorOptions): Connector {
-  const { manager, region, ...aware } = options;
-  return credentialAwareConnector(base, manager ?? brokerAwsManager(options), region, aware);
+export function brokerConnector(base: Connector, options: BrokerConnectorOptions = {}): Connector {
+  const { manager, brokerUrl, key, ...aware } = options;
+  return credentialAwareConnector(base, manager ?? brokerAwsManager({ brokerUrl, key }), aware);
 }

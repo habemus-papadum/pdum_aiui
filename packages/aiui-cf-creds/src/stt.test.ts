@@ -72,6 +72,16 @@ describe("scribeConnectUrl", () => {
     expect(new URL(first).searchParams.get("token")).toBe("sutkn_fixture_1");
     expect(new URL(second).searchParams.get("token")).toBe("sutkn_fixture_2");
   });
+
+  it("rides the key contract: ?key= on the route, same-origin or against a broker", async () => {
+    const seen = stubScribeBroker();
+    await scribeConnectUrl({ key: "app-fixture" });
+    await scribeConnectUrl({ brokerUrl: "https://broker.example.test", key: "app-fixture" });
+    expect(seen[0]?.url).toBe("/api/credentials/elevenlabs?key=app-fixture");
+    expect(seen[1]?.url).toBe(
+      "https://broker.example.test/api/credentials/elevenlabs?key=app-fixture",
+    );
+  });
 });
 
 describe("transcriptionKeySource", () => {

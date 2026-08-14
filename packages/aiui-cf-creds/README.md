@@ -36,13 +36,16 @@ const keySource = chainKeySource([
   pasteKeySource(localStorage, {}),   // a pasted key still trumps everything
   devKeySource("openai", {}),         // dev serve still just works
   cachingKeySource(                   // one ek_ opens multiple sessions until TTL
-    federatedKeySource({ region, identityProviderId, serviceAccountId }),
+    federatedKeySource({ key: "app" }),
   ),
 ]);
 ```
 
-The federation facts (`region`, `identityProviderId`, `serviceAccountId`) are per-deployment,
-non-secret, and baked at the app's composition root — this package carries no deployment identity.
+Under the broker's **key contract** (kit ≥0.4) the app passes only `key` — its own name — and
+the region, audience, and federation ids all ride the broker's one-mint bundle: no deployment
+identity anywhere in the page. Against a broker predating the contract, the legacy explicit
+trio still works (deprecated): `federatedKeySource({ region, identityProviderId,
+serviceAccountId })`.
 
 ### `aiui-cf-creds/stt` — both STT credential flavors
 
@@ -58,7 +61,7 @@ const socket = new WebSocket(await scribeConnectUrl());
 
 // The ALTERNATE — OpenAI transcription-type sessions: an ordinary ek_
 // KeySource whose minted secrets carry the transcription session config.
-const source = transcriptionKeySource({ region, identityProviderId, serviceAccountId });
+const source = transcriptionKeySource({ key: "app" });
 ```
 
 ### `aiui-cf-creds/mosaic` — the credential-installing connector
@@ -71,19 +74,24 @@ credentials are installed in DuckDB. `MosaicView` never learns credentials exist
 import { brokerConnector } from "@habemus-papadum/aiui-cf-creds/mosaic";
 
 coordinator.databaseConnector(
-  brokerConnector(wasmConnector({ duckdb: db, connection }), { region: "us-east-1" }),
+  brokerConnector(wasmConnector({ duckdb: db, connection }), { key: "app" }),
 );
 ```
 
-## One deployment knob
+With `key`, the S3 region rides the broker's credential envelope; without one, pass
+`region` explicitly as before.
+
+## Two deployment knobs
 
 In production everything is same-origin relative (the kit's `/api/credentials/*` convention) —
 zero config. For cross-origin dev (`vite dev` against the deployed broker, authenticated by the
-same Access cookie), pass the broker's origin once:
+same Access cookie), pass the broker's origin once. Against a key-contract broker (kit ≥0.4),
+pass `key` — the app's own name — alongside; it rides every route and replaces the per-provider
+ids entirely:
 
 ```ts
 import { brokerAwsManager } from "@habemus-papadum/aiui-cf-creds";
 
-const manager = brokerAwsManager({ brokerUrl: "https://app.example.com" });
+const manager = brokerAwsManager({ brokerUrl: "https://creds.example.com", key: "app" });
 // …then hand the one manager to each bridge's `manager` option.
 ```

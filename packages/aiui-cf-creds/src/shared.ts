@@ -29,11 +29,24 @@ export interface BrokerOptions {
    * appended; the broker owns that prefix by the kit's own contract.
    */
   brokerUrl?: string;
+  /**
+   * The app's OWN name under the broker's key contract (kit ≥0.4): the
+   * broker maps `(key, identity)` to everything the page needs — role,
+   * region, and for OpenAI the whole federation config — so no deployment
+   * identity is baked anywhere. Rides every route as `?key=`. With a key,
+   * per-provider ids stop being required; without one, the legacy explicit
+   * options still work.
+   */
+  key?: string;
 }
 
-/** Resolve a conventional credential route against an optional broker origin. */
-export function brokerRoute(path: string, brokerUrl?: string): string {
-  return brokerUrl === undefined ? path : new URL(path, brokerUrl).toString();
+/** Resolve a conventional credential route against an optional broker origin,
+ * appending the key-contract `?key=` when the app has one. */
+export function brokerRoute(path: string, brokerUrl?: string, key?: string): string {
+  const url = brokerUrl === undefined ? path : new URL(path, brokerUrl).toString();
+  if (key === undefined) return url;
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}key=${encodeURIComponent(key)}`;
 }
 
 export interface BrokerAwsManagerOptions extends BrokerOptions {
@@ -51,7 +64,7 @@ export function brokerAwsManager(
   options: BrokerAwsManagerOptions = {},
 ): CredentialManager<AwsCredentials> {
   return createAwsCredentialManager({
-    url: brokerRoute(AWS_CREDENTIALS_PATH, options.brokerUrl),
+    url: brokerRoute(AWS_CREDENTIALS_PATH, options.brokerUrl, options.key),
     refreshMarginMs: options.refreshMarginMs,
   });
 }
