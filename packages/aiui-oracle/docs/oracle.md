@@ -104,6 +104,65 @@ too; custom tools are just more entries in the array. The
 surface is **live**: `session.setTools(…)` / `setInstructions(…)` update mid-session, and
 `sendText(…)` / `sendImage(…)` inject ad-hoc context into the running conversation.
 
+## Shaping the prompt
+
+`instructions` takes three forms, in rising order of power.
+
+**A string** is the whole prompt, stated. **`PromptSlots`** composes it from four named parts,
+rendered by the weaver in a fixed order under stable headings — so a refresh can replace one
+without restating the others:
+
+| Slot | Heading the model reads | Lifetime |
+|---|---|---|
+| `app` | `About this app:` | standing — never changes |
+| `context` | `Right now:` | this second — page, route, selection |
+| `stance` | `For this conversation:` | this session — tutorial vs terse |
+| `extra` | *(none — verbatim)* | the escape hatch |
+
+The headings are the weaver's, not yours. That is the point: two apps supplying the same slots
+produce comparably-shaped prompts, which is what a shared persona needs to stay shared.
+
+**A resolver** computes the slots per compose, and is handed the facts only the session knows:
+
+```ts
+const session = new OracleSession({
+  config: {
+    instructions: ({ reason, turns, starts, usage }) => ({
+      app: "A spectrum viewer.",
+      context: whereTheUserIsStanding(),
+      // Anything about the HUMAN is yours — the package knows nothing about
+      // cookies or storage, by design.
+      stance: hasVisitedBefore() ? undefined : "They are new here. Offer the tour, once.",
+    }),
+    greeting: () => (hasVisitedBefore() ? "Welcome back." : undefined),
+  },
+  // …
+});
+```
+
+A resolver runs **before the credential is minted**, so the baked session already carries the
+right prompt — no opening correction, and one fewer whole-prompt send. It may be async; note
+that a slow one delays connect.
+
+**`session.refreshPrompt()`** re-runs the recipe on a live session and sends the result *only if
+the text actually moved*. Instructions are the largest thing on the session and are re-billed as
+input tokens every subsequent turn, so an unchanged refresh costs nothing — which is what makes
+it safe to wire to a noisy signal. `setInstructions(…)` still states the text outright, and
+replaces the recipe: an app that takes the wheel keeps it.
+
+Set `recompose: "each-turn"` to re-run the resolver after every completed turn — the thing that
+makes `turns` worth reading ("after five turns, stop explaining"). Off by default: a prompt that
+churns mid-conversation is hard to debug, and a first-visit tutorial flow does not need it, since
+it wants a stance chosen once at open.
+
+**The greeting** is the same shape. A plain string keeps the say-exactly-this framing — that is
+the echo-canceller **priming** form, and its predictability is what makes it safe to let an
+unconverged canceller clip it. `{ instructions: "…" }` hands the model a brief instead
+("greet them by name and offer the two-minute tour"), which is what a first-visit opening wants
+and which spends that predictability to get it. Either way it is resolved **once per start** and
+frozen: the echo window reads whether a greeting exists while building the audio block, and a
+value that changed between those reads could leave the session mute.
+
 ## The three key flows
 
 Auth is a pluggable `KeySource`; `standardKeySources()` is the decided priority chain:

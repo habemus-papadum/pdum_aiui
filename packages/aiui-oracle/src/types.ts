@@ -11,6 +11,88 @@
  * `raw` ledger entries, never dropped (the trace-stages total-parse lesson).
  */
 
+/**
+ * The prompt's structured modification points.
+ *
+ * Four NAMED slots rather than one free-text field, rendered by
+ * {@link ../prompt}.weaveInstructions in this fixed order under stable
+ * headings. Deliberately not `Record<string, string>`: arbitrary keys mean
+ * every app invents its own headings and its own ordering, and two apps'
+ * prompts stop being comparable — which is the thing "structured" is supposed
+ * to buy. A slot that does not fit is what {@link extra} is for.
+ *
+ * The split that matters is LIFETIME, not topic: `app` is standing and
+ * changes never, `context` is where the user is standing this second, and
+ * `stance` is how to behave for this conversation. A resolver (see
+ * {@link OracleConfig.instructions}) recomputes the short-lived ones without
+ * the caller restating the durable ones.
+ */
+export interface PromptSlots {
+  /** Standing: what this app IS, and what matters in it. */
+  app?: string;
+  /** Where the user is right now — page, route, selection. Short-lived. */
+  context?: string;
+  /** How to behave this conversation — tutorial-ish for a newcomer, terse for
+   * a regular. Chosen per session, not per turn. */
+  stance?: string;
+  /** Extra standing guidance, rendered verbatim. The escape hatch. */
+  extra?: string;
+}
+
+/**
+ * What a prompt resolver is told about the session it is composing for.
+ *
+ * Everything here is a fact only the SESSION can know. Anything about the
+ * human — have they been here before, what is their name, did they finish the
+ * tour — belongs to the app, which closes over its own cookie or storage: the
+ * package deliberately learns nothing about persistence.
+ */
+export interface PromptContext {
+  /** Why we are composing. `start` is a first open, `reconnect` a later one
+   * on the same session object, `refresh` an explicit
+   * {@link ../session}.OracleSession.refreshPrompt (or an each-turn
+   * recompose). */
+  reason: "start" | "reconnect" | "refresh";
+  /**
+   * User turns OPENED so far in this session — the same count the viewer's
+   * turn grouping shows, since both come from {@link opensTurn}.
+   *
+   * Reset to 0 on every start: a reconnect is a new vendor session with no
+   * memory of the last one, so carrying the count over would describe a
+   * conversation the model cannot remember having.
+   *
+   * 0 while composing for `start`, which is why a turn-sensitive prompt needs
+   * a recompose to mean anything (see {@link OracleConfig.recompose}).
+   */
+  turns: number;
+  /** How many times this session object has been started. 1 on a first open;
+   * a page that has never reloaded keeps counting up. */
+  starts: number;
+  /** Spend so far this session. */
+  usage: UsageTotals;
+}
+
+/**
+ * A value the integrator may compute instead of stating.
+ *
+ * Resolvers run at `start` (before the mint, so the baked config is already
+ * right) and on refresh. They may be async — but note that a slow one delays
+ * connect, since the credential is minted from the composed session.
+ */
+export type Resolved<T> = T | ((context: PromptContext) => T | Promise<T>);
+
+/**
+ * What the session opens by saying. See {@link OracleConfig.greeting} for why
+ * a greeting exists at all (it is echo-canceller priming, not decoration).
+ *
+ * A plain string is the PRIMING form: the model is told to say exactly it and
+ * nothing else, so the line is predictable and disposable. The object form
+ * hands the model a brief instead — "greet them by name and offer the
+ * two-minute tour" — which is what a first-visit tutorial flow wants, at the
+ * cost of a longer and less predictable opening.
+ */
+export type Greeting = string | { instructions: string };
+
 /** A tool the model may call — executed locally, in the page. */
 export interface OracleTool {
   /** Vendor-visible name (the model calls this). */
@@ -113,6 +195,35 @@ export interface OracleAudio {
 }
 
 /**
+ * `reasoning.effort` — how long the model thinks before it starts answering.
+ *
+ * Arrived with `gpt-realtime-2.1` (2026-07-06) and is honoured only by
+ * reasoning-capable models. An older realtime model does not reject it, it
+ * simply does not reason — which is precisely the silent-ignore case the
+ * config drift check exists to name, so this block is compared against the
+ * `session.updated` echo like the audio blocks are.
+ *
+ * The path and the five levels are the SERVER's, verified 2026-08-15 by
+ * minting against the live endpoint rather than read off a docs page: a bad
+ * value comes back `400 invalid_value` naming `session.reasoning.effort` and
+ * listing exactly these five. Worth knowing too — an unset block is simply
+ * ABSENT from the echo, the server does not fill its default in, so an
+ * untouched row reads "—" rather than `low`.
+ *
+ * The trade it makes is the one a voice session feels most: higher effort
+ * costs latency AND output tokens. The vendor's guidance for production voice
+ * agents is to start at `low` — which is also the default — and raise it only
+ * where a task actually needs the thinking.
+ */
+export type ReasoningEffort = "minimal" | "low" | "medium" | "high" | "xhigh";
+
+export interface OracleReasoning {
+  /** Default `low` (the vendor's default, and its recommended starting point
+   * for voice). */
+  effort?: ReasoningEffort;
+}
+
+/**
  * The oracle's session configuration.
  *
  * Deliberately spelled in the VENDOR's names, not ours (owner, 2026-07-30):
@@ -131,10 +242,26 @@ export interface OracleAudio {
 export interface OracleConfig {
   /** Realtime model id — FROZEN at connect. Default {@link DEFAULT_ORACLE_MODEL}. */
   model?: string;
-  /** The woven persona + app-specific prompt. Kept GENERIC about which tools
+  /**
+   * The woven persona + app-specific prompt. Kept GENERIC about which tools
    * exist — the `tools` array is the single source of truth (the documented
-   * "keep tool availability synchronized" failure mode). */
-  instructions: string;
+   * "keep tool availability synchronized" failure mode).
+   *
+   * Three forms, in rising order of power:
+   *
+   *  - a **string** — the whole prompt, stated. What most apps want, and the
+   *    only form before slots existed.
+   *  - **{@link PromptSlots}** — the same thing composed from named parts, so
+   *    a refresh can replace `context` without restating `app`.
+   *  - a **resolver** over {@link PromptContext} — computed per compose. This
+   *    is what a first-visit tutorial flow needs: the app checks its own
+   *    storage, and answers with a different `stance` for a newcomer than for
+   *    a regular.
+   *
+   * A resolver runs BEFORE the mint, so the baked session already carries the
+   * right prompt — no opening correction, and one fewer whole-prompt send.
+   */
+  instructions: Resolved<string | PromptSlots>;
   /** The tool surface presented at session start (live-updatable after). */
   tools?: OracleTool[];
   /** The vendor's `audio` block: input turn detection / noise reduction /
@@ -142,6 +269,9 @@ export interface OracleConfig {
   audio?: OracleAudio;
   /** Cap on a single response's output tokens; `"inf"` for the model's own. */
   max_output_tokens?: number | "inf";
+  /** The vendor's `reasoning` block — how hard the model thinks before it
+   * replies. Unset takes the model's own default (`low`). */
+  reasoning?: OracleReasoning;
   /**
    * Protect the FIRST reply from the microphone's own echo. Default ON; pass
    * `false` to disable, or an object to tune the timings.
@@ -204,8 +334,32 @@ export interface OracleConfig {
    * stated honestly: a human who talks OVER the greeting is heard and
    * committed but not answered until the window closes and they speak again.
    * The window is the greeting's own length plus {@link FirstReplyGuard.padMs}.
+   *
+   * A {@link Greeting} object replaces the say-exactly-this framing with a
+   * brief; a resolver computes the whole thing per session (returning
+   * `undefined` for "no greeting this time"). Whatever the form, it is
+   * resolved ONCE per start and frozen for the session's life — the echo
+   * window reads whether a greeting exists while building the audio block,
+   * and a value that changed between those reads could open the window
+   * suppressed and close it without restoring (see the note above on what
+   * that costs).
    */
-  greeting?: string;
+  greeting?: Resolved<Greeting | undefined>;
+  /**
+   * Whether the prompt is recomposed during the session. Default `"never"`.
+   *
+   * `"each-turn"` re-runs the resolver after every completed user turn, which
+   * is what makes {@link PromptContext.turns} worth reading ("after five
+   * turns, stop explaining"). It is off by default because instructions are
+   * the largest thing on the session and are re-billed as input tokens on
+   * every subsequent turn — and because a prompt that churns mid-conversation
+   * is a hard thing to debug. A recompose that produces identical text sends
+   * nothing at all, so the cost is only paid when the prompt actually moved.
+   *
+   * A first-visit tutorial flow does NOT need this: it wants a stance chosen
+   * once at open, which the resolver already does.
+   */
+  recompose?: "never" | "each-turn";
   /**
    * PARK the session after this many seconds with no activity. `0` disables.
    * Default {@link DEFAULT_PARK_AFTER_IDLE_SECONDS}.
@@ -484,8 +638,21 @@ export type LedgerBody =
   | { kind: "response"; responseId: string; status: string; usage?: UsageTotals }
   | {
       kind: "error";
-      source: "vendor" | "transport" | "tool" | "key";
+      source: "vendor" | "transport" | "tool" | "key" | "prompt";
       message: string;
       data?: unknown;
     }
   | { kind: "raw"; type: string; event: Record<string, unknown> };
+
+/**
+ * Whether a ledger entry OPENS a new turn — a heard utterance, or one
+ * injected in the user's own voice.
+ *
+ * One definition, two readers: the session counts turns with it (the number a
+ * prompt resolver reads) and the viewer groups the ledger with it. They must
+ * agree — a count that disagreed with the grouping on screen would make both
+ * untrustworthy — and the only way to guarantee that is to have one predicate.
+ */
+export function opensTurn(entry: LedgerBody): boolean {
+  return entry.kind === "heard" || (entry.kind === "injected" && entry.role === "user");
+}

@@ -26,7 +26,6 @@ import {
   OracleSession,
   type OracleTool,
   pasteKeySource,
-  weaveInstructions,
   webRtcTransport,
 } from "@habemus-papadum/aiui-oracle";
 import { type Accessor, createEffect, createRoot, createSignal, untrack } from "solid-js";
@@ -42,6 +41,17 @@ import type { LaneContext } from "./types";
  * truth, and a prompt naming an absent tool makes the model invent one (the
  * documented vendor failure mode the oracle's own persona is built around).
  * The tab-record prelude (O3d) is what will make this specific. */
+/**
+ * How long the prompt's `context` slot waits for the targeting host before
+ * opening without it.
+ *
+ * Short on purpose: this sits in front of the MINT now, so every millisecond
+ * here is a millisecond the human waits for the session to come up. Missing
+ * the slot costs one refresh after connect; missing the session costs the
+ * whole interaction.
+ */
+const TAB_CONTEXT_TIMEOUT_MS = 750;
+
 const PANEL_BLURB =
   "You are embedded in the aiui intent panel — the control surface a developer uses to " +
   "brief a coding agent about the web app they are building. When the developer's app is " +
@@ -242,9 +252,44 @@ export function createOracleLanes(ctx: OracleLaneContext): OracleLanes {
       })
       .catch(() => {});
   };
+  /**
+   * Where the human is standing, as the `<tab …/>` record the lowering
+   * renders — `renderTabRecord` verbatim, so the oracle reads the same shape
+   * the agent behind the channel does and the human's "this page" means the
+   * same thing to both.
+   *
+   * BOUNDED, because this now runs before the mint (see the resolver below):
+   * a targeting host that never answers must not hold connect open. On a
+   * timeout the session simply opens without the slot and the post-connect
+   * refresh fills it in — which is exactly what this did before it moved.
+   */
+  const tabContext = async (): Promise<string | undefined> => {
+    const meta = await Promise.race([
+      config.tabMeta?.().catch(() => undefined),
+      new Promise<undefined>((resolve) => {
+        setTimeout(() => resolve(undefined), TAB_CONTEXT_TIMEOUT_MS);
+      }),
+    ]);
+    const url = typeof meta?.url === "string" ? meta.url : undefined;
+    if (url === undefined) {
+      return undefined;
+    }
+    return renderTabRecord({
+      url,
+      ...(typeof meta?.title === "string" ? { title: meta.title } : {}),
+    });
+  };
   const session = new OracleSession({
     config: {
-      instructions: weaveInstructions({ app: PANEL_BLURB }),
+      // A RESOLVER, not a string (O3d): the page the developer is looking at
+      // is resolved before the credential is minted, so the baked session
+      // already knows where it is standing. It used to be a static weave plus
+      // a corrective `setInstructions` after connect — which minted a prompt
+      // we knew was stale and paid a second whole-prompt send to replace it.
+      instructions: async () => {
+        const context = await tabContext();
+        return { app: PANEL_BLURB, ...(context !== undefined ? { context } : {}) };
+      },
       // Tuned for the panel's actual acoustics: a laptop mic listening to the
       // same machine's speakers (owner, 2026-07-30, after the session kept
       // barging in on ITSELF).
@@ -339,29 +384,16 @@ export function createOracleLanes(ctx: OracleLaneContext): OracleLanes {
   };
 
   /**
-   * Tell the session what page the human is looking at (O3d), by re-weaving
-   * the instructions with the tab record the lowering renders — `renderTabRecord`
-   * verbatim, so the oracle reads the same `<tab …/>` shape the agent behind
-   * the channel does, and the human's "this page" means the same thing to
-   * both. Best-effort: a host with no `tabMeta` (the fake tier) simply gets
-   * the standing blurb.
+   * Re-run the prompt recipe against the page as it stands NOW (O3d).
+   *
+   * Kept as a post-connect call even though the resolver already ran before
+   * the mint: if `tabContext` timed out or the tab was not yet knowable then,
+   * this is what fills the slot in. When it resolved in time — the normal
+   * case — the recomposed text is identical and `refreshPrompt` sends
+   * nothing, so the belt costs one string comparison.
    */
   const applyPrelude = async (): Promise<void> => {
-    const meta = await config.tabMeta?.().catch(() => undefined);
-    const url = typeof meta?.url === "string" ? meta.url : undefined;
-    if (url === undefined) {
-      return;
-    }
-    const record = renderTabRecord({
-      url,
-      ...(typeof meta?.title === "string" ? { title: meta.title } : {}),
-    });
-    session.setInstructions(
-      weaveInstructions({
-        app: PANEL_BLURB,
-        extra: `The page the developer is looking at right now:\n${record}`,
-      }),
-    );
+    await session.refreshPrompt();
   };
 
   /**

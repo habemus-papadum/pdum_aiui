@@ -253,6 +253,16 @@ export const SESSION_PARAMS: readonly ParamSpec[] = [
     hint: "FROZEN at connect. Changing it needs a new session.",
   },
   {
+    name: "effort",
+    group: "reasoning",
+    default: "low",
+    path: "reasoning.effort",
+    kind: "enum",
+    options: ["minimal", "low", "medium", "high", "xhigh"],
+    when: "live",
+    hint: "How long the model thinks before answering. Higher costs latency AND output tokens; only reasoning-capable models (gpt-realtime-2.1 and up) honour it at all — read the echo.",
+  },
+  {
     name: "parkAfterIdleSeconds",
     group: "aiui — ours, not the vendor's",
     scope: "aiui",

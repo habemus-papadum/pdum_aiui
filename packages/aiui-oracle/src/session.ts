@@ -19,7 +19,9 @@
 
 import { priceRealtimeUsage, usageFromRealtimeResponse } from "./cost";
 import { pruneTurnDetection, setPath, TURN_DETECTION_TYPE } from "./params";
+import { weaveInstructions } from "./prompt";
 import type {
+  Greeting,
   KeySource,
   LedgerBody,
   LedgerEntry,
@@ -27,6 +29,7 @@ import type {
   OracleStatus,
   OracleTool,
   OracleTransport,
+  PromptContext,
   TransportHandle,
   UsageTotals,
 } from "./types";
@@ -37,6 +40,7 @@ import {
   DEFAULT_ORACLE_MODEL,
   DEFAULT_ORACLE_VOICE,
   DEFAULT_PARK_AFTER_IDLE_SECONDS,
+  opensTurn,
 } from "./types";
 
 export interface OracleState {
@@ -55,6 +59,9 @@ export interface OracleState {
    * it", which are different things to a human coming back to it. */
   parkedReason?: "manual" | "idle" | undefined;
   toolNames: string[];
+  /** User turns opened this session (see {@link PromptContext.turns}) — the
+   * number a prompt resolver reads, and the one the viewer groups by. */
+  turns: number;
   /** The vendor call id (WebRTC) — the sideband hook, surfaced first-class. */
   callId?: string;
   /** Autoplay blocked the reply element; a user gesture is the remedy. */
@@ -116,14 +123,44 @@ export class OracleSession {
     replyText: "",
     usage: EMPTY_USAGE,
     toolNames: [],
+    turns: 0,
     playbackBlocked: false,
   };
+
+  /**
+   * The COMPOSED prompt — what actually goes on the wire.
+   *
+   * Held separately from `config.instructions` because that field is now a
+   * recipe (a string, slots, or a resolver) and the wire needs a string. Every
+   * send reads this, so "what did we tell it" has exactly one answer.
+   */
+  private instructionsText = "";
+  /**
+   * The greeting for THIS session, resolved once at start.
+   *
+   * Memoized deliberately: `greetingText` is read while the audio block is
+   * being built — it decides whether the echo window carries
+   * `create_response: false`, and whether closing the window restores it. A
+   * resolver re-invoked at each of those reads could answer differently
+   * between them and leave the session permanently mute (the 2026-08-13
+   * failure recorded on OracleConfig.firstReplyGuard). One resolution per
+   * start, frozen, keeps that read synchronous and stable.
+   */
+  private resolvedGreeting: Greeting | undefined;
+  /** How many times `start` has run — {@link PromptContext.starts}. */
+  private startCount = 0;
 
   constructor(options: OracleSessionOptions) {
     this.options = options;
     this.transport = options.transport;
     this.now = options.now ?? (() => Date.now());
     this.applyTools(options.config.tools ?? []);
+    // A plain-string prompt is usable before any compose has run, so a caller
+    // that reads `sessionConfig()` without starting still sees the real thing.
+    // Anything richer stays empty until `start` resolves it.
+    if (typeof options.config.instructions === "string") {
+      this.instructionsText = options.config.instructions;
+    }
   }
 
   // ── observation ────────────────────────────────────────────────────────────
@@ -159,7 +196,10 @@ export class OracleSession {
     // open showing the last session's reply, and "ready — talk to it" (the
     // once-per-session invitation the strip no longer returns to) would never
     // appear again.
-    this.setState({ status: "connecting", playbackBlocked: false, replyText: "" });
+    // `turns` resets here, not in the constructor: a reconnect opens a NEW
+    // vendor session with no memory of the last one, so a count carried over
+    // would describe a conversation the model cannot remember having.
+    this.setState({ status: "connecting", playbackBlocked: false, replyText: "", turns: 0 });
     // The echo window opens BEFORE the config is built: `audioSession` reads
     // `this.guard`, so the baked session and the opening update carry the
     // suppressed interrupt from the very first byte. A reconnect re-opens it —
@@ -170,6 +210,25 @@ export class OracleSession {
       phase: "connecting",
       detail: `${this.transport.name} · ${this.options.keySource.describe()}`,
     });
+    // COMPOSE before the wire config is built — which puts it before the mint,
+    // so the baked session already carries the right prompt. (The old shape
+    // could only correct itself after connecting, which meant minting a
+    // config we already knew was stale and paying a second whole-prompt send
+    // to replace it.) The greeting resolves here too, and for a harder
+    // reason: `wireSession` reads whether one exists while building the audio
+    // block, so it must be settled before that read, not during it.
+    this.startCount += 1;
+    const reason = this.startCount === 1 ? "start" : "reconnect";
+    try {
+      this.instructionsText = await this.composeInstructions(reason);
+      this.resolvedGreeting = await this.resolve(this.options.config.greeting, reason);
+    } catch (error) {
+      // A resolver that throws fails the START rather than falling through to
+      // a default. Running on a prompt the app did not mean is worse than not
+      // running: the session would answer, plausibly, as something else.
+      this.fail("prompt", error);
+      return;
+    }
     const session = this.wireSession();
     let credential: Awaited<ReturnType<KeySource["credential"]>>;
     try {
@@ -221,12 +280,7 @@ export class OracleSession {
     const greeting = this.greetingText();
     if (greeting !== undefined) {
       this.record({ kind: "sent", type: "greeting" });
-      this.send({
-        type: "response.create",
-        response: {
-          instructions: `Open the conversation by saying exactly: "${greeting}". Say nothing else.`,
-        },
-      });
+      this.send({ type: "response.create", response: { instructions: greeting } });
     }
     // Connecting is not activity, but it IS the moment the mic opens — so the
     // stopwatch starts here. A session opened and then abandoned before a word
@@ -305,11 +359,83 @@ export class OracleSession {
     }
   }
 
+  /**
+   * State the prompt outright — the imperative escape hatch, unchanged.
+   *
+   * This REPLACES the configured recipe, so a session driven this way stops
+   * recomposing: an app that has taken manual control of the text keeps it
+   * until it hands control back. Use {@link refreshPrompt} instead when the
+   * resolver should stay in charge.
+   */
   setInstructions(instructions: string): void {
     this.options.config.instructions = instructions;
+    this.applyInstructions(instructions);
+  }
+
+  /**
+   * Recompose the prompt from the configured recipe and send it if it moved.
+   *
+   * The whole reason a resolver can read {@link PromptContext.turns} or the
+   * app's own storage: call this when the thing the prompt describes has
+   * changed — a navigation, a selection, the user finishing the tour.
+   *
+   * IDENTICAL TEXT SENDS NOTHING. Instructions are the largest thing on the
+   * session and are re-billed as input tokens on every subsequent turn, so a
+   * refresh that changed nothing must cost nothing; it also keeps the config
+   * ledger free of acks that say only "still the same". That guard is what
+   * makes an each-turn recompose, or a refresh wired to a noisy signal,
+   * affordable rather than reckless.
+   *
+   * Resolver failures are recorded and swallowed — a refresh is an
+   * improvement on a session that is already running, and losing the
+   * improvement is better than losing the session. (A failure at START is
+   * fatal, deliberately: there is no good prompt to fall back to there.)
+   */
+  async refreshPrompt(): Promise<void> {
+    let composed: string;
+    try {
+      composed = await this.composeInstructions("refresh");
+    } catch (error) {
+      this.record({ kind: "error", source: "prompt", message: message(error) });
+      return;
+    }
+    this.applyInstructions(composed);
+  }
+
+  /** Store the composed text and put it on the wire — once, and only if it
+   * actually differs from what the session is already holding. */
+  private applyInstructions(instructions: string): void {
+    if (instructions === this.instructionsText) {
+      return;
+    }
+    this.instructionsText = instructions;
     if (this.handle !== undefined) {
       this.sendSessionUpdate({ instructions });
     }
+  }
+
+  /** Resolve the configured recipe into the text that goes on the wire. */
+  private async composeInstructions(reason: PromptContext["reason"]): Promise<string> {
+    const resolved = await this.resolve(this.options.config.instructions, reason);
+    return typeof resolved === "string" ? resolved : weaveInstructions(resolved);
+  }
+
+  /** Run a {@link Resolved} value, handing a resolver the session's own facts.
+   * A function is always the resolver: no prompt or greeting form IS one. */
+  private async resolve<T>(
+    value: T | ((context: PromptContext) => T | Promise<T>),
+    reason: PromptContext["reason"],
+  ): Promise<T> {
+    if (typeof value !== "function") {
+      return value;
+    }
+    const resolver = value as (context: PromptContext) => T | Promise<T>;
+    return await resolver({
+      reason,
+      turns: this.current.turns,
+      starts: this.startCount,
+      usage: this.current.usage,
+    });
   }
 
   /**
@@ -486,11 +612,19 @@ export class OracleSession {
   private updatableSession(): Record<string, unknown> {
     const config = this.options.config;
     return {
-      instructions: config.instructions,
+      instructions: this.instructionsText,
       ...this.audioSession(),
       tools: this.toolSchemas(),
       ...(config.max_output_tokens !== undefined
         ? { max_output_tokens: config.max_output_tokens }
+        : {}),
+      // Sent only when an effort is actually chosen. Clearing the row leaves
+      // `reasoning: {}` behind in the config (setPath deletes the leaf, not
+      // its parent), and an empty block is not the same statement as "your
+      // default" — so the block is rebuilt from the leaf rather than passed
+      // through.
+      ...(config.reasoning?.effort !== undefined
+        ? { reasoning: { effort: config.reasoning.effort } }
         : {}),
     };
   }
@@ -575,11 +709,29 @@ export class OracleSession {
     };
   }
 
-  /** The greeting, or undefined when there is none (empty string counts as
-   * none — a session cannot speak nothing). */
+  /**
+   * The greeting as RESPONSE INSTRUCTIONS, or undefined when there is none
+   * (empty counts as none — a session cannot speak nothing).
+   *
+   * The two forms differ in who composes the words. A plain string is the
+   * PRIMING form and keeps the say-exactly-this frame: predictable, short,
+   * disposable — which is what makes it safe to let an unconverged echo
+   * canceller clip it. An object hands the model a brief and lets it write
+   * the line, which is what a first-visit tutorial opening wants and which
+   * spends that predictability to get it.
+   *
+   * Reads the value RESOLVED at start, never the config — see
+   * {@link resolvedGreeting} for why this read has to be stable.
+   */
   private greetingText(): string | undefined {
-    const greeting = this.options.config.greeting;
-    return greeting === undefined || greeting === "" ? undefined : greeting;
+    const greeting = this.resolvedGreeting;
+    if (greeting === undefined || greeting === "") {
+      return undefined;
+    }
+    if (typeof greeting === "string") {
+      return `Open the conversation by saying exactly: "${greeting}". Say nothing else.`;
+    }
+    return greeting.instructions === "" ? undefined : greeting.instructions;
   }
 
   // ── the first-reply echo window ────────────────────────────────────────────
@@ -900,6 +1052,15 @@ export class OracleSession {
     }
     if (calls.length > 0) {
       void this.runToolCalls(calls);
+      return;
+    }
+    // A finished turn is the moment an each-turn recompose is FOR — the reply
+    // has landed, the count has moved, and nothing is in flight to disturb.
+    // Not when tool calls follow: that response is about to be answered by a
+    // spoken one, so the turn is still running and recomposing mid-way would
+    // change the instructions under the very reply being composed.
+    if (this.options.config.recompose === "each-turn") {
+      void this.refreshPrompt();
     }
   }
 
@@ -966,7 +1127,7 @@ export class OracleSession {
     this.record({ kind: "session", phase: "closed", detail: reason });
   }
 
-  private fail(source: "key" | "transport", error: unknown): void {
+  private fail(source: "key" | "transport" | "prompt", error: unknown): void {
     this.clearIdleTimer();
     this.setState({ status: "error" });
     this.record({ kind: "error", source, message: message(error) });
@@ -989,6 +1150,12 @@ export class OracleSession {
     // like an injected screenshot.
     if (OracleSession.ACTIVITY.has(entry.kind)) {
       this.touchIdle();
+    }
+    // Counted from the LEDGER, by the same predicate the viewer groups with,
+    // so the number a resolver reads and the turns a human can see on screen
+    // can never disagree.
+    if (opensTurn(entry)) {
+      this.setState({ turns: this.current.turns + 1 });
     }
     for (const listener of this.ledgerListeners) {
       listener(full);
@@ -1069,7 +1236,39 @@ function configDrift(sent: Record<string, unknown>, effective: Record<string, un
       }
     }
   }
+  // REASONING — the newest field on the session, and the one most likely to be
+  // ignored rather than refused: it arrived with gpt-realtime-2.1 and models
+  // that cannot reason simply do not act on it. From this side an ignored
+  // effort and an honoured one look identical, so the echo is the only thing
+  // that can tell them apart.
+  const wantReasoning = subObject(sent, "reasoning");
+  if (wantReasoning !== undefined) {
+    const heldReasoning = subObject(effective, "reasoning");
+    if (heldReasoning === undefined) {
+      drift.push("reasoning not held");
+    } else {
+      for (const [key, value] of Object.entries(wantReasoning)) {
+        const got = heldReasoning[key];
+        if (got !== value) {
+          drift.push(
+            `reasoning.${key}: sent ${JSON.stringify(value)}, holds ${JSON.stringify(got)}`,
+          );
+        }
+      }
+    }
+  }
   return drift;
+}
+
+/** A top-level sub-object, defensively (either side may omit it). */
+function subObject(
+  session: Record<string, unknown>,
+  key: string,
+): Record<string, unknown> | undefined {
+  const value = session[key];
+  return value !== null && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : undefined;
 }
 
 /** The `audio.input` sub-object, defensively (either side may omit it). */

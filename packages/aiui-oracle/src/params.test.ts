@@ -182,6 +182,7 @@ describe("the tables themselves", () => {
       "transcription",
       "audio.output",
       "session",
+      "reasoning",
       // Ours, and visibly labelled as such — the verbatim-names rule would be
       // worthless if an aiui knob could pass itself off as a vendor field.
       "aiui — ours, not the vendor's",
@@ -200,5 +201,17 @@ describe("the tables themselves", () => {
     // Not connect-time: the vendor freezes voice once the model has SPOKEN.
     expect(when("audio.output.voice")).toBe("before-first-reply");
     expect(when(TURN_DETECTION_TYPE)).toBe("live");
+  });
+
+  it("carries reasoning.effort with the vendor's five levels, updatable live", () => {
+    const spec = SESSION_PARAMS.find((row) => row.path === "reasoning.effort");
+    expect(spec?.name).toBe("effort");
+    expect(spec?.options).toEqual(["minimal", "low", "medium", "high", "xhigh"]);
+    // `session.update` may carry any field except voice and model, so effort
+    // is retunable mid-conversation — which is the point of exposing it.
+    expect(spec?.when).toBe("live");
+    // The vendor's default, not ours: an unset control must read as the value
+    // the session will actually behave as.
+    expect(spec?.default).toBe("low");
   });
 });

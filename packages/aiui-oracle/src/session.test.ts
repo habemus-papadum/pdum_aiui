@@ -7,7 +7,15 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OracleSession } from "./session";
-import type { KeySource, LedgerEntry, OracleConfig, OracleTool, OracleTransport } from "./types";
+import type {
+  KeySource,
+  LedgerEntry,
+  OracleConfig,
+  OracleTool,
+  OracleTransport,
+  PromptContext,
+} from "./types";
+import { groupTurns } from "./widgets/viewer-model";
 
 const testKeys: KeySource = {
   describe: () => "test-keys",
@@ -818,6 +826,410 @@ describe("the anti-self-interrupt tuning, and proving the vendor took it", () =>
     await session.start();
     const sentSession = (rig.sent[0] as { session: Record<string, unknown> }).session;
     rig.emit({ type: "session.updated", session: sentSession });
+    const config = session.ledger().find((e) => e.kind === "config") as Extract<
+      LedgerEntry,
+      { kind: "config" }
+    >;
+    expect(config.drift).toEqual([]);
+  });
+});
+
+describe("the prompt as a RECIPE — slots, resolvers, and when they run", () => {
+  /** Starts a session, capturing what the MINT was handed (the composed wire
+   * config) as distinct from what the opening update carried. */
+  const started = async (config: Partial<OracleConfig>) => {
+    const rig = fakeTransport();
+    let minted: Record<string, unknown> | undefined;
+    const session = new OracleSession({
+      config: { instructions: "x", firstReplyGuard: false, ...config } as OracleConfig,
+      keySource: {
+        describe: () => "test-keys",
+        credential: async (wire) => {
+          minted = wire;
+          return { ek: "ek_test", expiresAt: 0 };
+        },
+      },
+      transport: rig.transport,
+    });
+    await session.start();
+    return { rig, session, minted: () => minted };
+  };
+  const instructionsOf = (event: unknown) =>
+    (event as { session: { instructions?: string } }).session.instructions;
+
+  it("composes BEFORE the mint — the baked config is already right", async () => {
+    // The old shape could only correct itself after connecting: mint a prompt
+    // known to be stale, then spend a second whole-prompt send replacing it.
+    const { minted, rig } = await started({
+      instructions: () => "resolved before the credential",
+    });
+    expect(minted()?.instructions).toBe("resolved before the credential");
+    expect(instructionsOf(rig.sent[0])).toBe("resolved before the credential");
+  });
+
+  it("hands the resolver the session's own facts", async () => {
+    const seen: PromptContext[] = [];
+    await started({
+      instructions: (context) => {
+        seen.push(context);
+        return "x";
+      },
+    });
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({ reason: "start", turns: 0, starts: 1 });
+  });
+
+  it("a second start is a RECONNECT, and counts", async () => {
+    const seen: PromptContext[] = [];
+    const { session } = await started({
+      instructions: (context) => {
+        seen.push(context);
+        return "x";
+      },
+    });
+    session.close();
+    await session.start();
+    expect(seen.map((c) => c.reason)).toEqual(["start", "reconnect"]);
+    expect(seen.map((c) => c.starts)).toEqual([1, 2]);
+  });
+
+  it("weaves slots into the wire text", async () => {
+    const { rig } = await started({ instructions: { app: "A spectrum viewer." } });
+    expect(instructionsOf(rig.sent[0])).toContain("About this app: A spectrum viewer.");
+  });
+
+  it("a resolver that throws at START fails the session — no silent fallback", async () => {
+    // Running on a prompt the app did not mean is worse than not running: the
+    // session would answer, plausibly, as something else entirely.
+    const { session } = await started({
+      instructions: () => {
+        throw new Error("no storage");
+      },
+    });
+    expect(session.state().status).toBe("error");
+    const error = session.ledger().find((e) => e.kind === "error") as Extract<
+      LedgerEntry,
+      { kind: "error" }
+    >;
+    expect(error.source).toBe("prompt");
+    expect(error.message).toContain("no storage");
+  });
+
+  it("a plain string is usable before any start — the common case never regressed", () => {
+    const rig = fakeTransport();
+    const session = new OracleSession({
+      config: { instructions: "stated outright" },
+      keySource: testKeys,
+      transport: rig.transport,
+    });
+    expect(session.sessionConfig().instructions).toBe("stated outright");
+  });
+});
+
+describe("refreshPrompt — recomposing a running session", () => {
+  const started = async (config: Partial<OracleConfig>) => {
+    const rig = fakeTransport();
+    const session = new OracleSession({
+      config: { instructions: "x", firstReplyGuard: false, ...config } as OracleConfig,
+      keySource: testKeys,
+      transport: rig.transport,
+    });
+    await session.start();
+    rig.sent.length = 0;
+    return { rig, session };
+  };
+
+  it("sends the new text when the recipe now answers differently", async () => {
+    let page = "/one";
+    const { rig, session } = await started({ instructions: () => `page ${page}` });
+    page = "/two";
+    await session.refreshPrompt();
+    expect((rig.sent[0] as { session: { instructions: string } }).session.instructions).toBe(
+      "page /two",
+    );
+  });
+
+  it("sends NOTHING when the text is unchanged — the guard that makes this cheap", async () => {
+    // Instructions are the largest thing on the session and are re-billed as
+    // input tokens every subsequent turn, so a no-op refresh must cost
+    // nothing — and must not fill the config ledger with "still the same".
+    const { rig, session } = await started({ instructions: () => "steady" });
+    await session.refreshPrompt();
+    await session.refreshPrompt();
+    expect(rig.sent).toEqual([]);
+  });
+
+  it("a resolver that throws on REFRESH is recorded, and the session lives", async () => {
+    // The opposite call from start: a refresh is an improvement on a session
+    // that already works, and losing the improvement beats losing the session.
+    let fail = false;
+    const { session } = await started({
+      instructions: () => {
+        if (fail) {
+          throw new Error("storage gone");
+        }
+        return "fine";
+      },
+    });
+    fail = true;
+    await session.refreshPrompt();
+    expect(session.state().status).toBe("live");
+    const error = session.ledger().find((e) => e.kind === "error") as Extract<
+      LedgerEntry,
+      { kind: "error" }
+    >;
+    expect(error.source).toBe("prompt");
+  });
+
+  it("setInstructions takes manual control, and still reaches the wire", async () => {
+    const { rig, session } = await started({ instructions: () => "resolved" });
+    session.setInstructions("stated by hand");
+    expect((rig.sent[0] as { session: { instructions: string } }).session.instructions).toBe(
+      "stated by hand",
+    );
+    // The recipe is REPLACED — an app that took the wheel keeps it.
+    rig.sent.length = 0;
+    await session.refreshPrompt();
+    expect(rig.sent).toEqual([]);
+  });
+});
+
+describe("turns — the count a resolver reads", () => {
+  const started = async (config: Partial<OracleConfig> = {}) => {
+    const rig = fakeTransport();
+    const session = new OracleSession({
+      config: { instructions: "x", firstReplyGuard: false, ...config } as OracleConfig,
+      keySource: testKeys,
+      transport: rig.transport,
+    });
+    await session.start();
+    return { rig, session };
+  };
+
+  it("counts a heard utterance, and agrees with the viewer's grouping", async () => {
+    const { rig, session } = await started();
+    expect(session.state().turns).toBe(0);
+    rig.emit({
+      type: "conversation.item.input_audio_transcription.completed",
+      transcript: "make it wider",
+    });
+    expect(session.state().turns).toBe(1);
+    // Same predicate, so the number and the turns a human sees cannot diverge.
+    expect(groupTurns(session.ledger()).filter((group) => group.id > 0)).toHaveLength(1);
+  });
+
+  it("resets on reconnect — a new vendor session remembers nothing", async () => {
+    const { rig, session } = await started();
+    rig.emit({
+      type: "conversation.item.input_audio_transcription.completed",
+      transcript: "one",
+    });
+    expect(session.state().turns).toBe(1);
+    session.close();
+    await session.start();
+    expect(session.state().turns).toBe(0);
+  });
+
+  it("recompose: each-turn re-runs the resolver once the reply has landed", async () => {
+    const seen: PromptContext[] = [];
+    const { rig } = await started({
+      recompose: "each-turn",
+      instructions: (context) => {
+        seen.push(context);
+        return `turn ${context.turns}`;
+      },
+    });
+    rig.emit({
+      type: "conversation.item.input_audio_transcription.completed",
+      transcript: "hello",
+    });
+    rig.emit({ type: "response.done", response: { id: "r1", status: "completed", output: [] } });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(seen.map((c) => c.reason)).toEqual(["start", "refresh"]);
+    expect(seen.at(-1)?.turns).toBe(1);
+  });
+
+  it("does NOT recompose when tool calls follow — that turn is still running", async () => {
+    const seen: PromptContext[] = [];
+    const { rig } = await started({
+      recompose: "each-turn",
+      tools: [
+        {
+          name: "set_freq",
+          description: "d",
+          parameters: {},
+          execute: () => ({ ok: true }),
+        },
+      ],
+      instructions: (context) => {
+        seen.push(context);
+        return "x";
+      },
+    });
+    rig.emit({
+      type: "response.done",
+      response: {
+        id: "r1",
+        status: "completed",
+        output: [{ type: "function_call", call_id: "c1", name: "set_freq", arguments: "{}" }],
+      },
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    // Recomposing here would change the instructions under the very reply
+    // those tool results are about to produce.
+    expect(seen.map((c) => c.reason)).toEqual(["start"]);
+  });
+});
+
+describe("the greeting as a recipe", () => {
+  const started = async (config: Partial<OracleConfig>) => {
+    const rig = fakeTransport();
+    const session = new OracleSession({
+      config: { instructions: "x", firstReplyGuard: false, ...config } as OracleConfig,
+      keySource: testKeys,
+      transport: rig.transport,
+    });
+    await session.start();
+    return { rig, session };
+  };
+  const greetingInstructions = (sent: Array<Record<string, unknown>>) =>
+    (
+      sent.find((e) => e.type === "response.create") as
+        | { response?: { instructions?: string } }
+        | undefined
+    )?.response?.instructions;
+
+  it("a string keeps the say-exactly-this frame — the priming form, unchanged", async () => {
+    const { rig } = await started({ greeting: "Hi there." });
+    expect(greetingInstructions(rig.sent)).toBe(
+      'Open the conversation by saying exactly: "Hi there.". Say nothing else.',
+    );
+  });
+
+  it("an object hands the model a BRIEF instead", async () => {
+    const { rig } = await started({
+      greeting: { instructions: "Greet them by name and offer the two-minute tour." },
+    });
+    expect(greetingInstructions(rig.sent)).toBe(
+      "Greet them by name and offer the two-minute tour.",
+    );
+  });
+
+  it("a resolver picks the opening from the session's facts", async () => {
+    const { rig } = await started({
+      greeting: (context) =>
+        context.starts === 1 ? { instructions: "Welcome them warmly." } : "Back again.",
+    });
+    expect(greetingInstructions(rig.sent)).toBe("Welcome them warmly.");
+  });
+
+  it("undefined from a resolver means NO greeting this time", async () => {
+    const { rig } = await started({ greeting: () => undefined });
+    expect(greetingInstructions(rig.sent)).toBeUndefined();
+  });
+
+  it("resolves EXACTLY ONCE per start — the echo window depends on it", async () => {
+    // `greetingText` is read while the audio block is built: it decides
+    // whether the window carries `create_response: false` and whether closing
+    // it restores the value. A resolver re-invoked at each read could answer
+    // differently between them and leave the session permanently mute — the
+    // 2026-08-13 failure, one layer up.
+    let calls = 0;
+    const { rig } = await started({
+      firstReplyGuard: true,
+      audio: { input: { turn_detection: { type: "server_vad" } } },
+      greeting: () => {
+        calls += 1;
+        return calls === 1 ? "Hi." : undefined;
+      },
+    });
+    expect(calls).toBe(1);
+    const opening = (
+      rig.sent[0] as { session: { audio: { input: { turn_detection: Record<string, unknown> } } } }
+    ).session.audio.input.turn_detection;
+    expect(opening).toMatchObject({ create_response: false, interrupt_response: false });
+  });
+});
+
+describe("reasoning.effort — how hard the model thinks before it answers", () => {
+  const started = async (config: Partial<OracleConfig>) => {
+    const rig = fakeTransport();
+    /** Captures what the MINT was handed — the wire session, frozen fields
+     * and all — which is a different object from the opening update. */
+    let minted: Record<string, unknown> | undefined;
+    const session = new OracleSession({
+      config: { instructions: "x", firstReplyGuard: false, ...config },
+      keySource: {
+        describe: () => "test-keys",
+        credential: async (wire) => {
+          minted = wire;
+          return { ek: "ek_test", expiresAt: 0 };
+        },
+      },
+      transport: rig.transport,
+    });
+    await session.start();
+    return { rig, session, minted: () => minted };
+  };
+  const sentSession = (event: unknown) => (event as { session: Record<string, unknown> }).session;
+
+  it("rides both the mint and the opening update when set", async () => {
+    const { rig, minted } = await started({ reasoning: { effort: "high" } });
+    expect(minted()?.reasoning).toEqual({ effort: "high" });
+    expect(sentSession(rig.sent[0]).reasoning).toEqual({ effort: "high" });
+  });
+
+  it("is absent entirely when unset — that is the vendor's default, not a value", async () => {
+    const { rig, minted } = await started({});
+    expect(Object.hasOwn(minted() ?? {}, "reasoning")).toBe(false);
+    expect(Object.hasOwn(sentSession(rig.sent[0]), "reasoning")).toBe(false);
+  });
+
+  it("retunes live — no reconnect, since only voice and model are frozen", async () => {
+    const { rig, session } = await started({ reasoning: { effort: "low" } });
+    rig.sent.length = 0;
+    session.setSessionParam("reasoning.effort", "xhigh");
+    expect(sentSession(rig.sent[0]).reasoning).toEqual({ effort: "xhigh" });
+  });
+
+  it("clearing the row sends NO block, not an empty one", async () => {
+    const { rig, session } = await started({ reasoning: { effort: "high" } });
+    rig.sent.length = 0;
+    // setPath deletes the leaf and leaves `reasoning: {}` behind in the
+    // config. An empty block is not the same statement as "your default", so
+    // the send is rebuilt from the leaf rather than passed through.
+    session.setSessionParam("reasoning.effort", undefined);
+    expect(Object.hasOwn(sentSession(rig.sent[0]), "reasoning")).toBe(false);
+  });
+
+  it("DRIFT names an effort the model quietly did not take", async () => {
+    const { rig, session } = await started({ reasoning: { effort: "high" } });
+    // A model that cannot reason does not refuse the field — it just does not
+    // act on it. Echoing `low` back is the whole failure mode, and from our
+    // side it is indistinguishable from success without this check.
+    rig.emit({ type: "session.updated", session: { reasoning: { effort: "low" } } });
+    const config = session.ledger().find((e) => e.kind === "config") as Extract<
+      LedgerEntry,
+      { kind: "config" }
+    >;
+    expect(config.drift?.join(" ")).toContain('reasoning.effort: sent "high", holds "low"');
+  });
+
+  it("DRIFT names a server that dropped the block outright", async () => {
+    const { rig, session } = await started({ reasoning: { effort: "high" } });
+    rig.emit({ type: "session.updated", session: { instructions: "x" } });
+    const config = session.ledger().find((e) => e.kind === "config") as Extract<
+      LedgerEntry,
+      { kind: "config" }
+    >;
+    expect(config.drift).toContain("reasoning not held");
+  });
+
+  it("no drift when the server holds the effort we asked for", async () => {
+    const { rig, session } = await started({ reasoning: { effort: "medium" } });
+    rig.emit({ type: "session.updated", session: sentSession(rig.sent[0]) });
     const config = session.ledger().find((e) => e.kind === "config") as Extract<
       LedgerEntry,
       { kind: "config" }

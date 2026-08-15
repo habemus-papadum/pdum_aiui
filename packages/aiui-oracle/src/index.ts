@@ -50,6 +50,7 @@ export type { OracleSessionOptions, OracleState } from "./session";
 export { OracleSession } from "./session";
 export type {
   FirstReplyGuard,
+  Greeting,
   InputTranscription,
   KeySource,
   LedgerBody,
@@ -60,9 +61,14 @@ export type {
   OracleAudioOutput,
   OracleConfig,
   OracleCredential,
+  OracleReasoning,
   OracleStatus,
   OracleTool,
   OracleTransport,
+  PromptContext,
+  PromptSlots,
+  ReasoningEffort,
+  Resolved,
   SemanticVad,
   ServerVad,
   TransportCapabilities,
@@ -78,6 +84,7 @@ export {
   DEFAULT_ORACLE_MODEL,
   DEFAULT_ORACLE_VOICE,
   DEFAULT_PARK_AFTER_IDLE_SECONDS,
+  opensTurn,
 } from "./types";
 export type { WebRtcTransportOptions } from "./webrtc";
 export { WEBRTC_CAPABILITIES, webRtcTransport } from "./webrtc";

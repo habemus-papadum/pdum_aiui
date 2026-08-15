@@ -14,6 +14,7 @@
 import { formatUsd } from "../cost";
 import type { OracleState } from "../session";
 import type { LedgerEntry } from "../types";
+import { opensTurn } from "../types";
 
 /** Coarse filter categories — the viewer's chips. */
 export type LedgerCategory = "turn" | "tool" | "config" | "flow" | "error" | "raw";
@@ -84,8 +85,8 @@ export function groupTurns(entries: readonly LedgerEntry[]): TurnGroup[] {
   let current: TurnGroup = { id: 0, entries: [] };
   const groups: TurnGroup[] = [current];
   for (const entry of entries) {
-    const opens = entry.kind === "heard" || (entry.kind === "injected" && entry.role === "user");
-    if (opens) {
+    // The session counts turns with this same predicate — see `opensTurn`.
+    if (opensTurn(entry)) {
       current = { id: entry.seq, entries: [entry] };
       groups.push(current);
     } else {
