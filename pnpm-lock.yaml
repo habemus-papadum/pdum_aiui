@@ -1226,6 +1226,9 @@ importers:
         specifier: catalog:solid
         version: 2.0.0-beta.32
     devDependencies:
+      '@habemus-papadum/aiui-build-config':
+        specifier: workspace:^
+        version: link:../aiui-build-config
       jsdom:
         specifier: 'catalog:'
         version: 29.1.1(@noble/hashes@2.3.0)

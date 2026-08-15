@@ -59,7 +59,7 @@ export function pathForSlide(base: string, ids: readonly string[], index: number
 /**
  * The deck's mount base, sniffed from the live URL — host-agnostic on
  * purpose (the two-host rule: ask at runtime, never bake a `define`). A
- * gallery mounts the deck at "<BASE>/<slug>"; standalone dev serves it at
+ * gallery mounts the deck at `<BASE>/<slug>`; standalone dev serves it at
  * "/" and the slug never appears, so the base is "".
  */
 export function deckBase(slug: string): string {

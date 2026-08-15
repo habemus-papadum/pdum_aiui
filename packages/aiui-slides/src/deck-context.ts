@@ -31,7 +31,7 @@ export interface SlideHandle {
 export const SlideContext = createContext<SlideHandle>();
 
 /** The mounted slide's handle. Default-less context: calling this outside a
- * <Deck> throws ContextNotFoundError — a slide component that calls it is
+ * `<Deck>` throws ContextNotFoundError — a slide component that calls it is
  * deck-aware by intent, so the loud failure is the right one. */
 export function useSlide(): SlideHandle {
   return useContext(SlideContext);
