@@ -28,12 +28,14 @@ import { createEffect, createSignal, Show, untrack } from "solid-js";
 import { Landing } from "./site/Landing";
 import { BRAND, LINKS, NAV_ITEMS } from "./site/nav";
 import { type GalleryPage, loadPage } from "./site/pages";
-import { interceptLocalLinks, LANDING, type Route, route } from "./site/router";
+import { headOf, interceptLocalLinks, LANDING, type Route, route } from "./site/router";
 
 interceptLocalLinks();
 
 interface View {
-  route: Route;
+  /** The mounted page's identity: the route's HEAD (demo slug) — a tail
+   * change (a deck moving between slides) must never remount the page. */
+  slug: Route;
   page: GalleryPage;
 }
 
@@ -44,25 +46,38 @@ function Shell() {
   const [view, setView] = createSignal<View | undefined>(undefined);
   let seq = 0;
 
+  // The route we last handled — distinguishes "tail-only change on the live
+  // page" (a deck's slide URL: ignore, the page owns its tail) from
+  // "returning from the landing to the same demo" (must re-activate).
+  let shown: Route = LANDING;
+
   const show = async (r: Route): Promise<void> => {
-    const my = ++seq;
+    const from = shown;
+    shown = r;
     if (r === LANDING) {
+      ++seq; // cancel any in-flight mount
       const parked = untrack(view)?.page;
       if (parked) setSitePageActive(parked, false); // park loops + tools bit; keep durables
       document.title = "aiui notebooks";
       return;
     }
-    const page = await loadPage(r); // cached after the first visit
+    const slug = headOf(r);
+    // A tail-only change (written with replaceState by the page itself) is
+    // the page's business — the mount must not churn, and an in-flight first
+    // mount of this same page must keep going (no seq bump here).
+    if (from !== LANDING && headOf(from) === slug) return;
+    const my = ++seq;
+    const page = await loadPage(slug); // cached after the first visit
     if (my !== seq) return; // superseded by a faster navigation (e.g. back home)
     const prev = untrack(view);
     // setSitePageActive drives BOTH lifecycles — the rAF park/resume and the
     // page-tools activity bit (page.toolsNs) — so route-following consumers
     // (the oracle) see only the notebook in view (the page-tools proposal,
     // git history).
-    if (prev?.route !== r && prev !== undefined) setSitePageActive(prev.page, false);
+    if (prev !== undefined && prev.slug !== slug) setSitePageActive(prev.page, false);
     setSitePageActive(page, true);
     document.title = page.title;
-    setView({ route: r, page });
+    if (prev?.slug !== slug) setView({ slug, page });
   };
 
   // Track the route in the source, load/swap in the untracked handler.
@@ -72,7 +87,7 @@ function Shell() {
 
   return (
     <div class="app-frame">
-      <SiteNav brand={BRAND} items={NAV_ITEMS} active={route()} links={LINKS} />
+      <SiteNav brand={BRAND} items={NAV_ITEMS} active={headOf(route())} links={LINKS} />
       <main class="app-content">
         {/* Landing at the base route; otherwise the demo page. */}
         <Show when={route() !== LANDING} fallback={<Landing />}>

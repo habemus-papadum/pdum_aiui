@@ -1,0 +1,308 @@
+/**
+ * styles.css — the slides framework's DEFAULT look: functional, quiet, and
+ * built to be replaced. Every color/size routes through a custom property
+ * with a fallback, so a design system rethemes by setting `--aiui-deck-*` /
+ * `--aiui-lens-*` tokens (or ships its own sheet against the same class
+ * names). Geometry (snap, positioning, layering) is the part worth keeping;
+ * the cosmetics are placeholders with taste.
+ *
+ * The translucent grays are deliberately mid-spectrum so the chrome reads on
+ * BOTH light and dark pages without knowing which it is on.
+ */
+
+/* ── the deck ──────────────────────────────────────────────────────────── */
+
+.aiui-deck {
+  position: relative;
+  height: var(--aiui-deck-height, 100dvh);
+}
+.aiui-deck-scroll {
+  height: 100%;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  overscroll-behavior: contain;
+}
+.aiui-deck-slide {
+  position: relative;
+  height: 100%;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  overflow: hidden; /* slides are viewport-sized by contract */
+}
+
+/* ── the scroll cue (fai-canteen lineage: bob, fade-out, fails open) ───── */
+
+.aiui-deck-cue {
+  position: absolute;
+  bottom: max(1.25rem, env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  border: 1px solid var(--aiui-deck-line, rgba(128, 128, 128, 0.45));
+  border-radius: 50%;
+  background: var(--aiui-deck-chrome-bg, rgba(128, 128, 128, 0.12));
+  color: var(--aiui-deck-fg, inherit);
+  cursor: pointer;
+  opacity: 0.85;
+  transition: opacity 0.5s ease;
+  z-index: 3;
+}
+.aiui-deck-cue svg {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+.aiui-deck-cue.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .aiui-deck-cue {
+    animation: aiui-deck-bob 2.4s ease-in-out infinite;
+  }
+}
+@keyframes aiui-deck-bob {
+  0%,
+  100% {
+    transform: translateX(-50%) translateY(0);
+  }
+  50% {
+    transform: translateX(-50%) translateY(0.55rem);
+  }
+}
+
+/* ── the nav widget ────────────────────────────────────────────────────── */
+
+.aiui-deck-nav {
+  position: absolute;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.3rem;
+  border: 1px solid var(--aiui-deck-line, rgba(128, 128, 128, 0.45));
+  border-radius: 999px;
+  background: var(--aiui-deck-chrome-bg, rgba(128, 128, 128, 0.12));
+  backdrop-filter: blur(8px);
+  z-index: 4;
+}
+.aiui-deck-nav-btn,
+.aiui-deck-nav-count {
+  display: grid;
+  place-items: center;
+  border: none;
+  background: transparent;
+  color: var(--aiui-deck-fg, inherit);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.aiui-deck-nav-btn {
+  width: 2.1rem;
+  height: 2.1rem;
+  padding: 0;
+}
+.aiui-deck-nav-btn svg {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+.aiui-deck-nav-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.aiui-deck-nav-btn:not(:disabled):hover,
+.aiui-deck-nav-count:hover {
+  background: var(--aiui-deck-chrome-hover, rgba(128, 128, 128, 0.22));
+}
+.aiui-deck-nav-count {
+  grid-auto-flow: column;
+  gap: 0.3rem;
+  height: 2.1rem;
+  padding: 0 0.7rem;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+}
+.aiui-deck-nav-sep {
+  opacity: 0.55;
+}
+.aiui-deck-nav-total {
+  opacity: 0.75;
+}
+
+/* ── the HUD (slide overview grid) ─────────────────────────────────────── */
+
+.aiui-deck-hud {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  z-index: 5;
+}
+.aiui-deck-hud-backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--aiui-deck-hud-backdrop, rgba(0, 0, 0, 0.55));
+  backdrop-filter: blur(3px);
+}
+.aiui-deck-hud-grid {
+  position: relative;
+  display: grid;
+  /* A nicely proportioned grid at any count: 3-up on a laptop, fewer as the
+     deck narrows — sized tiles, not a fixed 3×3. */
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 1rem;
+  width: min(64rem, calc(100% - 4rem));
+  max-height: calc(100% - 4rem);
+  overflow-y: auto;
+  padding: 0.5rem;
+}
+.aiui-deck-hud-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.6rem;
+  border: 1px solid var(--aiui-deck-line, rgba(128, 128, 128, 0.45));
+  border-radius: 0.6rem;
+  background: var(--aiui-deck-hud-tile-bg, rgba(20, 20, 24, 0.85));
+  color: var(--aiui-deck-hud-fg, #e8e8ee);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 0.15s ease,
+    transform 0.15s ease;
+}
+.aiui-deck-hud-tile:hover,
+.aiui-deck-hud-tile:focus-visible {
+  border-color: var(--aiui-deck-accent, #7aa2ff);
+  transform: translateY(-2px);
+}
+.aiui-deck-hud-tile.is-current {
+  border-color: var(--aiui-deck-accent, #7aa2ff);
+  box-shadow: 0 0 0 1px var(--aiui-deck-accent, #7aa2ff);
+}
+.aiui-deck-hud-thumb {
+  aspect-ratio: 16 / 9;
+  border-radius: 0.35rem;
+  overflow: hidden;
+  background: var(--aiui-deck-hud-thumb-bg, rgba(128, 128, 128, 0.12));
+  display: grid;
+}
+.aiui-deck-hud-thumb > * {
+  width: 100%;
+  height: 100%;
+}
+.aiui-deck-hud-typo {
+  display: grid;
+  place-items: center;
+  font-size: 2.2rem;
+  font-weight: 600;
+  opacity: 0.4;
+}
+.aiui-deck-hud-caption {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  font-size: 0.85rem;
+}
+.aiui-deck-hud-num {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.6;
+}
+.aiui-deck-hud-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── the Lens ──────────────────────────────────────────────────────────── */
+
+.aiui-lens-trigger {
+  display: inline;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-decoration-color: var(--aiui-lens-affordance, rgba(128, 128, 128, 0.8));
+  text-underline-offset: 0.2em;
+}
+.aiui-lens-trigger:hover,
+.aiui-lens-trigger:focus-visible {
+  text-decoration-style: solid;
+  text-decoration-color: var(--aiui-deck-accent, #7aa2ff);
+}
+.aiui-lens-peek {
+  position: fixed;
+  z-index: 30;
+  max-width: min(24rem, calc(100vw - 1rem));
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--aiui-deck-line, rgba(128, 128, 128, 0.45));
+  border-radius: 0.5rem;
+  background: var(--aiui-lens-bg, rgba(20, 20, 24, 0.95));
+  color: var(--aiui-lens-fg, #e8e8ee);
+  font-size: 0.85rem;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  pointer-events: auto;
+}
+.aiui-lens-overlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  z-index: 40;
+}
+.aiui-lens-backdrop {
+  position: absolute;
+  inset: 0;
+  background: var(--aiui-deck-hud-backdrop, rgba(0, 0, 0, 0.55));
+  backdrop-filter: blur(3px);
+}
+.aiui-lens-panel {
+  position: relative;
+  width: min(46rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 4rem);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--aiui-deck-line, rgba(128, 128, 128, 0.45));
+  border-radius: 0.75rem;
+  background: var(--aiui-lens-bg, rgba(20, 20, 24, 0.97));
+  color: var(--aiui-lens-fg, #e8e8ee);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+  outline: none;
+}
+.aiui-lens-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--aiui-deck-line, rgba(128, 128, 128, 0.35));
+}
+.aiui-lens-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.aiui-lens-close {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.7;
+  padding: 0.25rem;
+}
+.aiui-lens-close:hover {
+  opacity: 1;
+}
+.aiui-lens-body {
+  padding: 1rem;
+  overflow-y: auto;
+}

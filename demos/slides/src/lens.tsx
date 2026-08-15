@@ -1,0 +1,247 @@
+/**
+ * lens.tsx — the Lens: levels of detail for web-native documents, in three
+ * tiers.
+ *
+ *  1. An inline TRIGGER — a real `<button>` (semantics first) carrying
+ *     arbitrary JSX, with a dotted-underline affordance by default.
+ *  2. Hover or keyboard focus (short delay) → a PEEK: an anchored popover
+ *     rendering `preview` — dense, glanceable, deliberately cheap (the
+ *     DemoCard discipline: pure model only). Touch devices have no hover;
+ *     tap goes straight to tier 3 — by design, not simulation.
+ *  3. Click → the DETAIL overlay: a centered panel rendering `detail` —
+ *     full, interactive, and **in the same reactive graph** as the page: the
+ *     Portal keeps Solid ownership under this component, so the detail view
+ *     reads (and writes) the very cells and controls the page uses.
+ *     Mount-on-open / dispose-on-close is the components-are-pure-readers
+ *     discipline — nothing is lost on close.
+ *
+ * DECK-INDEPENDENT by construction: no deck imports, no deck context, no new
+ * dependencies (viewport clamping is arithmetic, not a floating-ui
+ * dependency) — a research notebook wants this component exactly as much as
+ * a slide does, and its upstream home is aiui-viz once it has proven out in
+ * both (docs/proposals/slides.md).
+ *
+ * Interaction conventions are the Dropdown's: outside-pointerdown and Escape
+ * close, listeners attach in the component body and detach via onCleanup
+ * (Solid 2.0: no onMount). The Escape listener runs at bubble phase, so a
+ * capture-phase deck keymap that claims Escape (an open HUD) wins first — a
+ * coherent ladder: topmost surface closes first. Focus goes into the panel
+ * on open and back to the trigger on close.
+ *
+ * The peek and the overlay render IN PLACE (position: fixed), not through a
+ * Portal: the page's design tokens (`--aiui-lens-*`, set on a page-scoped
+ * class) must reach them by inheritance, and a body-mounted portal would sit
+ * outside that scope. `position: fixed` escapes every ancestor's overflow
+ * clipping on its own; the one caveat — a transformed/filtered ancestor
+ * becomes a fixed-position containing block — is a constraint on page CSS,
+ * not on this component: don't put transforms on a Lens's ancestors.
+ */
+import { PageBoundary } from "@habemus-papadum/aiui-viz";
+import type { JSX } from "@solidjs/web";
+import { type Component, createSignal, onCleanup, Show } from "solid-js";
+
+type LensState = "closed" | "peek" | "open";
+
+/** How long the pointer rests on the trigger before the peek appears. */
+const PEEK_DELAY_MS = 200;
+/** Grace period to travel trigger → popover without the peek collapsing. */
+const PEEK_GRACE_MS = 160;
+/** Minimum gap between a peek popover and the viewport edge. */
+const EDGE_PAD_PX = 8;
+
+export function Lens(props: {
+  /** Trigger content (inline JSX — a term, a number, a thumbnail). */
+  children: JSX.Element;
+  /** Tier 2: the dense, glanceable preview. Omit to go straight to detail. */
+  preview?: Component;
+  /** Tier 3: the full, interactive detail view. */
+  detail: Component;
+  /** Accessible name for the trigger and heading for the detail panel. */
+  label: string;
+  class?: string;
+}): JSX.Element {
+  const [state, setState] = createSignal<LensState>("closed");
+  let trigger: HTMLButtonElement | undefined;
+  let panel: HTMLDivElement | undefined;
+  let peekTimer: ReturnType<typeof setTimeout> | undefined;
+  let graceTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const clearTimers = (): void => {
+    if (peekTimer !== undefined) clearTimeout(peekTimer);
+    if (graceTimer !== undefined) clearTimeout(graceTimer);
+    peekTimer = undefined;
+    graceTimer = undefined;
+  };
+  onCleanup(clearTimers);
+
+  const openPeek = (): void => {
+    if (props.preview !== undefined && state() === "closed") setState("peek");
+  };
+  const open = (): void => {
+    clearTimers();
+    setState("open");
+    queueMicrotask(() => panel?.focus());
+  };
+  const close = (): void => {
+    clearTimers();
+    const wasOpen = state() === "open";
+    setState("closed");
+    if (wasOpen) trigger?.focus();
+  };
+
+  // Tier-2 pointer choreography: rest to peek; leaving either side starts the
+  // grace clock; re-entering either side stops it.
+  const pointerIn = (e: PointerEvent): void => {
+    if (e.pointerType !== "mouse") return; // touch goes straight to tier 3
+    if (graceTimer !== undefined) {
+      clearTimeout(graceTimer);
+      graceTimer = undefined;
+    }
+    if (state() === "closed" && peekTimer === undefined) {
+      peekTimer = setTimeout(() => {
+        peekTimer = undefined;
+        openPeek();
+      }, PEEK_DELAY_MS);
+    }
+  };
+  const pointerOut = (e: PointerEvent): void => {
+    if (e.pointerType !== "mouse") return;
+    if (peekTimer !== undefined) {
+      clearTimeout(peekTimer);
+      peekTimer = undefined;
+    }
+    if (state() === "peek") {
+      graceTimer = setTimeout(() => {
+        graceTimer = undefined;
+        if (state() === "peek") setState("closed");
+      }, PEEK_GRACE_MS);
+    }
+  };
+
+  // Overlay dismissal (Dropdown conventions). Listeners live for the
+  // component's life and act only when open — cheaper than re-wiring per
+  // state flip, and Escape-at-bubble keeps the deck's capture keymap senior.
+  if (typeof document !== "undefined") {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key !== "Escape") return;
+      if (state() === "open") {
+        e.stopPropagation();
+        close();
+      } else if (state() === "peek") {
+        setState("closed");
+      }
+    };
+    const onPointerDown = (e: PointerEvent): void => {
+      if (state() !== "open") return;
+      const target = e.target as Node | null;
+      if (panel && target && panel.contains(target)) return;
+      if (trigger && target && trigger.contains(target)) return;
+      close();
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onPointerDown);
+    onCleanup(() => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onPointerDown);
+    });
+  }
+
+  /** Anchor the peek under (or, cramped, above) the trigger, clamped to the
+   * viewport — plain arithmetic on two rects, nothing more. */
+  const placePeek = (pop: HTMLElement): void => {
+    const anchor = trigger?.getBoundingClientRect();
+    if (anchor === undefined) return;
+    const rect = pop.getBoundingClientRect();
+    let left = anchor.left + anchor.width / 2 - rect.width / 2;
+    left = Math.max(EDGE_PAD_PX, Math.min(left, window.innerWidth - rect.width - EDGE_PAD_PX));
+    let top = anchor.bottom + EDGE_PAD_PX;
+    if (top + rect.height > window.innerHeight - EDGE_PAD_PX) {
+      top = Math.max(EDGE_PAD_PX, anchor.top - rect.height - EDGE_PAD_PX);
+    }
+    pop.style.left = `${left}px`;
+    pop.style.top = `${top}px`;
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        class={`aiui-lens-trigger${props.class === undefined ? "" : ` ${props.class}`}`}
+        aria-haspopup="dialog"
+        aria-expanded={state() === "open" ? "true" : "false"}
+        aria-label={props.label}
+        ref={(el) => {
+          trigger = el;
+        }}
+        onPointerEnter={pointerIn}
+        onPointerLeave={pointerOut}
+        onFocusIn={() => openPeek()}
+        onFocusOut={() => {
+          if (state() === "peek") setState("closed");
+        }}
+        onClick={() => (state() === "open" ? close() : open())}
+      >
+        {props.children}
+      </button>
+
+      <Show when={state() === "peek"}>
+        <div
+          class="aiui-lens-peek"
+          role="tooltip"
+          onPointerEnter={pointerIn}
+          onPointerLeave={pointerOut}
+          ref={(el) => {
+            // Position once laid out (the ref fires before styles settle).
+            queueMicrotask(() => placePeek(el));
+          }}
+        >
+          {/* The lazy-getter pattern (gallery Landing.tsx): Show's children
+              run untracked; PageBoundary both fixes the read and contains a
+              faulty preview. */}
+          <Show when={props.preview}>
+            {(Preview) => (
+              <PageBoundary name={`${props.label} preview`}>{Preview()({})}</PageBoundary>
+            )}
+          </Show>
+        </div>
+      </Show>
+
+      <Show when={state() === "open"}>
+        <div class="aiui-lens-overlay">
+          {/* biome-ignore lint/a11y/noStaticElementInteractions: click-away backdrop; Escape is the keyboard path. */}
+          {/* biome-ignore lint/a11y/useKeyWithClickEvents: same — the keyboard equivalent is Escape, handled document-wide. */}
+          <div class="aiui-lens-backdrop" onClick={() => close()} />
+          <div
+            class="aiui-lens-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-label={props.label}
+            tabindex="-1"
+            ref={(el) => {
+              panel = el;
+            }}
+          >
+            <div class="aiui-lens-head">
+              <span class="aiui-lens-title">{props.label}</span>
+              <button
+                type="button"
+                class="aiui-lens-close"
+                aria-label="close"
+                onClick={() => close()}
+              >
+                ✕
+              </button>
+            </div>
+            <div class="aiui-lens-body">
+              {/* Boundary at the mount seam: a broken detail view must not
+                  halt the document's reactive system. */}
+              <PageBoundary name={props.label}>
+                <props.detail />
+              </PageBoundary>
+            </div>
+          </div>
+        </div>
+      </Show>
+    </>
+  );
+}

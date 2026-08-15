@@ -1,18 +1,17 @@
 {
-  "name": "@habemus-papadum/demo-gears",
+  "name": "@habemus-papadum/demo-gear-talk",
   "version": "0.17.0+dev",
-  "description": "A live involute-gear studio: two spur gears in kinematic mesh, the line of action and contact point, and a single-tooth studio — all pure geometry.",
+  "description": "The Involute Gear, as a talk: the reference deck for @habemus-papadum/aiui-slides — six viewport slides over demo-gears' pure geometry, with Lens details folded into the talk's own control surface.",
   "private": true,
   "type": "module",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/habemus-papadum/pdum_aiui.git",
-    "directory": "demos/gears"
+    "directory": "demos/gear-talk"
   },
   "exports": {
     ".": "./src/index.ts",
-    "./gear": "./src/model/gear.ts",
     "./page": "./src/page.tsx",
     "./card": "./src/card.tsx"
   },
@@ -21,9 +20,9 @@
   "types": "./src/index.ts",
   "aiui": {
     "sitePage": {
-      "title": "gears",
-      "desc": "involute gears in kinematic mesh",
-      "order": 50,
+      "title": "gear talk",
+      "desc": "the involute gear, as slides",
+      "order": 55,
       "card": "./card"
     }
   },
@@ -36,8 +35,10 @@
   },
   "dependencies": {
     "@habemus-papadum/aiui-journal": "workspace:^",
+    "@habemus-papadum/aiui-slides": "workspace:^",
     "@habemus-papadum/aiui-source-processor": "workspace:^",
     "@habemus-papadum/aiui-viz": "workspace:^",
+    "@habemus-papadum/demo-gears": "workspace:^",
     "@solidjs/web": "catalog:solid",
     "solid-js": "catalog:solid"
   },

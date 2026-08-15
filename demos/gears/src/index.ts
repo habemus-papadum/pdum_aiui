@@ -10,6 +10,11 @@
  * scope.ts; user guide, "Composing bigger apps"). The widgets and graph read
  * the ONE module-level instance (an app that exports its parts, not a
  * multi-instance slice factory — see demos/oscillator for that pattern).
+ *
+ * Importing THIS barrel boots the app: it re-exports the graph and store, so
+ * their side effects (cells, toolkit) run. A sibling that wants only the pure
+ * geometry — demo-gear-talk's figures, a landing card — imports the `./gear`
+ * subpath instead, which carries no identity and registers nothing.
  */
 
 // --- pure model (playbook layer 1) ------------------------------------------

@@ -203,12 +203,19 @@ gitignored-scratch status), `demos/gears` (an involute-gear studio, pure SVG geo
 wave-optics pair `demos/gratings` + `demos/holograms` (diffraction and holography taught at
 design level: streamed 2-D wave maps from a worker, WebGL field islands, paraxial design
 equations overlaid on the honest wave — both riding `demos/optics`, the internal scalar-wave
-engine package whose unit tests pin the physics claims). Each
+engine package whose unit tests pin the physics claims), and `demos/gear-talk` (the involute
+gear as a six-slide TALK — the reference deck for `demos/slides`,
+`@habemus-papadum/aiui-slides`, the internal slides framework: scroll-snap viewport slides with
+the current slide as a control, a HUD overview grid of slide previews, widget-first navigation
+over a modal-kit keymap, slide↔URL tail binding over aiui-viz's shared `pathname()` signal, and
+the Lens levels-of-detail component — docs/proposals/slides.md is the decided contract; note
+the gallery router's head/tail routes and demo-gears' pure `./gear` subpath both exist for this
+deck). Each
 is deliberately far richer than the starter, runs standalone (`pnpm -C demos/<slug> claude` +
 `dev`), exports its widgets/store/pure model from `src/index.ts`, ships a live landing card
 (`src/card.tsx`), and is scoped under `scope("<slug>")` throughout. Their shared dark-journal look
-lives in `demos/journal` (`@habemus-papadum/aiui-journal`, internal like `demos/oscillator` and
-`demos/optics`): the
+lives in `demos/journal` (`@habemus-papadum/aiui-journal`, internal like `demos/oscillator`,
+`demos/optics`, and `demos/slides`): the
 theme literals plus the tokens/notebook-chrome stylesheet (the sidebar + landing-card chrome too).
 A demo's page CSS uses demo-prefixed class names (or is scoped under a root class, like
 `demos/gears`' `.gears`) so nothing leaks onto a sibling mounted in the same document.

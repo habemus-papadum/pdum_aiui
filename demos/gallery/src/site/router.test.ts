@@ -6,10 +6,13 @@
  */
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
-import { hrefOf, interceptLocalLinks, LANDING, navigate, route, routeOf } from "./router";
+import { headOf, hrefOf, interceptLocalLinks, LANDING, navigate, route, routeOf } from "./router";
 
 afterEach(() => {
   history.replaceState(null, "", "/");
+  // route() derives from the shared pathname signal (aiui-viz site/path.ts),
+  // which only sees popstate or navigateTo — resync it after the raw reset.
+  window.dispatchEvent(new PopStateEvent("popstate"));
 });
 
 /** Signal writes are batched — a same-tick read lies (the user guide's gotcha). */
@@ -27,6 +30,20 @@ describe("routeOf", () => {
     expect(routeOf("/aztec.html")).toBe("aztec");
     expect(routeOf("/seismos.html")).toBe("seismos");
     expect(routeOf("/index.html")).toBe(LANDING);
+  });
+
+  it("preserves tail segments under a known slug (a page's internal route)", () => {
+    expect(routeOf("/aztec/theory")).toBe("aztec/theory");
+    expect(routeOf("/aztec/theory/deep")).toBe("aztec/theory/deep");
+    expect(routeOf("/nonsense/tail")).toBe(LANDING);
+  });
+});
+
+describe("headOf", () => {
+  it("takes the page identity off a route, tail or no tail", () => {
+    expect(headOf("aztec")).toBe("aztec");
+    expect(headOf("aztec/theory")).toBe("aztec");
+    expect(headOf(LANDING)).toBe(LANDING);
   });
 });
 
@@ -67,6 +84,20 @@ describe("interceptLocalLinks", () => {
     expect(e.defaultPrevented).toBe(true); // no document death
     await tick();
     expect(route()).toBe("seismos");
+    a.remove();
+    off();
+  });
+
+  it("keeps the tail on an internal-route anchor (a deck's slide link)", async () => {
+    const off = interceptLocalLinks();
+    const a = document.createElement("a");
+    a.href = "/aztec/theory";
+    document.body.append(a);
+    const e = click(a);
+    expect(e.defaultPrevented).toBe(true);
+    await tick();
+    expect(route()).toBe("aztec/theory");
+    expect(location.pathname).toBe("/aztec/theory");
     a.remove();
     off();
   });

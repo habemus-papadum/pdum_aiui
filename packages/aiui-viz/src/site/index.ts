@@ -9,6 +9,9 @@
  * - {@link TeX} — KaTeX math with the `data-tex` attribution stamp.
  * - {@link colorMode} — the reactive `prefers-color-scheme` signal apps key
  *   their per-mode palettes on.
+ * - {@link pathname} / {@link navigateTo} — the one reactive source of truth
+ *   for `location.pathname`, shared by a shell routing on the path's head and
+ *   a page routing on its tail (a slide deck's slides).
  *
  * Kept off the core barrel so `katex` stays an optional peer — only `/site`
  * consumers pay for it. Styling is the consumer's throughout (`.site-*`,
@@ -21,6 +24,7 @@
 export type { DemoCard, SitePage } from "../site-page";
 export type { ColorMode } from "./color-mode";
 export { colorMode } from "./color-mode";
+export { navigateTo, pathname } from "./path";
 export type { SiteNavItem, SiteNavProps } from "./site-nav";
 export { SiteNav } from "./site-nav";
 export { TeX } from "./tex";

@@ -1,0 +1,283 @@
+/**
+ * page.css — the talk's look: journal-dark slide typography plus the token
+ * bridge that rethemes the framework's default chrome (the point of the
+ * `--aiui-deck-*` custom properties: one block, no specificity fights).
+ * Everything is scoped under `.gear-talk` so nothing leaks onto a sibling
+ * page in the shared gallery document.
+ */
+
+.gear-talk {
+  /* retheme the deck chrome onto journal tokens */
+  --aiui-deck-accent: var(--accent, #8ab4f8);
+  --aiui-deck-line: var(--panel-border, #262c3a);
+  --aiui-deck-chrome-bg: color-mix(in srgb, var(--panel, #171b25) 72%, transparent);
+  --aiui-deck-chrome-hover: var(--btn-hover, #2f3c58);
+  --aiui-deck-fg: var(--text, #e8e8ea);
+  --aiui-deck-hud-tile-bg: var(--panel, #171b25);
+  --aiui-deck-hud-fg: var(--text, #e8e8ea);
+  --aiui-lens-bg: var(--panel, #171b25);
+  --aiui-lens-fg: var(--text, #e8e8ea);
+
+  background: var(--figure-bg, #0e1119);
+  color: var(--text, #e8e8ea);
+}
+
+/* ── slide layout ─────────────────────────────────────────────────────── */
+
+.gear-talk .talk-slide {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1.1rem;
+  padding: clamp(1.5rem, 5vw, 4.5rem);
+  max-width: 68rem;
+  margin: 0 auto;
+}
+.gear-talk h1 {
+  font-size: clamp(2.6rem, 7vw, 5rem);
+  line-height: 1.05;
+  margin: 0;
+  color: var(--text-heading, #c3c9d4);
+}
+.gear-talk h2 {
+  font-size: clamp(1.6rem, 3.6vw, 2.6rem);
+  margin: 0;
+  color: var(--text-heading, #c3c9d4);
+}
+.gear-talk .talk-kicker {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  font-size: 0.8rem;
+  color: var(--accent, #8ab4f8);
+}
+.gear-talk .talk-sub {
+  margin: 0;
+  max-width: 34rem;
+  color: var(--text-secondary, #9aa0aa);
+}
+.gear-talk .talk-points {
+  margin: 0;
+  padding: 0 0 0 1.1rem;
+  display: grid;
+  gap: 0.9rem;
+  max-width: 44rem;
+  font-size: clamp(1rem, 1.9vw, 1.25rem);
+  line-height: 1.55;
+  color: var(--text, #e8e8ea);
+}
+.gear-talk .talk-fine {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-dim, #8f97a5);
+  max-width: 40rem;
+}
+.gear-talk kbd {
+  padding: 0.1em 0.45em;
+  border: 1px solid var(--panel-border, #262c3a);
+  border-bottom-width: 2px;
+  border-radius: 0.3em;
+  background: var(--panel, #171b25);
+  font-size: 0.85em;
+}
+.gear-talk a {
+  color: var(--accent, #8ab4f8);
+}
+
+/* title slide */
+.gear-talk .talk-title {
+  position: relative;
+  align-items: flex-start;
+}
+.gear-talk .talk-title-backdrop {
+  position: absolute;
+  inset: 0;
+  opacity: 0.22;
+  pointer-events: none;
+}
+.gear-talk .talk-title-mesh {
+  width: 100%;
+  height: 100%;
+}
+
+/* split slides (figure + text) */
+.gear-talk .talk-split {
+  flex-direction: row;
+  align-items: center;
+  gap: clamp(1rem, 4vw, 3rem);
+}
+.gear-talk .talk-split-text {
+  flex: 1 1 46%;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+.gear-talk .talk-split-fig {
+  flex: 1 1 54%;
+  min-width: 0;
+  align-self: stretch;
+  display: grid;
+}
+@media (max-width: 760px) {
+  .gear-talk .talk-split {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .gear-talk .talk-split-fig {
+    min-height: 0;
+  }
+}
+
+.gear-talk .talk-stage {
+  flex: 0 1 58vh;
+  min-height: 0;
+  display: grid;
+}
+.gear-talk .talk-fig {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+/* controls + readouts */
+.gear-talk .talk-controls {
+  display: flex;
+  gap: 1.25rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.gear-talk .talk-controls-col {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.6rem;
+}
+.gear-talk .talk-readouts {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+.gear-talk .talk-readouts > div {
+  display: grid;
+  gap: 0.15rem;
+}
+.gear-talk .talk-rd-num {
+  font-size: 1.5rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-heading, #c3c9d4);
+}
+.gear-talk .talk-rd-lbl {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted, #6b7280);
+}
+.gear-talk .talk-big-number {
+  font-size: 2.4rem;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent, #8ab4f8);
+}
+
+/* lens bodies + peeks — the Lens renders IN PLACE (no portal), so all of
+ * this sits inside .gear-talk and inherits the token bridge above. */
+.gear-talk .talk-lens-detail {
+  display: grid;
+  gap: 0.9rem;
+}
+.gear-talk .talk-lens-fig {
+  width: 100%;
+  max-height: 40vh;
+}
+.gear-talk .talk-peek {
+  display: grid;
+  gap: 0.5rem;
+  max-width: 20rem;
+}
+.gear-talk .talk-peek p {
+  margin: 0;
+}
+.gear-talk .talk-peek-fig {
+  width: 100%;
+  height: 6rem;
+}
+
+/* ── figure strokes (shared vocabulary; SVG scales the stroke) ─────────── */
+
+.gear-talk .fig-gear {
+  fill: none;
+  stroke: var(--accent, #8ab4f8);
+  stroke-width: 1.4;
+}
+.gear-talk .fig-gear-b {
+  stroke: var(--text-faint, #5b6270);
+}
+.gear-talk .fig-circle {
+  fill: none;
+  stroke-width: 0.9;
+  stroke-dasharray: 4 4;
+}
+.gear-talk .fig-pitch {
+  stroke: #e3b341;
+}
+.gear-talk .fig-base {
+  stroke: #56b6c2;
+}
+.gear-talk .fig-tip,
+.gear-talk .fig-root {
+  stroke: #5b6270;
+}
+.gear-talk .fig-loa {
+  stroke: #e06c75;
+  stroke-width: 1.6;
+}
+.gear-talk .fig-pitch-pt {
+  fill: #e3b341;
+}
+.gear-talk .fig-contact {
+  fill: #e06c75;
+}
+.gear-talk .fig-involute {
+  stroke: var(--accent, #8ab4f8);
+  stroke-width: 2;
+}
+.gear-talk .fig-string {
+  stroke: #e3b341;
+  stroke-width: 1.2;
+  stroke-dasharray: 3 3;
+}
+.gear-talk .fig-key {
+  border-bottom: 2px solid;
+  padding-bottom: 0.05em;
+}
+.gear-talk .fig-key-pitch {
+  border-color: #e3b341;
+}
+.gear-talk .fig-key-base {
+  border-color: #56b6c2;
+}
+
+/* HUD minis (mounted inside the deck's HUD, still under .gear-talk) */
+.gear-talk .talk-mini {
+  width: 100%;
+  height: 100%;
+}
+.gear-talk .talk-mini-tile {
+  display: grid;
+  place-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem;
+  height: 100%;
+}
+.gear-talk .talk-mini-word {
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary, #9aa0aa);
+  text-align: center;
+}
+.gear-talk .talk-mini-stat {
+  font-size: 1.6rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent, #8ab4f8);
+}
