@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-stt",
-  "version": "0.17.2",
+  "version": "0.17.2+dev",
   "description": "Realtime speech-to-text as a pencil-shaped component: ElevenLabs Scribe v2 (default) and OpenAI transcription realtime engines behind one session seam, with injected credentials and audio.",
   "type": "module",
   "license": "MIT",
