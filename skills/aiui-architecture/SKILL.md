@@ -67,6 +67,34 @@ pencil demo — `PencilSurface` from `@habemus-papadum/aiui-pencil` — and the 
 case); `demos/twins` + `demos/oscillator` (slices and scopes); and `demos/gallery`, the site
 shell that DISCOVERS the others (it depends on none of them — section below).
 
+## Installing into an existing app
+
+Every package is on public npm under `@habemus-papadum/*`. For a NEW app, don't
+hand-assemble — scaffold with `create-aiui` and all of this arrives pinned correctly. When
+adding aiui to an app that already exists, copy the dependency set from the create-aiui app
+template ([packages/create-aiui/templates/app/package.json](../../packages/create-aiui/templates/app/package.json))
+— it is the maintained record of what a consuming app needs, bumped in step with the repo
+catalog. Never trust a version written in prose (this skill included); the template is the
+source of truth.
+
+- **deps**: `aiui-viz` + `aiui-source-processor` at one matching version (they release in
+  lockstep; the template's `__AIUI_VERSION_RANGE__` placeholder means "current release" —
+  plain `pnpm add` gets it), plus `solid-js` and `@solidjs/web` at the template's EXACT
+  pins. During the Solid 2.0 beta the runtime and JSX compiler move in lockstep — never
+  loosen those pins to a `^`/`>=` range in an app.
+- **devDeps**: `vite-plugin-solid` at the template's exact pin (its next-tags track the
+  Solid beta), and `@babel/core` (aiui-source-processor's peer). Take the template's
+  vite/vitest/typescript lines too unless the app already carries its own — the processor
+  and plugin declare wide vite peer ranges, so an app's existing vite usually stands.
+- **Optional peers** arrive only with the porcelain subpath that needs them: `…/plot` →
+  `@observablehq/plot`; `…/mosaic` + `…/duckdb` → `@uwdata/mosaic-*` and
+  `@duckdb/duckdb-wasm` (exact-pin rule in the Charts section); `TeX` → katex.
+
+aiui-viz ships as `.tsx` source — the consuming app compiles it. The install is not done
+until `vite.config.ts` has `plugins: [aiui(), solid()]` (order rules in the compiler section
+above) and a build passes; put the versions wherever the consuming repo keeps them (catalog
+vs literal pins — follow the repo's convention).
+
 ## The playbook: the default order of work (and the default shape of a plan)
 
 When building **from scratch — or anything bigger than a one-line tweak — follow the
