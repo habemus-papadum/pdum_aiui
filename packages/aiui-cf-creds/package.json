@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-cf-creds",
-  "version": "0.17.1",
+  "version": "0.17.1+dev",
   "description": "Broker-backed ephemeral credentials for aiui apps: adapters from the cf_browser_credentials kit to aiui's credential seams (oracle KeySource, STT connect, Mosaic connector).",
   "type": "module",
   "license": "MIT",

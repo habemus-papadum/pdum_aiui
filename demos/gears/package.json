@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/demo-gears",
-  "version": "0.17.1",
+  "version": "0.17.1+dev",
   "description": "A live involute-gear studio: two spur gears in kinematic mesh, the line of action and contact point, and a single-tooth studio — all pure geometry.",
   "private": true,
   "type": "module",

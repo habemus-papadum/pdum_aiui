@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-slides",
-  "version": "0.17.1",
+  "version": "0.17.1+dev",
   "description": "The slides framework: a deck of viewport-sized, scroll-snapped slides as an ordinary aiui app — current slide as a control, HUD grid overview with live previews, widget-first navigation over a modal-kit keymap, and the Lens (hover preview → interactive detail overlay, folded into the page's reactive graph). Internal, never published (incubating — see docs/proposals/slides.md).",
   "type": "module",
   "license": "MIT",
