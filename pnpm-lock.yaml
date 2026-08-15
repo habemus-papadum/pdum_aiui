@@ -382,7 +382,7 @@ importers:
         version: link:../journal
       '@habemus-papadum/aiui-slides':
         specifier: workspace:^
-        version: link:../slides
+        version: link:../../packages/aiui-slides
       '@habemus-papadum/aiui-source-processor':
         specifier: workspace:^
         version: link:../../packages/aiui-source-processor
@@ -724,34 +724,6 @@ importers:
       vitest:
         specifier: 'catalog:'
         version: 3.2.6(@types/debug@4.1.13)(@types/node@26.1.0)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.3.0))(tsx@4.22.5)(yaml@2.9.0)
-
-  demos/slides:
-    dependencies:
-      '@habemus-papadum/aiui-viz':
-        specifier: workspace:^
-        version: link:../../packages/aiui-viz
-      '@solidjs/web':
-        specifier: catalog:solid
-        version: 2.0.0-beta.32(solid-js@2.0.0-beta.32)
-      solid-js:
-        specifier: catalog:solid
-        version: 2.0.0-beta.32
-    devDependencies:
-      jsdom:
-        specifier: 'catalog:'
-        version: 29.1.1(@noble/hashes@2.3.0)
-      typescript:
-        specifier: 'catalog:'
-        version: 5.9.3
-      vite:
-        specifier: 'catalog:'
-        version: 6.4.3(@types/node@26.2.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
-      vite-plugin-solid:
-        specifier: catalog:solid
-        version: 3.0.0-next.24(@solidjs/web@2.0.0-beta.32(solid-js@2.0.0-beta.32))(solid-js@2.0.0-beta.32)(vite@6.4.3(@types/node@26.2.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
-      vitest:
-        specifier: 'catalog:'
-        version: 3.2.6(@types/debug@4.1.13)(@types/node@26.2.0)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.3.0))(tsx@4.22.5)(yaml@2.9.0)
 
   demos/twins:
     dependencies:
@@ -1241,6 +1213,34 @@ importers:
       '@types/ws':
         specifier: 'catalog:'
         version: 8.18.1
+
+  packages/aiui-slides:
+    dependencies:
+      '@habemus-papadum/aiui-viz':
+        specifier: workspace:^
+        version: link:../aiui-viz
+      '@solidjs/web':
+        specifier: catalog:solid
+        version: 2.0.0-beta.32(solid-js@2.0.0-beta.32)
+      solid-js:
+        specifier: catalog:solid
+        version: 2.0.0-beta.32
+    devDependencies:
+      jsdom:
+        specifier: 'catalog:'
+        version: 29.1.1(@noble/hashes@2.3.0)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vite:
+        specifier: 'catalog:'
+        version: 6.4.3(@types/node@26.2.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
+      vite-plugin-solid:
+        specifier: catalog:solid
+        version: 3.0.0-next.24(@solidjs/web@2.0.0-beta.32(solid-js@2.0.0-beta.32))(solid-js@2.0.0-beta.32)(vite@6.4.3(@types/node@26.2.0)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.6(@types/debug@4.1.13)(@types/node@26.2.0)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.3.0))(tsx@4.22.5)(yaml@2.9.0)
 
   packages/aiui-source-processor:
     dependencies:

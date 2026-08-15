@@ -1,6 +1,8 @@
 # A slides framework for aiui — decks, the HUD, and the Lens
 
-Status: **accepted and implemented** — `demos/slides` (@habemus-papadum/aiui-slides),
+Status: **accepted and implemented** — `packages/aiui-slides` (@habemus-papadum/aiui-slides;
+incubated as `demos/slides`, promoted 2026-08-15 when the first out-of-repo consumer arrived —
+an app must not depend on a demo),
 `demos/gear-talk` (the reference deck), aiui-viz's `site/path.ts`, and the gallery's head/tail
 routes all landed together with this document (this document is the decided contract; it
 retires to git history once the dust has settled — the house convention for finished
@@ -54,10 +56,10 @@ and cross-demo links all keep working through the one interceptor.
 The sidebar highlights by head; `loadPage` caches by head; `show()` early-returns when the head
 is unchanged.
 
-### 3. `demos/slides` — `@habemus-papadum/aiui-slides` (internal, never published)
+### 3. `packages/aiui-slides` — `@habemus-papadum/aiui-slides` (internal, never published)
 
-The framework package, incubated exactly like `demos/journal`: workspace-internal, version
-lockstep, CI-typechecked, no `publishConfig`. Contents:
+The framework package, incubated exactly like `demos/journal` (as `demos/slides`; now under
+packages/): workspace-internal, version lockstep, CI-typechecked, no `publishConfig`. Contents:
 
 - **`SlideDef`** — `{ id, title, content: Component, preview?: Component }`. Slides are DATA
   (the router's "routes are data" move): the HUD grid, the URL segments, and any future

@@ -20,8 +20,10 @@
  *    own reactive graph.
  *
  * Default styling is the opt-in `./styles.css` (token-overridable
- * `aiui-deck-*` / `aiui-lens-*` classes). Internal to the pdum_aiui repo
- * while incubating; never published yet.
+ * `aiui-deck-*` / `aiui-lens-*` classes). Never published yet: workspace
+ * demos consume it as `workspace:^`, out-of-repo apps via a `link:` into
+ * this checkout (incubated in demos/, promoted to packages/ when the first
+ * real app arrived).
  */
 
 export { Deck } from "./deck";
