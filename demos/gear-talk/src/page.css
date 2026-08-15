@@ -7,7 +7,11 @@
  */
 
 .gear-talk {
-  /* retheme the deck chrome onto journal tokens */
+  /* retheme the deck chrome onto journal tokens — every one of these flips
+   * with the system mode, so the talk follows the OS like the notebooks do.
+   * (NOT --figure-bg: that is the journal's cross-mode-dark simulation-plate
+   * token, and a talk PAGE is prose, not a plate — using it here rendered
+   * light-mode text on a dark ground.) */
   --aiui-deck-accent: var(--accent, #8ab4f8);
   --aiui-deck-line: var(--panel-border, #262c3a);
   --aiui-deck-chrome-bg: color-mix(in srgb, var(--panel, #171b25) 72%, transparent);
@@ -18,8 +22,20 @@
   --aiui-lens-bg: var(--panel, #171b25);
   --aiui-lens-fg: var(--text, #e8e8ea);
 
-  background: var(--figure-bg, #0e1119);
+  /* figure literals with no journal token: dark values here, light below */
+  --gt-pitch: #e3b341;
+  --gt-base: #56b6c2;
+  --gt-hot: #e06c75;
+
+  background: var(--bg, #0e1119);
   color: var(--text, #e8e8ea);
+}
+@media (prefers-color-scheme: light) {
+  .gear-talk {
+    --gt-pitch: #a97b12;
+    --gt-base: #177889;
+    --gt-hot: #bd4450;
+  }
 }
 
 /* ── slide layout ─────────────────────────────────────────────────────── */
@@ -219,31 +235,31 @@
   stroke-dasharray: 4 4;
 }
 .gear-talk .fig-pitch {
-  stroke: #e3b341;
+  stroke: var(--gt-pitch);
 }
 .gear-talk .fig-base {
-  stroke: #56b6c2;
+  stroke: var(--gt-base);
 }
 .gear-talk .fig-tip,
 .gear-talk .fig-root {
-  stroke: #5b6270;
+  stroke: var(--text-faint, #5b6270);
 }
 .gear-talk .fig-loa {
-  stroke: #e06c75;
+  stroke: var(--gt-hot);
   stroke-width: 1.6;
 }
 .gear-talk .fig-pitch-pt {
-  fill: #e3b341;
+  fill: var(--gt-pitch);
 }
 .gear-talk .fig-contact {
-  fill: #e06c75;
+  fill: var(--gt-hot);
 }
 .gear-talk .fig-involute {
   stroke: var(--accent, #8ab4f8);
   stroke-width: 2;
 }
 .gear-talk .fig-string {
-  stroke: #e3b341;
+  stroke: var(--gt-pitch);
   stroke-width: 1.2;
   stroke-dasharray: 3 3;
 }
@@ -252,10 +268,10 @@
   padding-bottom: 0.05em;
 }
 .gear-talk .fig-key-pitch {
-  border-color: #e3b341;
+  border-color: var(--gt-pitch);
 }
 .gear-talk .fig-key-base {
-  border-color: #56b6c2;
+  border-color: var(--gt-base);
 }
 
 /* HUD minis (mounted inside the deck's HUD, still under .gear-talk) */

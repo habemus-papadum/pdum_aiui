@@ -7,8 +7,31 @@
  * the cosmetics are placeholders with taste.
  *
  * The translucent grays are deliberately mid-spectrum so the chrome reads on
- * BOTH light and dark pages without knowing which it is on.
+ * BOTH light and dark pages without knowing which it is on. The few surfaces
+ * that DO need a real background (HUD tiles, lens panels) get system-following
+ * internal defaults below — dark base, light media override — so an
+ * untokened consumer is readable in either OS mode. Override the public
+ * `--aiui-*` tokens, never the `--_aiui-*` internals.
  */
+
+.aiui-deck,
+.aiui-lens-trigger,
+.aiui-lens-peek,
+.aiui-lens-overlay {
+  --_aiui-surface: rgba(20, 20, 24, 0.94);
+  --_aiui-surface-fg: #e8e8ee;
+  --_aiui-accent: #7aa2ff;
+}
+@media (prefers-color-scheme: light) {
+  .aiui-deck,
+  .aiui-lens-trigger,
+  .aiui-lens-peek,
+  .aiui-lens-overlay {
+    --_aiui-surface: rgba(253, 253, 255, 0.97);
+    --_aiui-surface-fg: #202634;
+    --_aiui-accent: #2b5fb8;
+  }
+}
 
 /* ── the deck ──────────────────────────────────────────────────────────── */
 
@@ -167,8 +190,8 @@
   padding: 0.6rem;
   border: 1px solid var(--aiui-deck-line, rgba(128, 128, 128, 0.45));
   border-radius: 0.6rem;
-  background: var(--aiui-deck-hud-tile-bg, rgba(20, 20, 24, 0.85));
-  color: var(--aiui-deck-hud-fg, #e8e8ee);
+  background: var(--aiui-deck-hud-tile-bg, var(--_aiui-surface));
+  color: var(--aiui-deck-hud-fg, var(--_aiui-surface-fg));
   cursor: pointer;
   text-align: left;
   transition:
@@ -177,12 +200,12 @@
 }
 .aiui-deck-hud-tile:hover,
 .aiui-deck-hud-tile:focus-visible {
-  border-color: var(--aiui-deck-accent, #7aa2ff);
+  border-color: var(--aiui-deck-accent, var(--_aiui-accent));
   transform: translateY(-2px);
 }
 .aiui-deck-hud-tile.is-current {
-  border-color: var(--aiui-deck-accent, #7aa2ff);
-  box-shadow: 0 0 0 1px var(--aiui-deck-accent, #7aa2ff);
+  border-color: var(--aiui-deck-accent, var(--_aiui-accent));
+  box-shadow: 0 0 0 1px var(--aiui-deck-accent, var(--_aiui-accent));
 }
 .aiui-deck-hud-thumb {
   aspect-ratio: 16 / 9;
@@ -235,7 +258,7 @@
 .aiui-lens-trigger:hover,
 .aiui-lens-trigger:focus-visible {
   text-decoration-style: solid;
-  text-decoration-color: var(--aiui-deck-accent, #7aa2ff);
+  text-decoration-color: var(--aiui-deck-accent, var(--_aiui-accent));
 }
 .aiui-lens-peek {
   position: fixed;
@@ -244,8 +267,8 @@
   padding: 0.6rem 0.75rem;
   border: 1px solid var(--aiui-deck-line, rgba(128, 128, 128, 0.45));
   border-radius: 0.5rem;
-  background: var(--aiui-lens-bg, rgba(20, 20, 24, 0.95));
-  color: var(--aiui-lens-fg, #e8e8ee);
+  background: var(--aiui-lens-bg, var(--_aiui-surface));
+  color: var(--aiui-lens-fg, var(--_aiui-surface-fg));
   font-size: 0.85rem;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
   pointer-events: auto;
@@ -271,8 +294,8 @@
   flex-direction: column;
   border: 1px solid var(--aiui-deck-line, rgba(128, 128, 128, 0.45));
   border-radius: 0.75rem;
-  background: var(--aiui-lens-bg, rgba(20, 20, 24, 0.97));
-  color: var(--aiui-lens-fg, #e8e8ee);
+  background: var(--aiui-lens-bg, var(--_aiui-surface));
+  color: var(--aiui-lens-fg, var(--_aiui-surface-fg));
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
   outline: none;
 }
