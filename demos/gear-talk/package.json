@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/demo-gear-talk",
-  "version": "0.17.0+dev",
+  "version": "0.17.1",
   "description": "The Involute Gear, as a talk: the reference deck for @habemus-papadum/aiui-slides — six viewport slides over demo-gears' pure geometry, with Lens details folded into the talk's own control surface.",
   "private": true,
   "type": "module",

@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui",
-  "version": "0.17.0+dev",
+  "version": "0.17.1",
   "description": "ai ui frontends",
   "type": "module",
   "license": "MIT",
