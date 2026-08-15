@@ -3,10 +3,13 @@
 // repo's own Node. Versions are managed by CI (.github/workflows/release.yml);
 // humans and agents should NOT run `set` by hand (see AGENTS.md).
 //
-// Lockstep covers TWO kinds of file: every package.json (which carries the full
-// `X.Y.Z+dev` string) and the Chrome extension manifests (which carry only the
-// semver CORE `X.Y.Z` — Chrome rejects a `-prerelease`/`+build` suffix). `set`
-// keeps both in step; `current` verifies both.
+// Lockstep covers TWO kinds of file: the full-`X.Y.Z+dev` JSON manifests (every
+// package.json, plus the repo-root Claude-plugin manifest
+// .claude-plugin/plugin.json — its version is what installed copies report, so
+// the staleness check in `aiui claude` depends on it being stamped) and the
+// Chrome extension manifests (which carry only the semver CORE `X.Y.Z` — Chrome
+// rejects a `-prerelease`/`+build` suffix). `set` keeps all in step; `current`
+// verifies all.
 //
 // Subcommands:
 //   current                  print the single shared version; exit 1 if packages
@@ -56,9 +59,13 @@ function workspaceGlobs() {
   return globs;
 }
 
-/** Every package.json that carries the shared version: the root + each member. */
+/**
+ * Every JSON manifest that carries the shared version: the root package.json,
+ * each workspace member's, and the repo-root Claude-plugin manifest (same
+ * read/write shape — a top-level "version" field).
+ */
 function versionFiles() {
-  const files = [join(repoRoot, "package.json")];
+  const files = [join(repoRoot, "package.json"), join(repoRoot, ".claude-plugin", "plugin.json")];
   for (const glob of workspaceGlobs()) {
     for (const dir of globSync(glob, { cwd: repoRoot })) {
       const pkg = join(repoRoot, dir, "package.json");

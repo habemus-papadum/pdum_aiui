@@ -86,7 +86,7 @@ shots and selections over CDP reads), or no browser at all. Believe that sentenc
 computed per launch, not boilerplate. The other injection markers (`[screenshot located at
 <path>]`, `[selected text: …]`, `[current tab changed: <tab …/>]`, …) are cataloged with real
 outputs in the
-[Prompt Rendering Reference](../../../../../../../packages/aiui-claude-channel/docs/prompt-rendering.md).
+[Prompt Rendering Reference](../../packages/aiui-claude-channel/docs/prompt-rendering.md).
 
 The `<tab>` ids live in **different namespaces**, and none of them is an MCP pageId:
 
@@ -142,7 +142,7 @@ Gotchas that have cost real debugging time:
   `preferCurrentTab`) still shows a picker — never leave one dangling on the user's browser;
   and a Chrome spawned from a shell **without the macOS Screen-Recording grant inherits that
   lack and the call hangs** — never trust a capture measurement taken from an agent-spawned
-  shell (details: [chrome.md](../../../../../../../packages/aiui/docs/chrome.md)).
+  shell (details: [chrome.md](../../packages/aiui/docs/chrome.md)).
 - **Dev servers reload on any file change under the Vite root.** If the user is editing, your
   page state can vanish mid-drive — keep drives atomic and re-check state at the top of each
   script.

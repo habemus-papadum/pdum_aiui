@@ -12,11 +12,11 @@ share — you click around in the same tabs the agent drives, the agent screensh
 looking at, and the [intent client's extension](/guide/intent-panel) is loaded in it. That's what
 makes deictic work ("make *this* wider") possible.
 
-Sharing a browser needs manners, so whenever the Chrome DevTools MCP is attached, `aiui claude`
-also loads the **session-browser skill** from the bundled
-[plugin marketplace](/packages/aiui-claude-plugin/) — etiquette (announce visible actions,
-open your own tabs, never resize) plus the page-tools surface and tab-routing mechanics.
-Sessions without the browser skip the skill entirely.
+Sharing a browser needs manners, so every `aiui claude` session carries the
+**session-browser skill** (`skills/session-browser` in the repo-root aiui plugin) — etiquette
+(announce visible actions, open your own tabs, never resize) plus the page-tools surface and
+tab-routing mechanics. Its description scopes it to sessions where the DevTools MCP is
+actually attached, so browserless sessions leave it dormant.
 
 ## On and off
 

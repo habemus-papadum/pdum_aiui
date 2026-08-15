@@ -3,7 +3,8 @@
 ## Version management — do NOT touch versions
 
 The `version` field in every `package.json` (the root and every workspace member — `packages/*` and
-`demos/*` alike) is managed **exclusively** by the CI release pipeline. Do not edit it, and do not run
+`demos/*` alike) **and in the repo-root Claude-plugin manifest `.claude-plugin/plugin.json`** is
+managed **exclusively** by the CI release pipeline. Do not edit it, and do not run
 `node scripts/versioning.mjs set`. Between releases the tree carries an `X.Y.Z+dev` marker; the
 pipeline writes the clean `X.Y.Z` at release time. If you think a version change is needed, tell the
 user — do not make it.

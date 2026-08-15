@@ -1,0 +1,14 @@
+{
+  "name": "pdum-aiui",
+  "owner": {
+    "name": "Nehal Patel",
+    "email": "nehal@alum.mit.edu"
+  },
+  "plugins": [
+    {
+      "name": "aiui",
+      "source": "./",
+      "description": "The aiui skills (workflow introspection, frontend architecture, session-browser etiquette), fronting the repo docs they digest — the whole repo is the plugin, so the linked docs are the live ones."
+    }
+  ]
+}

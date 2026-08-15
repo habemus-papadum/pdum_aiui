@@ -1,5 +1,4 @@
 import { mkdirSync } from "node:fs";
-import { join, resolve } from "node:path";
 import type { ChromeDevtoolsInfo, LaunchInfo } from "@habemus-papadum/aiui-claude-channel";
 import {
   discoverSessionBrowser,
@@ -24,8 +23,9 @@ import { type AiuiConfig, type ChromeChannel, loadAiuiConfig } from "../util/con
 import { ENTER_NUDGE_ENABLED, nudgeChannelAck } from "../util/enter-nudge";
 import { ensureLaunchChoices } from "../util/first-run";
 import { ensureKeyDecisions, keysMode } from "../util/keys-interview";
+import { ensureAiuiPlugin } from "../util/plugin-status";
 import { ensureProfileMarker } from "../util/profile";
-import { packageRoot, resolvePackageCli } from "../util/resolve-cli";
+import { resolvePackageCli } from "../util/resolve-cli";
 import { resolveProfileBinary, startSessionBrowser } from "../util/session-browser";
 import { printError, printWarning } from "../util/ui";
 import { reportVendorKeyPreflight, vendorKeyStatuses } from "../util/vendor-key-preflight";
@@ -34,7 +34,6 @@ import { commandExists } from "../util/which";
 import { ensureProfileNativeHost } from "./extension";
 
 const CHANNEL_PKG = "@habemus-papadum/aiui-claude-channel";
-const PLUGIN_PKG = "@habemus-papadum/aiui-claude-plugin";
 
 // The inline MCP server id for our custom channel. It is reused twice: as the
 // key under `mcpServers` in `--mcp-config`, and as the `server:<id>` entry that
@@ -45,9 +44,12 @@ const CHANNEL_SERVER_ID = "aiui";
  * Launch Claude Code wired up with the aiui channel, plugin, and (by default)
  * the Chrome DevTools MCP.
  *
- * Builds a `claude` command line and hands the terminal over to it. The plugin
- * directories and the channel CLI are resolved from their dependencies to
- * absolute paths — no PATH lookups. In a dev checkout the channel runs straight
+ * Builds a `claude` command line and hands the terminal over to it. The aiui
+ * plugin is a launch precondition (see util/plugin-status: the repo root rides
+ * along as --plugin-dir in a source checkout; installed, the marketplace copy
+ * is verified and version-checked). The channel CLI is resolved from its
+ * dependency to an absolute path — no PATH lookups. In a dev checkout the
+ * channel runs straight
  * from its TypeScript source via tsx (no build step), and when installed from
  * npm it runs the built `dist` entry; see {@link resolvePackageCli}. Only
  * `claude` itself is checked on the PATH, since everything here launches it.
@@ -103,6 +105,20 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
   // worth showing them.
   if (!ensureClaudeOnPath()) {
     return;
+  }
+
+  // The aiui plugin (the repo root as a Claude plugin: the aiui-workflow,
+  // aiui-architecture, and session-browser skills) is the next precondition:
+  // a session without it is missing the skills everything else assumes. In a
+  // source checkout the working tree is the plugin and rides along as
+  // --plugin-dir (overriding any installed copy for this session); installed
+  // from npm it must already be installed from the git marketplace — refuse
+  // to launch when absent/disabled, warn loudly when stale. Checked before
+  // the interactive interviews so a missing plugin is the first and only
+  // message. (Provenance rule shared with the vendor keys — keysMode.)
+  const pluginDirs = await ensureAiuiPlugin(keysMode());
+  if (pluginDirs === undefined) {
+    return; // ensureAiuiPlugin printed the refusal and set the exit code
   }
 
   // Settings from the one user-level ~/.cache/aiui/config.json (flags win
@@ -171,12 +187,6 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
     reportVendorKeyPreflight(resolvedKeys);
   }
 
-  // Plugins ship in the plugin package's marketplace/ (in both dev and
-  // installed layouts). They're loaded directly with repeated `--plugin-dir`
-  // flags — the marketplace manifest exists for marketplace installs later,
-  // not as a required indirection here.
-  const pluginsRoot = resolve(packageRoot(PLUGIN_PKG), "marketplace", "plugins");
-
   // Resolve how to run the channel CLI (tsx-from-source in dev, dist when
   // installed) and append its `mcp` subcommand. A user-supplied `--aiui-tag`
   // is forwarded as the server's `--tag`; without one the server generates its
@@ -225,15 +235,6 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
 
   const mcpConfig = JSON.stringify({ mcpServers });
 
-  // The base aiui plugin and the aiui-architecture principles always load. The
-  // session-browser skill is an add-on for the Chrome DevTools MCP — etiquette
-  // for driving the *shared* browser — so the session is lightened by leaving
-  // it out whenever that MCP isn't attached.
-  const plugins = [join(pluginsRoot, "aiui"), join(pluginsRoot, "aiui-architecture")];
-  if (chromeInfo.enabled) {
-    plugins.push(join(pluginsRoot, "session-browser"));
-  }
-
   // We don't add `--chrome` or `--no-chrome`: whether to use Claude's own
   // browser integration is the user's call, forwarded via passthrough (e.g.
   // `aiui claude --chrome`) — it is independent of the Chrome DevTools MCP
@@ -249,7 +250,11 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
     ...configArgs,
     "--mcp-config",
     mcpConfig,
-    ...plugins.flatMap((dir) => ["--plugin-dir", dir]),
+    // Source mode only: the checkout rides along as the plugin (all three
+    // skills — the session-browser skill's own description scopes it to
+    // sessions where the DevTools MCP is attached). Installed, this is empty:
+    // Claude Code loads the marketplace-installed plugin at user scope itself.
+    ...pluginDirs.flatMap((dir) => ["--plugin-dir", dir]),
     // Custom channels are a research preview and not on the approved allowlist,
     // so opt this session into loading ours as a development channel.
     "--dangerously-load-development-channels",

@@ -764,9 +764,6 @@ importers:
       '@habemus-papadum/aiui-claude-channel':
         specifier: workspace:^
         version: link:../aiui-claude-channel
-      '@habemus-papadum/aiui-claude-plugin':
-        specifier: workspace:^
-        version: link:../aiui-claude-plugin
       '@habemus-papadum/aiui-registry':
         specifier: 'catalog:'
         version: 0.1.0
@@ -886,16 +883,6 @@ importers:
       '@types/ws':
         specifier: 'catalog:'
         version: 8.18.1
-
-  packages/aiui-claude-plugin:
-    dependencies:
-      commander:
-        specifier: 'catalog:'
-        version: 15.0.0
-    devDependencies:
-      '@habemus-papadum/aiui-build-config':
-        specifier: workspace:^
-        version: link:../aiui-build-config
 
   packages/aiui-console:
     dependencies:

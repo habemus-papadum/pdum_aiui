@@ -6,22 +6,22 @@ description: How an aiui app is architected — the four-layer playbook (pure fu
 # aiui architecture
 
 **Sources of truth** (read when depth is needed; if this digest ever disagrees, trust them and
-say so): [frontend-playbook.md](../../../../../../../packages/aiui-viz/docs/frontend-playbook.md)
+say so): [frontend-playbook.md](../../packages/aiui-viz/docs/frontend-playbook.md)
 (the BUILD ORDER: pure functions → cells → components → application, a definition of done per
 layer, vertical slices — follow it when creating or extending an app) →
-[frontend-user-guide.md](../../../../../../../packages/aiui-viz/docs/frontend-user-guide.md)
+[frontend-user-guide.md](../../packages/aiui-viz/docs/frontend-user-guide.md)
 (the progressive how-to — cells, deps tracking and its out-of-sync bug, testing, streaming,
 cancellation, workers, layout) →
-[frontend-for-agents.md](../../../../../../../docs/guide/frontend-for-agents.md)
+[frontend-for-agents.md](../../docs/guide/frontend-for-agents.md)
 (concepts) →
-[frontend-design-choices.md](../../../../../../../packages/aiui-viz/docs/frontend-design-choices.md)
+[frontend-design-choices.md](../../packages/aiui-viz/docs/frontend-design-choices.md)
 (design, with code refs) →
-[frontend-hard-won.md](../../../../../../../packages/aiui-viz/docs/frontend-hard-won.md) (gotcha ledger —
+[frontend-hard-won.md](../../packages/aiui-viz/docs/frontend-hard-won.md) (gotcha ledger —
 includes the Mosaic/DuckDB-WASM section) →
-[frontend-style-guide.md](../../../../../../../packages/aiui-viz/docs/frontend-style-guide.md) (authoring
-conventions: page structure, TOC, plotting, math, porcelain/plumbing). (In the pdum_aiui repo
-these links are the live docs; in a packaged install they point at copies bundled with
-this skill. Same content published at https://habemus-papadum.github.io/pdum_aiui/.) And
+[frontend-style-guide.md](../../packages/aiui-viz/docs/frontend-style-guide.md) (authoring
+conventions: page structure, TOC, plotting, math, porcelain/plumbing). (This plugin ships as
+the whole pdum_aiui repo, so these links are the live docs wherever the skill runs. Same
+content published at https://habemus-papadum.github.io/pdum_aiui/.) And
 always: the **installed package's own `.d.ts`/docblocks** — every export documents its
 contract; resolve `@habemus-papadum/aiui-viz` in node_modules and read the module headers.
 
@@ -70,7 +70,7 @@ shell that DISCOVERS the others (it depends on none of them — section below).
 ## The playbook: the default order of work (and the default shape of a plan)
 
 When building **from scratch — or anything bigger than a one-line tweak — follow the
-[playbook](../../../../../../../packages/aiui-viz/docs/frontend-playbook.md) unless you can state a concrete
+[playbook](../../packages/aiui-viz/docs/frontend-playbook.md) unless you can state a concrete
 reason not to.** Four layers, each with its own verification, rigor front-loaded:
 
 1. **Pure functions** — domain math, realm-free (no solid-js, no window, no import.meta.env);
@@ -202,7 +202,7 @@ a typed-in `file:line:col` lies as soon as the file is edited and the resolvers 
 it. An agent did this once instead of enabling the plugin, and the confident-but-wrong
 resolutions it caused must not be repeated: if stamps are missing, fix `vite.config.ts` —
 `aiui()` present, BEFORE `solid()` — never the markup (full contract:
-[attribution.md](../../../../../../../packages/aiui-viz/docs/attribution.md)). Verify your own
+[attribution.md](../../packages/aiui-viz/docs/attribution.md)). Verify your own
 work through this surface: `.tools`, `.call(name, args)`, `.report()`,
 `.call("locate", { selector })`.
 

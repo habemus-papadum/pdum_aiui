@@ -121,26 +121,6 @@ check(
   /chrome/.test(help.stdout) && /claude/.test(help.stdout),
 );
 
-const marketplace = join(
-  scratch,
-  "node_modules",
-  "@habemus-papadum",
-  "aiui-claude-plugin",
-  "marketplace",
-);
-check(
-  "packed plugin marketplace ships its manifest and plugins",
-  existsSync(join(marketplace, ".claude-plugin", "marketplace.json")) &&
-    existsSync(join(marketplace, "plugins", "aiui", ".claude-plugin", "plugin.json")) &&
-    existsSync(
-      join(marketplace, "plugins", "aiui-architecture", "skills", "aiui-architecture", "SKILL.md"),
-    ) &&
-    existsSync(
-      join(marketplace, "plugins", "session-browser", "skills", "session-browser", "SKILL.md"),
-    ),
-  marketplace,
-);
-
 const status = run(["chrome", "status"]);
 check("aiui chrome status exits 0", status.status === 0, status.stderr);
 check("status reports the intent client", /intent client/.test(status.stdout));

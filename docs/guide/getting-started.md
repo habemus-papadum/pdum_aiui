@@ -19,6 +19,17 @@ you're still here, you've decided to trust this code.
   **Chromium** by default (version-pinned, auto-loads the intent client's extension) — so say
   yes; branded Chrome ≥ 137 won't auto-load the extension and restricts the debug-port setup.
   Details: [The Agent's Browser](/packages/aiui/chrome).
+- **The aiui plugin** (the skills `aiui claude` sessions run on). A source checkout of this
+  repo carries it — nothing to do. An **installed** aiui refuses to launch until the plugin
+  is installed, once, from the repo's own plugin marketplace (both commands are idempotent):
+
+  ```sh
+  claude plugin marketplace add habemus-papadum/pdum_aiui
+  claude plugin install aiui@pdum-aiui
+  ```
+
+  The plugin is versioned in lockstep with aiui; when it falls behind the CLI you installed,
+  the launcher warns loudly and prints the two update commands.
 
 ## Vendor keys
 

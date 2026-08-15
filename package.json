@@ -33,7 +33,7 @@
     "npm:trust": "node scripts/npm-provision.mjs trust",
     "prepare": "git config core.hooksPath .githooks",
     "publish:gallery": "pnpm -C demos/gallery run publish",
-    "skills:check": "node scripts/bundle-skill-docs.mjs --check",
+    "skills:check": "node scripts/check-skill-links.mjs",
     "test": "vitest run",
     "test-app": "pnpm -C packages/aiui-test-app dev",
     "test-app:channel": "tsx packages/aiui/src/cli.ts mcp serve --name \"aiui test app\" --tag aiui-test-app --port 49317",

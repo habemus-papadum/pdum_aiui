@@ -1,9 +1,0 @@
-{
-  "name": "aiui-architecture",
-  "description": "How an aiui app is architected, as a skill: the four-layer playbook, SolidJS 2.0 cells, durable/disposable HMR structure, worker streaming, and agent tool surfaces. Digest of packages/aiui-viz/docs/ (the source of truth).",
-  "version": "0.0.0",
-  "author": {
-    "name": "Nehal Patel",
-    "email": "nehal@alum.mit.edu"
-  }
-}

@@ -75,6 +75,29 @@ prompts (`chrome.manage` in config; `packages/aiui/src/util/managed-browser.ts`)
 (`docs/guide/warning.md`, README) tell readers this repo is safer to read than to run — keep that
 warning intact and accurate as behavior evolves.
 
+## The repo IS the Claude plugin (skills at the root)
+
+The repo root carries `.claude-plugin/plugin.json` (one plugin, `aiui`) plus a one-entry
+self-catalog `.claude-plugin/marketplace.json` (marketplace `pdum-aiui`, source `./`), and the
+three skills live in root `skills/` (`aiui-workflow`, `aiui-architecture`, `session-browser`).
+Because the plugin is the whole repo, skill markdown links straight into `docs/guide/` and
+`packages/*/docs/` with ordinary relative links — installs get the live docs, nothing is
+bundled, rewritten, or generated (the old `packages/aiui-claude-plugin` npm package and its
+pack-time link-rewriting `bundle-skill-docs.mjs` are deleted; git history has both).
+`pnpm skills:check` (CI) is the only guard: manifests parse, every relative link resolves.
+
+How sessions get it (`packages/aiui/src/util/plugin-status.ts`): in a **source checkout**
+`aiui claude` passes `--plugin-dir <repo root>` — session-scoped, and it overrides any
+marketplace-installed copy of the same plugin name. **Installed** users install it once via
+`claude plugin marketplace add habemus-papadum/pdum_aiui` + `claude plugin install
+aiui@pdum-aiui`; `aiui claude` refuses to launch when the plugin is absent or disabled, and
+warns loudly when it's stale. Staleness is release-granularity by design: the plugin manifest's
+`version` is **lockstep** (stamped by `scripts/versioning.mjs`, verified by `version:check`;
+never hand-edit — AGENTS.md), and an explicit plugin version also pins marketplace updates to
+version bumps, so plugin updates flow at release cadence — coherent with the npm CLI they're
+compared against. All three skills always load; the session-browser skill's own description
+scopes it to sessions with the DevTools MCP attached.
+
 ## Workspace dependencies are editable (source-first) — the convention
 
 Every package's dev manifest points at **source**, and the `dist/` mapping lives in

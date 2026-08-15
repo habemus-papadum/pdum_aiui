@@ -118,9 +118,9 @@ exactly what degrades.
 
 For the *why* behind the setup (security posture, browser modes, remote development), read
 these rather than restating them here:
-[getting-started.md](../../../../../../../docs/guide/getting-started.md),
-[chrome.md](../../../../../../../packages/aiui/docs/chrome.md),
-[config.md](../../../../../../../docs/guide/config.md),
-[warning.md](../../../../../../../docs/guide/warning.md). (In the pdum_aiui repo these links
-are the live guide docs; in a packaged install they point at copies bundled with this skill.
+[getting-started.md](../../docs/guide/getting-started.md),
+[chrome.md](../../packages/aiui/docs/chrome.md),
+[config.md](../../docs/guide/config.md),
+[warning.md](../../docs/guide/warning.md). (This plugin ships as the whole pdum_aiui repo,
+so these links are the live guide docs wherever the skill runs.
 Published at https://habemus-papadum.github.io/pdum_aiui/.)
