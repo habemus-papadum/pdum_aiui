@@ -1,0 +1,107 @@
+/* page.css — regimes-specific styles. Everything is scoped under .regimes so
+ * nothing leaks onto a sibling notebook sharing the gallery's document; all
+ * shared chrome (panels, sliders, tiles, cell/plot chrome, TOC) comes from
+ * @habemus-papadum/aiui-journal. */
+
+/* --- multi-plot rows --------------------------------------------------------- */
+
+.regimes .regimes-plot-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  align-items: end;
+}
+
+.regimes .regimes-split {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 18px;
+  align-items: start;
+}
+
+/* --- the decomposition bar ---------------------------------------------------- */
+
+.regimes .regimes-decomp {
+  margin-top: 10px;
+}
+
+.regimes .regimes-bar {
+  display: flex;
+  height: 26px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--line, #262c3a) 55%, transparent);
+}
+
+.regimes .regimes-bar-seg {
+  height: 100%;
+  min-width: 1px;
+  transition: width 200ms ease;
+}
+
+.regimes .regimes-bar-rows {
+  margin-top: 10px;
+  display: grid;
+  gap: 5px;
+}
+
+.regimes .regimes-bar-row {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 13px;
+}
+
+.regimes .regimes-bar-row i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  align-self: center;
+}
+
+.regimes .regimes-bar-row .dim {
+  min-width: 3.5em;
+  text-align: right;
+}
+
+.regimes .regimes-bar-total {
+  border-top: 1px solid var(--line, #262c3a);
+  padding-top: 6px;
+  margin-top: 2px;
+}
+
+/* --- the regime verdict ------------------------------------------------------- */
+
+.regimes .regimes-regime {
+  margin-top: 14px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.45;
+  border: 1px solid var(--line, #262c3a);
+}
+
+.regimes .regimes-regime-approximation {
+  border-color: color-mix(in srgb, #9b6fdb 55%, transparent);
+  color: #c9b3ef;
+}
+
+.regimes .regimes-regime-estimation {
+  border-color: color-mix(in srgb, #4a86dd 55%, transparent);
+  color: #a8c6f0;
+}
+
+.regimes .regimes-regime-balanced {
+  border-color: color-mix(in srgb, #2fa876 55%, transparent);
+  color: #9fd9be;
+}
+
+/* --- phone ------------------------------------------------------------------- */
+
+@media (max-width: 900px) {
+  .regimes .regimes-plot-row,
+  .regimes .regimes-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

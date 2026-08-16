@@ -1,0 +1,54 @@
+{
+  "name": "@habemus-papadum/demo-regimes",
+  "version": "0.14.0+dev",
+  "description": "In-repo aiui demo: which regime is your loss in? Pointwise vs distributional, the four-term decomposition, ensembling, spectral bias, horizon.",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/habemus-papadum/pdum_aiui.git",
+    "directory": "demos/regimes"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./page": "./src/page.tsx",
+    "./card": "./src/card.tsx"
+  },
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
+  "aiui": {
+    "sitePage": {
+      "title": "regimes",
+      "desc": "which error term owns your loss",
+      "order": 60,
+      "card": "./card"
+    }
+  },
+  "scripts": {
+    "claude": "../../bin/aiui claude",
+    "dev": "vite",
+    "open": "../../bin/aiui open",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@habemus-papadum/aiui-source-processor": "workspace:^",
+    "@habemus-papadum/aiui-viz": "workspace:^",
+    "@solidjs/web": "2.0.0-beta.15",
+    "solid-js": "2.0.0-beta.15",
+    "@habemus-papadum/aiui-journal": "workspace:^",
+    "@observablehq/plot": "^0.6.17"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.29.7",
+    "@habemus-papadum/aiui": "workspace:^",
+    "jsdom": "^29.0.0",
+    "typescript": "^5.6.0",
+    "typescript-language-server": "^5.3.0",
+    "vite": "^6.4.1",
+    "vite-plugin-solid": "3.0.0-next.5",
+    "vitest": "^3.2.0"
+  }
+}

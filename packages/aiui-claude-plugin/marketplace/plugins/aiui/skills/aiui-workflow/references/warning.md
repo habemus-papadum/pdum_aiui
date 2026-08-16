@@ -1,0 +1,104 @@
+<!-- GENERATED at pack time — bundled copy of docs/guide/warning.md (the source of truth),
+     published at https://habemus-papadum.github.io/pdum_aiui/guide/warning. Relative links inside this copy resolve in the source
+     repo, not necessarily here. -->
+
+# ⚠️ Read before running
+
+::: danger This codebase is dangerous to run
+It launches Claude Code in ways that trade safety for velocity, deliberately. Read this page
+before running anything, and prefer **reading the code to running it**.
+:::
+
+## 1. Skipping permissions is a choice — make it deliberately
+
+Skipping permissions is **opt-in and off by default**. Out of the box, `aiui claude` leaves
+Claude Code's own permission prompts in charge — nothing runs without asking. To launch with
+`--dangerously-skip-permissions`, add it yourself:
+
+```sh
+aiui config set-dsp        # appends --dangerously-skip-permissions to claude.args
+```
+
+That flag lives in the general [`claude.args`](./config) list (the argv passed to `claude` on
+every launch); `set-dsp` is just the ergonomic way to add it. With it on, every action the agent
+takes (shell commands, file writes, network, the browser) runs without asking you first. That's
+the author's personal preference, not a recommendation — aiui works perfectly well without it.
+
+The honest warning: once you've opted in, you're running an unrestricted agent on **every**
+launch, interactive or headless, until you remove the flag. Check what you've set
+(`aiui config get claude.args`, or read `~/.cache/aiui/config.json`), and remove it with
+`aiui config unset claude.args` (or edit the list) to change your mind.
+
+## 2. The custom channel requires total trust
+
+The whole point of this project is a **custom channel** that injects externally-supplied prompts
+into your live, permission-skipping Claude Code session (loaded via
+`--dangerously-load-development-channels`). Think about what that means:
+
+- Anything that can reach the channel's local web backend can steer your agent.
+- The remote-device sidecars (the iPad pencil, the command bar) ride the same port (on by
+  default — they cost nothing until something connects).
+- **So does the intent client, and it bridges the browser.** The channel serves the panel at
+  `/intent/`, and — so the panel can drive real tabs without a browser extension — proxies the
+  Chrome DevTools protocol at `/intent/cdp` to the [session browser](./chrome). The browser's own
+  debug port stays loopback-bound (the proxy refuses to bridge anywhere else), but the *bridge*
+  is on the channel port. Whoever can reach that port can therefore drive the browser: read any
+  open tab, screenshot it, run JavaScript in it. Same trust boundary as prompt injection, and the
+  same `channel.bind` choice decides who is inside it.
+- **Who can reach that port is your `channel.bind` choice** — asked at first run, never silently
+  widened. `loopback` (the default) keeps the whole surface this-machine-only; using the iPad then
+  means tunneling the port yourself (Tailscale, `ssh -L`). `host` binds `0.0.0.0`: one port, and
+  everything on it — prompt injection, `/debug`, the paint page — is reachable by
+  **anyone on your network, unauthenticated**. That's the deliberate trusted-LAN posture: the
+  boundary is your network, so choose it only where the network is genuinely yours alone (a home
+  LAN — not café Wi-Fi, not an office network shared with other people).
+- The channel code itself runs inside your session's trust boundary. If you don't understand what
+  this code does, **the custom channel could do anything to your computer**.
+
+You are placing a lot of trust in the author. Don't do that casually.
+
+## 3. The agent gets a browser by default
+
+`aiui claude` also attaches the
+[Chrome DevTools MCP](https://github.com/ChromeDevTools/chrome-devtools-mcp) unless you opt out
+(`--aiui-no-chrome`, or `chrome.enabled: false` in [config](./config); it's off automatically
+under CI). Combined with skipped permissions, that means the agent can drive a real Chrome —
+navigate anywhere, click, fill forms, run JavaScript in pages — without asking. Two things to
+understand about how it's wired:
+
+- By default the agent shares a **session browser** with you: one visible Chrome window,
+  deliberately — the agent acts in the tabs you're looking at. It uses a project-local profile
+  (`.aiui-cache/chrome/`), so it starts logged out of everything; but anything you log into
+  *inside that browser* persists in the profile and is reachable by the agent in later sessions.
+- The sharing works over Chrome's **DevTools debug port, which is unauthenticated**: any process
+  that can reach it has full control of that browser. It binds to loopback only, so "any process"
+  means anything running on your machine — and if you tunnel it for
+  [remote development](./remote), anything on the remote machine too. Note the channel's
+  `/intent/cdp` bridge above: it re-exposes that control on the channel port, under
+  `channel.bind`.
+- The session browser also launches with **media prompts pre-answered**
+  (`--auto-accept-camera-and-microphone-capture`, `--auto-accept-this-tab-capture`): any page
+  open in it can capture the microphone, the camera, and its own tab **without a permission
+  dialog**. This exists so the intent tool's dictation and screenshots don't re-prompt per
+  dev-server port — but it applies to every page in that browser, so don't browse the open web
+  in it.
+
+Details: [The Agent's Browser](./chrome).
+
+## The actual recommendation
+
+**Read this code rather than use it.** It's a working reference for a real workflow — channel
+registry, prompt injection, session discovery, TUI test harness — and its best use for most people
+is as parts and patterns for building *your own* system, with *your own* trust decisions.
+
+If you run it anyway: run it in a sandbox or a machine/account you can afford to lose, with
+credentials you can revoke.
+
+## Roadmap for softening this
+
+- [x] Make skipping permissions explicit and off by default — opt in with `aiui config set-dsp`,
+      which adds `--dangerously-skip-permissions` to `claude.args` in [config.json](./config).
+      Choosing a specific `--permission-mode` is still open.
+- [ ] Document the channel's exact attack surface (what listens where, who can connect).
+- [ ] Narrow the channel backend to authenticated clients (partially done: it binds to
+      `127.0.0.1` unless `channel.bind: "host"` deliberately widens it).
