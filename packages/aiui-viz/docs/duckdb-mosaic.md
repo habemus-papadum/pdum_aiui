@@ -328,6 +328,13 @@ and the encoded gotchas (2×1-D over 2-D boxes, preagg vs. cross-table
 clauses, report-after-a-task-boundary); `src/mosaic-selection.test.ts` pins
 the behaviors against the real pinned mosaic-core.
 
+### Beyond vgplot: the embedding view
+
+Any Mosaic client can join this coordinator — Apple's Embedding Atlas point
+cloud rides the same Selections through the `aiui-viz/embedding` bridge
+(producer registry, region adoption, agent tools included). See
+[embedding-view.md](./embedding-view.md).
+
 ---
 
 ## Part 5 — Choosing

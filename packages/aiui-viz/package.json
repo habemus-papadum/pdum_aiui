@@ -14,6 +14,7 @@
     ".": "./src/index.ts",
     "./plot": "./src/plot.tsx",
     "./mosaic": "./src/mosaic.tsx",
+    "./embedding": "./src/embedding-view.tsx",
     "./mosaic-selection": "./src/mosaic-selection.ts",
     "./selection-views": "./src/selection-views.tsx",
     "./selection-inspector": "./src/selection-inspector.tsx",
@@ -50,6 +51,11 @@
         "types": "./dist/mosaic.d.ts",
         "import": "./dist/mosaic.js",
         "default": "./dist/mosaic.js"
+      },
+      "./embedding": {
+        "types": "./dist/embedding-view.d.ts",
+        "import": "./dist/embedding.js",
+        "default": "./dist/embedding.js"
       },
       "./mosaic-selection": {
         "types": "./dist/mosaic-selection.d.ts",
@@ -105,11 +111,15 @@
     "@uwdata/mosaic-core": ">=0.28",
     "@uwdata/mosaic-plot": ">=0.28",
     "@uwdata/mosaic-sql": ">=0.28",
+    "embedding-atlas": ">=0.24",
     "solid-js": ">=2.0.0-beta.32 <2.0.0-experimental.0",
     "katex": "^0.16 || ^0.17"
   },
   "peerDependenciesMeta": {
     "@duckdb/duckdb-wasm": {
+      "optional": true
+    },
+    "embedding-atlas": {
       "optional": true
     },
     "@observablehq/plot": {
@@ -135,7 +145,10 @@
     "@solidjs/web": "catalog:solid",
     "@uwdata/mosaic-core": "^0.28.1",
     "@uwdata/mosaic-plot": "^0.28.1",
+    "@uwdata/mosaic-spec": "^0.28.1",
     "@uwdata/mosaic-sql": "^0.28.1",
+    "@uwdata/vgplot": "0.28.1",
+    "embedding-atlas": "catalog:",
     "katex": "^0.17.0",
     "solid-js": "catalog:solid",
     "vite": "catalog:",

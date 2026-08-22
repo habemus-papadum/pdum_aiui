@@ -67,14 +67,17 @@ export interface IntervalFacetBinding {
   from?: (cv: unknown) => IntervalValue;
 }
 
-/** Bind TWO interval dimensions jointly to one 2-D interactor (a map box).
- * Transforms are required — the joint mapping is never the identity. `to`
- * must return a full `[[x0,x1],[y0,y1]]` box or null (a 2-D brush cannot be
- * one-sided); `from` returns the pair of semantic values in `dims` order. */
+/** Bind TWO interval dimensions jointly to one 2-D component (a map box, an
+ * embedding view's region). Transforms are required — the joint mapping is
+ * never the identity. For a vgplot 2-D interactor, `to` must return a full
+ * `[[x0,x1],[y0,y1]]` box or null (a 2-D brush cannot be one-sided); for a
+ * self-driving producer ({@link AIUI_DRIVE}) it returns whatever value shape
+ * the component's own drive hook expects (an embedding-atlas `Rectangle`).
+ * `from` returns the pair of semantic values in `dims` order. */
 export interface PairFacetBinding {
   dims: readonly [SelectionDim<IntervalValue>, SelectionDim<IntervalValue>];
   producer: string;
-  to: (a: IntervalValue, b: IntervalValue) => readonly (readonly number[])[] | null;
+  to: (a: IntervalValue, b: IntervalValue) => unknown;
   from: (cv: unknown) => readonly [IntervalValue, IntervalValue];
 }
 
@@ -91,6 +94,22 @@ export type FacetBinding = IntervalFacetBinding | PairFacetBinding | PointFacetB
 
 // ---------------------------------------------------------------------------
 // Internal shapes (duck-typed against mosaic-plot / mosaic-inputs 0.28)
+
+/**
+ * The self-driving-producer seam. A producer whose `source` carries this
+ * method (non-enumerable, installed by its own bridge — the embedding view's
+ * wrapper) is driven by CALLING it with the `to()`-mapped component value
+ * instead of the vgplot interactor surgery below: the component then draws
+ * its own visual AND publishes the clause itself, from this same source.
+ * Because that publish is asynchronous (the component's framework flushes
+ * it), the dimension's headless clause is retracted only when the driven
+ * clause is seen landing — until then it keeps filtering, exactly like the
+ * 2-D scale-retry path.
+ */
+export const AIUI_DRIVE = "__aiuiDrive";
+interface SelfDrivingSource {
+  [AIUI_DRIVE]?: (componentValue: unknown) => void;
+}
 
 /** @internal The seam selectionDim() installs for this module. */
 interface DimInternals {
@@ -159,6 +178,9 @@ interface BindingState {
   /** Last component-space value THIS binding published (loop guard). */
   lastDriven: unknown;
   hadClause: boolean;
+  /** A self-driving publish is in flight: hold the headless retraction (and
+   * ignore stale clause echoes) until the driven clause lands. */
+  pendingRetract: boolean;
   /** 2-D publish deferred until the interactor's scales exist. */
   retry?: ReturnType<typeof setTimeout>;
   retriesLeft: number;
@@ -251,6 +273,7 @@ export function bindSelectionComponents(opts: { bindings: readonly FacetBinding[
       shadow: dims.map((d) => d.get()),
       lastDriven: null,
       hadClause: false,
+      pendingRetract: false,
       retriesLeft: 0,
       onValue: () => onSelectionValue(state),
     };
@@ -304,6 +327,7 @@ function adopt(state: BindingState, entry: MosaicProducerEntry): void {
   state.entry = entry;
   state.hadClause = false;
   state.lastDriven = null;
+  state.pendingRetract = false;
   if (semanticIsNull(state)) return;
   // The filter exists: publish it through the component (visual included),
   // then retract the headless clause it rode on. 2-D may defer on scales —
@@ -316,6 +340,7 @@ function release(state: BindingState): void {
   state.entry = undefined;
   state.hadClause = false;
   state.lastDriven = null;
+  state.pendingRetract = false;
   if (state.retry !== undefined) {
     clearTimeout(state.retry);
     state.retry = undefined;
@@ -341,14 +366,24 @@ function onSelectionValue(state: BindingState): void {
       // Our own publish echoing back. A menu's late update() (its options
       // query landing after our drive) re-syncs from valueFor and can reset
       // the <select> while this emit was still queued — re-assert it.
+      if (state.pendingRetract) {
+        // The self-driven clause landed: NOW the headless clause can go.
+        state.pendingRetract = false;
+        retractHeadless(state);
+      }
       confirmPointVisual(state);
       return;
     }
+    // A self-driven publish is still in flight — this clause is a stale echo
+    // (e.g. the component's initial null clause); mirroring it would wipe
+    // the dims. The driven value's own echo resolves the wait.
+    if (state.pendingRetract) return;
     state.lastDriven = clause.value;
     applySemantic(state, state.from(clause.value));
   } else if (state.hadClause) {
     state.hadClause = false;
     state.lastDriven = null;
+    state.pendingRetract = false;
     clearPointVisual(state);
     applySemantic(state, null);
   }
@@ -397,6 +432,28 @@ function drive(state: BindingState): void {
   if (entry === undefined) return;
   const cv =
     state.kind === "pair" ? state.to(state.shadow[0], state.shadow[1]) : state.to(state.shadow[0]);
+  const driver = (entry.source as SelfDrivingSource)[AIUI_DRIVE];
+  if (typeof driver === "function") {
+    // Self-driving producer: hand it the component-space value and let it
+    // draw + publish (same source, its own clients set). A NON-NULL drive
+    // retracts the headless clause only once the driven clause is seen
+    // landing (onSelectionValue) — until then it keeps filtering. A null
+    // drive (or a value the component already shows, which its own
+    // deep-equality guard swallows without an echo) retracts immediately:
+    // there is no filter gap to protect, and waiting would wedge the
+    // in-flight flag and suppress mouse mirroring forever.
+    const next = cv ?? null;
+    if (valueEq(next, state.lastDriven) && !state.pendingRetract) {
+      retractHeadless(state);
+      return;
+    }
+    state.lastDriven = next;
+    state.hadClause = next != null;
+    state.pendingRetract = next != null;
+    driver(next);
+    if (next == null) retractHeadless(state);
+    return;
+  }
   if (state.kind === "pair") drivePair(state, entry, cv);
   else if (state.kind === "interval") driveInterval(state, entry, cv);
   else drivePoint(state, entry, cv);

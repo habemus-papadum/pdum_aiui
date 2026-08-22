@@ -45,6 +45,7 @@ export default defineConfig({
         index: "src/index.ts",
         plot: "src/plot.tsx",
         mosaic: "src/mosaic.tsx",
+        embedding: "src/embedding-view.tsx",
         "mosaic-selection": "src/mosaic-selection.ts",
         "selection-views": "src/selection-views.tsx",
         "selection-inspector": "src/selection-inspector.tsx",

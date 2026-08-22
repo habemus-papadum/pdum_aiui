@@ -1,0 +1,2082 @@
+[
+  { "country": "Albania", "province": "Mirditë", "lat": 41.16, "lon": 20, "source": "country" },
+  {
+    "country": "Argentina",
+    "province": "Mendoza Province",
+    "lat": -34.848,
+    "lon": -68.542,
+    "source": "admin1"
+  },
+  { "country": "Argentina", "province": "Other", "lat": -34.6, "lon": -68.5, "source": "manual" },
+  { "country": "Armenia", "province": "Armenia", "lat": 40.25, "lon": 44.78, "source": "country" },
+  {
+    "country": "Australia",
+    "province": "Australia Other",
+    "lat": -33.38,
+    "lon": 144.71,
+    "source": "country"
+  },
+  {
+    "country": "Australia",
+    "province": "New South Wales",
+    "lat": -32.8,
+    "lon": 150.9,
+    "source": "manual"
+  },
+  {
+    "country": "Australia",
+    "province": "Queensland",
+    "lat": -23.136,
+    "lon": 144.778,
+    "source": "admin1"
+  },
+  {
+    "country": "Australia",
+    "province": "South Australia",
+    "lat": -34.6,
+    "lon": 138.9,
+    "source": "manual"
+  },
+  {
+    "country": "Australia",
+    "province": "Tasmania",
+    "lat": -42.138,
+    "lon": 146.603,
+    "source": "admin1"
+  },
+  {
+    "country": "Australia",
+    "province": "Victoria",
+    "lat": -37.008,
+    "lon": 144.75,
+    "source": "admin1"
+  },
+  {
+    "country": "Australia",
+    "province": "Western Australia",
+    "lat": -33.9,
+    "lon": 115.1,
+    "source": "manual"
+  },
+  { "country": "Austria", "province": "Austria", "lat": 48.248, "lon": 15.745, "source": "admin1" },
+  {
+    "country": "Austria",
+    "province": "Burgenland",
+    "lat": 47.428,
+    "lon": 16.358,
+    "source": "admin1"
+  },
+  { "country": "Austria", "province": "Carnuntum", "lat": 48.1, "lon": 16.9, "source": "manual" },
+  {
+    "country": "Austria",
+    "province": "Donauland",
+    "lat": 47.55,
+    "lon": 13.93,
+    "source": "country"
+  },
+  { "country": "Austria", "province": "Eisenberg", "lat": 47.2, "lon": 16.4, "source": "manual" },
+  { "country": "Austria", "province": "Kamptal", "lat": 48.55, "lon": 15.67, "source": "manual" },
+  { "country": "Austria", "province": "Kremstal", "lat": 48.42, "lon": 15.6, "source": "manual" },
+  { "country": "Austria", "province": "Leithaberg", "lat": 47.9, "lon": 16.7, "source": "manual" },
+  {
+    "country": "Austria",
+    "province": "Mittelburgenland",
+    "lat": 47.5,
+    "lon": 16.5,
+    "source": "manual"
+  },
+  {
+    "country": "Austria",
+    "province": "Neusiedlersee",
+    "lat": 47.85,
+    "lon": 16.85,
+    "source": "manual"
+  },
+  {
+    "country": "Austria",
+    "province": "Neusiedlersee-Hügelland",
+    "lat": 47.55,
+    "lon": 13.93,
+    "source": "country"
+  },
+  {
+    "country": "Austria",
+    "province": "Niederösterreich",
+    "lat": 48.248,
+    "lon": 15.745,
+    "source": "admin1"
+  },
+  {
+    "country": "Austria",
+    "province": "Österreichischer Perlwein",
+    "lat": 47.55,
+    "lon": 13.93,
+    "source": "country"
+  },
+  {
+    "country": "Austria",
+    "province": "Österreichischer Sekt",
+    "lat": 47.55,
+    "lon": 13.93,
+    "source": "country"
+  },
+  {
+    "country": "Austria",
+    "province": "South Styria",
+    "lat": 47.39,
+    "lon": 14.857,
+    "source": "admin1"
+  },
+  { "country": "Austria", "province": "Steiermark", "lat": 47.1, "lon": 15.4, "source": "manual" },
+  { "country": "Austria", "province": "Styria", "lat": 47.39, "lon": 14.857, "source": "admin1" },
+  {
+    "country": "Austria",
+    "province": "Südburgenland",
+    "lat": 47.428,
+    "lon": 16.358,
+    "source": "admin1"
+  },
+  {
+    "country": "Austria",
+    "province": "Südoststeiermark",
+    "lat": 47.39,
+    "lon": 14.857,
+    "source": "admin1"
+  },
+  {
+    "country": "Austria",
+    "province": "Südsteiermark",
+    "lat": 46.7,
+    "lon": 15.5,
+    "source": "manual"
+  },
+  {
+    "country": "Austria",
+    "province": "Thermenregion",
+    "lat": 48,
+    "lon": 16.25,
+    "source": "manual"
+  },
+  { "country": "Austria", "province": "Traisental", "lat": 48.3, "lon": 15.7, "source": "manual" },
+  { "country": "Austria", "province": "Vienna", "lat": 48.225, "lon": 16.38, "source": "admin1" },
+  { "country": "Austria", "province": "Wachau", "lat": 48.36, "lon": 15.43, "source": "manual" },
+  { "country": "Austria", "province": "Wagram", "lat": 48.4, "lon": 15.9, "source": "manual" },
+  {
+    "country": "Austria",
+    "province": "Wagram-Donauland",
+    "lat": 47.55,
+    "lon": 13.93,
+    "source": "country"
+  },
+  {
+    "country": "Austria",
+    "province": "Weinland Österreich",
+    "lat": 47.55,
+    "lon": 13.93,
+    "source": "country"
+  },
+  { "country": "Austria", "province": "Weinviertel", "lat": 48.6, "lon": 16.4, "source": "manual" },
+  {
+    "country": "Austria",
+    "province": "Wiener Gemischter Satz",
+    "lat": 47.55,
+    "lon": 13.93,
+    "source": "country"
+  },
+  {
+    "country": "Bosnia and Herzegovina",
+    "province": "Mostar",
+    "lat": 44.15,
+    "lon": 18.14,
+    "source": "country"
+  },
+  { "country": "Brazil", "province": "Brazil", "lat": -12.52, "lon": -48.36, "source": "country" },
+  {
+    "country": "Brazil",
+    "province": "Campanha",
+    "lat": -12.52,
+    "lon": -48.36,
+    "source": "country"
+  },
+  {
+    "country": "Brazil",
+    "province": "Pinto Bandeira",
+    "lat": -12.52,
+    "lon": -48.36,
+    "source": "country"
+  },
+  {
+    "country": "Brazil",
+    "province": "Santa Catarina",
+    "lat": -27.039,
+    "lon": -51.159,
+    "source": "admin1"
+  },
+  {
+    "country": "Brazil",
+    "province": "Serra do Sudeste",
+    "lat": -12.52,
+    "lon": -48.36,
+    "source": "country"
+  },
+  {
+    "country": "Brazil",
+    "province": "Serra Gaúcha",
+    "lat": -12.52,
+    "lon": -48.36,
+    "source": "country"
+  },
+  {
+    "country": "Brazil",
+    "province": "Vale dos Vinhedos",
+    "lat": -12.52,
+    "lon": -48.36,
+    "source": "country"
+  },
+  {
+    "country": "Brazil",
+    "province": "Vale Trentino",
+    "lat": -12.52,
+    "lon": -48.36,
+    "source": "country"
+  },
+  {
+    "country": "Bulgaria",
+    "province": "Black Sea Coastal",
+    "lat": 42.81,
+    "lon": 25.18,
+    "source": "country"
+  },
+  {
+    "country": "Bulgaria",
+    "province": "Bulgaria",
+    "lat": 42.81,
+    "lon": 25.18,
+    "source": "country"
+  },
+  {
+    "country": "Bulgaria",
+    "province": "Danube Hills Valley",
+    "lat": 42.81,
+    "lon": 25.18,
+    "source": "country"
+  },
+  {
+    "country": "Bulgaria",
+    "province": "Danube River Plains",
+    "lat": 42.81,
+    "lon": 25.18,
+    "source": "country"
+  },
+  {
+    "country": "Bulgaria",
+    "province": "Rose Valley",
+    "lat": 42.81,
+    "lon": 25.18,
+    "source": "country"
+  },
+  { "country": "Bulgaria", "province": "Sliven", "lat": 42.716, "lon": 26.237, "source": "admin1" },
+  {
+    "country": "Bulgaria",
+    "province": "Targovishte",
+    "lat": 43.225,
+    "lon": 26.364,
+    "source": "admin1"
+  },
+  {
+    "country": "Bulgaria",
+    "province": "Thracian Valley",
+    "lat": 42.81,
+    "lon": 25.18,
+    "source": "country"
+  },
+  {
+    "country": "Canada",
+    "province": "British Columbia",
+    "lat": 49.6,
+    "lon": -119.7,
+    "source": "manual"
+  },
+  {
+    "country": "Canada",
+    "province": "Canada Other",
+    "lat": 53.92,
+    "lon": -92.53,
+    "source": "country"
+  },
+  { "country": "Canada", "province": "Ontario", "lat": 43.15, "lon": -79.3, "source": "manual" },
+  {
+    "country": "Chile",
+    "province": "Aconcagua Costa",
+    "lat": -32.488,
+    "lon": -70.936,
+    "source": "admin1"
+  },
+  {
+    "country": "Chile",
+    "province": "Aconcagua Valley",
+    "lat": -32.8,
+    "lon": -70.7,
+    "source": "manual"
+  },
+  { "country": "Chile", "province": "Apalta", "lat": -34.37, "lon": -71.26, "source": "country" },
+  {
+    "country": "Chile",
+    "province": "Bío Bío Valley",
+    "lat": -37.7,
+    "lon": -72.5,
+    "source": "manual"
+  },
+  { "country": "Chile", "province": "Buin", "lat": -34.37, "lon": -71.26, "source": "country" },
+  {
+    "country": "Chile",
+    "province": "Cachapoal Valley",
+    "lat": -34.3,
+    "lon": -70.9,
+    "source": "manual"
+  },
+  {
+    "country": "Chile",
+    "province": "Casablanca & Leyda Valleys",
+    "lat": -34.37,
+    "lon": -71.26,
+    "source": "country"
+  },
+  {
+    "country": "Chile",
+    "province": "Casablanca Valley",
+    "lat": -33.32,
+    "lon": -71.4,
+    "source": "manual"
+  },
+  {
+    "country": "Chile",
+    "province": "Casablanca-Curicó Valley",
+    "lat": -34.37,
+    "lon": -71.26,
+    "source": "country"
+  },
+  {
+    "country": "Chile",
+    "province": "Cauquenes Valley",
+    "lat": -34.37,
+    "lon": -71.26,
+    "source": "country"
+  },
+  {
+    "country": "Chile",
+    "province": "Central Valley",
+    "lat": -35,
+    "lon": -71.3,
+    "source": "manual"
+  },
+  { "country": "Chile", "province": "Chile", "lat": -53.472, "lon": -71.397, "source": "admin1" },
+  {
+    "country": "Chile",
+    "province": "Choapa Valley",
+    "lat": -34.37,
+    "lon": -71.26,
+    "source": "country"
+  },
+  {
+    "country": "Chile",
+    "province": "Colchagua Costa",
+    "lat": -34.37,
+    "lon": -71.26,
+    "source": "country"
+  },
+  {
+    "country": "Chile",
+    "province": "Colchagua Valley",
+    "lat": -34.7,
+    "lon": -71.3,
+    "source": "manual"
+  },
+  {
+    "country": "Chile",
+    "province": "Curicó and Leyda Valleys",
+    "lat": -34.37,
+    "lon": -71.26,
+    "source": "country"
+  },
+  {
+    "country": "Chile",
+    "province": "Curicó and Maipo Valleys",
+    "lat": -34.37,
+    "lon": -71.26,
+    "source": "country"
+  },
+  {
+    "country": "Chile",
+    "province": "Curicó Valley",
+    "lat": -34.98,
+    "lon": -71.24,
+    "source": "manual"
+  },
+  {
+    "country": "Chile",
+    "province": "Elqui Valley",
+    "lat": -29.9,
+    "lon": -70.9,
+    "source": "manual"
+  },
+  {
+    "country": "Chile",
+    "province": "Itata Valley",
+    "lat": -36.6,
+    "lon": -72.4,
+    "source": "manual"
+  },
+  {
+    "country": "Chile",
+    "province": "Leyda Valley",
+    "lat": -33.6,
+    "lon": -71.5,
+    "source": "manual"
+  },
+  {
+    "country": "Chile",
+    "province": "Leyda Valley-Maipo Valley",
+    "lat": -34.37,
+    "lon": -71.26,
+    "source": "country"
+  },
+  { "country": "Chile", "province": "Limarí Valley", "lat": -30.7, "lon": -71, "source": "manual" },
+  {
+    "country": "Chile",
+    "province": "Lolol Valley",
+    "lat": -34.37,
+    "lon": -71.26,
+    "source": "country"
+  },
+  {
+    "country": "Chile",
+    "province": "Loncomilla Valley",
+    "lat": -35.6,
+    "lon": -71.7,
+    "source": "manual"
+  },
+  {
+    "country": "Chile",
+    "province": "Lontué Valley",
+    "lat": -35.05,
+    "lon": -71.3,
+    "source": "manual"
+  },
+  {
+    "country": "Chile",
+    "province": "Maipo Valley",
+    "lat": -33.7,
+    "lon": -70.7,
+    "source": "manual"
+  },
+  {
+    "country": "Chile",
+    "province": "Maipo Valley-Colchagua Valley",
+    "lat": -34.37,
+    "lon": -71.26,
+    "source": "country"
+  },
+  { "country": "Chile", "province": "Malleco", "lat": -38.2, "lon": -72.4, "source": "manual" },
+  {
+    "country": "Chile",
+    "province": "Marchigue",
+    "lat": -34.37,
+    "lon": -71.26,
+    "source": "country"
+  },
+  {
+    "country": "Chile",
+    "province": "Maule Valley",
+    "lat": -35.5,
+    "lon": -71.7,
+    "source": "manual"
+  },
+  { "country": "Chile", "province": "Molina", "lat": -34.37, "lon": -71.26, "source": "country" },
+  { "country": "Chile", "province": "Peumo", "lat": -34.37, "lon": -71.26, "source": "country" },
+  { "country": "Chile", "province": "Pirque", "lat": -34.37, "lon": -71.26, "source": "country" },
+  {
+    "country": "Chile",
+    "province": "Puente Alto",
+    "lat": -34.37,
+    "lon": -71.26,
+    "source": "country"
+  },
+  { "country": "Chile", "province": "Rapel Valley", "lat": -34.5, "lon": -71, "source": "manual" },
+  {
+    "country": "Chile",
+    "province": "Rapel Valley-Casablanca Valley",
+    "lat": -34.37,
+    "lon": -71.26,
+    "source": "country"
+  },
+  { "country": "Chile", "province": "Requinoa", "lat": -34.37, "lon": -71.26, "source": "country" },
+  {
+    "country": "Chile",
+    "province": "Rio Claro",
+    "lat": -34.37,
+    "lon": -71.26,
+    "source": "country"
+  },
+  { "country": "Chile", "province": "San Antonio", "lat": -33.6, "lon": -71.5, "source": "manual" },
+  {
+    "country": "Chile",
+    "province": "San Clemente",
+    "lat": -34.37,
+    "lon": -71.26,
+    "source": "country"
+  },
+  {
+    "country": "Chile",
+    "province": "Santa Cruz",
+    "lat": -34.37,
+    "lon": -71.26,
+    "source": "country"
+  },
+  { "country": "China", "province": "China", "lat": 32.77, "lon": 111.44, "source": "country" },
+  { "country": "Croatia", "province": "Croatia", "lat": 45.21, "lon": 16.47, "source": "country" },
+  {
+    "country": "Croatia",
+    "province": "Dalmatian Coast",
+    "lat": 45.21,
+    "lon": 16.47,
+    "source": "country"
+  },
+  { "country": "Croatia", "province": "Dingač", "lat": 45.21, "lon": 16.47, "source": "country" },
+  {
+    "country": "Croatia",
+    "province": "Hrvatsko Primorje",
+    "lat": 45.21,
+    "lon": 16.47,
+    "source": "country"
+  },
+  { "country": "Croatia", "province": "Hvar", "lat": 45.21, "lon": 16.47, "source": "country" },
+  { "country": "Croatia", "province": "Istria", "lat": 45.125, "lon": 13.868, "source": "admin1" },
+  { "country": "Croatia", "province": "Korčula", "lat": 45.21, "lon": 16.47, "source": "country" },
+  { "country": "Croatia", "province": "Krk", "lat": 45.21, "lon": 16.47, "source": "country" },
+  { "country": "Croatia", "province": "Kutjevo", "lat": 45.21, "lon": 16.47, "source": "country" },
+  {
+    "country": "Croatia",
+    "province": "Middle and South Dalmatia",
+    "lat": 45.21,
+    "lon": 16.47,
+    "source": "country"
+  },
+  {
+    "country": "Croatia",
+    "province": "North Dalmatia",
+    "lat": 45.21,
+    "lon": 16.47,
+    "source": "country"
+  },
+  { "country": "Croatia", "province": "Peljesac", "lat": 45.21, "lon": 16.47, "source": "country" },
+  {
+    "country": "Croatia",
+    "province": "Podunavlje",
+    "lat": 45.21,
+    "lon": 16.47,
+    "source": "country"
+  },
+  {
+    "country": "Cyprus",
+    "province": "Commandaria",
+    "lat": 34.94,
+    "lon": 33.27,
+    "source": "country"
+  },
+  { "country": "Cyprus", "province": "Cyprus", "lat": 34.94, "lon": 33.27, "source": "country" },
+  { "country": "Cyprus", "province": "Kathikas", "lat": 34.94, "lon": 33.27, "source": "country" },
+  { "country": "Cyprus", "province": "Lemesos", "lat": 34.94, "lon": 33.27, "source": "country" },
+  { "country": "Cyprus", "province": "Pafos", "lat": 34.931, "lon": 32.528, "source": "admin1" },
+  {
+    "country": "Cyprus",
+    "province": "Pitsilia Mountains",
+    "lat": 34.94,
+    "lon": 33.27,
+    "source": "country"
+  },
+  {
+    "country": "Czech Republic",
+    "province": "Moravia",
+    "lat": 49.1,
+    "lon": 16.9,
+    "source": "manual"
+  },
+  { "country": "Egypt", "province": "Egypt", "lat": 28.96, "lon": 31.35, "source": "country" },
+  { "country": "England", "province": "England", "lat": 51, "lon": -0.8, "source": "manual" },
+  { "country": "France", "province": "Alsace", "lat": 48.25, "lon": 7.4, "source": "manual" },
+  { "country": "France", "province": "Beaujolais", "lat": 46.15, "lon": 4.72, "source": "manual" },
+  { "country": "France", "province": "Bordeaux", "lat": 44.84, "lon": -0.58, "source": "manual" },
+  { "country": "France", "province": "Burgundy", "lat": 47.05, "lon": 4.85, "source": "manual" },
+  { "country": "France", "province": "Champagne", "lat": 49.05, "lon": 4, "source": "manual" },
+  {
+    "country": "France",
+    "province": "France Other",
+    "lat": 44.28,
+    "lon": 1.92,
+    "source": "country"
+  },
+  {
+    "country": "France",
+    "province": "Languedoc-Roussillon",
+    "lat": 43.5,
+    "lon": 3,
+    "source": "manual"
+  },
+  { "country": "France", "province": "Loire Valley", "lat": 47.3, "lon": 0.7, "source": "manual" },
+  { "country": "France", "province": "Provence", "lat": 43.5, "lon": 6, "source": "manual" },
+  { "country": "France", "province": "Rhône Valley", "lat": 44.5, "lon": 4.8, "source": "manual" },
+  {
+    "country": "France",
+    "province": "Southwest France",
+    "lat": 43.9,
+    "lon": 0.5,
+    "source": "manual"
+  },
+  { "country": "Georgia", "province": "Georgia", "lat": 42.06, "lon": 43.41, "source": "country" },
+  { "country": "Georgia", "province": "Kakheti", "lat": 41.653, "lon": 45.858, "source": "admin1" },
+  {
+    "country": "Georgia",
+    "province": "Napareuli",
+    "lat": 42.06,
+    "lon": 43.41,
+    "source": "country"
+  },
+  { "country": "Germany", "province": "Ahr", "lat": 50.5, "lon": 7.1, "source": "manual" },
+  { "country": "Germany", "province": "Baden", "lat": 48.5, "lon": 8, "source": "manual" },
+  { "country": "Germany", "province": "Franken", "lat": 49.8, "lon": 10, "source": "manual" },
+  { "country": "Germany", "province": "Germany", "lat": 51.6, "lon": 10.24, "source": "country" },
+  {
+    "country": "Germany",
+    "province": "Landwein Rhein",
+    "lat": 51.6,
+    "lon": 10.24,
+    "source": "country"
+  },
+  {
+    "country": "Germany",
+    "province": "Mittelrhein",
+    "lat": 51.6,
+    "lon": 10.24,
+    "source": "country"
+  },
+  { "country": "Germany", "province": "Mosel", "lat": 49.9, "lon": 7, "source": "manual" },
+  {
+    "country": "Germany",
+    "province": "Mosel-Saar-Ruwer",
+    "lat": 49.8,
+    "lon": 6.8,
+    "source": "manual"
+  },
+  { "country": "Germany", "province": "Nahe", "lat": 49.8, "lon": 7.7, "source": "manual" },
+  { "country": "Germany", "province": "Pfalz", "lat": 49.3, "lon": 8.15, "source": "manual" },
+  {
+    "country": "Germany",
+    "province": "Rhein-Mosel",
+    "lat": 51.6,
+    "lon": 10.24,
+    "source": "country"
+  },
+  { "country": "Germany", "province": "Rheingau", "lat": 50, "lon": 8, "source": "manual" },
+  { "country": "Germany", "province": "Rheinhessen", "lat": 49.8, "lon": 8.2, "source": "manual" },
+  { "country": "Germany", "province": "Württemberg", "lat": 49.1, "lon": 9.3, "source": "manual" },
+  { "country": "Greece", "province": "Achaia", "lat": 38.88, "lon": 23.1, "source": "country" },
+  {
+    "country": "Greece",
+    "province": "Agioritikos",
+    "lat": 38.88,
+    "lon": 23.1,
+    "source": "country"
+  },
+  {
+    "country": "Greece",
+    "province": "Aigialias Slopes",
+    "lat": 38.88,
+    "lon": 23.1,
+    "source": "country"
+  },
+  { "country": "Greece", "province": "Amindeo", "lat": 38.88, "lon": 23.1, "source": "country" },
+  { "country": "Greece", "province": "Amyndeon", "lat": 38.88, "lon": 23.1, "source": "country" },
+  { "country": "Greece", "province": "Arcadia", "lat": 38.88, "lon": 23.1, "source": "country" },
+  {
+    "country": "Greece",
+    "province": "Atalanti Valley",
+    "lat": 38.88,
+    "lon": 23.1,
+    "source": "country"
+  },
+  { "country": "Greece", "province": "Attica", "lat": 38.063, "lon": 23.8, "source": "admin1" },
+  { "country": "Greece", "province": "Beotia", "lat": 38.88, "lon": 23.1, "source": "country" },
+  {
+    "country": "Greece",
+    "province": "Central Greece",
+    "lat": 38.637,
+    "lon": 22.61,
+    "source": "admin1"
+  },
+  { "country": "Greece", "province": "Cephalonia", "lat": 38.88, "lon": 23.1, "source": "country" },
+  { "country": "Greece", "province": "Chalkidiki", "lat": 38.88, "lon": 23.1, "source": "country" },
+  { "country": "Greece", "province": "Corinth", "lat": 38.88, "lon": 23.1, "source": "country" },
+  { "country": "Greece", "province": "Corinthia", "lat": 38.88, "lon": 23.1, "source": "country" },
+  { "country": "Greece", "province": "Crete", "lat": 35.24, "lon": 24.8, "source": "manual" },
+  { "country": "Greece", "province": "Cyclades", "lat": 38.88, "lon": 23.1, "source": "country" },
+  { "country": "Greece", "province": "Drama", "lat": 38.88, "lon": 23.1, "source": "country" },
+  {
+    "country": "Greece",
+    "province": "Egilias Slopes",
+    "lat": 38.88,
+    "lon": 23.1,
+    "source": "country"
+  },
+  { "country": "Greece", "province": "Epanomi", "lat": 38.88, "lon": 23.1, "source": "country" },
+  { "country": "Greece", "province": "Evia", "lat": 38.88, "lon": 23.1, "source": "country" },
+  { "country": "Greece", "province": "Florina", "lat": 38.88, "lon": 23.1, "source": "country" },
+  { "country": "Greece", "province": "Gerania", "lat": 38.88, "lon": 23.1, "source": "country" },
+  { "country": "Greece", "province": "Goumenissa", "lat": 38.88, "lon": 23.1, "source": "country" },
+  { "country": "Greece", "province": "Greece", "lat": 38.637, "lon": 22.61, "source": "admin1" },
+  { "country": "Greece", "province": "Halkidiki", "lat": 38.88, "lon": 23.1, "source": "country" },
+  { "country": "Greece", "province": "Ilia", "lat": 38.88, "lon": 23.1, "source": "country" },
+  { "country": "Greece", "province": "Ilias", "lat": 38.88, "lon": 23.1, "source": "country" },
+  { "country": "Greece", "province": "Imathia", "lat": 38.88, "lon": 23.1, "source": "country" },
+  { "country": "Greece", "province": "Ioannina", "lat": 38.88, "lon": 23.1, "source": "country" },
+  { "country": "Greece", "province": "Ismarikos", "lat": 38.88, "lon": 23.1, "source": "country" },
+  { "country": "Greece", "province": "Korinthia", "lat": 38.88, "lon": 23.1, "source": "country" },
+  {
+    "country": "Greece",
+    "province": "Krania Olympus",
+    "lat": 38.88,
+    "lon": 23.1,
+    "source": "country"
+  },
+  { "country": "Greece", "province": "Lakonia", "lat": 38.88, "lon": 23.1, "source": "country" },
+  { "country": "Greece", "province": "Lemnos", "lat": 38.88, "lon": 23.1, "source": "country" },
+  { "country": "Greece", "province": "Lesbos", "lat": 38.88, "lon": 23.1, "source": "country" },
+  { "country": "Greece", "province": "Letrinon", "lat": 38.88, "lon": 23.1, "source": "country" },
+  { "country": "Greece", "province": "Limnos", "lat": 38.88, "lon": 23.1, "source": "country" },
+  { "country": "Greece", "province": "Macedonia", "lat": 40.8, "lon": 22.5, "source": "manual" },
+  { "country": "Greece", "province": "Mantinia", "lat": 38.88, "lon": 23.1, "source": "country" },
+  { "country": "Greece", "province": "Markopoulo", "lat": 38.88, "lon": 23.1, "source": "country" },
+  {
+    "country": "Greece",
+    "province": "Mavrodaphne de Cephalonie",
+    "lat": 38.88,
+    "lon": 23.1,
+    "source": "country"
+  },
+  {
+    "country": "Greece",
+    "province": "Mavrodaphne of Patras",
+    "lat": 38.88,
+    "lon": 23.1,
+    "source": "country"
+  },
+  { "country": "Greece", "province": "Messinia", "lat": 38.88, "lon": 23.1, "source": "country" },
+  { "country": "Greece", "province": "Monemvasia", "lat": 38.88, "lon": 23.1, "source": "country" },
+  {
+    "country": "Greece",
+    "province": "Mount Athos",
+    "lat": 40.292,
+    "lon": 24.192,
+    "source": "admin1"
+  },
+  {
+    "country": "Greece",
+    "province": "Muscat of Kefallonian",
+    "lat": 38.88,
+    "lon": 23.1,
+    "source": "country"
+  },
+  {
+    "country": "Greece",
+    "province": "Muscat of Patras",
+    "lat": 38.88,
+    "lon": 23.1,
+    "source": "country"
+  },
+  { "country": "Greece", "province": "Naoussa", "lat": 40.63, "lon": 22.07, "source": "manual" },
+  { "country": "Greece", "province": "Nemea", "lat": 37.8, "lon": 22.65, "source": "manual" },
+  {
+    "country": "Greece",
+    "province": "Opuntia Locris",
+    "lat": 38.88,
+    "lon": 23.1,
+    "source": "country"
+  },
+  { "country": "Greece", "province": "Pageon", "lat": 38.88, "lon": 23.1, "source": "country" },
+  { "country": "Greece", "province": "Pangeon", "lat": 38.88, "lon": 23.1, "source": "country" },
+  { "country": "Greece", "province": "Patras", "lat": 38.88, "lon": 23.1, "source": "country" },
+  {
+    "country": "Greece",
+    "province": "Peloponnese",
+    "lat": 37.332,
+    "lon": 22.35,
+    "source": "admin1"
+  },
+  { "country": "Greece", "province": "Peza", "lat": 38.88, "lon": 23.1, "source": "country" },
+  { "country": "Greece", "province": "Pisatis", "lat": 38.88, "lon": 23.1, "source": "country" },
+  { "country": "Greece", "province": "Rapsani", "lat": 38.88, "lon": 23.1, "source": "country" },
+  { "country": "Greece", "province": "Retsina", "lat": 38.88, "lon": 23.1, "source": "country" },
+  { "country": "Greece", "province": "Samos", "lat": 38.88, "lon": 23.1, "source": "country" },
+  { "country": "Greece", "province": "Santorini", "lat": 36.4, "lon": 25.45, "source": "manual" },
+  { "country": "Greece", "province": "Sithonia", "lat": 38.88, "lon": 23.1, "source": "country" },
+  {
+    "country": "Greece",
+    "province": "Sterea Ellada",
+    "lat": 38.637,
+    "lon": 22.61,
+    "source": "admin1"
+  },
+  {
+    "country": "Greece",
+    "province": "Thessalikos",
+    "lat": 38.88,
+    "lon": 23.1,
+    "source": "country"
+  },
+  { "country": "Greece", "province": "Thraki", "lat": 41.104, "lon": 25.208, "source": "admin1" },
+  {
+    "country": "Greece",
+    "province": "Vin de Pays d'Imathia",
+    "lat": 38.88,
+    "lon": 23.1,
+    "source": "country"
+  },
+  {
+    "country": "Greece",
+    "province": "Vin de Pays de Macédoine",
+    "lat": 38.88,
+    "lon": 23.1,
+    "source": "country"
+  },
+  {
+    "country": "Greece",
+    "province": "Vin de Pays de Velvendo",
+    "lat": 38.88,
+    "lon": 23.1,
+    "source": "country"
+  },
+  { "country": "Greece", "province": "Zitsa", "lat": 38.88, "lon": 23.1, "source": "country" },
+  { "country": "Hungary", "province": "Eger", "lat": 47.9, "lon": 20.37, "source": "manual" },
+  {
+    "country": "Hungary",
+    "province": "Felso-Magyarország",
+    "lat": 47.15,
+    "lon": 19.09,
+    "source": "country"
+  },
+  { "country": "Hungary", "province": "Hungary", "lat": 47.15, "lon": 19.09, "source": "country" },
+  { "country": "Hungary", "province": "Mátra", "lat": 47.15, "lon": 19.09, "source": "country" },
+  { "country": "Hungary", "province": "Neszmély", "lat": 47.15, "lon": 19.09, "source": "country" },
+  { "country": "Hungary", "province": "Sopron", "lat": 47.68, "lon": 16.58, "source": "manual" },
+  {
+    "country": "Hungary",
+    "province": "Szekszárd",
+    "lat": 46.356,
+    "lon": 18.698,
+    "source": "admin1"
+  },
+  { "country": "Hungary", "province": "Tokaj", "lat": 48.12, "lon": 21.4, "source": "manual" },
+  { "country": "Hungary", "province": "Tokaji", "lat": 48.12, "lon": 21.4, "source": "manual" },
+  { "country": "Hungary", "province": "Villány", "lat": 47.15, "lon": 19.09, "source": "country" },
+  { "country": "India", "province": "Nashik", "lat": 22.85, "lon": 81.76, "source": "country" },
+  { "country": "Israel", "province": "Dan", "lat": 32.01, "lon": 34.99, "source": "country" },
+  {
+    "country": "Israel",
+    "province": "Ella Valley",
+    "lat": 32.01,
+    "lon": 34.99,
+    "source": "country"
+  },
+  { "country": "Israel", "province": "Galil", "lat": 32.01, "lon": 34.99, "source": "country" },
+  { "country": "Israel", "province": "Galilee", "lat": 32.9, "lon": 35.3, "source": "manual" },
+  { "country": "Israel", "province": "Golan Heights", "lat": 33, "lon": 35.75, "source": "manual" },
+  {
+    "country": "Israel",
+    "province": "Haut-Judeé",
+    "lat": 32.01,
+    "lon": 34.99,
+    "source": "country"
+  },
+  { "country": "Israel", "province": "Israel", "lat": 32.01, "lon": 34.99, "source": "country" },
+  {
+    "country": "Israel",
+    "province": "Jerusalem Hills",
+    "lat": 31.74,
+    "lon": 35.018,
+    "source": "admin1"
+  },
+  {
+    "country": "Israel",
+    "province": "Judean Hills",
+    "lat": 31.75,
+    "lon": 35.1,
+    "source": "manual"
+  },
+  { "country": "Israel", "province": "Negev", "lat": 30.5, "lon": 34.9, "source": "manual" },
+  {
+    "country": "Israel",
+    "province": "Negev Hills",
+    "lat": 32.01,
+    "lon": 34.99,
+    "source": "country"
+  },
+  { "country": "Israel", "province": "Samson", "lat": 32.01, "lon": 34.99, "source": "country" },
+  { "country": "Israel", "province": "Shomron", "lat": 32.3, "lon": 35, "source": "manual" },
+  {
+    "country": "Israel",
+    "province": "Upper Galilee",
+    "lat": 32.01,
+    "lon": 34.99,
+    "source": "country"
+  },
+  { "country": "Italy", "province": "Central Italy", "lat": 42.5, "lon": 12.5, "source": "manual" },
+  { "country": "Italy", "province": "Italy Other", "lat": 42.8, "lon": 12.5, "source": "manual" },
+  { "country": "Italy", "province": "Lombardy", "lat": 45.6, "lon": 9.8, "source": "manual" },
+  {
+    "country": "Italy",
+    "province": "Northeastern Italy",
+    "lat": 46,
+    "lon": 11.5,
+    "source": "manual"
+  },
+  {
+    "country": "Italy",
+    "province": "Northwestern Italy",
+    "lat": 45.2,
+    "lon": 8.5,
+    "source": "manual"
+  },
+  { "country": "Italy", "province": "Piedmont", "lat": 46.074, "lon": 8.343, "source": "admin1" },
+  {
+    "country": "Italy",
+    "province": "Sicily & Sardinia",
+    "lat": 38.5,
+    "lon": 13.5,
+    "source": "manual"
+  },
+  {
+    "country": "Italy",
+    "province": "Southern Italy",
+    "lat": 40.8,
+    "lon": 15.5,
+    "source": "manual"
+  },
+  { "country": "Italy", "province": "Tuscany", "lat": 42.819, "lon": 11.205, "source": "admin1" },
+  { "country": "Italy", "province": "Veneto", "lat": 45.6, "lon": 11.7, "source": "manual" },
+  {
+    "country": "Lebanon",
+    "province": "Bekaa Valley",
+    "lat": 34.049,
+    "lon": 36.109,
+    "source": "admin1"
+  },
+  { "country": "Lebanon", "province": "Lebanon", "lat": 33.266, "lon": 35.297, "source": "admin1" },
+  {
+    "country": "Lithuania",
+    "province": "Lithuania",
+    "lat": 55.32,
+    "lon": 23.64,
+    "source": "country"
+  },
+  {
+    "country": "Luxembourg",
+    "province": "Moselle Luxembourgeoise",
+    "lat": 49.638,
+    "lon": 6.051,
+    "source": "admin1"
+  },
+  { "country": "Macedonia", "province": "Tikves", "lat": 41.44, "lon": 22, "source": "manual" },
+  {
+    "country": "Mexico",
+    "province": "San Antonio de las Minas Valley",
+    "lat": 21.71,
+    "lon": -100.16,
+    "source": "country"
+  },
+  {
+    "country": "Mexico",
+    "province": "San Vicente",
+    "lat": 21.71,
+    "lon": -100.16,
+    "source": "country"
+  },
+  {
+    "country": "Mexico",
+    "province": "Valle de Guadalupe",
+    "lat": 21.71,
+    "lon": -100.16,
+    "source": "country"
+  },
+  {
+    "country": "Mexico",
+    "province": "Valle de Guadalupe and Santo Tomás",
+    "lat": 21.71,
+    "lon": -100.16,
+    "source": "country"
+  },
+  { "country": "Moldova", "province": "Cahul", "lat": 45.64, "lon": 28.314, "source": "admin1" },
+  {
+    "country": "Moldova",
+    "province": "Chisinau County",
+    "lat": 47.035,
+    "lon": 28.822,
+    "source": "admin1"
+  },
+  {
+    "country": "Moldova",
+    "province": "Codru Region",
+    "lat": 47.26,
+    "lon": 28.49,
+    "source": "country"
+  },
+  { "country": "Moldova", "province": "Moldova", "lat": 47.26, "lon": 28.49, "source": "country" },
+  {
+    "country": "Montenegro",
+    "province": "Lake Skadar Valley",
+    "lat": 42.69,
+    "lon": 19.25,
+    "source": "country"
+  },
+  {
+    "country": "Morocco",
+    "province": "Beni M'Tir",
+    "lat": 31.69,
+    "lon": -7.35,
+    "source": "country"
+  },
+  {
+    "country": "Morocco",
+    "province": "Guerrouane",
+    "lat": 31.69,
+    "lon": -7.35,
+    "source": "country"
+  },
+  { "country": "Morocco", "province": "Morocco", "lat": 31.69, "lon": -7.35, "source": "country" },
+  { "country": "Morocco", "province": "Zenata", "lat": 31.69, "lon": -7.35, "source": "country" },
+  {
+    "country": "New Zealand",
+    "province": "Awatere Valley",
+    "lat": -40.3,
+    "lon": 129.5,
+    "source": "country"
+  },
+  {
+    "country": "New Zealand",
+    "province": "Canterbury",
+    "lat": -43.4,
+    "lon": 171.813,
+    "source": "admin1"
+  },
+  {
+    "country": "New Zealand",
+    "province": "Central Otago",
+    "lat": -45.43,
+    "lon": 169.887,
+    "source": "admin1"
+  },
+  {
+    "country": "New Zealand",
+    "province": "East Coast",
+    "lat": -38.344,
+    "lon": 177.93,
+    "source": "admin1"
+  },
+  {
+    "country": "New Zealand",
+    "province": "Eastern Bays",
+    "lat": -40.3,
+    "lon": 129.5,
+    "source": "country"
+  },
+  {
+    "country": "New Zealand",
+    "province": "Gisborne",
+    "lat": -38.344,
+    "lon": 177.93,
+    "source": "admin1"
+  },
+  {
+    "country": "New Zealand",
+    "province": "Gladstone",
+    "lat": -40.3,
+    "lon": 129.5,
+    "source": "country"
+  },
+  {
+    "country": "New Zealand",
+    "province": "Hawke's Bay",
+    "lat": -39.543,
+    "lon": 176.605,
+    "source": "admin1"
+  },
+  {
+    "country": "New Zealand",
+    "province": "Kumeu",
+    "lat": -40.3,
+    "lon": 129.5,
+    "source": "country"
+  },
+  {
+    "country": "New Zealand",
+    "province": "Marlborough",
+    "lat": -41.638,
+    "lon": 173.656,
+    "source": "admin1"
+  },
+  {
+    "country": "New Zealand",
+    "province": "Marlborough & Hawkes Bay",
+    "lat": -41.638,
+    "lon": 173.656,
+    "source": "admin1"
+  },
+  {
+    "country": "New Zealand",
+    "province": "Martinborough",
+    "lat": -40.3,
+    "lon": 129.5,
+    "source": "country"
+  },
+  {
+    "country": "New Zealand",
+    "province": "Martinborough Terrace",
+    "lat": -40.3,
+    "lon": 129.5,
+    "source": "country"
+  },
+  {
+    "country": "New Zealand",
+    "province": "Moutere",
+    "lat": -40.3,
+    "lon": 129.5,
+    "source": "country"
+  },
+  {
+    "country": "New Zealand",
+    "province": "Nelson",
+    "lat": -41.251,
+    "lon": 173.388,
+    "source": "admin1"
+  },
+  {
+    "country": "New Zealand",
+    "province": "New Zealand",
+    "lat": -40.3,
+    "lon": 129.5,
+    "source": "country"
+  },
+  {
+    "country": "New Zealand",
+    "province": "North Island",
+    "lat": -40.3,
+    "lon": 129.5,
+    "source": "country"
+  },
+  {
+    "country": "New Zealand",
+    "province": "Ohiti Valley",
+    "lat": -40.3,
+    "lon": 129.5,
+    "source": "country"
+  },
+  {
+    "country": "New Zealand",
+    "province": "Omaka Valley",
+    "lat": -40.3,
+    "lon": 129.5,
+    "source": "country"
+  },
+  {
+    "country": "New Zealand",
+    "province": "South Island",
+    "lat": -40.3,
+    "lon": 129.5,
+    "source": "country"
+  },
+  {
+    "country": "New Zealand",
+    "province": "Stirling",
+    "lat": -40.3,
+    "lon": 129.5,
+    "source": "country"
+  },
+  {
+    "country": "New Zealand",
+    "province": "Waiheke Island",
+    "lat": -40.3,
+    "lon": 129.5,
+    "source": "country"
+  },
+  {
+    "country": "New Zealand",
+    "province": "Waipara",
+    "lat": -40.3,
+    "lon": 129.5,
+    "source": "country"
+  },
+  {
+    "country": "New Zealand",
+    "province": "Waipara Valley",
+    "lat": -40.3,
+    "lon": 129.5,
+    "source": "country"
+  },
+  {
+    "country": "New Zealand",
+    "province": "Wairarapa",
+    "lat": -40.3,
+    "lon": 129.5,
+    "source": "country"
+  },
+  {
+    "country": "New Zealand",
+    "province": "Wairau Valley",
+    "lat": -40.3,
+    "lon": 129.5,
+    "source": "country"
+  },
+  {
+    "country": "New Zealand",
+    "province": "Waitaki Valley",
+    "lat": -40.3,
+    "lon": 129.5,
+    "source": "country"
+  },
+  { "country": "Peru", "province": "Ica", "lat": -14.226, "lon": -75.677, "source": "admin1" },
+  {
+    "country": "Portugal",
+    "province": "Alenquer",
+    "lat": 39.51,
+    "lon": -9.52,
+    "source": "country"
+  },
+  { "country": "Portugal", "province": "Alentejano", "lat": 38.5, "lon": -7.9, "source": "manual" },
+  { "country": "Portugal", "province": "Alentejo", "lat": 38.5, "lon": -7.9, "source": "manual" },
+  { "country": "Portugal", "province": "Alenteo", "lat": 39.51, "lon": -9.52, "source": "country" },
+  { "country": "Portugal", "province": "Algarve", "lat": 39.51, "lon": -9.52, "source": "country" },
+  { "country": "Portugal", "province": "Bairrada", "lat": 40.4, "lon": -8.5, "source": "manual" },
+  {
+    "country": "Portugal",
+    "province": "Beira Atlantico",
+    "lat": 40.4,
+    "lon": -8.5,
+    "source": "manual"
+  },
+  {
+    "country": "Portugal",
+    "province": "Beira Interior",
+    "lat": 39.51,
+    "lon": -9.52,
+    "source": "country"
+  },
+  { "country": "Portugal", "province": "Beiras", "lat": 40.5, "lon": -7.8, "source": "manual" },
+  { "country": "Portugal", "province": "Bucelas", "lat": 39.51, "lon": -9.52, "source": "country" },
+  { "country": "Portugal", "province": "Colares", "lat": 39.51, "lon": -9.52, "source": "country" },
+  { "country": "Portugal", "province": "Dão", "lat": 40.55, "lon": -7.9, "source": "manual" },
+  { "country": "Portugal", "province": "Douro", "lat": 41.2, "lon": -7.5, "source": "manual" },
+  {
+    "country": "Portugal",
+    "province": "Douro Superior",
+    "lat": 39.51,
+    "lon": -9.52,
+    "source": "country"
+  },
+  { "country": "Portugal", "province": "Duriense", "lat": 41.2, "lon": -7.5, "source": "manual" },
+  {
+    "country": "Portugal",
+    "province": "Estremadura",
+    "lat": 39.51,
+    "lon": -9.52,
+    "source": "country"
+  },
+  { "country": "Portugal", "province": "Lisboa", "lat": 39.1, "lon": -9.2, "source": "manual" },
+  { "country": "Portugal", "province": "Madeira", "lat": 32.75, "lon": -16.97, "source": "manual" },
+  { "country": "Portugal", "province": "Minho", "lat": 39.51, "lon": -9.52, "source": "country" },
+  {
+    "country": "Portugal",
+    "province": "Moscatel de Setúbal",
+    "lat": 38.207,
+    "lon": -8.573,
+    "source": "admin1"
+  },
+  {
+    "country": "Portugal",
+    "province": "Moscatel do Douro",
+    "lat": 39.51,
+    "lon": -9.52,
+    "source": "country"
+  },
+  { "country": "Portugal", "province": "Obidos", "lat": 39.51, "lon": -9.52, "source": "country" },
+  { "country": "Portugal", "province": "Palmela", "lat": 39.51, "lon": -9.52, "source": "country" },
+  {
+    "country": "Portugal",
+    "province": "Península de Setúbal",
+    "lat": 38.5,
+    "lon": -8.85,
+    "source": "manual"
+  },
+  { "country": "Portugal", "province": "Port", "lat": 41.15, "lon": -7.6, "source": "manual" },
+  {
+    "country": "Portugal",
+    "province": "Portugal",
+    "lat": 39.51,
+    "lon": -9.52,
+    "source": "country"
+  },
+  {
+    "country": "Portugal",
+    "province": "Portuguese Table Wine",
+    "lat": 39.6,
+    "lon": -8,
+    "source": "manual"
+  },
+  {
+    "country": "Portugal",
+    "province": "Ribatejano",
+    "lat": 39.51,
+    "lon": -9.52,
+    "source": "country"
+  },
+  {
+    "country": "Portugal",
+    "province": "Ribatejo",
+    "lat": 39.51,
+    "lon": -9.52,
+    "source": "country"
+  },
+  { "country": "Portugal", "province": "Setubal", "lat": 38.5, "lon": -8.8, "source": "manual" },
+  {
+    "country": "Portugal",
+    "province": "Table wine",
+    "lat": 39.51,
+    "lon": -9.52,
+    "source": "country"
+  },
+  {
+    "country": "Portugal",
+    "province": "Távora-Varosa",
+    "lat": 39.51,
+    "lon": -9.52,
+    "source": "country"
+  },
+  { "country": "Portugal", "province": "Tejo", "lat": 39.2, "lon": -8.5, "source": "manual" },
+  {
+    "country": "Portugal",
+    "province": "Terras da Beira",
+    "lat": 39.51,
+    "lon": -9.52,
+    "source": "country"
+  },
+  {
+    "country": "Portugal",
+    "province": "Terras do Dão",
+    "lat": 39.51,
+    "lon": -9.52,
+    "source": "country"
+  },
+  {
+    "country": "Portugal",
+    "province": "Terras do Sado",
+    "lat": 39.51,
+    "lon": -9.52,
+    "source": "country"
+  },
+  {
+    "country": "Portugal",
+    "province": "Torres Vedras",
+    "lat": 39.51,
+    "lon": -9.52,
+    "source": "country"
+  },
+  {
+    "country": "Portugal",
+    "province": "Transmontanas",
+    "lat": 39.51,
+    "lon": -9.52,
+    "source": "country"
+  },
+  {
+    "country": "Portugal",
+    "province": "Transmontano",
+    "lat": 39.51,
+    "lon": -9.52,
+    "source": "country"
+  },
+  {
+    "country": "Portugal",
+    "province": "Trás-os-Montes",
+    "lat": 39.51,
+    "lon": -9.52,
+    "source": "country"
+  },
+  {
+    "country": "Portugal",
+    "province": "Vinho da Mesa",
+    "lat": 39.51,
+    "lon": -9.52,
+    "source": "country"
+  },
+  {
+    "country": "Portugal",
+    "province": "Vinho Espumante",
+    "lat": 39.51,
+    "lon": -9.52,
+    "source": "country"
+  },
+  {
+    "country": "Portugal",
+    "province": "Vinho Espumante de Qualidade",
+    "lat": 39.51,
+    "lon": -9.52,
+    "source": "country"
+  },
+  {
+    "country": "Portugal",
+    "province": "Vinho Licoroso",
+    "lat": 39.51,
+    "lon": -9.52,
+    "source": "country"
+  },
+  {
+    "country": "Portugal",
+    "province": "Vinho Verde",
+    "lat": 41.6,
+    "lon": -8.4,
+    "source": "manual"
+  },
+  {
+    "country": "Romania",
+    "province": "Colinele Dobrogei",
+    "lat": 45.74,
+    "lon": 25.17,
+    "source": "country"
+  },
+  {
+    "country": "Romania",
+    "province": "Dealu Mare",
+    "lat": 45.74,
+    "lon": 25.17,
+    "source": "country"
+  },
+  {
+    "country": "Romania",
+    "province": "Dealurile Hușilor",
+    "lat": 45.74,
+    "lon": 25.17,
+    "source": "country"
+  },
+  {
+    "country": "Romania",
+    "province": "Dealurile Munteniei",
+    "lat": 45.74,
+    "lon": 25.17,
+    "source": "country"
+  },
+  { "country": "Romania", "province": "Jidvei", "lat": 45.74, "lon": 25.17, "source": "country" },
+  {
+    "country": "Romania",
+    "province": "Murfatlar",
+    "lat": 45.74,
+    "lon": 25.17,
+    "source": "country"
+  },
+  {
+    "country": "Romania",
+    "province": "Murfatlar Cernavoda",
+    "lat": 45.74,
+    "lon": 25.17,
+    "source": "country"
+  },
+  { "country": "Romania", "province": "Panciu", "lat": 45.74, "lon": 25.17, "source": "country" },
+  {
+    "country": "Romania",
+    "province": "Plaiurile Drancei",
+    "lat": 45.74,
+    "lon": 25.17,
+    "source": "country"
+  },
+  { "country": "Romania", "province": "Recas", "lat": 45.74, "lon": 25.17, "source": "country" },
+  { "country": "Romania", "province": "Romania", "lat": 45.74, "lon": 25.17, "source": "country" },
+  { "country": "Romania", "province": "Sebes", "lat": 45.74, "lon": 25.17, "source": "country" },
+  { "country": "Romania", "province": "Tarnave", "lat": 45.74, "lon": 25.17, "source": "country" },
+  {
+    "country": "Romania",
+    "province": "Terasele Dunarii",
+    "lat": 45.74,
+    "lon": 25.17,
+    "source": "country"
+  },
+  {
+    "country": "Romania",
+    "province": "Transylvanian Plateau",
+    "lat": 45.74,
+    "lon": 25.17,
+    "source": "country"
+  },
+  {
+    "country": "Romania",
+    "province": "Vânju Mare",
+    "lat": 45.74,
+    "lon": 25.17,
+    "source": "country"
+  },
+  {
+    "country": "Romania",
+    "province": "Viile Timis",
+    "lat": 45.596,
+    "lon": 21.393,
+    "source": "admin1"
+  },
+  {
+    "country": "Romania",
+    "province": "Viile Timisului",
+    "lat": 45.596,
+    "lon": 21.393,
+    "source": "admin1"
+  },
+  {
+    "country": "Serbia",
+    "province": "Fruška Gora",
+    "lat": 44.26,
+    "lon": 20.81,
+    "source": "country"
+  },
+  { "country": "Serbia", "province": "Župa", "lat": 44.26, "lon": 20.81, "source": "country" },
+  { "country": "Slovakia", "province": "Muzla", "lat": 48.64, "lon": 19.07, "source": "country" },
+  { "country": "Slovenia", "province": "Brda", "lat": 46.019, "lon": 13.544, "source": "admin1" },
+  {
+    "country": "Slovenia",
+    "province": "Goriska Brda",
+    "lat": 46.24,
+    "lon": 15.09,
+    "source": "country"
+  },
+  { "country": "Slovenia", "province": "Kras", "lat": 46.24, "lon": 15.09, "source": "country" },
+  {
+    "country": "Slovenia",
+    "province": "Primorska",
+    "lat": 46.24,
+    "lon": 15.09,
+    "source": "country"
+  },
+  {
+    "country": "Slovenia",
+    "province": "Slovenia",
+    "lat": 46.24,
+    "lon": 15.09,
+    "source": "country"
+  },
+  {
+    "country": "Slovenia",
+    "province": "Slovenska Istra",
+    "lat": 46.24,
+    "lon": 15.09,
+    "source": "country"
+  },
+  {
+    "country": "Slovenia",
+    "province": "Štajerska",
+    "lat": 46.24,
+    "lon": 15.09,
+    "source": "country"
+  },
+  {
+    "country": "Slovenia",
+    "province": "Vipavska Dolina",
+    "lat": 46.24,
+    "lon": 15.09,
+    "source": "country"
+  },
+  {
+    "country": "South Africa",
+    "province": "Bot River",
+    "lat": -28.31,
+    "lon": 26.57,
+    "source": "country"
+  },
+  {
+    "country": "South Africa",
+    "province": "Breede River Valley",
+    "lat": -28.31,
+    "lon": 26.57,
+    "source": "country"
+  },
+  {
+    "country": "South Africa",
+    "province": "Breedekloof",
+    "lat": -28.31,
+    "lon": 26.57,
+    "source": "country"
+  },
+  {
+    "country": "South Africa",
+    "province": "Cape Agulhas",
+    "lat": -28.31,
+    "lon": 26.57,
+    "source": "country"
+  },
+  {
+    "country": "South Africa",
+    "province": "Cape Peninsula",
+    "lat": -28.31,
+    "lon": 26.57,
+    "source": "country"
+  },
+  {
+    "country": "South Africa",
+    "province": "Cape South Coast",
+    "lat": -28.31,
+    "lon": 26.57,
+    "source": "country"
+  },
+  {
+    "country": "South Africa",
+    "province": "Cederberg",
+    "lat": -28.31,
+    "lon": 26.57,
+    "source": "country"
+  },
+  {
+    "country": "South Africa",
+    "province": "Ceres Plateau",
+    "lat": -28.31,
+    "lon": 26.57,
+    "source": "country"
+  },
+  {
+    "country": "South Africa",
+    "province": "Coastal Region",
+    "lat": -33.8,
+    "lon": 18.8,
+    "source": "manual"
+  },
+  {
+    "country": "South Africa",
+    "province": "Constantia",
+    "lat": -34.03,
+    "lon": 18.42,
+    "source": "manual"
+  },
+  {
+    "country": "South Africa",
+    "province": "Darling",
+    "lat": -28.31,
+    "lon": 26.57,
+    "source": "country"
+  },
+  {
+    "country": "South Africa",
+    "province": "Durbanville",
+    "lat": -28.31,
+    "lon": 26.57,
+    "source": "country"
+  },
+  {
+    "country": "South Africa",
+    "province": "Eilandia",
+    "lat": -28.31,
+    "lon": 26.57,
+    "source": "country"
+  },
+  {
+    "country": "South Africa",
+    "province": "Elgin",
+    "lat": -34.2,
+    "lon": 19.03,
+    "source": "manual"
+  },
+  {
+    "country": "South Africa",
+    "province": "Elim",
+    "lat": -28.31,
+    "lon": 26.57,
+    "source": "country"
+  },
+  {
+    "country": "South Africa",
+    "province": "Franschhoek",
+    "lat": -33.9,
+    "lon": 19.12,
+    "source": "manual"
+  },
+  {
+    "country": "South Africa",
+    "province": "Groenekloof",
+    "lat": -28.31,
+    "lon": 26.57,
+    "source": "country"
+  },
+  {
+    "country": "South Africa",
+    "province": "Helderberg",
+    "lat": -28.31,
+    "lon": 26.57,
+    "source": "country"
+  },
+  {
+    "country": "South Africa",
+    "province": "Hemel en Aarde",
+    "lat": -28.31,
+    "lon": 26.57,
+    "source": "country"
+  },
+  {
+    "country": "South Africa",
+    "province": "Jonkershoek Valley",
+    "lat": -28.31,
+    "lon": 26.57,
+    "source": "country"
+  },
+  {
+    "country": "South Africa",
+    "province": "Klein River",
+    "lat": -28.31,
+    "lon": 26.57,
+    "source": "country"
+  },
+  {
+    "country": "South Africa",
+    "province": "Lutzville Valley",
+    "lat": -28.31,
+    "lon": 26.57,
+    "source": "country"
+  },
+  {
+    "country": "South Africa",
+    "province": "Malgas",
+    "lat": -28.31,
+    "lon": 26.57,
+    "source": "country"
+  },
+  {
+    "country": "South Africa",
+    "province": "Northern Cape",
+    "lat": -29.744,
+    "lon": 20.996,
+    "source": "admin1"
+  },
+  {
+    "country": "South Africa",
+    "province": "Olifants River",
+    "lat": -28.31,
+    "lon": 26.57,
+    "source": "country"
+  },
+  {
+    "country": "South Africa",
+    "province": "Overberg",
+    "lat": -28.31,
+    "lon": 26.57,
+    "source": "country"
+  },
+  {
+    "country": "South Africa",
+    "province": "Paardeberg",
+    "lat": -28.31,
+    "lon": 26.57,
+    "source": "country"
+  },
+  {
+    "country": "South Africa",
+    "province": "Paarl",
+    "lat": -33.72,
+    "lon": 18.96,
+    "source": "manual"
+  },
+  {
+    "country": "South Africa",
+    "province": "Philadelphia",
+    "lat": -28.31,
+    "lon": 26.57,
+    "source": "country"
+  },
+  {
+    "country": "South Africa",
+    "province": "Polkadraai Hills",
+    "lat": -28.31,
+    "lon": 26.57,
+    "source": "country"
+  },
+  {
+    "country": "South Africa",
+    "province": "Robertson",
+    "lat": -33.8,
+    "lon": 19.88,
+    "source": "manual"
+  },
+  {
+    "country": "South Africa",
+    "province": "Simonsberg-Paarl",
+    "lat": -28.31,
+    "lon": 26.57,
+    "source": "country"
+  },
+  {
+    "country": "South Africa",
+    "province": "Simonsberg-Stellenbosch",
+    "lat": -28.31,
+    "lon": 26.57,
+    "source": "country"
+  },
+  {
+    "country": "South Africa",
+    "province": "South Africa",
+    "lat": -28.31,
+    "lon": 26.57,
+    "source": "country"
+  },
+  {
+    "country": "South Africa",
+    "province": "Stellenbosch",
+    "lat": -33.93,
+    "lon": 18.86,
+    "source": "manual"
+  },
+  {
+    "country": "South Africa",
+    "province": "Swartland",
+    "lat": -33.4,
+    "lon": 18.7,
+    "source": "manual"
+  },
+  {
+    "country": "South Africa",
+    "province": "Tradouw",
+    "lat": -28.31,
+    "lon": 26.57,
+    "source": "country"
+  },
+  {
+    "country": "South Africa",
+    "province": "Tulbagh",
+    "lat": -28.31,
+    "lon": 26.57,
+    "source": "country"
+  },
+  {
+    "country": "South Africa",
+    "province": "Walker Bay",
+    "lat": -34.4,
+    "lon": 19.35,
+    "source": "manual"
+  },
+  {
+    "country": "South Africa",
+    "province": "Wellington",
+    "lat": -28.31,
+    "lon": 26.57,
+    "source": "country"
+  },
+  {
+    "country": "South Africa",
+    "province": "Western Cape",
+    "lat": -33.9,
+    "lon": 19.5,
+    "source": "manual"
+  },
+  {
+    "country": "South Korea",
+    "province": "Jiri Valley",
+    "lat": 36.09,
+    "lon": 127.61,
+    "source": "country"
+  },
+  { "country": "Spain", "province": "Andalucia", "lat": 37.5, "lon": -4.7, "source": "manual" },
+  { "country": "Spain", "province": "Catalonia", "lat": 41.6, "lon": 1.6, "source": "manual" },
+  { "country": "Spain", "province": "Central Spain", "lat": 39.5, "lon": -3.5, "source": "manual" },
+  { "country": "Spain", "province": "Galicia", "lat": 42.6, "lon": -8.1, "source": "manual" },
+  { "country": "Spain", "province": "Levante", "lat": 39, "lon": -0.8, "source": "manual" },
+  {
+    "country": "Spain",
+    "province": "Northern Spain",
+    "lat": 42.5,
+    "lon": -2.7,
+    "source": "manual"
+  },
+  { "country": "Spain", "province": "Spain Other", "lat": 40.2, "lon": -3.7, "source": "manual" },
+  {
+    "country": "Spain",
+    "province": "Spanish Islands",
+    "lat": 39.93,
+    "lon": -3.81,
+    "source": "country"
+  },
+  {
+    "country": "Switzerland",
+    "province": "Neuchâtel",
+    "lat": 46.989,
+    "lon": 6.761,
+    "source": "admin1"
+  },
+  {
+    "country": "Switzerland",
+    "province": "Switzerland",
+    "lat": 47.06,
+    "lon": 8.16,
+    "source": "country"
+  },
+  { "country": "Switzerland", "province": "Ticino", "lat": 46.36, "lon": 8.79, "source": "admin1" },
+  {
+    "country": "Switzerland",
+    "province": "Valais",
+    "lat": 46.202,
+    "lon": 7.613,
+    "source": "admin1"
+  },
+  {
+    "country": "Switzerland",
+    "province": "Vino da Tavola della Svizzera Italiana",
+    "lat": 47.06,
+    "lon": 8.16,
+    "source": "country"
+  },
+  { "country": "Tunisia", "province": "Tunisia", "lat": 36.779, "lon": 10.172, "source": "admin1" },
+  { "country": "Turkey", "province": "Aegean", "lat": 39.28, "lon": 35.19, "source": "country" },
+  { "country": "Turkey", "province": "Ankara", "lat": 39.829, "lon": 32.578, "source": "admin1" },
+  {
+    "country": "Turkey",
+    "province": "Cappadocia",
+    "lat": 39.28,
+    "lon": 35.19,
+    "source": "country"
+  },
+  { "country": "Turkey", "province": "Elazığ", "lat": 38.572, "lon": 39.37, "source": "admin1" },
+  {
+    "country": "Turkey",
+    "province": "Elazığ-Diyarbakir",
+    "lat": 38.572,
+    "lon": 39.37,
+    "source": "admin1"
+  },
+  { "country": "Turkey", "province": "Thrace", "lat": 39.28, "lon": 35.19, "source": "country" },
+  { "country": "Turkey", "province": "Turkey", "lat": 39.28, "lon": 35.19, "source": "country" },
+  {
+    "country": "Turkey",
+    "province": "Urla-Thrace",
+    "lat": 39.28,
+    "lon": 35.19,
+    "source": "country"
+  },
+  { "country": "Ukraine", "province": "Ukraine", "lat": 49.12, "lon": 30.52, "source": "country" },
+  {
+    "country": "Uruguay",
+    "province": "Atlantida",
+    "lat": -33.17,
+    "lon": -56.05,
+    "source": "country"
+  },
+  {
+    "country": "Uruguay",
+    "province": "Canelones",
+    "lat": -34.547,
+    "lon": -55.923,
+    "source": "admin1"
+  },
+  {
+    "country": "Uruguay",
+    "province": "Colonia",
+    "lat": -34.195,
+    "lon": -57.679,
+    "source": "admin1"
+  },
+  {
+    "country": "Uruguay",
+    "province": "El Colorado",
+    "lat": -33.17,
+    "lon": -56.05,
+    "source": "country"
+  },
+  {
+    "country": "Uruguay",
+    "province": "Juanico",
+    "lat": -33.17,
+    "lon": -56.05,
+    "source": "country"
+  },
+  {
+    "country": "Uruguay",
+    "province": "Montevideo",
+    "lat": -34.827,
+    "lon": -56.228,
+    "source": "admin1"
+  },
+  {
+    "country": "Uruguay",
+    "province": "Progreso",
+    "lat": -33.17,
+    "lon": -56.05,
+    "source": "country"
+  },
+  {
+    "country": "Uruguay",
+    "province": "San Jose",
+    "lat": -34.312,
+    "lon": -56.765,
+    "source": "admin1"
+  },
+  {
+    "country": "Uruguay",
+    "province": "Uruguay",
+    "lat": -33.17,
+    "lon": -56.05,
+    "source": "country"
+  },
+  { "country": "US", "province": "America", "lat": 39, "lon": -98, "source": "manual" },
+  { "country": "US", "province": "Arizona", "lat": 34.305, "lon": -111.935, "source": "admin1" },
+  { "country": "US", "province": "California", "lat": 36.75, "lon": -119.591, "source": "admin1" },
+  { "country": "US", "province": "Colorado", "lat": 39, "lon": -105.543, "source": "admin1" },
+  { "country": "US", "province": "Connecticut", "lat": 41.649, "lon": -72.759, "source": "admin1" },
+  { "country": "US", "province": "Hawaii", "lat": 21.492, "lon": -157.999, "source": "admin1" },
+  { "country": "US", "province": "Idaho", "lat": 43.782, "lon": -114.133, "source": "admin1" },
+  { "country": "US", "province": "Illinois", "lat": 39.946, "lon": -89.199, "source": "admin1" },
+  { "country": "US", "province": "Iowa", "lat": 42.042, "lon": -93.389, "source": "admin1" },
+  { "country": "US", "province": "Kentucky", "lat": 37.399, "lon": -85.573, "source": "admin1" },
+  {
+    "country": "US",
+    "province": "Massachusetts",
+    "lat": 42.374,
+    "lon": -71.999,
+    "source": "admin1"
+  },
+  { "country": "US", "province": "Michigan", "lat": 43.434, "lon": -84.948, "source": "admin1" },
+  { "country": "US", "province": "Missouri", "lat": 38.549, "lon": -92.446, "source": "admin1" },
+  { "country": "US", "province": "Nevada", "lat": 39.43, "lon": -117.02, "source": "admin1" },
+  { "country": "US", "province": "New Jersey", "lat": 40.045, "lon": -74.465, "source": "admin1" },
+  { "country": "US", "province": "New Mexico", "lat": 34.5, "lon": -106.024, "source": "admin1" },
+  { "country": "US", "province": "New York", "lat": 43.199, "lon": -75.324, "source": "admin1" },
+  {
+    "country": "US",
+    "province": "North Carolina",
+    "lat": 35.615,
+    "lon": -78.866,
+    "source": "admin1"
+  },
+  { "country": "US", "province": "Ohio", "lat": 40.092, "lon": -82.672, "source": "admin1" },
+  { "country": "US", "province": "Oregon", "lat": 44.9, "lon": -123, "source": "manual" },
+  { "country": "US", "province": "Pennsylvania", "lat": 40.86, "lon": -77.609, "source": "admin1" },
+  {
+    "country": "US",
+    "province": "Rhode Island",
+    "lat": 41.624,
+    "lon": -71.508,
+    "source": "admin1"
+  },
+  { "country": "US", "province": "Texas", "lat": 31.131, "lon": -98.761, "source": "admin1" },
+  { "country": "US", "province": "Vermont", "lat": 44.089, "lon": -72.732, "source": "admin1" },
+  { "country": "US", "province": "Virginia", "lat": 37.74, "lon": -78.243, "source": "admin1" },
+  { "country": "US", "province": "Washington", "lat": 47.486, "lon": -120.361, "source": "admin1" },
+  {
+    "country": "US",
+    "province": "Washington-Oregon",
+    "lat": 45.9,
+    "lon": -120,
+    "source": "manual"
+  },
+  {
+    "country": "US-France",
+    "province": "Santa Barbara County-Condrieu",
+    "lat": 34.7,
+    "lon": -120.2,
+    "source": "manual"
+  }
+]

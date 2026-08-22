@@ -1,0 +1,291 @@
+/* wine — page-specific styles layered on the shared notebook theme
+ * (@habemus-papadum/aiui-journal/styles.css, imported by main.tsx standalone
+ * and by the gallery shell). Design tokens (--panel, --text, …) are
+ * inherited; this file adds the atlas grid, the embedding island host, the
+ * loading panel, the vgplot input widgets, and the shared class contracts
+ * (inspector, views bar) — all scoped under the page root class `.wine` so
+ * nothing leaks onto a sibling mounted in the same document. */
+
+/* --- the atlas grid ---------------------------------------------------------- */
+.wine .atlas {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.wine .atlas-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  gap: 14px;
+  align-items: start;
+}
+.wine .atlas-side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.wine .atlas-side .panel {
+  margin-top: 0;
+}
+.wine .atlas-maps {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+.wine .atlas-map,
+.wine .atlas-world {
+  margin-top: 0;
+  display: flex;
+  flex-direction: column;
+}
+@media (max-width: 980px) {
+  .wine .atlas-main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* --- the embedding island host ----------------------------------------------- */
+/* The bridge measures this box and hands the component literal width/height;
+ * give it a real extent (fluid width from the grid, clamped height). */
+.wine .atlas-embedding {
+  width: 100%;
+  height: clamp(380px, 62vh, 640px);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* --- loading panel (the dataset cell's fallback) ------------------------------ */
+.wine .loading-panel {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 28px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  text-align: center;
+}
+.wine .loading-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+.wine .loading-bar {
+  width: min(420px, 80%);
+  height: 8px;
+  background: var(--progress-track);
+  border-radius: 5px;
+  overflow: hidden;
+}
+.wine .loading-bar-fill {
+  height: 100%;
+  background: var(--accent-strong);
+  border-radius: 5px;
+  transition: width 180ms ease;
+}
+.wine .loading-sub {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- the Mosaic / vgplot island host ------------------------------------------ */
+.wine .mosaic-host {
+  overflow-x: auto;
+  margin-top: 2px;
+}
+.wine .mosaic-host .plot {
+  max-width: 100%;
+}
+.wine .mosaic-host svg [aria-label="brush"] rect,
+.wine .mosaic-host svg .interval {
+  stroke: var(--accent);
+}
+
+/* --- controls + facets --------------------------------------------------------- */
+.wine .wine-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+.wine .facets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+.wine .vg-input {
+  display: inline-flex;
+}
+.wine .vg-input label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.wine .vg-input select {
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--btn-bg);
+  border: 1px solid var(--btn-border);
+  border-radius: 7px;
+  padding: 3px 7px;
+  cursor: pointer;
+  max-width: 190px;
+}
+.wine .vg-input select:hover {
+  background: var(--btn-hover);
+}
+
+/* the named-views bar (aiui-viz SelectionViewsBar — class contract only) */
+.wine .selection-views {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.wine .selection-views select,
+.wine .selection-views input,
+.wine .selection-views button {
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--btn-bg);
+  border: 1px solid var(--btn-border);
+  border-radius: 7px;
+  padding: 3px 7px;
+}
+.wine .selection-views select,
+.wine .selection-views button {
+  cursor: pointer;
+}
+.wine .selection-views select:hover,
+.wine .selection-views button:not(:disabled):hover {
+  background: var(--btn-hover);
+}
+.wine .selection-views button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.wine .selection-views input {
+  width: 130px;
+}
+
+/* --- selection inspector (aiui-viz/selection-inspector class contract) -------- */
+.wine .selection-inspector {
+  display: grid;
+  gap: 10px;
+  font-size: 12px;
+}
+.wine .inspector-clause {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--row-border);
+}
+.wine .inspector-clause::before {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border: 1px solid var(--btn-border);
+  border-radius: 4px;
+  padding: 0 5px;
+  color: var(--text-secondary);
+}
+.wine .inspector-clause[data-origin="dim"]::before {
+  content: "dim";
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.wine .inspector-clause[data-origin="component"]::before {
+  content: "ui";
+}
+.wine .inspector-clause[data-origin="unknown"]::before {
+  content: "?";
+  color: var(--error-text);
+  border-color: var(--error-border);
+}
+.wine .inspector-producer {
+  color: var(--text);
+  font-weight: 600;
+}
+.wine .inspector-fields {
+  color: var(--text-secondary);
+}
+.wine .inspector-value {
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.wine .inspector-sql {
+  color: var(--text-muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.wine .inspector-clear {
+  margin-left: auto;
+  align-self: center;
+  width: 18px;
+  height: 18px;
+  line-height: 1;
+  padding: 0;
+  border: 1px solid var(--btn-border);
+  border-radius: 4px;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+.wine .inspector-clear:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.wine .inspector-empty {
+  color: var(--text-muted);
+  font-style: italic;
+}
+.wine .inspector-where {
+  display: block;
+  color: var(--text-dim);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.wine .inspector-capabilities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  border-top: 1px solid var(--row-border);
+  padding-top: 8px;
+}
+.wine .inspector-capability {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.wine .capability-fields {
+  color: var(--text-secondary);
+}
+.wine .capability-member {
+  border: 1px solid var(--btn-border);
+  border-radius: 999px;
+  padding: 1px 8px;
+  color: var(--text-dim);
+}
+.wine .capability-member[data-kind="dim"] {
+  border-style: dashed;
+}
+.wine .capability-member[data-active] {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+/* --- misc ---------------------------------------------------------------------- */
+.wine .mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.92em;
+}

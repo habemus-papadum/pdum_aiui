@@ -490,6 +490,183 @@ describe("point adoption (menu)", () => {
   });
 });
 
+describe("self-driving producer (the embedding-view seam)", () => {
+  interface Rect {
+    xMin: number;
+    xMax: number;
+    yMin: number;
+    yMax: number;
+  }
+  const to = (a: IntervalValue, b: IntervalValue): Rect | null =>
+    a == null && b == null
+      ? null
+      : { xMin: a?.lo ?? -1, xMax: a?.hi ?? 1, yMin: b?.lo ?? -1, yMax: b?.hi ?? 1 };
+  const from = (cv: unknown): [IntervalValue, IntervalValue] => {
+    if (cv == null) return [null, null];
+    const r = cv as Rect;
+    return [
+      { lo: r.xMin, hi: r.xMax },
+      { lo: r.yMin, hi: r.yMax },
+    ];
+  };
+
+  /** A fake embedding view: the driver only RECORDS (the real component
+   * publishes asynchronously after its framework flush); `echo` is the test's
+   * hand on that later publish, from the same source with its clients set. */
+  function fakeEmbedding(sel: Selection) {
+    const driven: unknown[] = [];
+    const client: Record<string, unknown> = { reset: () => {} };
+    client.__aiuiDrive = (cv: unknown) => {
+      driven.push(cv);
+    };
+    const echo = (cv: unknown) =>
+      sel.update({
+        source: client,
+        clients: new Set([client]),
+        value: cv,
+        predicate: cv == null ? null : column("px"),
+      } as never);
+    return { client, driven, echo };
+  }
+
+  function declareRegionPair(sel: Selection) {
+    const px = selectionDim({
+      name: "px",
+      scope: fx(),
+      kind: "interval",
+      targets: [{ selection: sel, field: "px" }],
+    });
+    const py = selectionDim({
+      name: "py",
+      scope: fx(),
+      kind: "interval",
+      targets: [{ selection: sel, field: "py" }],
+    });
+    return { px, py };
+  }
+
+  it("drives through the hook and holds the headless clause until the echo lands", async () => {
+    const sel = Selection.crossfilter();
+    const { px, py } = declareRegionPair(sel);
+    px.set({ lo: 1, hi: 2 });
+    py.set({ lo: 3, hi: 4 });
+    await tick();
+    const { client, driven, echo } = fakeEmbedding(sel);
+    disposers.push(
+      registerMosaicInput({
+        scope: "fx",
+        name: "embed",
+        input: client,
+        selection: sel,
+        fields: ["px", "py"],
+        kind: "interval",
+      }),
+    );
+    const { dispose } = bindSelectionComponents({
+      bindings: [{ dims: [px, py], producer: "fx/embed", to, from }],
+    });
+    disposers.push(dispose);
+
+    // Adoption drove the component… but its publish has not landed yet: the
+    // headless clauses must keep filtering across the gap.
+    expect(driven.at(-1)).toEqual({ xMin: 1, xMax: 2, yMin: 3, yMax: 4 });
+    expect(dimClause(sel, "dim:fx/px")).toBeDefined();
+    expect(dimClause(sel, "dim:fx/py")).toBeDefined();
+
+    // A stale echo (the component's initial null clause) must not wipe the dims.
+    echo(null);
+    await tick();
+    expect(px.get()).toEqual({ lo: 1, hi: 2 });
+    expect(dimClause(sel, "dim:fx/px")).toBeDefined();
+
+    // The driven clause lands: headless retracts, one clause from the client.
+    echo(driven.at(-1));
+    await tick();
+    expect(dimClause(sel, "dim:fx/px")).toBeUndefined();
+    expect(dimClause(sel, "dim:fx/py")).toBeUndefined();
+    expect(sel.clauses).toHaveLength(1);
+    expect(sel.clauses[0].source).toBe(client);
+  });
+
+  it("a mouse region mirrors into both dims; a repeated identical drive never wedges the mirror", async () => {
+    const sel = Selection.crossfilter();
+    const { px, py } = declareRegionPair(sel);
+    const { client, driven, echo } = fakeEmbedding(sel);
+    disposers.push(
+      registerMosaicInput({
+        scope: "fx",
+        name: "embed",
+        input: client,
+        selection: sel,
+        fields: ["px", "py"],
+        kind: "interval",
+      }),
+    );
+    const { dispose } = bindSelectionComponents({
+      bindings: [{ dims: [px, py], producer: "fx/embed", to, from }],
+    });
+    disposers.push(dispose);
+
+    px.set({ lo: 1, hi: 2 });
+    await tick();
+    echo(driven.at(-1));
+    await tick();
+
+    // Same semantic value again: the component's own deep-equality guard
+    // would swallow it silently — the binder must not wait for an echo.
+    px.set({ lo: 1, hi: 2 });
+    await tick();
+    expect(driven).toHaveLength(1);
+
+    // …so a following mouse region still mirrors (nothing suppressed).
+    echo({ xMin: 5, xMax: 6, yMin: 7, yMax: 8 });
+    await tick();
+    expect(px.get()).toEqual({ lo: 5, hi: 6 });
+    expect(py.get()).toEqual({ lo: 7, hi: 8 });
+    expect(sel.clauses).toHaveLength(1);
+  });
+
+  it("clearing drives null and retracts headless immediately; release republishes headless", async () => {
+    const sel = Selection.crossfilter();
+    const { px, py } = declareRegionPair(sel);
+    const { client, driven, echo } = fakeEmbedding(sel);
+    const unregister = registerMosaicInput({
+      scope: "fx",
+      name: "embed",
+      input: client,
+      selection: sel,
+      fields: ["px", "py"],
+      kind: "interval",
+    });
+    const { dispose } = bindSelectionComponents({
+      bindings: [{ dims: [px, py], producer: "fx/embed", to, from }],
+    });
+    disposers.push(dispose);
+
+    px.set({ lo: 1, hi: 2 });
+    await tick();
+    echo(driven.at(-1));
+    await tick();
+
+    px.clear();
+    await tick();
+    expect(driven.at(-1)).toBeNull();
+    expect(dimClause(sel, "dim:fx/px")).toBeUndefined();
+
+    // Filter set again, then the component unmounts: the binder republishes
+    // the headless clauses so the filter survives the gap.
+    px.set({ lo: 9, hi: 10 });
+    await tick();
+    echo(driven.at(-1));
+    await tick();
+    unregister();
+    echo(null); // the component's own unmount retraction
+    await tick();
+    expect(px.get()).toEqual({ lo: 9, hi: 10 });
+    expect(dimClause(sel, "dim:fx/px")).toBeDefined();
+  });
+});
+
 describe("dispose", () => {
   it("restores plain headless behavior", async () => {
     const sel = Selection.crossfilter();

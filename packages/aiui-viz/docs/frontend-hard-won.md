@@ -142,6 +142,22 @@ Found building the seismos notebook (full detail: `demos/seismos/src/NOTES.md`):
   deduped copy exists; build DuckDB from locally `?url`-imported wasm/worker assets (no CDN) —
   it survives a hosting prefix and works offline.
 
+Found building the wine demo (embedding-atlas integration; full detail:
+`docs/embedding-view.md`):
+
+- **A fully occluded Chrome window freezes the whole Mosaic pipeline** while
+  `document.visibilityState` still reads "visible": Chrome pauses the rendering steps (rAF,
+  ResizeObserver delivery, screenshots), and coordinator-driven updates ride them — views
+  stay blank, menus never populate, custom clients never get results, and nothing errors.
+  Bites hardest when driving the session browser from an agent while its window sits behind
+  other apps; verify in a headless instance instead (headless never occludes). Layout still
+  computes under occlusion (`clientWidth` is live), which is why size-dependent mounts should
+  measure directly rather than wait for a first ResizeObserver delivery.
+- **`embedding-atlas` declares non-optional peers on `@uwdata/mosaic-spec` and
+  `@uwdata/vgplot`** that pnpm auto-installs at the NEWEST release — which can be broken
+  upstream (mosaic-spec 0.30.0 demanded an unpublished vgplot ^0.30.0). Pin both at the
+  app's mosaic line in the consumer's own dependencies.
+
 ## Biome (lint) specifics
 
 - `useAnchorContent` rejects icon-only anchors even with `aria-label` + an `aria-hidden` SVG —
