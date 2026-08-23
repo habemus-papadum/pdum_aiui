@@ -47,6 +47,19 @@ Versions these were established against: `solid-js@2.0.0-beta.15`, `@solidjs/web
   `classList` (compute class strings). `render` and the `JSX` type moved to `@solidjs/web`
   (`jsxImportSource` likewise). `<Show>`'s non-keyed function child receives an **accessor**;
   keyed receives the value.
+- **Ref callbacks run with no owner.** `getOwner()` inside a `ref={…}` returns null — the ref
+  is not a reactive scope — so an `onCleanup` registered from a ref, or from a microtask the
+  ref queues, silently never runs (`NO_OWNER_CLEANUP` in dev; the observer/listener leaks on
+  dispose). Capture `getOwner()` in the *component body* and re-enter with
+  `runWithOwner(owner, …)` around the deferred setup. Living reference: aiui-slides'
+  `setupObserver` (`packages/aiui-slides/src/deck.tsx`).
+- **Reading a pending async value in JSX outside a Loading boundary defers the ROOT mount.**
+  A direct call on a not-yet-settled cell (or any async memo) suspends; with no boundary above
+  it, Solid holds the *entire document's* first paint until the async settles — the symptom is
+  a blank page plus an `ASYNC_OUTSIDE_LOADING_BOUNDARY` warning, easily misread as a render
+  bug. `<CellView>` provides the boundary (plus state chrome); a value that must render
+  quietly with no chrome reads `cell.latest()` — non-throwing, non-suspending, `undefined`
+  until first settle.
 - **`<Index>` is also gone; `<Repeat count={n}>{(i) => …}` is 2.0's position-keyed list** — and
   the distinction is load-bearing, not cosmetic. Reference-keyed `<For>` over freshly-*computed*
   row objects re-creates the DOM node on every recompute, which detaches a node mid-interaction:

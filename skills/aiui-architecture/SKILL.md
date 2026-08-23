@@ -286,6 +286,14 @@ core in `aiui-viz/modal`, regions built with `ladder`/`toggle`/`choice`):
   cell deps) are always fine. `control()`/`durableSignal()`/`createStore` share these semantics.
   Mode-engine machine state is exempt by construction: dispatch is flush-committed and state is
   a plain frozen object — never stale to read.
+- Reading a pending async value (a cell call included) in JSX outside a Loading boundary defers
+  the ENTIRE root mount until it settles — a blank page and an `ASYNC_OUTSIDE_LOADING_BOUNDARY`
+  warning. Render through `<CellView>`, or for quiet-by-contract text read `cell.latest()`
+  (non-throwing, non-suspending, `undefined` until ready).
+- Ref callbacks run with NO owner: `getOwner()` inside a `ref` is null, so an `onCleanup`
+  registered from a ref — or from a microtask it queues — never runs (`NO_OWNER_CLEANUP`, and
+  the resource leaks on dispose). Capture `getOwner()` in the component body and re-enter with
+  `runWithOwner` around the deferred work.
 - A cell is callable — never put identity on `.name` (Function.name is read-only).
 
 ## HMR rules that keep live state safe

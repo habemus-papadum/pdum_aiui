@@ -34,7 +34,16 @@
 import { PageBoundary } from "@habemus-papadum/aiui-viz";
 import { installKeys, resolveKey } from "@habemus-papadum/aiui-viz/modal";
 import type { JSX } from "@solidjs/web";
-import { createEffect, createSignal, For, onCleanup, Show, untrack } from "solid-js";
+import {
+  createEffect,
+  createSignal,
+  For,
+  getOwner,
+  onCleanup,
+  runWithOwner,
+  Show,
+  untrack,
+} from "solid-js";
 import { SlideContext } from "./deck-context";
 import { DeckNav } from "./deck-nav";
 import { DeckHud } from "./hud";
@@ -108,6 +117,11 @@ export function Deck(props: {
     typeof window.matchMedia === "function" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+  // Captured HERE, in the component body: Solid 2.0 runs ref callbacks (and
+  // their microtasks) with NO owner — getOwner() inside a ref is null, and an
+  // unowned onCleanup never runs (NO_OWNER_CLEANUP; the observer would leak).
+  const owner = getOwner();
+
   const setupObserver = (container: HTMLElement): void => {
     if (typeof IntersectionObserver === "undefined") return;
     const observer = new IntersectionObserver(
@@ -178,8 +192,9 @@ export function Deck(props: {
         ref={(el) => {
           // Solid 2.0: no onMount — the ref runs when the element exists;
           // defer a microtask so the slide sections below are inserted first
-          // (the TocRail precedent).
-          queueMicrotask(() => setupObserver(el));
+          // (the TocRail precedent). Re-enter the owner captured in the
+          // component body: setupObserver's onCleanups must register there.
+          queueMicrotask(() => runWithOwner(owner, () => setupObserver(el)));
         }}
       >
         {/* Slides are STATIC data (a deck never reorders), so the index is
