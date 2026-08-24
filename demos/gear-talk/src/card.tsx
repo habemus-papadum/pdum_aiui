@@ -88,7 +88,7 @@ function Preview() {
 export const card: DemoCard = {
   blurb:
     "The involute gear as a six-slide talk — the reference deck for the aiui slides framework: " +
-    "scroll-snap slides, a HUD overview with live previews, and Lens popups whose sliders write " +
-    "the same graph the figures read.",
+    "one-step-per-gesture slides, a HUD overview with live previews, and Lens popups whose " +
+    "sliders write the same graph the figures read.",
   Preview,
 };

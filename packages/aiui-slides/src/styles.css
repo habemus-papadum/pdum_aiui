@@ -39,18 +39,47 @@
   position: relative;
   height: var(--aiui-deck-height, 100dvh);
 }
-.aiui-deck-scroll {
+/* Scroll is INTERPRETED (deck.tsx): the viewport clips, the track glides.
+   pinch-zoom stays the browser's; single-finger travel is the deck's. */
+.aiui-deck-viewport {
   height: 100%;
-  overflow-y: auto;
-  scroll-snap-type: y mandatory;
-  overscroll-behavior: contain;
+  overflow: hidden;
+  touch-action: pinch-zoom;
+  overscroll-behavior: none;
+}
+.aiui-deck-track {
+  height: 100%;
+  transition: transform var(--aiui-deck-glide, 0.55s) cubic-bezier(0.22, 0.61, 0.36, 1);
+  will-change: transform;
 }
 .aiui-deck-slide {
   position: relative;
   height: 100%;
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
   overflow: hidden; /* slides are viewport-sized by contract */
+  /* Structural, not editorial: a site sheet's `section { margin-block }`
+   * would collapse into the track and skew every slide 40-odd px per index
+   * against the exact -100%*i transform (found live: the drifting band). */
+  margin: 0;
+}
+
+/* ── scenes (the Step idiom + reduced motion, one gate for both) ───────── */
+
+.aiui-step {
+  opacity: 0;
+  transform: translateY(0.8rem);
+  transition:
+    opacity 0.5s ease,
+    transform 0.5s ease;
+}
+.aiui-step.is-in {
+  opacity: 1;
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .aiui-deck-track,
+  .aiui-step {
+    transition: none;
+  }
 }
 
 /* ── the scroll cue (fai-canteen lineage: bob, fade-out, fails open) ───── */
@@ -82,6 +111,9 @@
   opacity: 0;
   pointer-events: none;
 }
+.aiui-deck-cue.is-up svg {
+  transform: rotate(180deg);
+}
 @media (prefers-reduced-motion: no-preference) {
   .aiui-deck-cue {
     animation: aiui-deck-bob 2.4s ease-in-out infinite;
@@ -95,6 +127,41 @@
   50% {
     transform: translateX(-50%) translateY(0.55rem);
   }
+}
+
+/* ── the scene dots (current slide's interior position) ────────────────── */
+
+.aiui-deck-dots {
+  position: absolute;
+  bottom: max(4.6rem, calc(env(safe-area-inset-bottom) + 3.35rem));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 0.55rem;
+  padding: 0.45rem 0.7rem;
+  border-radius: 999px;
+  z-index: 3;
+}
+.aiui-deck-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  padding: 0;
+  border: 1px solid var(--aiui-deck-line, rgba(128, 128, 128, 0.55));
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    background-color 0.3s ease,
+    border-color 0.3s ease,
+    transform 0.3s ease;
+}
+.aiui-deck-dot.is-played {
+  background: var(--aiui-deck-line, rgba(128, 128, 128, 0.55));
+}
+.aiui-deck-dot.is-current {
+  border-color: var(--aiui-deck-accent, var(--_aiui-accent));
+  background: var(--aiui-deck-accent, var(--_aiui-accent));
+  transform: scale(1.25);
 }
 
 /* ── the nav widget ────────────────────────────────────────────────────── */

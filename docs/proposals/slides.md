@@ -147,11 +147,40 @@ control moved inside one slide's Lens detail visibly persisting in a later slide
 "folded into the graph" claim made checkable), slide previews in the HUD, an rAF slide parking
 itself via `useSlide().active`, and a cross-demo link to `/gears` through the interceptor.
 
-## Decided details and traps
+## v2 addendum — scenes, and scroll becomes interpreted (2026-08-24)
 
-- **Two writers of the slide, one guard.** The observer (user scrolling) and the model
-  (keys/widget/agent/URL) both move `slide`; the `scrollTarget` claim plus user-input
-  cancellation is the whole protocol. Do not add flags beyond it.
+The second deck (the FAI Labs pitch) needed in-slide animation steps, which retired v1's
+"fragments are a non-goal" line and, with it, native scrolling. The decided v2 contract:
+
+- **The unit of navigation is the FRAME** — (slide, scene step). `SlideDef.steps: n` declares
+  n additive scenes (states 0…n; 0 is the slide as first seen). One forward input plays the
+  next scene, or moves a slide once the scenes are spent; backward mirrors, re-entering a
+  slide at its LAST scene. `createDeckModel` registers `step` as a second durable control
+  beside `slide`, and `next`/`prev` become frame verbs.
+- **Scenes share the slide's graph.** Components stay mounted across scene changes — a scene
+  is a reactive read of `useSlide().step()` flipping CSS state (the `Step` helper cans the
+  additive rise-and-fade; anything richer styles its own classes). `stepAt(i)` renders passed
+  slides fully played and unreached slides at state 0, so the derivation is continuous no
+  matter how the deck is driven. Additivity is a convention, not a constraint.
+- **Scroll is interpreted, never native.** scroll-snap cannot express "this scroll plays a
+  scene instead of moving the page", so the v1 observer/scrollTarget protocol is GONE: the
+  viewport clips, a track translates by `-slide × 100%` with a CSS glide, and wheel/touch
+  feed pure intent machines (gestures.ts — threshold + quiet gap + direction flip + re-flick
+  spike; one gesture, inertia tail and all, = one frame). The machines are realm-free and
+  trace-tested; the deck handler only normalizes delta modes and applies the GESTURE-HOLE
+  rule (Lens surfaces, `data-deck-scroll-hole`, scrollable regions with travel left keep
+  their events untouched).
+- **Slide-grained surfaces stay slide-grained**: the HUD grid, the URL binding, and `set
+  slide` jumps (which land at scene 0). Scenes are a slide's interior — invisible to the
+  deck's table of contents. The chrome gains scene-position dots (current slide only) and
+  the cue becomes the one-step button: immediate on the title frame, returning after ~10 s
+  of rest anywhere, pointing up at the deck's very end.
+
+## Decided details and traps (v1 — the observer bullet is superseded above)
+
+- ~~**Two writers of the slide, one guard.**~~ Retired in v2: with interpreted scroll there
+  is ONE writer (the model); the observer, its `scrollTarget` claim, and the cancellation
+  protocol no longer exist.
 - **replaceState, not pushState**, for slide changes. Deep links stay copyable at every moment;
   history stays sane.
 - **Published-site deep links to slides are a known gap**: publish.sh ships explicit S3 objects
@@ -160,18 +189,18 @@ itself via `useSlide().active`, and a cross-demo link to `/gears` through the in
   hatch, if it ever matters, is a marker field listing slide ids for publish.sh to copy.
 - **Viewport sizing** is the deck container's (`height: 100dvh` by default, overridable via
   `--aiui-deck-height`) — never `100vh` literals in slides, and never document scroll.
-- **Reduced motion** gates the cue's bob (CSS) and smooth scrolling (`behavior: "auto"`)
-  — both, always.
-- **jsdom guards**: `IntersectionObserver` and `scrollIntoView` don't exist there; the deck
-  feature-checks both so model/keymap tests run headless.
+- **Reduced motion** gates the cue's bob, the track glide, and the Step transitions — all
+  in CSS, one media block.
+- **jsdom guards**: v2's runtime is plain listeners + inline styles, so the whole deck —
+  gestures included — exercises headless; no feature checks needed anymore.
 - **Solid 2.0-beta.32**: two-arg `createEffect` everywhere; `PageBoundary` at every mount seam
   that hosts foreign content (slides, HUD previews, Lens details).
 
 ## Non-goals (v1, named so nobody gets ambitious)
 
-PDF/print export; presenter notes / speaker view; slide transitions beyond scroll; fragments /
-per-bullet stepping (a slide's internal structure is its own — use Solid state, or a Lens);
-lens-state-in-URL; a `new-deck` scaffolder (copy gear-talk until a third deck exists).
+PDF/print export; presenter notes / speaker view; slide transitions beyond the vertical
+glide; ~~fragments / per-bullet stepping~~ (landed as scenes in v2 — the second deck needed
+them); lens-state-in-URL; a `new-deck` scaffolder (copy gear-talk until a third deck exists).
 
 ## Upstreaming path
 

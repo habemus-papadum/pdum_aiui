@@ -8,8 +8,8 @@ import { describe, expect, it } from "vitest";
 import { type DeckCommand, type DeckKeyState, deckKeyLayers } from "./keys";
 
 const stack = deckKeyLayers();
-const closed: DeckKeyState = { hudOpen: false, slide: 1, count: 6 };
-const open: DeckKeyState = { hudOpen: true, slide: 1, count: 6 };
+const closed: DeckKeyState = { hudOpen: false, atStart: false, atEnd: false };
+const open: DeckKeyState = { hudOpen: true, atStart: false, atEnd: false };
 
 const command = (state: DeckKeyState, key: string): DeckCommand | "pass" | "swallow" => {
   const claim = resolveKey(stack, state, key, "down", false);
@@ -55,7 +55,12 @@ describe("hints (the widget's labels ARE the working keymap)", () => {
 
   it("carries tapKeys so widget taps resolve through the same table", () => {
     const hints = keyHints(stack, closed);
-    expect(hints.find((h) => h.label === "next slide")?.tapKey).toBe("ArrowDown");
-    expect(hints.find((h) => h.label === "previous slide")?.tapKey).toBe("ArrowUp");
+    expect(hints.find((h) => h.label === "next")?.tapKey).toBe("ArrowDown");
+    expect(hints.find((h) => h.label === "back")?.tapKey).toBe("ArrowUp");
+  });
+
+  it("the forward hint reads 'end' once nothing is ahead", () => {
+    const hints = keyHints(stack, { hudOpen: false, atStart: false, atEnd: true });
+    expect(hints.find((h) => h.tapKey === "ArrowDown")?.label).toBe("end");
   });
 });

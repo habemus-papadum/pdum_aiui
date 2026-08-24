@@ -11,9 +11,10 @@
  * A bare base is "no opinion", not "slide 0": the slide control is durable,
  * so an author revisiting /gear-talk resumes where they left off, while a
  * link WITH a tail always wins (that is what a deep link means). Hence
- * {@link bindDeckToPath} seeds the model from the URL synchronously (tail
- * only) BEFORE its effect runs — the effect's first pass then aligns the URL
- * to the model instead of clobbering the deep link.
+ * {@link bindDeckToPath} captures the tail synchronously and seeds the model
+ * on a microtask (tail only) — the effect may reflect the durable slide into
+ * the URL for one pass, then re-reflects the seeded frame; all of it settles
+ * before first paint, so the deep link renders crisply.
  *
  * One effect owns both directions with a last-path tiebreak: when the URL
  * moved (popstate, shell navigation, pasted link) it wins; otherwise the
@@ -78,9 +79,16 @@ export function bindDeckToPath(model: DeckModel, base: string): void {
   if (typeof location === "undefined") return;
   const ids = model.slides.map((s) => s.id);
 
-  // Deep links win over durable state — but only a tail is an opinion.
+  // Deep links win over durable state — but only a tail is an opinion. A
+  // deep link means "this slide, from the top": the scene step resets too.
+  // The write is DEFERRED: this function runs in the Deck's component body,
+  // an owned scope where control writes throw in dev
+  // (REACTIVE_WRITE_IN_OWNED_SCOPE — frontend-hard-won.md). The microtask
+  // still commits before first paint, so the deep link lands without a
+  // visible track glide, and the binding effect below re-reflects the URL
+  // once the seed settles.
   const initial = slideFromPath(location.pathname, base, ids);
-  if (initial > 0) model.slide.set(initial);
+  if (initial > 0) queueMicrotask(() => model.goToFrame(initial, 0));
 
   let lastPath = location.pathname;
   createEffect(

@@ -1,7 +1,10 @@
 /**
- * deck-nav.tsx — the navigation WIDGET: prev/next chevrons flanking a "3 / 6"
- * counter that opens the HUD. This is the primary affordance — a keyboard is
- * never assumed — and it is wired so it CANNOT drift from the keymap:
+ * deck-nav.tsx — the navigation WIDGET: back/forward chevrons flanking a
+ * "3 / 6" counter that opens the HUD. The chevrons move ONE FRAME (a scene,
+ * or a slide once its scenes are spent — the same unit as every gesture);
+ * the counter stays slide-grained, the deck's table-of-contents unit. This
+ * is the primary affordance — a keyboard is never assumed — and it is wired
+ * so it CANNOT drift from the keymap:
  *
  *  - a button executes by synthesizing its binding's first key through the
  *    same `resolveKey` stack real keydowns use (the tapKey house pattern —
@@ -56,9 +59,9 @@ export function DeckNav(props: {
       <button
         type="button"
         class="aiui-deck-nav-btn"
-        disabled={slide() === 0}
-        aria-label="previous slide"
-        title={titleFor("ArrowUp", "previous slide")}
+        disabled={props.model.atStart()}
+        aria-label="one step back"
+        title={titleFor("ArrowUp", "back")}
         onClick={() => props.tap("ArrowUp")}
       >
         <Chevron dir="up" />
@@ -78,9 +81,9 @@ export function DeckNav(props: {
       <button
         type="button"
         class="aiui-deck-nav-btn"
-        disabled={slide() === props.model.count - 1}
-        aria-label="next slide"
-        title={titleFor("ArrowDown", "next slide")}
+        disabled={props.model.atEnd()}
+        aria-label="one step forward"
+        title={titleFor("ArrowDown", "next")}
         onClick={() => props.tap("ArrowDown")}
       >
         <Chevron dir="down" />

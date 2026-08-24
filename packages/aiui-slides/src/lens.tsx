@@ -32,15 +32,35 @@
  * Portal: the page's design tokens (`--aiui-lens-*`, set on a page-scoped
  * class) must reach them by inheritance, and a body-mounted portal would sit
  * outside that scope. `position: fixed` escapes every ancestor's overflow
- * clipping on its own; the one caveat — a transformed/filtered ancestor
- * becomes a fixed-position containing block — is a constraint on page CSS,
- * not on this component: don't put transforms on a Lens's ancestors.
+ * clipping on its own. A transformed/filtered ancestor DOES become the
+ * fixed-position containing block — and the deck's translated track is
+ * exactly that for every slide past the first — so both surfaces measure
+ * that block's viewport origin and subtract it (`fixedOrigin`), staying
+ * viewport-true under any ancestor.
  */
 import { PageBoundary } from "@habemus-papadum/aiui-viz";
 import type { JSX } from "@solidjs/web";
-import { type Component, createSignal, onCleanup, Show } from "solid-js";
+import {
+  type Component,
+  createContext,
+  createEffect,
+  createSignal,
+  onCleanup,
+  Show,
+  useContext,
+} from "solid-js";
 
 type LensState = "closed" | "peek" | "open";
+
+/**
+ * Where Lens popovers MOUNT. A shell whose content rides a transformed
+ * surface (the deck's translated track; a Step row mid-transition) provides
+ * an element OUTSIDE every transform but INSIDE its token scope, and Lens
+ * reparents its fixed surfaces there — their containing block is then the
+ * real viewport, stable by construction. Without a provider the surfaces
+ * render in place: the plain-page path, unchanged.
+ */
+export const LensLayer = createContext<HTMLElement | null>(null);
 
 /** How long the pointer rests on the trigger before the peek appears. */
 const PEEK_DELAY_MS = 200;
@@ -61,10 +81,36 @@ export function Lens(props: {
   class?: string;
 }): JSX.Element {
   const [state, setState] = createSignal<LensState>("closed");
+  // Captured in the BODY (refs run without context in Solid 2.0).
+  const layer = useContext(LensLayer);
   let trigger: HTMLButtonElement | undefined;
   let panel: HTMLDivElement | undefined;
   let peekTimer: ReturnType<typeof setTimeout> | undefined;
   let graceTimer: ReturnType<typeof setTimeout> | undefined;
+
+  // A surface REPARENTED into the layer leaves its <Show>'s marker span, so
+  // Solid's branch disposal cannot remove it (found live: an unclosable
+  // zombie panel). Track the moved nodes and remove them OURSELVES — when
+  // their state ends, and when the component disposes (unmount, HMR).
+  let peekEl: HTMLElement | undefined;
+  let overlayEl: HTMLElement | undefined;
+  createEffect(
+    () => state(),
+    (s) => {
+      if (s !== "peek" && peekEl !== undefined) {
+        peekEl.remove();
+        peekEl = undefined;
+      }
+      if (s !== "open" && overlayEl !== undefined) {
+        overlayEl.remove();
+        overlayEl = undefined;
+      }
+    },
+  );
+  onCleanup(() => {
+    peekEl?.remove();
+    overlayEl?.remove();
+  });
 
   const clearTimers = (): void => {
     if (peekTimer !== undefined) clearTimeout(peekTimer);
@@ -146,11 +192,25 @@ export function Lens(props: {
     });
   }
 
+  /** Where the element's fixed containing block sits in VIEWPORT space.
+   * `position: fixed` anchors to the viewport only until some ancestor wears
+   * a transform and becomes the containing block — the module caveat, now met
+   * in practice: a deck's translated track transforms EVERY slide past the
+   * first. Zero the insets, and the rect origin reveals the containing
+   * block; subtracting it makes viewport coordinates true again anywhere. */
+  const fixedOrigin = (el: HTMLElement): { x: number; y: number } => {
+    el.style.left = "0px";
+    el.style.top = "0px";
+    const zero = el.getBoundingClientRect();
+    return { x: zero.x, y: zero.y };
+  };
+
   /** Anchor the peek under (or, cramped, above) the trigger, clamped to the
    * viewport — plain arithmetic on two rects, nothing more. */
   const placePeek = (pop: HTMLElement): void => {
     const anchor = trigger?.getBoundingClientRect();
     if (anchor === undefined) return;
+    const origin = fixedOrigin(pop);
     const rect = pop.getBoundingClientRect();
     let left = anchor.left + anchor.width / 2 - rect.width / 2;
     left = Math.max(EDGE_PAD_PX, Math.min(left, window.innerWidth - rect.width - EDGE_PAD_PX));
@@ -158,8 +218,20 @@ export function Lens(props: {
     if (top + rect.height > window.innerHeight - EDGE_PAD_PX) {
       top = Math.max(EDGE_PAD_PX, anchor.top - rect.height - EDGE_PAD_PX);
     }
-    pop.style.left = `${left}px`;
-    pop.style.top = `${top}px`;
+    pop.style.left = `${left - origin.x}px`;
+    pop.style.top = `${top - origin.y}px`;
+  };
+
+  /** Anchor the full-viewport overlay to the actual viewport: under a
+   * transformed ancestor its `inset: 0` covers the containing block instead,
+   * so shift by the measured origin and size it to the window explicitly. */
+  const placeOverlay = (el: HTMLElement): void => {
+    const origin = fixedOrigin(el);
+    if (origin.x === 0 && origin.y === 0) return;
+    el.style.left = `${-origin.x}px`;
+    el.style.top = `${-origin.y}px`;
+    el.style.width = `${window.innerWidth}px`;
+    el.style.height = `${window.innerHeight}px`;
   };
 
   return (
@@ -191,8 +263,16 @@ export function Lens(props: {
           onPointerEnter={pointerIn}
           onPointerLeave={pointerOut}
           ref={(el) => {
-            // Position once laid out (the ref fires before styles settle).
-            queueMicrotask(() => placePeek(el));
+            // Both moves are DEFERRED: the ref fires before Solid inserts the
+            // node at its anchor, so a synchronous reparent would be undone by
+            // that insert (probed on beta.32) — and styles settle by then too.
+            queueMicrotask(() => {
+              if (layer !== null) {
+                layer.appendChild(el);
+                peekEl = el; // moved: ours to remove (see the state effect)
+              }
+              placePeek(el);
+            });
           }}
         >
           {/* The lazy-getter pattern (gallery Landing.tsx): Show's children
@@ -207,7 +287,20 @@ export function Lens(props: {
       </Show>
 
       <Show when={state() === "open"}>
-        <div class="aiui-lens-overlay">
+        <div
+          class="aiui-lens-overlay"
+          ref={(el) => {
+            // Same deferral as the peek: reparent after Solid's insert, then
+            // anchor.
+            queueMicrotask(() => {
+              if (layer !== null) {
+                layer.appendChild(el);
+                overlayEl = el; // moved: ours to remove (see the state effect)
+              }
+              placeOverlay(el);
+            });
+          }}
+        >
           {/* biome-ignore lint/a11y/noStaticElementInteractions: click-away backdrop; Escape is the keyboard path. */}
           {/* biome-ignore lint/a11y/useKeyWithClickEvents: same — the keyboard equivalent is Escape, handled document-wide. */}
           <div class="aiui-lens-backdrop" onClick={() => close()} />

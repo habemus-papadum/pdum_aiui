@@ -1,8 +1,13 @@
 /**
  * keys.ts — the deck's keyboard as modal-kit DATA (aiui-viz/modal keys.ts):
- * one base layer for slide movement, one HUD layer that claims Escape while
+ * one base layer for frame movement, one HUD layer that claims Escape while
  * the overview is open. Claim-or-pass is exhaustive by construction; typing
  * targets already yield inside `installKeys`.
+ *
+ * Movement is STEP-grained: next/prev mean one frame (a scene, or a slide
+ * once the scenes are spent) — the same unit every gesture and the cue tap
+ * dispatch, so a keyboard can never blow past an unplayed scene. First/last
+ * jump to the deck's outer frames.
  *
  * Two deliberate choices:
  *
@@ -27,8 +32,10 @@ export type DeckCommand = "next" | "prev" | "first" | "last" | "toggle-hud" | "c
 /** The keymap's view of the deck (see `installKeys`' getState). */
 export interface DeckKeyState {
   hudOpen: boolean;
-  slide: number;
-  count: number;
+  /** At the very first frame — nothing behind. */
+  atStart: boolean;
+  /** At the very last frame — nothing ahead. */
+  atEnd: boolean;
 }
 
 /** The deck's layer stack, top-down: HUD above base. */
@@ -51,17 +58,16 @@ export function deckKeyLayers(): readonly KeyLayer<DeckKeyState, DeckCommand>[] 
       fallback: "pass", // a deck is a page, not a blocking dialog
       bindings: [
         {
-          // Space repeats are welcome: held-key advance is a feature here,
-          // and the scroll-intent guard keeps the pile-up coherent.
+          // Space repeats are welcome: held-key advance is a feature here —
+          // one frame per repeat, scenes included.
           keys: ["ArrowDown", "ArrowRight", "PageDown", " "],
           down: () => ({ command: "next" }),
-          hint: (s) =>
-            s.slide < s.count - 1 ? { key: "↓", label: "next slide" } : { key: "↓", label: "end" },
+          hint: (s) => (s.atEnd ? { key: "↓", label: "end" } : { key: "↓", label: "next" }),
         },
         {
           keys: ["ArrowUp", "ArrowLeft", "PageUp"],
           down: () => ({ command: "prev" }),
-          hint: { key: "↑", label: "previous slide" },
+          hint: { key: "↑", label: "back" },
         },
         { keys: ["Home"], down: () => ({ command: "first" }) },
         { keys: ["End"], down: () => ({ command: "last" }) },

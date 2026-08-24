@@ -24,6 +24,11 @@ export interface SlideHandle {
   index: number;
   /** Is this slide the current one? Gate rAF loops on this. */
   active(): boolean;
+  /** THIS slide's rendered scene step (reactive): 0 before the deck reaches
+   * it, its full `steps` once passed, the live step while current. Scenes
+   * read it additively — `step() >= k` flips scene k's CSS state, and the
+   * transition plays forward or backward for free (`Step` cans the idiom). */
+  step(): number;
 }
 
 /** Solid 2.0: the context object IS its provider component — the Deck
