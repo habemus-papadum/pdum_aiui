@@ -140,9 +140,16 @@ export function toolsFromControlSurface(options: ControlSurfaceToolsOptions = {}
         name: toolName("", entry.name),
         description: entry.description ?? entry.name,
         parameters:
-          // Actions rarely declare a real schema; the loose `params` prose
-          // rides the description instead of pretending to be one.
-          { type: "object", properties: {}, additionalProperties: true },
+          // An action that declares a real inputSchema hands it to the model —
+          // the selection dims do, and realtime tools have no strict mode, so
+          // the schema is how the model learns the argument shape. Without
+          // one, the loose `params` prose rides the description instead of
+          // pretending to be a schema.
+          actionByName(entry.name)?.inputSchema ?? {
+            type: "object",
+            properties: {},
+            additionalProperties: true,
+          },
         execute: (args) => {
           const action = actionByName(entry.name);
           if (action === undefined) {

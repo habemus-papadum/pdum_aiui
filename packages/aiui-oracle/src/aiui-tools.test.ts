@@ -72,6 +72,30 @@ describe("toolsFromControlSurface", () => {
     ).rejects.toThrow();
   });
 
+  it("an action's declared inputSchema reaches the model verbatim", () => {
+    // The selection dims (aiui-viz/mosaic-selection) declare real schemas on
+    // their set-<name> actions; a loose {} projection would strip the one
+    // thing realtime models have in lieu of strict mode.
+    const schema = {
+      type: "object",
+      properties: { lo: { type: "number" }, hi: { type: "number" } },
+      additionalProperties: false,
+    };
+    action({
+      name: "orlab/window",
+      description: "set a window",
+      inputSchema: schema,
+      run: () => null,
+    });
+    expect(byName(ours(), "orlab_window").parameters).toEqual(schema);
+    // No schema declared → the loose object survives as the fallback.
+    expect(byName(ours(), "orlab_kick").parameters).toEqual({
+      type: "object",
+      properties: {},
+      additionalProperties: true,
+    });
+  });
+
   it("actions become tools, and report snapshots values + bounds", async () => {
     const tools = ours();
     expect(await byName(tools, "orlab_kick").execute({ hard: true })).toBe("kicked");
