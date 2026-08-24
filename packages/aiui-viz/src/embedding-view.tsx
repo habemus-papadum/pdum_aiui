@@ -98,6 +98,19 @@ export function EmbeddingView(props: {
   /** Reactive extras merged last: theme, categoryColors, config, labels,
    *  callbacks… — anything from EmbeddingViewMosaicProps. */
   viewOptions?: () => Partial<EmbeddingViewMosaicProps>;
+  /** Start the view with a selection tool engaged — "marquee" (rectangle)
+   *  or "lasso" — so a plain drag SELECTS instead of panning (shift+drag
+   *  then pans). The component holds this state internally with no public
+   *  prop (0.24 initializes it to "none"), so the wrapper presses the
+   *  status bar's own toggle button — the same path a user's click takes.
+   *  Needs the status bar (on by default). Read once per component build. */
+  initialSelectionMode?: "marquee" | "lasso";
+  /** `false` disables wheel-zoom: wheel events are swallowed at the host in
+   *  the capture phase, so they neither reach the component's canvas (no
+   *  zoom) nor bubble to a scroll-interpreting shell (a slide deck doesn't
+   *  navigate mid-hover either) — the view simply ignores the wheel.
+   *  Default: the component's own behavior (wheel zooms). Read at mount. */
+  wheelZoom?: boolean;
   /** Producer-registry enrollment (with `scope`), like MosaicView's. */
   scope?: Scope | string;
   name?: string;
@@ -167,6 +180,36 @@ export function EmbeddingView(props: {
     activate: (clause: unknown) => meta?.selection?.activate?.(clause),
   };
 
+  /** The status-bar toggle titles are the only stable handle on the
+   * component's internal selection-mode state (see initialSelectionMode). */
+  const MODE_BUTTON_TITLE = {
+    marquee: "Toggle rectangle selection mode",
+    lasso: "Toggle lasso selection mode",
+  } as const;
+
+  /** Engage `initialSelectionMode` on a freshly built component by clicking
+   * its own status-bar toggle (a fresh component always starts at "none",
+   * so one click = engaged, never toggled back off). The status bar mounts
+   * with the component; the short retry loop covers a late frame. */
+  const engageSelectionMode = (forComponent: EmbeddingViewMosaic): void => {
+    const mode = props.initialSelectionMode;
+    if (mode === undefined) return;
+    let tries = 0;
+    const attempt = (): void => {
+      if (disposed || component !== forComponent) return;
+      const btn = host.querySelector<HTMLElement>(`[title^="${MODE_BUTTON_TITLE[mode]}"]`);
+      if (btn !== null) btn.click();
+      else if (++tries < 40) setTimeout(attempt, 50);
+    };
+    queueMicrotask(attempt);
+  };
+
+  /** wheelZoom === false: capture-phase swallow on the host (see the prop). */
+  const swallowWheel = (e: WheelEvent): void => {
+    e.stopPropagation();
+    e.preventDefault();
+  };
+
   const apply = (w: number, h: number): void => {
     if (w > 0 && h > 0) setSize({ w: Math.round(w), h: Math.round(h) });
   };
@@ -185,6 +228,7 @@ export function EmbeddingView(props: {
 
   onCleanup(() => {
     disposed = true;
+    if (host !== undefined) host.removeEventListener("wheel", swallowWheel, { capture: true });
     observer.disconnect();
     registered?.unregister();
     registered = undefined;
@@ -231,6 +275,7 @@ export function EmbeddingView(props: {
       if (!v.ready) return;
       if (component === undefined) {
         component = new EmbeddingViewMosaic(host, v.merged as EmbeddingViewMosaicProps);
+        engageSelectionMode(component);
       } else {
         component.update(v.merged);
       }
@@ -242,6 +287,10 @@ export function EmbeddingView(props: {
       class={props.class ? `embedding-host ${props.class}` : "embedding-host"}
       ref={(el) => {
         host = el;
+        // Mount-time read (no owner here; removal rides the body onCleanup).
+        if (props.wheelZoom === false) {
+          el.addEventListener("wheel", swallowWheel, { capture: true, passive: false });
+        }
         // The ref runs pre-insertion; measure after this render flush lands.
         queueMicrotask(measure);
         observer.observe(el);

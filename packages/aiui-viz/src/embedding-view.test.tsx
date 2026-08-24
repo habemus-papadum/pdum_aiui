@@ -24,10 +24,17 @@ const harness = vi.hoisted(() => {
     updates: Record<string, unknown>[] = [];
     destroyed = false;
     client: Record<string, unknown> = { reset: () => {} };
+    modeClicks: string[] = [];
     constructor(target: HTMLElement, props: Record<string, unknown>) {
       this.target = target;
       this.props = props;
       instances.push(this);
+      // A stand-in status bar: the wrapper engages initialSelectionMode by
+      // pressing this toggle, found by title prefix like the real one's.
+      const btn = target.ownerDocument.createElement("button");
+      btn.title = "Toggle rectangle selection mode. In normal mode, use shift + drag…";
+      btn.addEventListener("click", () => this.modeClicks.push("marquee"));
+      target.appendChild(btn);
       // The real component's range effect publishes an initial (null) clause
       // from its internal client as soon as the Mosaic client exists.
       const range = props.rangeSelection as { update(c: unknown): unknown } | null;
@@ -172,5 +179,70 @@ describe("EmbeddingView", () => {
     const lastClause = range.updates.at(-1) as { source: unknown; predicate: unknown };
     expect(lastClause.source).toBe(view.client);
     expect(lastClause.predicate).toBeNull();
+    // The default posture: no initialSelectionMode → the toggle untouched.
+    expect(view.modeClicks).toEqual([]);
+  });
+
+  it("initialSelectionMode presses the component's own toggle once per build", async () => {
+    dispose = render(
+      () => (
+        <EmbeddingView
+          coordinator={coordinator}
+          table="wine"
+          x="px"
+          y="py"
+          initialSelectionMode="marquee"
+        />
+      ),
+      document.body,
+    );
+    await tick();
+    FakeResizeObserver.instances[0].fire(640, 480);
+    await tick();
+    await tick(); // engage runs a microtask after the component builds
+    expect(harness.instances[0].modeClicks).toEqual(["marquee"]);
+  });
+
+  it("wheelZoom: false swallows wheel in the capture phase — nothing escapes", async () => {
+    dispose = render(
+      () => (
+        <EmbeddingView coordinator={coordinator} table="wine" x="px" y="py" wheelZoom={false} />
+      ),
+      document.body,
+    );
+    await tick();
+    FakeResizeObserver.instances[0].fire(640, 480);
+    await tick();
+    const escaped: Event[] = [];
+    const listen = (e: Event): void => {
+      escaped.push(e);
+    };
+    document.addEventListener("wheel", listen);
+    // Dispatch on a child of the host (the fake's button): the host's
+    // capture listener runs before the target — the widget never zooms and
+    // the deck's viewport listener never navigates.
+    const child = document.querySelector<HTMLElement>(".embedding-host button");
+    const e = new WheelEvent("wheel", { deltaY: 40, bubbles: true, cancelable: true });
+    child?.dispatchEvent(e);
+    expect(escaped).toHaveLength(0);
+    expect(e.defaultPrevented).toBe(true);
+    document.removeEventListener("wheel", listen);
+  });
+
+  it("wheel escapes normally without wheelZoom: false", async () => {
+    dispose = render(
+      () => <EmbeddingView coordinator={coordinator} table="wine" x="px" y="py" />,
+      document.body,
+    );
+    await tick();
+    const escaped: Event[] = [];
+    const listen = (e: Event): void => {
+      escaped.push(e);
+    };
+    document.addEventListener("wheel", listen);
+    const hostEl = document.querySelector<HTMLElement>(".embedding-host");
+    hostEl?.dispatchEvent(new WheelEvent("wheel", { deltaY: 40, bubbles: true, cancelable: true }));
+    expect(escaped).toHaveLength(1);
+    document.removeEventListener("wheel", listen);
   });
 });

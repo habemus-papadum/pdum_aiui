@@ -23,6 +23,11 @@ export interface WinePalette {
   categories: string[];
   /** d3 sequential scheme for the world map's density raster (per mode). */
   densityScheme: string;
+  /** Explicit low→high ramp overriding `densityScheme`. A consuming app
+   * whose panel surface no stock scheme floor matches (the pitch deck's
+   * cotton paper) starts the ramp AT that surface color, so zero density
+   * dissolves into the page instead of printing a tinted plate. */
+  densityRange?: string[];
   /** Border/graticule overlay ink — cosmetic underlay, tuned per mode
    * against that mode's density-scheme floor (the seismos rationale). */
   coast: string;

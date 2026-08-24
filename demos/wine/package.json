@@ -13,7 +13,9 @@
   "exports": {
     ".": "./src/index.ts",
     "./page": "./src/page.tsx",
-    "./card": "./src/card.tsx"
+    "./card": "./src/card.tsx",
+    "./store": "./src/model/store.ts",
+    "./specs": "./src/ui/specs.ts"
   },
   "main": "./src/index.ts",
   "module": "./src/index.ts",

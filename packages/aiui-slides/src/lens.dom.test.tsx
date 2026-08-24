@@ -69,6 +69,64 @@ describe("Lens", () => {
     expect(document.querySelector(".aiui-lens-overlay")).toBeNull();
   });
 
+  it("panelClass reaches the detail panel; the trigger keeps its own class", async () => {
+    const el = mount(() => (
+      <Lens
+        label="the instrument"
+        class="trigger-extra"
+        panelClass="wide-instrument"
+        detail={() => <div class="full">gauges</div>}
+      >
+        the instrument
+      </Lens>
+    ));
+    const trigger = el.querySelector<HTMLButtonElement>(".aiui-lens-trigger");
+    expect(trigger?.classList.contains("trigger-extra")).toBe(true);
+    expect(trigger?.classList.contains("wide-instrument")).toBe(false);
+    trigger?.click();
+    await tick();
+    const panel = document.querySelector(".aiui-lens-panel");
+    expect(panel?.classList.contains("wide-instrument")).toBe(true);
+  });
+
+  it("nested lenses close as a ladder: Escape takes the topmost only", async () => {
+    const el = mount(() => (
+      <Lens
+        label="the outer instrument"
+        detail={() => (
+          <div class="outer-detail">
+            gauges, and{" "}
+            <Lens label="the inner calculator" detail={() => <div class="inner-detail">sums</div>}>
+              the inner calculator
+            </Lens>
+          </div>
+        )}
+      >
+        the outer instrument
+      </Lens>
+    ));
+    el.querySelector<HTMLButtonElement>(".aiui-lens-trigger")?.click();
+    await tick();
+    document
+      .querySelector(".outer-detail")
+      ?.querySelector<HTMLButtonElement>(".aiui-lens-trigger")
+      ?.click();
+    await tick();
+    expect(document.querySelectorAll(".aiui-lens-overlay")).toHaveLength(2);
+
+    // one Escape: the inner surface closes, its host stays
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await tick();
+    expect(document.querySelector(".inner-detail")).toBeNull();
+    expect(document.querySelector(".outer-detail")).not.toBeNull();
+
+    // a click inside the inner panel must not fall through to the host —
+    // covered by the same seniority guard; the second Escape ends the ladder
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await tick();
+    expect(document.querySelectorAll(".aiui-lens-overlay")).toHaveLength(0);
+  });
+
   it("outside pointerdown closes an open lens", async () => {
     const el = mountLens();
     el.querySelector<HTMLButtonElement>(".aiui-lens-trigger")?.click();

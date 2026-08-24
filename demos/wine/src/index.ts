@@ -7,6 +7,13 @@
  *
  * The mountable page lives behind the `./page` subpath on purpose: importing
  * THIS barrel should not drag in the page's stylesheet or wiring side effects.
+ *
+ * The `./store` and `./specs` subpaths exist for consumers that mount the
+ * dashboard piecemeal under their own look (the FAI pitch deck): they carry
+ * the durable plumbing and the themable vgplot specs WITHOUT graph.ts — this
+ * barrel imports the graph, whose dataset cell starts the ~64 MB download the
+ * moment it builds, and a consumer embedding the atlas behind its own gate
+ * must be able to import the store without that side effect.
  */
 
 export { degreesToEqBox, eqBoxToDegrees, equalEarth, equalEarthInverse } from "./model/geo";

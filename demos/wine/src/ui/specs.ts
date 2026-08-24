@@ -6,6 +6,11 @@
  * relayed into the brush) — brush one view and the coordinator re-queries the
  * rest, the embedding map included. Specs read the per-mode palette live, so
  * a system theme flip rebuilds each island correctly tinted.
+ *
+ * Every spec takes an optional {@link SpecTheme}: a consuming app mounting
+ * this dashboard under its own design system (the FAI pitch deck does)
+ * passes its chart palette and plot-root CSS; omitted, both default to this
+ * page's per-mode look — the wine app's call sites are unchanged.
  */
 import { plotStyle } from "@habemus-papadum/aiui-journal";
 import type { Directive } from "@habemus-papadum/aiui-viz/mosaic";
@@ -39,14 +44,27 @@ import {
 } from "@uwdata/vgplot";
 import { EQ_X_MAX, EQ_Y_MAX, equalEarth } from "../model/geo";
 import { store } from "../model/store";
-import { wine } from "../palette";
+import { type WinePalette, wine } from "../palette";
+
+export type { WinePalette } from "../palette";
+
+/** A consuming app's skin for these specs (see the module header). */
+export interface SpecTheme {
+  /** Chart palette; default: this page's per-mode `wine()`. */
+  palette?: WinePalette;
+  /** CSS for the plot root (vgplot `style(...)`); default: journal `plotStyle()`. */
+  plotCss?: Record<string, string>;
+}
 
 const TABLE = () => store.table;
 const BRUSH = () => store.brush;
 
-/** Shared per-mode cosmetics for every panel chart. */
-function cosmetics(): Directive[] {
-  return [style(plotStyle())];
+/** The theme's palette, or this page's per-mode default. */
+const pal = (theme: SpecTheme): WinePalette => theme.palette ?? wine();
+
+/** Shared cosmetics for every panel chart (themed, else per-mode). */
+function cosmetics(theme: SpecTheme): Directive[] {
+  return [style(theme.plotCss ?? plotStyle())];
 }
 
 /** One vertex of the 30° graticule / world outline, pre-projected. */
@@ -88,8 +106,8 @@ const GRATICULE = buildGraticule();
  * box into the crossfilter. The `xfield`/`yfield` are explicit because a
  * raster's channels don't resolve to plain columns for the brush.
  */
-export function mapSpec(w = 720, h = 380): Directive[] {
-  const p = wine();
+export function mapSpec(w = 720, h = 380, theme: SpecTheme = {}): Directive[] {
+  const p = pal(theme);
   const world = store.world();
   return [
     // Reviews concentrate in ~478 small jitter clouds and California alone
@@ -139,22 +157,24 @@ export function mapSpec(w = 720, h = 380): Directive[] {
     xTicks([]),
     yTicks([]),
     colorScale("sqrt"),
-    colorScheme(p.densityScheme),
+    ...(p.densityRange !== undefined
+      ? [colorRange(p.densityRange)]
+      : [colorScheme(p.densityScheme)]),
     marginLeft(10),
     marginBottom(10),
     xLabel(null),
     yLabel(null),
-    ...cosmetics(),
+    ...cosmetics(theme),
   ];
 }
 
 /** Critic-score histogram (80–100) with an interval brush. */
-export function pointsHistSpec(w = 320, h = 150): Directive[] {
+export function pointsHistSpec(w = 320, h = 150, theme: SpecTheme = {}): Directive[] {
   return [
     rectY(from(TABLE(), { filterBy: BRUSH() }), {
       x: bin("points"),
       y: count(),
-      fill: wine().hist,
+      fill: pal(theme).hist,
       inset: 0.5,
     }),
     intervalX({ as: BRUSH() }),
@@ -164,18 +184,20 @@ export function pointsHistSpec(w = 320, h = 150): Directive[] {
     marginBottom(28),
     xLabel("points →"),
     yLabel("reviews"),
-    ...cosmetics(),
+    ...cosmetics(theme),
   ];
 }
 
 /** Price histogram, clipped to the readable range (the tail runs to $3300;
- * the brush still filters real prices — an open right edge means "and up"). */
-export function priceHistSpec(w = 320, h = 150): Directive[] {
+ * the brush still filters real prices — an open right edge means "and up").
+ * The bin step is EXPLICIT: maxbins spreads over the full data extent, so
+ * $3300 ÷ 50 bins put the whole visible $0–200 window inside one bar. */
+export function priceHistSpec(w = 320, h = 150, theme: SpecTheme = {}): Directive[] {
   return [
     rectY(from(TABLE(), { filterBy: BRUSH() }), {
-      x: bin("price", { maxbins: 50 }),
+      x: bin("price", { step: 5 }),
       y: count(),
-      fill: wine().hist,
+      fill: pal(theme).hist,
       inset: 0.5,
     }),
     intervalX({ as: BRUSH() }),
@@ -186,7 +208,7 @@ export function priceHistSpec(w = 320, h = 150): Directive[] {
     marginBottom(28),
     xLabel("price ($) →"),
     yLabel("reviews"),
-    ...cosmetics(),
+    ...cosmetics(theme),
   ];
 }
 
@@ -197,7 +219,7 @@ export function priceHistSpec(w = 320, h = 150): Directive[] {
  * so the highlight can gray unselected varieties — `highlight` over the
  * crossfilter itself is a silent no-op (categorySelection's docblock).
  */
-export function varietyBarSpec(w = 320, h = 240): Directive[] {
+export function varietyBarSpec(w = 320, h = 240, theme: SpecTheme = {}): Directive[] {
   const classes = store.summary()?.varieties ?? [];
   return [
     rectX(from(TABLE(), { filterBy: BRUSH() }), {
@@ -212,11 +234,11 @@ export function varietyBarSpec(w = 320, h = 240): Directive[] {
     height(h),
     yDomain(classes),
     colorDomain(classes),
-    colorRange(wine().categories),
+    colorRange(pal(theme).categories),
     marginLeft(158),
     marginBottom(28),
     xLabel("reviews →"),
     yLabel(null),
-    ...cosmetics(),
+    ...cosmetics(theme),
   ];
 }

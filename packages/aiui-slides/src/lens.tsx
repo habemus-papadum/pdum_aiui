@@ -79,6 +79,10 @@ export function Lens(props: {
   /** Accessible name for the trigger and heading for the detail panel. */
   label: string;
   class?: string;
+  /** Extra class(es) for the DETAIL PANEL (`.aiui-lens-panel`) — the hook for
+   * per-lens sizing (a wide instrument, a narrow definition) without touching
+   * the global panel rule. `class` styles the trigger only. */
+  panelClass?: string;
 }): JSX.Element {
   const [state, setState] = createSignal<LensState>("closed");
   // Captured in the BODY (refs run without context in Solid 2.0).
@@ -94,16 +98,23 @@ export function Lens(props: {
   // their state ends, and when the component disposes (unmount, HMR).
   let peekEl: HTMLElement | undefined;
   let overlayEl: HTMLElement | undefined;
+  // Removal is DEFERRED a microtask: removing a surface that holds focus
+  // refires focus handlers synchronously, and inside this effect callback
+  // their state() reads would warn STRICT_READ_UNTRACKED (seen live). The
+  // element is captured first, so a same-tick reopen's fresh surface is
+  // never the one removed.
   createEffect(
     () => state(),
     (s) => {
       if (s !== "peek" && peekEl !== undefined) {
-        peekEl.remove();
+        const el = peekEl;
         peekEl = undefined;
+        queueMicrotask(() => el.remove());
       }
       if (s !== "open" && overlayEl !== undefined) {
-        overlayEl.remove();
+        const el = overlayEl;
         overlayEl = undefined;
+        queueMicrotask(() => el.remove());
       }
     },
   );
@@ -168,9 +179,21 @@ export function Lens(props: {
   // component's life and act only when open — cheaper than re-wiring per
   // state flip, and Escape-at-bubble keeps the deck's capture keymap senior.
   if (typeof document !== "undefined") {
+    /** Lenses NEST (a detail can hold further lenses), and every instance
+     * listens on the document — where stopPropagation cannot stop the other
+     * same-node listeners, so one Escape would close the whole stack (found
+     * live: a nested calculator and its host both vanished). Overlays append
+     * in open order, so the LAST one in the document is the topmost surface:
+     * only its owner may claim this Escape. */
+    const ownsTopOverlay = (): boolean => {
+      const overlays = document.querySelectorAll(".aiui-lens-overlay");
+      const top = overlays[overlays.length - 1];
+      return top !== undefined && panel !== undefined && top.contains(panel);
+    };
     const onKey = (e: KeyboardEvent): void => {
       if (e.key !== "Escape") return;
       if (state() === "open") {
+        if (!ownsTopOverlay()) return; // an inner lens closes first
         e.stopPropagation();
         close();
       } else if (state() === "peek") {
@@ -179,6 +202,7 @@ export function Lens(props: {
     };
     const onPointerDown = (e: PointerEvent): void => {
       if (state() !== "open") return;
+      if (!ownsTopOverlay()) return; // clicks belong to the inner surface
       const target = e.target as Node | null;
       if (panel && target && panel.contains(target)) return;
       if (trigger && target && trigger.contains(target)) return;
@@ -305,7 +329,7 @@ export function Lens(props: {
           {/* biome-ignore lint/a11y/useKeyWithClickEvents: same — the keyboard equivalent is Escape, handled document-wide. */}
           <div class="aiui-lens-backdrop" onClick={() => close()} />
           <div
-            class="aiui-lens-panel"
+            class={`aiui-lens-panel${props.panelClass === undefined ? "" : ` ${props.panelClass}`}`}
             role="dialog"
             aria-modal="true"
             aria-label={props.label}
