@@ -3,24 +3,36 @@
  * byte-progress fetch that usually accompanies loading a dataset into it.
  * Graduated from the seismos notebook (porcelain-by-extraction).
  *
- * Why the bundles are a **parameter** and not imported here: the assets must
- * be first-class files of the CONSUMING app — imported with Vite's `?url`
- * suffix so they're emitted under the app's own base and origin (no jsDelivr
- * at runtime; a static-S3 deploy can't depend on a CDN). A library cannot do
- * `?url` imports on the app's behalf: in the published dist build they would
- * inline or dangle (the same class of build-time trap as `import.meta.env` —
- * see the workspace packaging conventions). So the app owns four one-line
- * imports and this module owns the selection/instantiation dance:
+ * Why the bundles are a **parameter** and not imported here: the asset
+ * sourcing is the CONSUMING app's deployment decision, and a library cannot
+ * do `?url` imports on the app's behalf anyway — in the published dist build
+ * they would inline or dangle (the same class of build-time trap as
+ * `import.meta.env`; see the workspace packaging conventions). So the app
+ * owns the bundle wiring and this module owns the selection/instantiation
+ * dance. Two proven wirings:
  *
  * ```ts
+ * // Workers app-bundled (`?url` — same-origin, so a plain `new Worker` works
+ * // with no cross-origin Blob bootstrap); wasm from jsDelivr, pinned to the
+ * // installed version by getJsDelivrBundles(). The default for the in-repo
+ * // apps (demos/wine): the ~35–41 MB binaries blow past static-host
+ * // per-file limits (Cloudflare Workers assets cap at 25 MiB), and the CDN
+ * // copy is immutable and CORS-open.
  * import ehWorker from "@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url";
  * import mvpWorker from "@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?url";
+ * const jsd = getJsDelivrBundles();
+ * const db = await instantiateDuckDB({
+ *   mvp: { mainModule: jsd.mvp.mainModule, mainWorker: mvpWorker },
+ *   eh: { mainModule: jsd.eh.mainModule, mainWorker: ehWorker },
+ * });
+ * ```
+ *
+ * ```ts
+ * // Fully self-hosted: wasm `?url`-imported too, emitted under the app's
+ * // own base and origin — for a deploy that must not depend on a CDN and
+ * // whose host has no per-file size cap.
  * import ehWasm from "@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url";
  * import mvpWasm from "@duckdb/duckdb-wasm/dist/duckdb-mvp.wasm?url";
- * const db = await instantiateDuckDB({
- *   mvp: { mainModule: mvpWasm, mainWorker: mvpWorker },
- *   eh: { mainModule: ehWasm, mainWorker: ehWorker },
- * });
  * ```
  *
  * Ship only `mvp` + `eh` (no `coi`): the threaded/COI bundle needs
