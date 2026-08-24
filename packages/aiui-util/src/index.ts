@@ -9,7 +9,13 @@
 export * from "./browser.ts";
 export * from "./environment.ts";
 export * from "./extension.ts";
-export { packageFromSource, packageRoot, runningFromSource } from "./provenance.ts";
+export {
+  ownPackageRoot,
+  packageFromSource,
+  packageRoot,
+  runningFromSource,
+  type SelfProvenanceOptions,
+} from "./provenance.ts";
 export * from "./secret-input.ts";
 export * from "./socket-url.ts";
 export * from "./vault.ts";

@@ -32,7 +32,7 @@ import {
   type ResolveVendorKeysOptions,
   resolveVendorKeys,
   type VendorProvider,
-  vendorKeysMode,
+  vendorKeysModeSelf,
 } from "@habemus-papadum/aiui-util";
 import type { Plugin } from "vite";
 import {
@@ -118,7 +118,15 @@ export function devKeysSeed(
   let held: Promise<Record<string, string>> | undefined;
   const resolveOnce = (): Promise<Record<string, string>> => {
     held ??= (async () => {
-      const mode = vendorKeysMode("@habemus-papadum/aiui-source-processor");
+      // Self-provenance (never a by-name lookup from aiui-util's vantage):
+      // under pnpm's strict layout a workspace package is invisible to a
+      // sibling's node_modules chain, and the by-name form 500'd a consuming
+      // dev server on every page load whenever no incidental NODE_PATH
+      // rescued it (found live 2026-08-24, pitch deck).
+      const mode = vendorKeysModeSelf({
+        importMetaUrl: import.meta.url,
+        packageName: "@habemus-papadum/aiui-source-processor",
+      });
       const resolved = await resolve({ mode, onWarn: warn });
       const keys: Record<string, string> = {};
       for (const provider of providers) {

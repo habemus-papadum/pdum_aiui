@@ -24,7 +24,12 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { cacheDir } from "./index.ts";
-import { packageFromSource } from "./provenance.ts";
+import {
+  ownPackageRoot,
+  packageFromSource,
+  runningFromSource,
+  type SelfProvenanceOptions,
+} from "./provenance.ts";
 import { vaultLookup } from "./vault.ts";
 
 /**
@@ -52,6 +57,31 @@ export function vendorKeysMode(
     return "installed";
   }
   return packageFromSource(packageName) ? "source" : "installed";
+}
+
+/**
+ * {@link vendorKeysMode} for a module deciding about the package IT LIVES IN
+ * — self-provenance via {@link ownPackageRoot} instead of a by-name lookup
+ * from aiui-util's vantage, which under pnpm's strict layout cannot see a
+ * workspace sibling and crashed a consuming dev server on every page load
+ * (2026-08-24). This variant NEVER throws: an unresolvable vantage answers
+ * `installed` (vault only) — the conservative mode, since honoring the
+ * environment is the source-checkout privilege.
+ */
+export function vendorKeysModeSelf(
+  options: SelfProvenanceOptions,
+  env: NodeJS.ProcessEnv = process.env,
+): "source" | "installed" {
+  const forced = env[FORCE_INSTALLED_ENV]?.trim().toLowerCase();
+  if (forced !== undefined && forced !== "" && forced !== "0" && forced !== "false") {
+    return "installed";
+  }
+  try {
+    const root = ownPackageRoot(options);
+    return root !== undefined && runningFromSource(root) ? "source" : "installed";
+  } catch {
+    return "installed";
+  }
 }
 
 /** One vendor the channel can hold a key for. */

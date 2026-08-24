@@ -16,6 +16,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 // Resolve modules the way this package would at runtime.
 const nodeRequire = createRequire(import.meta.url);
@@ -67,4 +68,73 @@ export function runningFromSource(packageDir: string): boolean {
  */
 export function packageFromSource(packageName: string): boolean {
   return runningFromSource(packageRoot(packageName));
+}
+
+/** A module asking about the package IT LIVES IN (see {@link ownPackageRoot}). */
+export interface SelfProvenanceOptions {
+  /** The calling module's `import.meta.url`, verbatim. */
+  importMetaUrl: string;
+  /** The calling package's published name — the walk-up match guard, so a
+   * bundled vantage (whose nearest manifest is the CONSUMER's) never
+   * misreports itself as some other package. */
+  packageName: string;
+}
+
+/**
+ * Package root for a module asking about ITSELF — the resolution-robust
+ * variant of {@link packageRoot}, which anchors at THIS package (aiui-util)
+ * and so answers by-name questions from a vantage the asker never chose.
+ * That vantage broke live (2026-08-24): under pnpm's strict layout a
+ * workspace package is invisible to a sibling's `node_modules` chain, and
+ * whether the lookup still landed turned on an incidental `NODE_PATH`.
+ *
+ * Two probes, in order:
+ *
+ *  1. **By name, anchored at the calling module** — covers installed
+ *     layouts (the pnpm virtual store places siblings adjacent) and
+ *     config-bundle vantages (a Vite config bundle sits in the consuming
+ *     app, whose `node_modules` can see the package).
+ *  2. **Upward walk from the calling module's path** to the nearest
+ *     `package.json` whose `name` MATCHES — covers the source checkout,
+ *     where a workspace package cannot see itself by name at all. The name
+ *     guard is what keeps a bundled vantage honest: the consumer's own
+ *     manifest doesn't match, so the walk keeps going instead of lying.
+ *
+ * Returns undefined when neither lands — the caller picks its safe default
+ * rather than crashing (the failure that motivated this was a dev server
+ * 500ing every page load).
+ */
+export function ownPackageRoot(options: SelfProvenanceOptions): string | undefined {
+  const { importMetaUrl, packageName } = options;
+  try {
+    const anchored = createRequire(importMetaUrl);
+    const segments = packageName.split("/");
+    for (const base of anchored.resolve.paths(packageName) ?? []) {
+      const manifest = join(base, ...segments, "package.json");
+      if (existsSync(manifest)) {
+        return dirname(manifest);
+      }
+    }
+  } catch {
+    // fall through to the walk
+  }
+  try {
+    let dir = dirname(fileURLToPath(importMetaUrl));
+    for (;;) {
+      const manifest = join(dir, "package.json");
+      if (existsSync(manifest)) {
+        const pkg = JSON.parse(readFileSync(manifest, "utf8")) as { name?: string };
+        if (pkg.name === packageName) {
+          return dir;
+        }
+      }
+      const parent = dirname(dir);
+      if (parent === dir) {
+        return undefined;
+      }
+      dir = parent;
+    }
+  } catch {
+    return undefined;
+  }
 }

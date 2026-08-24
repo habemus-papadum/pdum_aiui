@@ -12,6 +12,7 @@ import {
   readKeyDecisions,
   resolveVendorKeys,
   vendorKeysMode,
+  vendorKeysModeSelf,
 } from "./vendor-keys.ts";
 
 const emptyVault = () => Promise.resolve(null);
@@ -35,6 +36,35 @@ describe("vendorKeysMode — the AIUI_NO_SOURCE_MODE override", () => {
     for (const v of ["", "0", "false", "FALSE"]) {
       expect(vendorKeysMode(pkg, { [FORCE_INSTALLED_ENV]: v })).toBe("source");
     }
+  });
+});
+
+describe("vendorKeysModeSelf — self-provenance, never a throw", () => {
+  const self = {
+    importMetaUrl: import.meta.url,
+    packageName: "@habemus-papadum/aiui-util",
+  };
+
+  it("a source-checkout module reports source about itself", () => {
+    expect(vendorKeysModeSelf(self, {})).toBe("source");
+  });
+
+  it("the override still wins", () => {
+    expect(vendorKeysModeSelf(self, { [FORCE_INSTALLED_ENV]: "1" })).toBe("installed");
+  });
+
+  it("an unresolvable vantage answers installed (vault only) instead of crashing", () => {
+    // The by-name form THROWS here (see packageRoot); the self form must
+    // degrade — a dev server 500ing every page load is the failure this
+    // exists to end (2026-08-24).
+    const mode = vendorKeysModeSelf(
+      {
+        importMetaUrl: "file:///no/such/dir/anywhere/bundle.mjs",
+        packageName: "@habemus-papadum/does-not-exist-xyz",
+      },
+      {},
+    );
+    expect(mode).toBe("installed");
   });
 });
 

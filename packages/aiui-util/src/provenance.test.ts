@@ -1,8 +1,9 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { packageFromSource, packageRoot, runningFromSource } from "./provenance.ts";
+import { ownPackageRoot, packageFromSource, packageRoot, runningFromSource } from "./provenance.ts";
 
 const temps: string[] = [];
 function tempDir(): string {
@@ -59,5 +60,46 @@ describe("packageRoot / packageFromSource", () => {
 
   it("throws for an unresolvable package", () => {
     expect(() => packageRoot("@habemus-papadum/does-not-exist-xyz")).toThrow(/could not locate/);
+  });
+});
+
+describe("ownPackageRoot", () => {
+  it(
+    "a workspace module finds ITSELF by upward walk, even though pnpm's " +
+      "strict layout hides it from every by-name chain",
+    () => {
+      // Exactly the vantage that broke live (2026-08-24): a workspace package
+      // asking about itself from its own real source path.
+      const root = ownPackageRoot({
+        importMetaUrl: import.meta.url,
+        packageName: "@habemus-papadum/aiui-util",
+      });
+      expect(root).toMatch(/aiui-util$/);
+      expect(runningFromSource(root ?? "")).toBe(true);
+    },
+  );
+
+  it(
+    "the name guard keeps a foreign vantage honest — nearest manifest with " +
+      "the WRONG name is skipped, not reported",
+    () => {
+      // A bundled config's vantage: the module's URL sits in some consumer
+      // directory whose own package.json is the nearest one.
+      const dir = tempDir();
+      writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "some-consumer-app" }));
+      const root = ownPackageRoot({
+        importMetaUrl: pathToFileURL(join(dir, "bundle.mjs")).href,
+        packageName: "@habemus-papadum/nowhere-to-be-found",
+      });
+      expect(root).toBeUndefined();
+    },
+  );
+
+  it("an unresolvable vantage answers undefined, never a throw", () => {
+    const root = ownPackageRoot({
+      importMetaUrl: pathToFileURL(join(tmpdir(), "no-such-dir-xyz", "m.mjs")).href,
+      packageName: "@habemus-papadum/does-not-exist-xyz",
+    });
+    expect(root).toBeUndefined();
   });
 });
