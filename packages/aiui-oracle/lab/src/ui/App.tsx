@@ -6,7 +6,6 @@
  */
 
 import {
-  cachingKeySource,
   chainKeySource,
   devKeySource,
   mintingKeySource,
@@ -61,7 +60,9 @@ export function App() {
     // default is paste → dev-key → mint).
     keySource: chainKeySource([
       pasteKeySource(),
-      cachingKeySource(mintingKeySource("/oracle/mint")),
+      // Uncached: ephemeral secrets are single-use (2026-08-25) — a cached
+      // ek_ fails every reconnect with ephemeral_token_already_used.
+      mintingKeySource("/oracle/mint"),
       devKeySource(),
     ]),
     transport: webRtcTransport(),

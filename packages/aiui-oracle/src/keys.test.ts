@@ -186,6 +186,22 @@ describe("devKeySource + standardKeySources — the three flows in the decided o
     const noneLeft = standardKeySources({ storage });
     await expect(noneLeft.credential({})).rejects.toThrow(/paste-key.*dev-key/);
   });
+
+  it("the mint flow re-mints per credential — ephemeral secrets are single-use", async () => {
+    // Vendor change found live 2026-08-25: a reused ek_ is refused with
+    // ephemeral_token_already_used, so the chain must not cache the mint.
+    const slot = new Map<string, string>();
+    const storage = { getItem: (key: string) => slot.get(key) ?? null };
+    const { impl, calls } = fakeFetch(minted);
+    const source = standardKeySources({
+      storage,
+      mintUrl: "http://mint.test/mint",
+      mint: { fetchImpl: impl },
+    });
+    await source.credential({});
+    await source.credential({});
+    expect(calls.length).toBe(2);
+  });
 });
 
 describe("pasteKeySource", () => {

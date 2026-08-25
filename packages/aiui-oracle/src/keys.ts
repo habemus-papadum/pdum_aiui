@@ -13,7 +13,13 @@
  * Ground truth (exploration/ephemeral-keys, live 2026-07-20): the mint is
  * `POST /v1/realtime/client_secrets`, TTL 10–7200 s; an expired `ek_` can fail
  * EITHER at upgrade (401) or after open (an `error` event) — callers handle
- * both. One secret opens multiple sessions until it expires.
+ * both.
+ *
+ * REVISED 2026-08-25 (found live, prod): ephemeral secrets are now
+ * SINGLE-USE — a second `/v1/realtime/calls` with the same `ek_` is refused
+ * `401 ephemeral_token_already_used`. "One secret opens multiple sessions
+ * until it expires" (measured 2026-07-20) no longer holds; mint fresh per
+ * connect, and do NOT wrap an ek_-minting source in {@link cachingKeySource}.
  */
 
 import type { KeySource, OracleCredential } from "./types";
@@ -151,12 +157,12 @@ export function standardKeySources(options: StandardKeySourcesOptions = {}): Key
     devKeySource("openai", options.mint ?? {}),
   ];
   if (options.mintUrl !== undefined) {
+    // No cachingKeySource here anymore: ephemeral secrets are single-use
+    // (2026-08-25) — a cached ek_ fails every reconnect.
     sources.push(
-      cachingKeySource(
-        mintingKeySource(
-          options.mintUrl,
-          options.mint?.fetchImpl !== undefined ? { fetchImpl: options.mint.fetchImpl } : {},
-        ),
+      mintingKeySource(
+        options.mintUrl,
+        options.mint?.fetchImpl !== undefined ? { fetchImpl: options.mint.fetchImpl } : {},
       ),
     );
   }
@@ -191,10 +197,12 @@ export function chainKeySource(sources: KeySource[]): KeySource {
 
 /**
  * Cache the inner source's credential and refresh it only when its TTL is
- * within `marginSeconds` of expiring — so reconnects inside a session reuse
- * the live `ek_` (one secret opens multiple sessions until it expires) and a
- * long session never trips over a stale one. Credentials with an unknown
- * expiry (a pasted `ek_`) are never cached — the inner source is the truth.
+ * within `marginSeconds` of expiring. NOT for `ek_`-minting sources anymore:
+ * ephemeral secrets became single-use (2026-08-25, the header's revision) —
+ * a cached one fails every reconnect with `ephemeral_token_already_used`.
+ * Kept for credentials that genuinely remain valid across uses. Credentials
+ * with an unknown expiry (a pasted `ek_`) are never cached — the inner
+ * source is the truth.
  */
 export function cachingKeySource(inner: KeySource, marginSeconds = 60): KeySource {
   let held: OracleCredential | undefined;
