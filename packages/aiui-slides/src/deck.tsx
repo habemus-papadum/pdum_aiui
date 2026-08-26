@@ -26,7 +26,14 @@
  * Lens surface (`.aiui-lens-overlay` / `.aiui-lens-peek`), anything marked
  * `data-deck-scroll-hole`, or a scrollable region with travel left in the
  * gesture's direction. Those events pass untouched (no preventDefault) so
- * the content underneath scrolls normally.
+ * the content underneath scrolls normally. Wheel events carry their
+ * direction and are judged one by one; a touch gesture is judged ONCE, at
+ * the first few px of travel (when its direction becomes legible), and the
+ * verdict holds for the whole gesture — a swipe that starts in a hole stays
+ * the scroller's even after the scroll hits its edge mid-gesture, and the
+ * NEXT swipe at that edge is the deck's (found live: an overflowing slide
+ * on a phone ate every swipe after the first — the old direction-blind
+ * check saw "scrollable" and never let a touch through).
  *
  * jsdom guards: everything here is plain listeners + inline styles, so the
  * whole runtime — gestures included — exercises headlessly.
@@ -49,8 +56,8 @@ import { StepDots } from "./step-dots";
 /** Px per line/page for normalized wheel deltas (deltaMode 1/2). */
 const LINE_PX = 24;
 
-/** See "Gesture holes" above. `deltaY` null = direction unknown (touch):
- * any scrollable ancestor keeps its gesture. */
+/** See "Gesture holes" above. `deltaY` null = direction unknown: any
+ * scrollable ancestor keeps its gesture. */
 function inGestureHole(
   target: EventTarget | null,
   viewport: HTMLElement,
@@ -155,17 +162,33 @@ export function Deck(props: {
       const dir = wheel.feed(e.timeStamp, e.deltaY * scale);
       if (dir !== 0) stepBy(dir);
     };
+    // One hole verdict per touch gesture, made when direction is legible
+    // (see "Gesture holes" above). `null` = not yet decided.
+    let touchStartY = 0;
+    let touchInHole: boolean | null = null;
     const onTouchStart = (e: TouchEvent): void => {
-      if (e.touches.length === 1) touch.start(e.touches[0].clientY);
+      if (e.touches.length === 1) {
+        touchStartY = e.touches[0].clientY;
+        touchInHole = null;
+        touch.start(e.touches[0].clientY);
+      }
     };
     const onTouchMove = (e: TouchEvent): void => {
       if (e.touches.length !== 1) return; // pinch etc. stay the browser's
-      if (inGestureHole(e.target, viewport, null)) return;
-      e.preventDefault(); // the deck owns single-finger vertical travel
+      if (touchInHole === null) {
+        const travel = touchStartY - e.touches[0].clientY; // + = forward
+        if (Math.abs(travel) < 4) return; // direction not yet legible
+        touchInHole = inGestureHole(e.target, viewport, travel);
+      }
+      if (touchInHole) return; // the scroller's gesture, start to end
+      if (e.cancelable) e.preventDefault(); // the deck owns this travel
       const dir = touch.move(e.touches[0].clientY);
       if (dir !== 0) stepBy(dir);
     };
-    const onTouchEnd = (): void => touch.end();
+    const onTouchEnd = (): void => {
+      touchInHole = null;
+      touch.end();
+    };
     viewport.addEventListener("wheel", onWheel, { passive: false });
     viewport.addEventListener("touchstart", onTouchStart, { passive: true });
     viewport.addEventListener("touchmove", onTouchMove, { passive: false });

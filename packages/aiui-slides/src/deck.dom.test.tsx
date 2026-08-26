@@ -78,6 +78,24 @@ const wheel = (el: Element, deltaY: number, timeStamp?: number): void => {
   el.dispatchEvent(e);
 };
 
+/** jsdom has no TouchEvent: a plain Event wearing `touches` exercises the
+ * same listeners. Dispatch on the element the finger lands on. */
+const touchAt = (el: Element, type: string, y: number): void => {
+  const e = new Event(type, { bubbles: true, cancelable: true });
+  Object.defineProperty(e, "touches", { value: [{ clientY: y }] });
+  el.dispatchEvent(e);
+};
+
+/** Dress an element as a scrollable region (jsdom's layout is all zeros):
+ * inline overflow so getComputedStyle sees it, geometry via defineProperty,
+ * scrollTop as a plain writable field. */
+const makeScrollable = (el: HTMLElement, scrollTop: number): void => {
+  el.style.overflowY = "auto";
+  Object.defineProperty(el, "scrollHeight", { value: 800, configurable: true });
+  Object.defineProperty(el, "clientHeight", { value: 600, configurable: true });
+  Object.defineProperty(el, "scrollTop", { value: scrollTop, writable: true, configurable: true });
+};
+
 describe("Deck", () => {
   it("renders every slide in order on the track, each inside its own boundary", () => {
     const el = mount(() => <Deck model={deck()} />);
@@ -266,6 +284,45 @@ describe("Deck", () => {
     await tick();
     expect(m.slide.get()).toBe(2);
     wheel(viewport, -120, 3000);
+    await tick();
+    expect(m.slide.get()).toBe(1);
+  });
+
+  it("touch: a swipe at a scrollable slide's bottom edge steps the deck", async () => {
+    // Regression: the hole test was direction-blind for touch — any
+    // scrollable slide ate EVERY swipe, so a phone stalled after the first
+    // swipe scrolled the overflow to its edge.
+    const m = deck();
+    const el = mount(() => <Deck model={m} />);
+    const viewport = el.querySelector<HTMLElement>(".aiui-deck-viewport");
+    const frame = el.querySelector<HTMLElement>(".aiui-deck-slide");
+    if (!viewport || !frame) throw new Error("no viewport/frame");
+    makeScrollable(frame, 200); // 200 + 600 = 800: scrolled to the bottom
+    const content = frame.querySelector("h1") ?? frame;
+    touchAt(content, "touchstart", 300);
+    touchAt(content, "touchmove", 240); // forward, no travel left → the deck's
+    await tick();
+    expect(m.slide.get()).toBe(1);
+    touchAt(content, "touchend", 240);
+  });
+
+  it("touch: a swipe with scroll travel left stays the scroller's, start to end", async () => {
+    const m = deck();
+    const el = mount(() => <Deck model={m} />);
+    const frame = el.querySelector<HTMLElement>(".aiui-deck-slide");
+    if (!frame) throw new Error("no frame");
+    makeScrollable(frame, 0); // top: forward travel available
+    const content = frame.querySelector("h1") ?? frame;
+    touchAt(content, "touchstart", 300);
+    touchAt(content, "touchmove", 240); // hole verdict: the scroller's
+    touchAt(content, "touchmove", 100); // still native, even past threshold
+    await tick();
+    expect(m.slide.get()).toBe(0);
+    touchAt(content, "touchend", 100);
+    // The NEXT gesture at the (now) bottom edge belongs to the deck.
+    frame.scrollTop = 200;
+    touchAt(content, "touchstart", 300);
+    touchAt(content, "touchmove", 240);
     await tick();
     expect(m.slide.get()).toBe(1);
   });
