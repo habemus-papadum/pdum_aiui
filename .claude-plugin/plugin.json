@@ -1,7 +1,7 @@
 {
   "name": "aiui",
   "description": "The aiui skills: aiui-workflow (live introspection of the running aiui system — channel, session browser, config), aiui-architecture (the four-layer playbook and design principles for aiui-viz frontends), and session-browser (etiquette and page-tools surface for driving the shared session browser). The skills front the repo's own docs, which travel with this plugin.",
-  "version": "0.17.3",
+  "version": "0.17.3+dev",
   "author": {
     "name": "Nehal Patel",
     "email": "nehal@alum.mit.edu"

@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/demo-gratings",
-  "version": "0.17.3",
+  "version": "0.17.3+dev",
   "description": "How stripes steer and split light: phase arrows, the grating equation, a spectrometer designer, and the zone-plate lens — diffraction as a design tool, computed live from the wave equation.",
   "private": true,
   "type": "module",

@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/demo-wine",
-  "version": "0.17.3",
+  "version": "0.17.3+dev",
   "description": "Wine reviews × Embedding Atlas: 120k tasting notes as a Mosaic-coordinated embedding map (embedding-atlas's EmbeddingViewMosaic) cross-filtered against points, price, variety, and country.",
   "private": true,
   "type": "module",
