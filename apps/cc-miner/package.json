@@ -1,6 +1,6 @@
 {
   "name": "pdum-cc-miner",
-  "version": "0.17.2+dev",
+  "version": "0.17.3",
   "description": "Understand your own Claude Code usage, and whether it was time well spent.",
   "private": true,
   "type": "module",
