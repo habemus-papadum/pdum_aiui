@@ -13,7 +13,7 @@ import { render } from "@solidjs/web";
 import { createSignal } from "solid-js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { disposeDurable } from "./durable";
-import { EmbeddingView } from "./embedding-view";
+import { EmbeddingView, embeddingViewSupported } from "./embedding-view";
 import { clearMosaicProducerRegistry, mosaicProducerByName } from "./mosaic-registry";
 
 const harness = vi.hoisted(() => {
@@ -244,5 +244,53 @@ describe("EmbeddingView", () => {
     hostEl?.dispatchEvent(new WheelEvent("wheel", { deltaY: 40, bubbles: true, cancelable: true }));
     expect(escaped).toHaveLength(1);
     document.removeEventListener("wheel", listen);
+  });
+});
+
+describe("embeddingViewSupported", () => {
+  /** Install a fake `navigator.gpu` for one test (jsdom ships none). */
+  const withGpu = (gpu: unknown): void => {
+    Object.defineProperty(navigator, "gpu", { value: gpu, configurable: true });
+  };
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, "gpu");
+  });
+
+  it("false when navigator.gpu is absent (jsdom's default)", async () => {
+    await expect(embeddingViewSupported()).resolves.toBe(false);
+  });
+
+  it("false without wgslLanguageFeatures (the component's own presence gate)", async () => {
+    withGpu({ requestAdapter: async () => ({ features: new Set(["shader-f16"]) }) });
+    await expect(embeddingViewSupported()).resolves.toBe(false);
+  });
+
+  it("false when no adapter is granted", async () => {
+    withGpu({ requestAdapter: async () => null, wgslLanguageFeatures: {} });
+    await expect(embeddingViewSupported()).resolves.toBe(false);
+  });
+
+  it("false when the adapter lacks shader-f16 (every device request requires it)", async () => {
+    withGpu({
+      requestAdapter: async () => ({ features: new Set(["float32-filterable"]) }),
+      wgslLanguageFeatures: {},
+    });
+    await expect(embeddingViewSupported()).resolves.toBe(false);
+  });
+
+  it("false when requestAdapter throws", async () => {
+    withGpu({
+      requestAdapter: () => Promise.reject(new Error("gpu unavailable")),
+      wgslLanguageFeatures: {},
+    });
+    await expect(embeddingViewSupported()).resolves.toBe(false);
+  });
+
+  it("true with an adapter offering shader-f16", async () => {
+    withGpu({
+      requestAdapter: async () => ({ features: new Set(["shader-f16"]) }),
+      wgslLanguageFeatures: {},
+    });
+    await expect(embeddingViewSupported()).resolves.toBe(true);
   });
 });

@@ -55,6 +55,38 @@ interface ClauseLike {
   source?: object;
 }
 
+/** The slice of `navigator.gpu` the support probe touches — structural, so
+ * this module needs no WebGPU type lib. */
+interface GpuProbeLike {
+  requestAdapter?: () => Promise<{ features: { has(name: string): boolean } } | null>;
+  wgslLanguageFeatures?: object;
+}
+
+/**
+ * Whether THIS browser can run {@link EmbeddingView}. `embedding-atlas`
+ * renders through WebGPU only — no WebGL fallback (0.24) — and when the API
+ * is missing it paints an easy-to-miss one-line note inside the view.
+ * Probe up front and mount real fallback UI instead.
+ *
+ * The checks mirror the component's own gate exactly: `navigator.gpu` with
+ * `requestAdapter` AND `wgslLanguageFeatures` (its presence test), an
+ * adapter granted, and the `shader-f16` feature — the component requests
+ * every device with `requiredFeatures: ["shader-f16"]`, so an adapter
+ * without it fails there. Reading `adapter.features` answers that without
+ * holding a device. Resolves in milliseconds; callers cache the answer
+ * (a cell holds it naturally — support never changes within a session).
+ */
+export async function embeddingViewSupported(): Promise<boolean> {
+  const gpu = (navigator as Navigator & { gpu?: GpuProbeLike }).gpu;
+  if (gpu?.requestAdapter == null || gpu.wgslLanguageFeatures == null) return false;
+  try {
+    const adapter = await gpu.requestAdapter();
+    return adapter != null && adapter.features.has("shader-f16");
+  } catch {
+    return false;
+  }
+}
+
 /**
  * The slice of a Mosaic `Selection` the embedding view drives — structural,
  * so this module adds no `@uwdata/mosaic-core` dependency; pass the real
