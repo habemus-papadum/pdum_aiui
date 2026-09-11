@@ -280,6 +280,21 @@ Found building the wine demo (embedding-atlas integration; full detail:
   refresh on by default. The in-repo source locator is unaffected by the native default *by
   design* (its own `enforce: "pre"` Babel pass, not the plugin's `babel` option) — verified:
   `data-source-loc` stamps and HMR hot-swap both work under the native compiler.
+- **Native compiler `0.50.0-next.40` (the pin behind `vite-plugin-solid@3.0.0-next.24`) drops
+  the marker for a lone dynamic child between two text runs.** `<p>text <Comp/> text</p>` —
+  one component (or `{expr}`-less JSX element) with static text on both sides — compiles to a
+  template with the two text runs *adjacent* (the browser merges them into one text node) and
+  `insert(el, comp, firstChild.nextSibling)`, whose marker is `null`: the component lands at the
+  END of its parent. Symptom: an inline `<Lens>` trigger or `<TeX>` symbol renders after the
+  paragraph's last word; no warning anywhere. Two or more dynamic children in the element get
+  proper `<!>` markers, as do a leading or trailing one. `{" "}` next to the element does NOT
+  help (static strings fold into the text). Shapes that compile correctly: wrap the element in
+  braces (`text {<Comp/>} text` — an expression container always gets a marker), put the
+  surrounding text in `<span>`s (the pitch deck's atlas lede did this before the cause was
+  known), or nest the component in its own element. Found and reduced 2026-09-09 (pitch,
+  app/ciamac); the Babel plugin (`@dom-expressions/babel-plugin-jsx@0.50.0-next.42`,
+  `compiler: "babel"`) and the native compiler at `0.50.0-next.44` both compile every shape
+  correctly, so the durable fix is the plugin/compiler bump when the catalog next moves.
 - **The JSX compiler and runtime move in lockstep — fresh installs break otherwise.** Symptom:
   `"claimElement" is not exported by @solidjs/web/…` (or `scope`) at dev/build time: the newer
   compiler emits helpers the older runtime doesn't ship, and the plugin's `babel-preset-solid`
