@@ -8,24 +8,16 @@ describe("createChannelServer", () => {
     expect(createChannelServer("1.2.3")).toBeTruthy();
   });
 
-  it("declares the tools listChanged capability", async () => {
+  it("declares a static tools capability — no listChanged, nothing is ever pushed", async () => {
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     const mcp = createChannelServer("1.2.3");
     const client = new Client({ name: "test", version: "1.0.0" });
     await Promise.all([mcp.connect(serverTransport), client.connect(clientTransport)]);
     try {
-      expect(client.getServerCapabilities()?.tools).toEqual({ listChanged: true });
+      expect(client.getServerCapabilities()?.tools).toEqual({});
     } finally {
       await client.close();
       await mcp.close();
     }
-  });
-
-  it("refuses to send list_changed before a transport is connected", async () => {
-    // The mcp command only subscribes the directory listener after connect();
-    // this pins the failure mode that ordering (plus its try/catch) guards.
-    await expect(createChannelServer("1.2.3").sendToolListChanged()).rejects.toThrow(
-      /Not connected/,
-    );
   });
 });

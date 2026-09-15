@@ -3,7 +3,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { ToolListChangedNotificationSchema } from "@modelcontextprotocol/sdk/types.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PageToolDirectory } from "./page-tools";
 import { createChannelServer } from "./server";
@@ -97,12 +96,7 @@ describe("page-tool MCP tools (wired to a directory with a fake page connection)
    * what the `/tools` websocket would feed and what the agent would drive.
    */
   async function connectWithDirectory(handlers: Record<string, (args: unknown) => unknown> = {}) {
-    // Zero debounce so change-signal tests need no timer control.
-    const pageTools = new PageToolDirectory({
-      log: () => {},
-      newId: () => "fixed-id",
-      changeDebounceMs: 0,
-    });
+    const pageTools = new PageToolDirectory({ log: () => {}, newId: () => "fixed-id" });
     let clientId = "";
     clientId = pageTools.addConnection((msg) => {
       if (msg.type !== "call") {
@@ -148,12 +142,20 @@ describe("page-tool MCP tools (wired to a directory with a fake page connection)
       const result = await client.callTool({ name: "page_tools_list" });
       const content = result.content as Array<{ type: string; text: string }>;
       const listed = JSON.parse(content[0].text);
+      // Grouped by TAB: one entry per connection, its namespaces inside.
       expect(listed).toHaveLength(1);
       expect(listed[0]).toMatchObject({
         clientId,
-        ns: "morpho",
         url: "http://localhost/morpho",
-        tools: [{ name: "set-params", description: "set params", inputSchema: { type: "object" } }],
+        namespaces: [
+          {
+            ns: "morpho",
+            active: true,
+            tools: [
+              { name: "set-params", description: "set params", inputSchema: { type: "object" } },
+            ],
+          },
+        ],
       });
     } finally {
       await client.close();
@@ -202,25 +204,47 @@ describe("page-tool MCP tools (wired to a directory with a fake page connection)
     }
   });
 
-  it("delivers tools/list_changed to the client on a directory change", async () => {
-    const { pageTools, clientId, mcp, client } = await connectWithDirectory();
-    const heard = new Promise<void>((resolve) => {
-      client.setNotificationHandler(ToolListChangedNotificationSchema, () => resolve());
+  it("addresses list and call by the tab ids the <tab> marker carries", async () => {
+    const { pageTools, clientId, mcp, client } = await connectWithDirectory({
+      report: () => ({ from: "cdp" }),
     });
-    // Mirror the mcp command's wiring: the directory's debounced change signal
-    // drives the SDK's sendToolListChanged (capability declared in server.ts).
-    pageTools.onChange(() => {
-      void mcp.sendToolListChanged();
+    pageTools.handleClientMessage(clientId, {
+      v: 1,
+      type: "register",
+      ns: "aztec",
+      hash: "h1",
+      url: "http://localhost:5173/aztec",
+      tab: { targetId: "T-AZTEC", driverTab: 4, url: "http://localhost:5173/aztec" },
+      tools: [{ name: "report", description: "snapshot" }],
     });
+    const text = async (name: string, args: Record<string, unknown>) => {
+      const result = await client.callTool({ name, arguments: args });
+      const content = result.content as Array<{ type: string; text: string }>;
+      return { text: content[0].text, isError: result.isError === true };
+    };
     try {
-      pageTools.handleClientMessage(clientId, {
-        v: 1,
-        type: "register",
-        ns: "morpho",
-        hash: "h1",
-        tools: [{ name: "set-params", description: "set params" }],
-      });
-      await heard;
+      // list by cdp-target-id / driver-tab / url; the flat args map to the selector.
+      for (const args of [
+        { targetId: "T-AZTEC" },
+        { driverTab: 4 },
+        { url: "http://localhost:5173/" },
+        { clientId },
+      ]) {
+        const { text: body, isError } = await text("page_tools_list", args);
+        expect(isError).toBe(false);
+        expect(JSON.parse(body)).toHaveLength(1);
+      }
+      // A tab that is not connected: an error naming the connected tabs.
+      const missing = await text("page_tools_list", { chromeTabId: 99 });
+      expect(missing.isError).toBe(true);
+      expect(missing.text).toMatch(/no connected page matches.*connected tabs:.*T-AZTEC/);
+
+      const called = await text("page_tools_call", { name: "report", driverTab: 4 });
+      expect(called.isError).toBe(false);
+      expect(JSON.parse(called.text)).toEqual({ from: "cdp" });
+      const wrongTab = await text("page_tools_call", { name: "report", chromeTabId: 99 });
+      expect(wrongTab.isError).toBe(true);
+      expect(wrongTab.text).toMatch(/no connected page matches tab/);
     } finally {
       await client.close();
       await mcp.close();

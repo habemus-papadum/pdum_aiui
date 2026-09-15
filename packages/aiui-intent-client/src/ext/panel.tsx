@@ -210,7 +210,13 @@ async function boot(): Promise<{
   lanes.bind(client);
 
   // The page-tools bridge — real chrome tab/window identity in this tier.
-  createToolsLink({ host, port: () => port, windowId, log: (m) => console.info("[tools]", m) });
+  createToolsLink({
+    host,
+    port: () => port,
+    tabIdKey: "chromeTabId",
+    windowId,
+    log: (m) => console.info("[tools]", m),
+  });
 
   // The remote pencil: an iPad marks up the tab, its strokes landing on the
   // in-page surface. The video is the SAME warm tabCapture MediaStream the shot

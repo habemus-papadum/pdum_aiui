@@ -9,8 +9,7 @@
  * what it makes free — the directory is connection-scoped, so a closed
  * socket drops exactly that tab's namespaces (tab close = cleanup, no
  * unregister protocol), and the same app open in two tabs never collides
- * (distinct clients; `page_tools_call` disambiguates by clientId + the
- * active-tab flag).
+ * (distinct clients; the agent addresses a call by TAB).
  *
  * Downstream calls route the other way: the directory sends
  * `{type:"call", callId, ns, name, args}` on the tab's socket; we forward it
@@ -18,11 +17,16 @@
  * the `toolsResult` event comes back correlated by callId; we answer
  * `{type:"result", …}`. Activation (which tab the user is looking at) rides
  * whichever socket is open — it is directory-global — sent on every active
- * tab change: the engage/disengage the retired extension's tools-link carried.
+ * tab change so an un-addressed call can prefer the tab in view.
  *
- * Tab identity: the extension passes real chrome ids (`windowId` option);
- * the CDP tier's tab numbers ride as correlation HINTS (accepted decide) —
- * the directory treats `tab` as a hint, never a key.
+ * **Tab identity is honest per host** (the channel-wakeups decision,
+ * 2026-09-15): every register and activation carries the tab under the id
+ * this host actually has — `tabIdKey` names it (`chromeTabId` for the MV3
+ * side panel, `driverTab` for the plain-page CDP host) — plus whatever else
+ * the host's `tabInfo` knows (chrome window/index; the CDP target id). The
+ * agent copies those ids from the prompt's `<tab …/>` marker straight into
+ * `page_tools_list` / `page_tools_call`, and the url is the join to the
+ * DevTools MCP's `list_pages`. The url is kept live across navigations.
  */
 
 import type { IntentHost } from "./transport";
@@ -34,10 +38,28 @@ export interface ToolsSocket {
   addEventListener(type: "open" | "message" | "close", handler: (event: never) => void): void;
 }
 
+/** The tab-record fields a register/activation carries (the channel's PageToolTab). */
+export interface ToolsTabRecord {
+  url?: string;
+  title?: string;
+  chromeTabId?: number;
+  windowId?: number;
+  tabIndex?: number;
+  targetId?: string;
+  driverTab?: number;
+}
+
 export interface ToolsLinkOptions {
   host: IntentHost;
   /** The channel to represent pages to. */
   port: () => number | undefined;
+  /**
+   * Which id namespace this host's transport tab numbers live in: real
+   * `chrome.tabs` ids under the extension, the CDP driver's own handles under
+   * the plain page. Stated explicitly so a driver handle never masquerades as
+   * a chrome id.
+   */
+  tabIdKey: "chromeTabId" | "driverTab";
   /** The panel's window (MV3 — real chrome ids); absent in the CDP tier. */
   windowId?: number;
   socketFactory?: (url: string) => ToolsSocket;
@@ -49,9 +71,10 @@ interface TabLink {
   open: boolean;
   /** The tab's current registrations (re-sent on open/reconnect). */
   registrations: Array<{ ns: string; tools: unknown[]; active?: boolean }>;
-  /** The tab's identity (url/title), fetched once per link — rides every
-   * register so the directory's ambiguity messages can NAME the page. */
-  meta?: { url?: string; title?: string };
+  /** The tab's identity as the host knows it — fetched once per link, url
+   * kept current on navigation. Rides every register so the directory can
+   * address the tab and name the page in its errors. */
+  meta?: ToolsTabRecord;
   /** Deliberate close (empty registration / dispose) — no re-dial. */
   closing: boolean;
   queue: string[];
@@ -60,13 +83,9 @@ interface TabLink {
 const REDIAL_MS = 3000;
 
 /** A cheap, stable content hash (djb2 over the canonical JSON). The directory
- * keys its change detection on `ns|hash` — with no hash every registration
- * looked identical, so a tool-set CHANGE inside a namespace never fired
- * `tools/list_changed` (found by the channel-plumbing audit, 2026-08-03).
- * The ACTIVITY bit is deliberately excluded: a route flip re-registers with
- * an unchanged hash, so the directory updates the record without announcing
- * "page tools changed" on every gallery navigation (the same reason the
- * directory's signature excludes the active-tab flag). */
+ * logs a registration only when a namespace's hash changes, so HMR/reload
+ * churn with an unchanged set stays silent. The ACTIVITY bit is deliberately
+ * excluded: a route flip re-registers with an unchanged hash. */
 export function toolsHash(registration: { ns: string; tools: unknown[] }): string {
   const canon = JSON.stringify({ ns: registration.ns, tools: registration.tools });
   let h = 5381;
@@ -74,6 +93,33 @@ export function toolsHash(registration: { ns: string; tools: unknown[] }): strin
     h = ((h << 5) + h + canon.charCodeAt(i)) | 0;
   }
   return (h >>> 0).toString(16);
+}
+
+/** Keep only the tab-record fields the channel knows, from whatever tabInfo returned. */
+function pickTabRecord(info: Record<string, unknown>): ToolsTabRecord {
+  const out: ToolsTabRecord = {};
+  if (typeof info.url === "string") {
+    out.url = info.url;
+  }
+  if (typeof info.title === "string") {
+    out.title = info.title;
+  }
+  if (typeof info.chromeTabId === "number") {
+    out.chromeTabId = info.chromeTabId;
+  }
+  if (typeof info.windowId === "number") {
+    out.windowId = info.windowId;
+  }
+  if (typeof info.tabIndex === "number") {
+    out.tabIndex = info.tabIndex;
+  }
+  if (typeof info.targetId === "string") {
+    out.targetId = info.targetId;
+  }
+  if (typeof info.driverTab === "number") {
+    out.driverTab = info.driverTab;
+  }
+  return out;
 }
 
 export function createToolsLink(options: ToolsLinkOptions): { dispose(): void } {
@@ -84,6 +130,13 @@ export function createToolsLink(options: ToolsLinkOptions): { dispose(): void } 
   /** callId → tab, so a result finds its way back to the right socket. */
   const pendingCalls = new Map<string, number>();
   let disposed = false;
+
+  /** The record for one tab: this host's id for it, its window, then whatever tabInfo added. */
+  const tabRecord = (tab: number, meta: ToolsTabRecord | undefined): ToolsTabRecord => ({
+    [options.tabIdKey]: tab,
+    ...(options.windowId !== undefined ? { windowId: options.windowId } : {}),
+    ...meta,
+  });
 
   const sendOn = (link: TabLink, message: unknown): void => {
     const data = JSON.stringify(message);
@@ -102,16 +155,11 @@ export function createToolsLink(options: ToolsLinkOptions): { dispose(): void } 
         ns: registration.ns,
         tools: registration.tools,
         // The namespace's activity bit + a content hash: the directory's
-        // change detection keys on the hash, projections filter on the bit.
+        // registration log keys on the hash, projections filter on the bit.
         active: registration.active !== false,
         hash: toolsHash(registration),
         ...(link.meta?.url !== undefined ? { url: link.meta.url } : {}),
-        tab: {
-          chromeTabId: tab,
-          ...(options.windowId !== undefined ? { windowId: options.windowId } : {}),
-          ...(link.meta?.url !== undefined ? { url: link.meta.url } : {}),
-          ...(link.meta?.title !== undefined ? { title: link.meta.title } : {}),
-        },
+        tab: tabRecord(tab, link.meta),
       });
     }
   };
@@ -203,19 +251,31 @@ export function createToolsLink(options: ToolsLinkOptions): { dispose(): void } 
         dial(event.tab, link);
         log(`tools: tab ${event.tab} connected (${event.registrations.length} namespace(s))`);
         // The tab's identity, once per link — best-effort, then re-register
-        // so the directory's records (and its ambiguity messages) carry the
-        // page's url/title instead of a bare clientId.
+        // so the directory's records carry the page's url/title and this
+        // host's other ids (the CDP target id; chrome window/index) instead
+        // of the bare transport number.
         void options.host.targeting
           .tabInfo?.(event.tab)
           .then((info) => {
             if (info !== undefined && links.get(event.tab) === link) {
-              link.meta = { url: info.url, title: info.title };
+              link.meta = pickTabRecord(info as Record<string, unknown>);
               registerAll(event.tab, link);
             }
           })
           .catch(() => {});
       }
       registerAll(event.tab, link);
+    } else if (event.kind === "navigation") {
+      // The page moved: keep the registered url honest so the agent's url
+      // addressing (and the DevTools MCP's list_pages join) keeps matching.
+      // The title is unknown until the new document reports; drop the stale
+      // one rather than name the wrong page.
+      const link = links.get(event.tab);
+      if (link !== undefined && link.meta?.url !== event.to) {
+        const { title: _stale, ...rest } = link.meta ?? {};
+        link.meta = { ...rest, url: event.to };
+        registerAll(event.tab, link);
+      }
     } else if (event.kind === "tabClosed") {
       // The tab is GONE: close its socket so the directory forgets its
       // namespaces (close = cleanup, the connection-scoped contract). This is
@@ -245,8 +305,9 @@ export function createToolsLink(options: ToolsLinkOptions): { dispose(): void } 
     }
   });
 
-  // Engagement follows the eye: the directory flags the active tab and steers
-  // ambiguous calls there. Directory-global, so any open socket carries it.
+  // Engagement follows the eye: the directory flags the active tab and lets
+  // it win an un-addressed call. Directory-global, so any open socket
+  // carries it — in this host's own id namespace.
   const offTab = options.host.targeting.onActiveTabChange((tab) => {
     if (tab === undefined) {
       return;
@@ -256,7 +317,7 @@ export function createToolsLink(options: ToolsLinkOptions): { dispose(): void } 
       sendOn(carrier, {
         v: 1,
         type: "activation",
-        tab: { chromeTabId: tab, windowId: options.windowId ?? 0 },
+        tab: { [options.tabIdKey]: tab, windowId: options.windowId ?? 0 },
         active: true,
       });
     }

@@ -5,7 +5,7 @@ import { createChannelLog } from "../channel-log";
 import { dashboardTabTarget } from "../dashboard-tab";
 import { STALE_NOTICE } from "../hot";
 import { type LaunchInfo, parseLaunchInfo } from "../launch-info";
-import { formatPageToolsChanged, PageToolDirectory } from "../page-tools";
+import { PageToolDirectory } from "../page-tools";
 import { registerServer } from "../registry";
 import { createChannelServer } from "../server";
 import { projectCacheDir } from "../trace";
@@ -27,16 +27,6 @@ export interface McpOptions extends CommonChannelOptions {
    * not behavior) and surfaced at `GET /debug/api/info`. See launch-info.ts.
    */
   launchInfo?: string;
-  /**
-   * Push a terse "page tools changed: ns/name, …" note into the session when
-   * the page-tool directory changes — rung 2 of the notification ladder
-   * (the browser-extension intent-tool proposal §7, git history). Named tools
-   * ride the push because a *listed* tool is not necessarily one the model looks
-   * up (the extension-spike results, M3, git history). Defaults ON (`false` disables;
-   * the CLI's `--no-page-tools-notify`). The spec-blessed
-   * `notifications/tools/list_changed` (rung 3) is sent regardless.
-   */
-  pageToolsNotify?: boolean;
 }
 
 // Injected at build time by Vite's `define` (see vite.config.ts). The `typeof`
@@ -130,32 +120,6 @@ export async function runMcp(options: McpOptions = {}): Promise<void> {
   // through claude's env. Never throws, never hangs (timeouts degrade to
   // keyless); the log line records each key's SOURCE, never a value.
   await resolveAndStashVendorKeys((message) => channelLog.log(message));
-
-  // One debounced directory change drives both notification rungs of the
-  // browser-extension proposal (§7): `tools/list_changed` makes the client
-  // re-fetch the tool list (measured to work cross-turn AND mid-turn on CLI
-  // 2.1.206 — the extension-spike results, M3, in git history; the advertised list is
-  // still the static meta-tools, so its value is the refresh cycle), and the
-  // channel push *names* the tools, because a re-listed tool is not
-  // necessarily one a weak model looks up. Subscribed after connect(), so a
-  // send can only fail racing shutdown — caught and logged, never fatal.
-  const pageToolsNotify = options.pageToolsNotify !== false;
-  pageTools.onChange(() => {
-    mcp.sendToolListChanged().catch((err) => {
-      channelLog.log("tools/list_changed send failed", {
-        error: err instanceof Error ? err.message : String(err),
-      });
-    });
-    if (pageToolsNotify) {
-      // The directory's signature gate already guarantees the set (or its
-      // active-tab flags) really changed since the last signal — no re-hash here.
-      pushToSession(formatPageToolsChanged(pageTools.list()), "page-tools").catch((err) => {
-        channelLog.log("page-tools push failed", {
-          error: err instanceof Error ? err.message : String(err),
-        });
-      });
-    }
-  });
 
   // A web backend that fails to start is FATAL, and loudly so. Without the
   // try/catch, the rejection bubbles to cli.ts, which logs to stderr — invisible

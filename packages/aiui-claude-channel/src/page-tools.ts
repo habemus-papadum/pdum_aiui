@@ -8,12 +8,20 @@
  * — for the whole namespace at once. The channel keeps that declaration here;
  * the MCP layer surfaces it to the Claude Code session (`page_tools_list`),
  * and a call (`page_tools_call`) is routed back over the same socket to the
- * live page function, whose result returns the same way. The tools-link (in
- * both intent-client hosts) additionally reports tab `activation` on the same
- * socket, which flags/pre-orders the active tab's entries and steers
- * ambiguous calls; the directory's debounced change signal ({@link
- * PageToolDirectory.onChange}) is what drives the agent-facing notifications
- * (the browser-extension intent-tool proposal §7, git history).
+ * live page function, whose result returns the same way.
+ *
+ * **The directory is a routing table, not an event source** (the
+ * channel-wakeups decision, 2026-09-15). It never announces that its contents
+ * changed — no session push, no `tools/list_changed` — because every such
+ * announcement became a model turn over the whole context, fired by nothing
+ * more than the user (or the agent's own verification loop) opening and
+ * closing tabs. The agent asks when it has a question: `list()` answers it,
+ * addressed by TAB. Registrations carry each host's honest tab record (the
+ * extension's chrome ids; the plain-page CDP host's target id + driver tab),
+ * and a call names the tab it means with any of those ids or the page URL.
+ * Tab `activation` (which tab the user is looking at) is still tracked —
+ * flag-only, so a CLI-initiated turn can find "the page in view" — and it
+ * breaks ties for an un-addressed call; it announces nothing either.
  *
  * This module is transport-agnostic — a connection is just an id plus a `send`
  * function — so the whole thing is unit-testable without a real websocket (see
@@ -21,7 +29,7 @@
  * protocol is documented in docs/websocket-protocol.md.
  *
  * Nothing here may write to stdout: in the `mcp` command that stream carries the
- * MCP stdio protocol. The change-log line goes through {@link
+ * MCP stdio protocol. The registration log line goes through {@link
  * PageToolDirectoryOptions.log}, which defaults to stderr.
  */
 import { randomUUID } from "node:crypto";
@@ -35,16 +43,54 @@ export interface PageToolDescriptor {
   inputSchema?: Record<string, unknown>;
 }
 
+/**
+ * The tab record a registration carries: url/title plus whichever ids the
+ * registering HOST honestly has. The browser extension knows `chromeTabId` /
+ * `windowId` / `tabIndex`; the plain-page CDP host knows the CDP `targetId`
+ * and its own `driverTab` handle. Never both — and none of them is the Chrome
+ * DevTools MCP's `pageId` (that one exists only in `list_pages` output; the
+ * join is by url/title).
+ */
+export type PageToolTab = TabInfo & {
+  /** The plain-page host's CDP driver handle for this tab. */
+  driverTab?: number;
+};
+
+/** The id fields two tab records can be compared on (never url — two tabs may share one). */
+const TAB_ID_KEYS = ["chromeTabId", "targetId", "driverTab"] as const;
+
+/** Whether two tab records name the same tab: any id present in BOTH is equal. */
+function sameTab(a: PageToolTab | undefined, b: PageToolTab | undefined): boolean {
+  if (!a || !b) {
+    return false;
+  }
+  return TAB_ID_KEYS.some((key) => a[key] !== undefined && a[key] === b[key]);
+}
+
+/**
+ * How the agent names a tab. Any field narrows; all given fields must hold.
+ * The ids are copied from the prompt's `<tab …/>` marker (`chrome-tab-id`,
+ * `cdp-target-id`, `driver-tab`) or from a previous `list()`; `url` is the
+ * page's `location.href` — an exact match wins, else a prefix match (so the
+ * URL `list_pages` prints, or the app's origin, both work).
+ */
+export interface TabSelector {
+  chromeTabId?: number;
+  targetId?: string;
+  driverTab?: number;
+  url?: string;
+}
+
 /** A page's declaration of the full tool set for one namespace. */
 export interface PageToolRegistration {
   /** Server-assigned id of the connection this namespace was declared on. */
   clientId: string;
   /** The page namespace (`morpho`, `aztec`, …); unique per connection. */
   ns: string;
-  /** The page's live `location.href` at registration time. */
+  /** The page's live `location.href` (updated by the client on navigation). */
   url?: string;
-  /** The browser tab the page lives in (correlation hints; see {@link TabInfo}). */
-  tab?: TabInfo;
+  /** The browser tab the page lives in — the registering host's honest record. */
+  tab?: PageToolTab;
   /** Where the page's source lives on disk. */
   source?: SourceInfo;
   /** Content hash of the tool set (page-computed) — identity across reloads. */
@@ -57,31 +103,47 @@ export interface PageToolRegistration {
    * The NAMESPACE's activity bit (the page-tools proposal, git history): false when
    * the page parked this app (a gallery notebook off-route). Parked tools
    * stay listed and callable — the agent sees the flag; route-following
-   * consumers (the panel's oracle) filter page-side. Deliberately NOT in the
-   * change signature: a route flip is not a "page tools changed" event.
+   * consumers (the panel's oracle) filter page-side.
    */
   active: boolean;
   /**
    * Present when this registration's tab is a window's active tab (per the
    * `activation` messages — see {@link PageToolDirectory.handleClientMessage}).
-   * Derived at {@link PageToolDirectory.list} time, never stored: an activation
-   * flip re-flags the next list without touching registrations.
+   * Derived at {@link PageToolDirectory.list} time, never stored.
    */
   activeTab?: true;
   /**
    * Derived at {@link PageToolDirectory.list} time: this registration's
-   * namespace collides with another connection's, and call routing would
-   * pick the OTHER one. Advisory — the honest rendering of a duplicate
-   * instead of two identical rows (the page-tools proposal, git history).
+   * namespace collides with another connection's, and an UN-ADDRESSED call
+   * would pick the OTHER one. Advisory — name the tab and it is moot.
    */
   shadowed?: true;
 }
 
+/** One connected tab as the agent sees it: its record plus every namespace it holds. */
+export interface PageToolTabEntry {
+  clientId: string;
+  url?: string;
+  tab?: PageToolTab;
+  source?: SourceInfo;
+  /** True when the user is looking at this tab (when the client reports activation). */
+  activeTab?: true;
+  namespaces: Array<{
+    ns: string;
+    hash: string;
+    active: boolean;
+    shadowed?: true;
+    tools: PageToolDescriptor[];
+  }>;
+}
+
 /** A call the agent asks the directory to route to a page. */
 export interface PageToolCall {
-  /** Disambiguator: which connection. Omit when the match is unique. */
+  /** Which tab (any of its ids, or its url). Omit only when one page is connected. */
+  tab?: TabSelector;
+  /** Disambiguator: which connection (an exact handle from `list()`). */
   clientId?: string;
-  /** Disambiguator: which namespace. Omit when the match is unique. */
+  /** Disambiguator: which namespace, when a tab holds several. */
   ns?: string;
   /** The tool to call. */
   name: string;
@@ -111,21 +173,15 @@ export interface PageToolSummary {
 
 export interface PageToolDirectoryOptions {
   /**
-   * Where the change-log line goes (a namespace registering a *new* tool-set
-   * hash — reloads with an unchanged set are silent). Defaults to stderr, since
-   * stdout carries the MCP protocol. Inject a collector in tests.
+   * Where the registration log line goes (a namespace registering a *new*
+   * tool-set hash — reloads with an unchanged set are silent). Defaults to
+   * stderr, since stdout carries the MCP protocol. Inject a collector in tests.
    */
   log?: (line: string) => void;
   /** Clock for `registeredAt` — inject for deterministic tests. */
   now?: () => Date;
   /** Id generator for client ids and call ids — inject for deterministic tests. */
   newId?: () => string;
-  /**
-   * Quiet period (ms) before the change signal fires (see {@link
-   * PageToolDirectory.onChange}) — coalesces the burst a reload produces
-   * (close + reconnect + re-register) into at most one emission. Default 500.
-   */
-  changeDebounceMs?: number;
 }
 
 interface Pending {
@@ -144,26 +200,51 @@ interface Connection {
 }
 
 const DEFAULT_TIMEOUT_MS = 15_000;
-const DEFAULT_CHANGE_DEBOUNCE_MS = 500;
 
 const asRecord = (value: unknown): Record<string, unknown> | undefined =>
   typeof value === "object" && value !== null ? (value as Record<string, unknown>) : undefined;
 
-/**
- * Render the terse session-push line for a changed directory — rung 2 of the
- * notification ladder (the browser-extension intent-tool proposal §7, git history).
- * Names every tool because a listed tool is not necessarily one the model
- * looks up (the extension-spike results, M3's model-behavior nuance, git history).
- */
-export function formatPageToolsChanged(entries: PageToolRegistration[]): string {
-  if (entries.length === 0) {
-    return "page tools changed: none registered";
+/** Read a tab record off the wire: only the fields we know, each type-checked. */
+function readTab(value: unknown): PageToolTab | undefined {
+  const raw = asRecord(value);
+  if (!raw) {
+    return undefined;
   }
-  const names = entries.flatMap((reg) => reg.tools.map((t) => `${reg.ns}/${t.name}`));
-  const active = entries.find((reg) => reg.activeTab);
-  const label = active ? (active.tab?.title ?? active.tab?.url ?? active.url) : undefined;
-  return `page tools changed: ${names.join(", ")}${label ? ` (active tab: ${label})` : ""}`;
+  const tab: PageToolTab = {};
+  if (typeof raw.url === "string") {
+    tab.url = raw.url;
+  }
+  if (typeof raw.title === "string") {
+    tab.title = raw.title;
+  }
+  if (typeof raw.chromeTabId === "number") {
+    tab.chromeTabId = raw.chromeTabId;
+  }
+  if (typeof raw.windowId === "number") {
+    tab.windowId = raw.windowId;
+  }
+  if (typeof raw.tabIndex === "number") {
+    tab.tabIndex = raw.tabIndex;
+  }
+  if (typeof raw.targetId === "string") {
+    tab.targetId = raw.targetId;
+  }
+  if (typeof raw.driverTab === "number") {
+    tab.driverTab = raw.driverTab;
+  }
+  return tab;
 }
+
+/** A selector with no criteria narrows nothing. */
+const selectorIsEmpty = (sel: TabSelector | undefined): boolean =>
+  sel === undefined ||
+  (sel.chromeTabId === undefined &&
+    sel.targetId === undefined &&
+    sel.driverTab === undefined &&
+    sel.url === undefined);
+
+/** Render a selector for an error message. */
+const describeSelector = (sel: TabSelector): string => JSON.stringify(sel);
 
 /**
  * The channel's live registry of page-declared tools and the connections that
@@ -176,24 +257,18 @@ export class PageToolDirectory {
   private readonly now: () => Date;
   private readonly newId: () => string;
   /**
-   * The browser's active tab per window (`windowId` → `chromeTabId`), fed by
+   * The browser's active tab per window (`windowId` → tab record), fed by
    * `activation` messages. Directory-global, not per connection: whichever
    * socket reports it (the intent client's tools-link), there is one truth about
    * which tab a window shows. Empty until an activation arrives — every
    * active-tab behavior degrades to the flag simply being absent.
    */
-  private readonly activeTabs = new Map<number, number>();
-  private readonly changeListeners = new Set<() => void>();
-  private readonly changeDebounceMs: number;
-  private changeTimer: ReturnType<typeof setTimeout> | undefined;
-  /** Signature of the state the listeners last heard about (see {@link signature}). */
-  private lastSignature = "";
+  private readonly activeTabs = new Map<number, PageToolTab>();
 
   constructor(options: PageToolDirectoryOptions = {}) {
     this.log = options.log ?? ((line) => process.stderr.write(`${line}\n`));
     this.now = options.now ?? (() => new Date());
     this.newId = options.newId ?? randomUUID;
-    this.changeDebounceMs = options.changeDebounceMs ?? DEFAULT_CHANGE_DEBOUNCE_MS;
   }
 
   /** Register a freshly connected page socket; returns its server-assigned id. */
@@ -222,7 +297,6 @@ export class PageToolDirectory {
       pending.reject(new Error("page disconnected before the tool call returned"));
     }
     this.connections.delete(clientId);
-    this.maybeSignalChange();
   }
 
   /**
@@ -245,119 +319,41 @@ export class PageToolDirectory {
   }
 
   /**
-   * Subscribe to the debounced change signal. Fires once per quiet period
-   * after the TOOL SET changes: a registration under a new hash, or a
-   * namespace lost to socket close. Same-hash re-registrations (HMR churn),
-   * reconnects that restore an identical set within the debounce window, and
-   * ACTIVATION flips (tab switches — deliberately unobservable here; see
-   * `signature`) never fire — the signature gate below is the same
-   * dedupe-by-content-hash discipline registration logging uses. Returns an
-   * unsubscribe function.
-   */
-  onChange(listener: () => void): () => void {
-    this.changeListeners.add(listener);
-    return () => {
-      this.changeListeners.delete(listener);
-    };
-  }
-
-  /**
    * Track the browser's active tab. The message (sent by the intent client's
    * tools-link over `/tools`) carries which tab just became — or stopped
-   * being — its window's active tab. Never receiving one is fine: the
-   * directory simply reports no `activeTab` flags.
+   * being — its window's active tab, as a tab record in the sender's own id
+   * namespace. Never receiving one is fine: the directory simply reports no
+   * `activeTab` flags. Deliberately announces nothing: a tab switch is not an
+   * event the agent needs to hear about.
    */
   private activation(msg: Record<string, unknown>): void {
-    const tab = asRecord(msg.tab);
-    const chromeTabId = tab?.chromeTabId;
-    if (typeof chromeTabId !== "number" || typeof msg.active !== "boolean") {
+    const tab = readTab(msg.tab);
+    if (!tab || typeof msg.active !== "boolean") {
       return;
+    }
+    if (!TAB_ID_KEYS.some((key) => tab[key] !== undefined)) {
+      return; // a record with no id can neither activate nor deactivate anything
     }
     // One active tab per window; a sender that omits windowId shares a single
     // bucket (still exactly one active tab overall — coherent, just coarser).
-    const windowId = typeof tab?.windowId === "number" ? tab.windowId : -1;
+    const windowId = tab.windowId ?? -1;
     if (msg.active) {
-      this.activeTabs.set(windowId, chromeTabId);
-    } else if (this.activeTabs.get(windowId) === chromeTabId) {
+      this.activeTabs.set(windowId, tab);
+    } else if (sameTab(this.activeTabs.get(windowId), tab)) {
       // Only the currently-active tab may deactivate its window — a stale
       // deactivation must not clobber a newer activation.
       this.activeTabs.delete(windowId);
     }
-    // Deliberately NO change signal: activation is not in the signature
-    // (see `signature` — tab switches must not announce an unchanged set).
   }
 
   /** Whether a registration's page sits in some window's active tab. */
   private isActive(reg: PageToolRegistration): boolean {
-    const id = reg.tab?.chromeTabId;
-    if (id === undefined) {
-      return false;
-    }
     for (const active of this.activeTabs.values()) {
-      if (active === id) {
+      if (sameTab(active, reg.tab)) {
         return true;
       }
     }
     return false;
-  }
-
-  /**
-   * The observable state as a stable string: `ns|hash` per registration,
-   * sorted. Deliberately excludes clientId, so a page that reconnects (page
-   * reload, channel reload) and re-registers an unchanged set has an
-   * unchanged signature — a set's identity is its content hash, not its
-   * socket. Deliberately excludes the ACTIVE flag too (owner, 2026-07-16):
-   * activation flips on every tab switch, and firing "page tools changed"
-   * for an unchanged tool list thrashed the session (found live: switching
-   * between a tools tab and a plain tab announced the same four tools on
-   * every switch). Activation stays tracked — `list()` flags it and call
-   * routing steers by it — it just isn't a notification-worthy change.
-   */
-  private signature(): string {
-    const parts: string[] = [];
-    for (const conn of this.connections.values()) {
-      for (const reg of conn.registrations.values()) {
-        parts.push(`${reg.ns}|${reg.hash}`);
-      }
-    }
-    return parts.sort().join(",");
-  }
-
-  /**
-   * Schedule the debounced change check. The fire-time re-read means a burst
-   * (a reload's close + reconnect + re-register) is judged by its *net*
-   * effect: state that returns to what the listeners last heard about emits
-   * nothing.
-   */
-  private maybeSignalChange(): void {
-    if (this.changeTimer !== undefined) {
-      return; // a check is already pending; it re-reads the state when it fires
-    }
-    if (this.signature() === this.lastSignature) {
-      return;
-    }
-    const timer = setTimeout(() => {
-      this.changeTimer = undefined;
-      const sig = this.signature();
-      if (sig === this.lastSignature) {
-        return;
-      }
-      this.lastSignature = sig;
-      for (const listener of this.changeListeners) {
-        try {
-          listener();
-        } catch (err) {
-          this.log(
-            `page-tools: change listener failed: ${err instanceof Error ? err.message : String(err)}`,
-          );
-        }
-      }
-    }, this.changeDebounceMs);
-    // The pending check must not keep the process alive on its own.
-    if (typeof timer === "object" && "unref" in timer) {
-      timer.unref();
-    }
-    this.changeTimer = timer;
   }
 
   private register(clientId: string, msg: Record<string, unknown>): void {
@@ -375,17 +371,16 @@ export class PageToolDirectory {
       }));
     const hash = typeof msg.hash === "string" ? msg.hash : "";
     const previous = conn.registrations.get(msg.ns);
+    const tab = readTab(msg.tab);
     const entry: PageToolRegistration = {
       clientId,
       ns: msg.ns,
       ...(typeof msg.url === "string" ? { url: msg.url } : {}),
-      ...(asRecord(msg.tab) ? { tab: asRecord(msg.tab) as TabInfo } : {}),
+      ...(tab ? { tab } : {}),
       ...(asRecord(msg.source) ? { source: asRecord(msg.source) as SourceInfo } : {}),
       hash,
       tools,
-      // Absent on registrations from links predating the bit ⇒ active. The
-      // bit rides OUTSIDE the hash (the client excludes it), so a route flip
-      // updates this entry without waking the change signal.
+      // Absent on registrations from links predating the bit ⇒ active.
       active: msg.active !== false,
       registeredAt: this.now().toISOString(),
     };
@@ -399,7 +394,6 @@ export class PageToolDirectory {
       );
     }
     conn.send({ v: 1, type: "registered", ns: msg.ns, hash });
-    this.maybeSignalChange();
   }
 
   private settle(clientId: string, callId: string, msg: Record<string, unknown>): void {
@@ -420,9 +414,9 @@ export class PageToolDirectory {
   }
 
   /**
-   * Rank two same-namespace registrations for routing: the user's eye first
-   * (a window's active tab), then a live (non-parked) namespace over a parked
-   * one, then the newer registration. Shared by the shadow marking in
+   * Rank two same-namespace registrations for un-addressed routing: the user's
+   * eye first (a window's active tab), then a live (non-parked) namespace over
+   * a parked one, then the newer registration. Shared by the shadow marking in
    * {@link list} and the tie-break in {@link call}, so the list's marks and
    * the router's choice cannot disagree.
    */
@@ -438,13 +432,65 @@ export class PageToolDirectory {
   }
 
   /**
-   * Every current registration, across all connections — active-tab entries
-   * first (stable within each group): the agent reads the list top-down and
-   * the tab the user is looking at is the likeliest routing target. When two
-   * connections carry the SAME namespace, the losers are marked `shadowed`
-   * (the honest rendering of a duplicate — call routing prefers the winner).
+   * Whether a registration is on the tab a selector names. Every given field
+   * must hold; `url` matches the registration's live url exactly or by prefix
+   * (exact matches are preferred by the caller — see {@link select}).
    */
-  list(): PageToolRegistration[] {
+  private matchesTab(
+    reg: PageToolRegistration,
+    sel: TabSelector,
+    urlMode: "exact" | "prefix",
+  ): boolean {
+    const tab = reg.tab;
+    if (sel.chromeTabId !== undefined && tab?.chromeTabId !== sel.chromeTabId) {
+      return false;
+    }
+    if (sel.targetId !== undefined && tab?.targetId !== sel.targetId) {
+      return false;
+    }
+    if (sel.driverTab !== undefined && tab?.driverTab !== sel.driverTab) {
+      return false;
+    }
+    if (sel.url !== undefined) {
+      const url = reg.url ?? tab?.url;
+      if (url === undefined) {
+        return false;
+      }
+      if (urlMode === "exact" ? url !== sel.url : !url.startsWith(sel.url)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * The registrations a selector picks out of a candidate set. A url that
+   * matches some candidate EXACTLY restricts to exact matches; otherwise a
+   * prefix match stands (the app's origin, or a url `list_pages` printed
+   * before the page navigated within it).
+   */
+  private select(
+    candidates: PageToolRegistration[],
+    sel: TabSelector | undefined,
+  ): PageToolRegistration[] {
+    if (selectorIsEmpty(sel) || sel === undefined) {
+      return candidates;
+    }
+    const exact = candidates.filter((reg) => this.matchesTab(reg, sel, "exact"));
+    if (exact.length > 0 || sel.url === undefined) {
+      return exact;
+    }
+    return candidates.filter((reg) => this.matchesTab(reg, sel, "prefix"));
+  }
+
+  /**
+   * Every current registration, across all connections, or only those on the
+   * tab a selector names — active-tab entries first (stable within each
+   * group). When two connections carry the SAME namespace, the losers are
+   * marked `shadowed`: the honest rendering of a duplicate — an un-addressed
+   * call would go to the winner.
+   */
+  list(selector?: TabSelector & { clientId?: string }): PageToolRegistration[] {
     const out: PageToolRegistration[] = [];
     const winners = new Map<string, PageToolRegistration>();
     for (const conn of this.connections.values()) {
@@ -463,7 +509,45 @@ export class PageToolDirectory {
         reg.shadowed = true;
       }
     }
-    return out.sort((a, b) => Number(b.activeTab === true) - Number(a.activeTab === true));
+    const byClient =
+      selector?.clientId !== undefined
+        ? out.filter((reg) => reg.clientId === selector.clientId)
+        : out;
+    return this.select(byClient, selector).sort(
+      (a, b) => Number(b.activeTab === true) - Number(a.activeTab === true),
+    );
+  }
+
+  /**
+   * The same directory grouped by TAB — what `page_tools_list` serves: one
+   * entry per connected tab (a connection is a tab; the intent client dials
+   * one socket per tab that has tools), carrying the tab record the agent
+   * addresses calls with, and every namespace the tab holds.
+   */
+  tabs(selector?: TabSelector & { clientId?: string }): PageToolTabEntry[] {
+    const entries = new Map<string, PageToolTabEntry>();
+    for (const reg of this.list(selector)) {
+      let entry = entries.get(reg.clientId);
+      if (!entry) {
+        entry = {
+          clientId: reg.clientId,
+          ...(reg.url !== undefined ? { url: reg.url } : {}),
+          ...(reg.tab !== undefined ? { tab: reg.tab } : {}),
+          ...(reg.source !== undefined ? { source: reg.source } : {}),
+          ...(reg.activeTab ? { activeTab: true } : {}),
+          namespaces: [],
+        };
+        entries.set(reg.clientId, entry);
+      }
+      entry.namespaces.push({
+        ns: reg.ns,
+        hash: reg.hash,
+        active: reg.active,
+        ...(reg.shadowed ? { shadowed: true } : {}),
+        tools: reg.tools,
+      });
+    }
+    return [...entries.values()];
   }
 
   /** Cheap counts for a `/health` or `/debug` summary. */
@@ -481,45 +565,75 @@ export class PageToolDirectory {
 
   /** A short, agent-readable identifier for a candidate registration. */
   private describeCandidate(reg: PageToolRegistration): string {
+    const tab = reg.tab;
     return JSON.stringify({
       clientId: reg.clientId,
       ns: reg.ns,
       ...(reg.url ? { url: reg.url } : {}),
-      ...(reg.tab?.title ? { tab: reg.tab.title } : {}),
+      ...(tab?.title ? { title: tab.title } : {}),
+      ...(tab?.chromeTabId !== undefined ? { chromeTabId: tab.chromeTabId } : {}),
+      ...(tab?.targetId !== undefined ? { targetId: tab.targetId } : {}),
+      ...(tab?.driverTab !== undefined ? { driverTab: tab.driverTab } : {}),
       ...(this.isActive(reg) ? { activeTab: true } : {}),
       ...(reg.active ? {} : { parked: true }),
     });
   }
 
+  /** One line naming every connected tab, for "no such tab" errors. */
+  private describeTabs(): string {
+    const seen = new Set<string>();
+    const parts: string[] = [];
+    for (const conn of this.connections.values()) {
+      for (const reg of conn.registrations.values()) {
+        if (seen.has(reg.clientId)) {
+          continue;
+        }
+        seen.add(reg.clientId);
+        parts.push(this.describeCandidate(reg));
+      }
+    }
+    return parts.join(", ");
+  }
+
   /**
-   * Route a call to the one page registration that matches. `clientId`/`ns`
-   * narrow the search; either may be omitted when the match is already unique.
-   * Among several matches, a single one on the browser's active tab wins
-   * (MCP-B's routing rule: active tab first, else any tab holding the tool).
-   * Rejects on remaining ambiguity (listing the candidates), when nothing
-   * matches, on timeout, or if the page disconnects before answering.
+   * Route a call to the one page registration that matches. The tab selector,
+   * `clientId`, and `ns` each narrow; among several matches a single one on the
+   * browser's active tab wins, then a single live (non-parked) one. Rejects on
+   * remaining ambiguity (listing the candidates), when nothing matches, on
+   * timeout, or if the page disconnects before answering.
    */
   call(request: PageToolCall): Promise<unknown> {
-    const { clientId, ns, name, args, timeoutMs = DEFAULT_TIMEOUT_MS } = request;
-    let candidates: Array<{ conn: Connection; reg: PageToolRegistration }> = [];
+    const { tab, clientId, ns, name, args, timeoutMs = DEFAULT_TIMEOUT_MS } = request;
+    if (this.connections.size === 0) {
+      return Promise.reject(new Error(`no page connected — cannot call tool "${name}"`));
+    }
+    const all: PageToolRegistration[] = [];
     for (const conn of this.connections.values()) {
       if (clientId !== undefined && conn.clientId !== clientId) {
         continue;
       }
       for (const reg of conn.registrations.values()) {
-        if (ns !== undefined && reg.ns !== ns) {
-          continue;
-        }
-        if (reg.tools.some((t) => t.name === name)) {
-          candidates.push({ conn, reg });
+        if (ns === undefined || reg.ns === ns) {
+          all.push(reg);
         }
       }
     }
+    const onTab = this.select(all, tab);
+    if (onTab.length === 0 && tab !== undefined && !selectorIsEmpty(tab)) {
+      const known = this.describeTabs();
+      return Promise.reject(
+        new Error(
+          `no connected page matches tab ${describeSelector(tab)}` +
+            (known ? ` — connected: ${known}` : " — no page has registered tools"),
+        ),
+      );
+    }
+    let candidates = onTab.filter((reg) => reg.tools.some((t) => t.name === name));
     if (candidates.length > 1) {
       // Active-tab preference resolves cross-tab ambiguity only when it picks
       // exactly one candidate; two active matches (two namespaces in one tab)
       // or none fall through to the next narrowing.
-      const active = candidates.filter((c) => this.isActive(c.reg));
+      const active = candidates.filter((reg) => this.isActive(reg));
       if (active.length === 1) {
         candidates = active;
       }
@@ -527,37 +641,37 @@ export class PageToolDirectory {
     if (candidates.length > 1) {
       // Then a LIVE namespace beats a parked one (the gallery: the notebook
       // in view over its off-route twin) — again only when that is decisive.
-      const live = candidates.filter((c) => c.reg.active);
+      const live = candidates.filter((reg) => reg.active);
       if (live.length === 1) {
         candidates = live;
       }
     }
 
     if (candidates.length === 0) {
-      if (this.connections.size === 0) {
-        return Promise.reject(new Error(`no page connected — cannot call tool "${name}"`));
-      }
-      const known = this.list()
-        .flatMap((reg) => reg.tools.map((t) => `${reg.ns}/${t.name}`))
-        .join(", ");
+      const known = onTab.flatMap((reg) => reg.tools.map((t) => `${reg.ns}/${t.name}`)).join(", ");
       return Promise.reject(
         new Error(
           `no page tool "${name}"${ns !== undefined ? ` in namespace "${ns}"` : ""} is registered` +
+            (tab !== undefined && !selectorIsEmpty(tab) ? ` on tab ${describeSelector(tab)}` : "") +
             (known ? ` (available: ${known})` : ""),
         ),
       );
     }
     if (candidates.length > 1) {
-      const list = candidates.map((c) => this.describeCandidate(c.reg)).join(", ");
+      const list = candidates.map((reg) => this.describeCandidate(reg)).join(", ");
       return Promise.reject(
         new Error(
           `ambiguous tool "${name}" — ${candidates.length} registrations match; ` +
-            `narrow with clientId and/or ns. Candidates: ${list}`,
+            `name the tab (chromeTabId / targetId / driverTab / url) and/or ns. Candidates: ${list}`,
         ),
       );
     }
 
-    const { conn, reg } = candidates[0];
+    const reg = candidates[0];
+    const conn = this.connections.get(reg.clientId);
+    if (!conn) {
+      return Promise.reject(new Error("page disconnected before the tool call was sent"));
+    }
     const callId = this.newId();
     return new Promise<unknown>((resolve, reject) => {
       const timer = setTimeout(() => {

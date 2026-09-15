@@ -46,17 +46,10 @@
  *   <the meta, as JSON>
  *   --- end ---
  *
- * Page-tool transitions print the same delimited way — the register/unregister
- * events that `mcp` would voice to its session (as `tools/list_changed` + a
- * page-tools push) have no session here, so `serve` narrates them to stdout as
- * plain text: a diff of which `ns/tool` names appeared and disappeared, then
- * the current set.
- *
- *   --- page tools ---
- *   + morpho/plot_spectrum, morpho/set_range   (active tab: Morphogen)
- *   - aztec/step
- *   = now: morpho/plot_spectrum, morpho/set_range
- *   --- end ---
+ * Page-tool registrations are NOT narrated here (nor voiced to any session by
+ * `mcp`): the directory is a routing table the agent queries per tab, never an
+ * event source (page-tools.ts). The directory's own stderr log line per new
+ * tool-set hash is the only trace a debug run gets.
  *
  * Everything else worth watching narrates to **stderr** (never stdout — that is
  * the parseable protocol above), alongside the lifecycle lines: each connection
@@ -407,41 +400,6 @@ export async function runServe(options: ServeOptions = {}): Promise<ServeHandle>
   });
   installExitBackstop(registration);
 
-  // Narrate page-tool transitions to stdout (see the header's stdout protocol).
-  // The `/tools` websocket feeds `web.pageTools` here exactly as it would under
-  // `mcp`; the only thing missing in a debug server is the MCP layer that would
-  // voice the change to a session. So we diff the tool-name set on every change
-  // and print what registered/unregistered — the register/unregister visibility
-  // a debug run needs, without an agent on the wire.
-  const toolNames = (): Set<string> =>
-    new Set(web.pageTools.list().flatMap((reg) => reg.tools.map((t) => `${reg.ns}/${t.name}`)));
-  const activeTabLabel = (): string | undefined => {
-    const active = web.pageTools.list().find((reg) => reg.activeTab);
-    return active ? (active.tab?.title ?? active.tab?.url ?? active.url) : undefined;
-  };
-  let lastTools = new Set<string>();
-  const unsubscribeTools = web.pageTools.onChange(() => {
-    const current = toolNames();
-    const added = [...current].filter((n) => !lastTools.has(n));
-    const removed = [...lastTools].filter((n) => !current.has(n));
-    lastTools = current;
-    // onChange coalesces by a content signature, but an active-tab flip changes
-    // the signature without changing the tool set — nothing to narrate then.
-    if (added.length === 0 && removed.length === 0) {
-      return;
-    }
-    const label = activeTabLabel();
-    const lines = ["--- page tools ---"];
-    if (added.length > 0) {
-      lines.push(`+ ${added.join(", ")}${label !== undefined ? ` (active tab: ${label})` : ""}`);
-    }
-    if (removed.length > 0) {
-      lines.push(`- ${removed.join(", ")}`);
-    }
-    lines.push(`= now: ${current.size === 0 ? "none" : [...current].join(", ")}`, "--- end ---");
-    process.stdout.write(`${lines.join("\n")}\n`);
-  });
-
   // Dev-only STALENESS watch (AIUI_CHANNEL_WATCH=1, source only). Like `mcp`, no
   // hot-reload — but a debug server has no agent to tell, so the notice goes to
   // stderr, next to the wire narration. Restart the debug channel to apply edits.
@@ -457,12 +415,7 @@ export async function runServe(options: ServeOptions = {}): Promise<ServeHandle>
   const close = createShutdown({
     channelLog,
     registration,
-    closers: [
-      stopWatch,
-      unsubscribeTools,
-      () => web.close().catch(() => {}),
-      () => recorder?.close(),
-    ],
+    closers: [stopWatch, () => web.close().catch(() => {}), () => recorder?.close()],
   });
   // `once`, not `on`: after our graceful pass the default handler is back, so
   // a second Ctrl-C during a wedged shutdown still kills the process.

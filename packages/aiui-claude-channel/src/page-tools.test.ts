@@ -1,8 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
-  formatPageToolsChanged,
   PageToolDirectory,
   type PageToolDirectoryOptions,
+  type PageToolTab,
   type ServerToClientMessage,
 } from "./page-tools";
 
@@ -19,13 +19,10 @@ function makeDirectory(options: Partial<PageToolDirectoryOptions> = {}) {
   return { dir, log };
 }
 
-/** The `activation` message the intent client's tools-link would send. */
-const activation = (
-  dir: PageToolDirectory,
-  clientId: string,
-  tab: { chromeTabId?: number; windowId?: number },
-  active: boolean,
-) => dir.handleClientMessage(clientId, { v: 1, type: "activation", tab, active });
+/** The `activation` message the intent client's tools-link would send — a tab
+ * record in the sender's own id namespace (chrome ids, or the CDP tier's). */
+const activation = (dir: PageToolDirectory, clientId: string, tab: PageToolTab, active: boolean) =>
+  dir.handleClientMessage(clientId, { v: 1, type: "activation", tab, active });
 
 /**
  * Attach a page connection whose named handlers answer the calls the directory
@@ -139,7 +136,7 @@ describe("namespace activity + shadow marking (the page-tools proposal, git hist
     expect(dir.list()[0]?.active).toBe(true);
     page.register("aztec", tools, "h1", { active: false }); // route left the page
     expect(dir.list()[0]?.active).toBe(false);
-    // The flip is not a "page tools changed" event: hash unchanged, one log line.
+    // Same hash: the registration line is logged once, not per flip.
     expect(log.filter((l) => l.includes("aztec declared"))).toHaveLength(1);
   });
 
@@ -330,6 +327,9 @@ describe("PageToolDirectory tab activation", () => {
   it("ignores malformed activation messages", () => {
     const { dir } = makeDirectory();
     const page = connectPage(dir);
+    page.register("morpho", [{ name: "x", description: "d" }], "h1", {
+      tab: { chromeTabId: 10, windowId: 1 },
+    });
     expect(() =>
       dir.handleClientMessage(page.clientId, { v: 1, type: "activation", active: true }),
     ).not.toThrow();
@@ -341,6 +341,22 @@ describe("PageToolDirectory tab activation", () => {
         active: true,
       }),
     ).not.toThrow();
+    // A record with no id at all (url only) activates nothing: two tabs may share a url.
+    activation(dir, page.clientId, { url: "http://localhost/morpho" }, true);
+    expect(dir.list()[0].activeTab).toBeUndefined();
+  });
+
+  it("activation in the CDP host's id namespace flags a CDP-registered tab", () => {
+    const { dir } = makeDirectory();
+    const page = connectPage(dir);
+    page.register("morpho", [{ name: "x", description: "d" }], "h1", {
+      tab: { driverTab: 3, targetId: "T-AAA", url: "http://localhost/morpho" },
+    });
+    // The plain-page host has no chrome ids; it reports its own handle.
+    activation(dir, page.clientId, { driverTab: 3, windowId: 0 }, true);
+    expect(dir.list()[0].activeTab).toBe(true);
+    activation(dir, page.clientId, { driverTab: 4, windowId: 0 }, true);
+    expect(dir.list()[0].activeTab).toBeUndefined();
   });
 
   it("prefers the active tab's registration on an otherwise ambiguous call", async () => {
@@ -377,163 +393,139 @@ describe("PageToolDirectory tab activation", () => {
   });
 });
 
-describe("PageToolDirectory change signal", () => {
-  beforeEach(() => {
-    vi.useFakeTimers();
-  });
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  /** A directory with a change counter attached; debounce left at the default 500ms. */
-  function makeObserved() {
-    const made = makeDirectory();
-    let changes = 0;
-    const unsubscribe = made.dir.onChange(() => {
-      changes += 1;
+describe("PageToolDirectory tab addressing (the channel-wakeups decision)", () => {
+  /** Two hosts' worth of tabs: an extension-registered app and a CDP-registered one. */
+  function twoHosts() {
+    const { dir } = makeDirectory();
+    const ext = connectPage(dir, { report: () => "ext-report" });
+    ext.register("morpho", [{ name: "report", description: "d" }], "h1", {
+      url: "http://localhost:5173/morpho",
+      tab: {
+        chromeTabId: 10,
+        windowId: 1,
+        tabIndex: 2,
+        url: "http://localhost:5173/morpho",
+        title: "Morphogen",
+      },
     });
-    return { ...made, changes: () => changes, unsubscribe };
+    const cdp = connectPage(dir, { report: () => "cdp-report", regrow: () => "grown" });
+    cdp.register(
+      "aztec",
+      [
+        { name: "report", description: "d" },
+        { name: "regrow", description: "d" },
+      ],
+      "h2",
+      {
+        url: "http://localhost:5173/aztec",
+        tab: {
+          targetId: "T-AZTEC",
+          driverTab: 4,
+          url: "http://localhost:5173/aztec",
+          title: "Aztec",
+        },
+      },
+    );
+    return { dir, ext, cdp };
   }
 
-  it("emits once, debounced, for a burst of registrations", () => {
-    const { dir, changes } = makeObserved();
-    const page = connectPage(dir);
-    page.register("morpho", [{ name: "a", description: "d" }], "h1");
-    page.register("aztec", [{ name: "b", description: "d" }], "h2");
-    expect(changes()).toBe(0); // nothing before the quiet period
-
-    vi.advanceTimersByTime(500);
-    expect(changes()).toBe(1);
-
-    vi.advanceTimersByTime(5000);
-    expect(changes()).toBe(1); // no re-emission without a new change
+  it("list() narrows by any host id the <tab> marker carries", () => {
+    const { dir, ext, cdp } = twoHosts();
+    expect(dir.list({ chromeTabId: 10 }).map((r) => r.clientId)).toEqual([ext.clientId]);
+    expect(dir.list({ targetId: "T-AZTEC" }).map((r) => r.clientId)).toEqual([cdp.clientId]);
+    expect(dir.list({ driverTab: 4 }).map((r) => r.clientId)).toEqual([cdp.clientId]);
+    expect(dir.list({ clientId: ext.clientId }).map((r) => r.ns)).toEqual(["morpho"]);
+    // Ids from the OTHER host's namespace match nothing — never a wrong tab.
+    expect(dir.list({ chromeTabId: 4 })).toEqual([]);
+    expect(dir.list({ driverTab: 10 })).toEqual([]);
   });
 
-  it("stays silent for a same-hash re-registration", () => {
-    const { dir, changes } = makeObserved();
-    const page = connectPage(dir);
-    const tools = [{ name: "a", description: "d" }];
-    page.register("morpho", tools, "h1");
-    vi.advanceTimersByTime(500);
-    expect(changes()).toBe(1);
-
-    page.register("morpho", tools, "h1"); // HMR/reload churn
-    vi.advanceTimersByTime(5000);
-    expect(changes()).toBe(1);
+  it("list() narrows by url — exact first, then prefix", () => {
+    const { dir, ext, cdp } = twoHosts();
+    expect(dir.list({ url: "http://localhost:5173/aztec" }).map((r) => r.clientId)).toEqual([
+      cdp.clientId,
+    ]);
+    // A prefix (the app origin) matches both; an exact match, when one exists, wins alone.
+    expect(
+      dir
+        .list({ url: "http://localhost:5173/" })
+        .map((r) => r.clientId)
+        .sort(),
+    ).toEqual([ext.clientId, cdp.clientId].sort());
+    expect(dir.list({ url: "http://localhost:5173/morpho" }).map((r) => r.clientId)).toEqual([
+      ext.clientId,
+    ]);
+    expect(dir.list({ url: "http://elsewhere/" })).toEqual([]);
   });
 
-  it("stays silent when a reconnect restores the same set within the window", () => {
-    const { dir, changes } = makeObserved();
-    const a = connectPage(dir);
-    a.register("morpho", [{ name: "a", description: "d" }], "h1");
-    vi.advanceTimersByTime(500);
-    expect(changes()).toBe(1);
-
-    // A channel/page reload: socket close, then a fresh connection re-registers
-    // the identical set (same ns + hash, new clientId) inside the debounce.
-    dir.removeConnection(a.clientId);
-    const b = connectPage(dir);
-    b.register("morpho", [{ name: "a", description: "d" }], "h1");
-    vi.advanceTimersByTime(5000);
-    expect(changes()).toBe(1); // net effect: nothing changed
-  });
-
-  it("emits when a connection close takes registrations with it", () => {
-    const { dir, changes } = makeObserved();
-    const page = connectPage(dir);
-    page.register("morpho", [{ name: "a", description: "d" }], "h1");
-    vi.advanceTimersByTime(500);
-    expect(changes()).toBe(1);
-
-    dir.removeConnection(page.clientId);
-    vi.advanceTimersByTime(500);
-    expect(changes()).toBe(2);
-  });
-
-  it("NEVER emits on activation flips — tab switches must not announce an unchanged set", () => {
-    // The thrash found live (2026-07-15): switching between a tools tab and a
-    // plain tab re-announced the same four tools on every switch, because the
-    // active flag sat in the change signature. Activation stays tracked (the
-    // list() flag, call routing) — it just isn't a notification-worthy change.
-    const { dir, changes } = makeObserved();
-    const page = connectPage(dir);
-    page.register("testapp", [{ name: "report", description: "d" }], "h1", {
-      tab: { chromeTabId: 10, windowId: 1 },
+  it("tabs() groups the directory by connected tab, record first", () => {
+    const { dir, ext, cdp } = twoHosts();
+    activation(dir, ext.clientId, { chromeTabId: 10, windowId: 1 }, true);
+    const tabs = dir.tabs();
+    expect(tabs.map((t) => t.clientId)).toEqual([ext.clientId, cdp.clientId]); // active first
+    expect(tabs[0]).toMatchObject({
+      url: "http://localhost:5173/morpho",
+      tab: { chromeTabId: 10, windowId: 1, tabIndex: 2, title: "Morphogen" },
+      activeTab: true,
+      namespaces: [{ ns: "morpho", active: true, tools: [{ name: "report" }] }],
     });
-    vi.advanceTimersByTime(500);
-    expect(changes()).toBe(1); // the registration itself, once
-
-    // The user flips between the tools tab (10) and a plain tab (99), twice.
-    for (const tabId of [99, 10, 99, 10]) {
-      activation(dir, page.clientId, { chromeTabId: tabId, windowId: 1 }, true);
-      vi.advanceTimersByTime(5000);
-    }
-    expect(changes()).toBe(1); // not a peep
-
-    // …and the flag itself still tracks: the directory's list() reflects the
-    // final activation even though no notification fired for it.
-    expect(dir.list().find((r) => r.ns === "testapp")?.activeTab).toBe(true);
+    expect(tabs[1].activeTab).toBeUndefined();
+    expect(tabs[1].namespaces[0].tools.map((t) => t.name)).toEqual(["report", "regrow"]);
+    expect(dir.tabs({ targetId: "T-AZTEC" }).map((t) => t.clientId)).toEqual([cdp.clientId]);
   });
 
-  it("stops notifying after unsubscribe", () => {
-    const { dir, changes, unsubscribe } = makeObserved();
-    unsubscribe();
-    const page = connectPage(dir);
-    page.register("morpho", [{ name: "a", description: "d" }], "h1");
-    vi.advanceTimersByTime(500);
-    expect(changes()).toBe(0);
+  it("an addressed call routes to the named tab, never to a tie-break", async () => {
+    const { dir, ext } = twoHosts();
+    // The user is looking at the extension's tab — irrelevant once the tab is named.
+    activation(dir, ext.clientId, { chromeTabId: 10, windowId: 1 }, true);
+    await expect(dir.call({ name: "report", tab: { targetId: "T-AZTEC" } })).resolves.toBe(
+      "cdp-report",
+    );
+    await expect(dir.call({ name: "report", tab: { driverTab: 4 } })).resolves.toBe("cdp-report");
+    await expect(dir.call({ name: "report", tab: { chromeTabId: 10 } })).resolves.toBe(
+      "ext-report",
+    );
+    await expect(
+      dir.call({ name: "report", tab: { url: "http://localhost:5173/aztec" } }),
+    ).resolves.toBe("cdp-report");
+    // Un-addressed, the tie-break still stands for the lazy case.
+    await expect(dir.call({ name: "report" })).resolves.toBe("ext-report");
   });
 
-  it("contains a throwing listener and still notifies the rest", () => {
-    const { dir, log } = makeDirectory();
-    dir.onChange(() => {
-      throw new Error("listener boom");
-    });
-    let heard = 0;
-    dir.onChange(() => {
-      heard += 1;
-    });
-    const page = connectPage(dir);
-    page.register("morpho", [{ name: "a", description: "d" }], "h1");
-    vi.advanceTimersByTime(500);
-    expect(heard).toBe(1);
-    expect(log.some((line) => line.includes("listener boom"))).toBe(true);
-  });
-});
-
-describe("formatPageToolsChanged", () => {
-  it("names every tool and the active tab", () => {
-    const { dir } = makeDirectory();
-    const page = connectPage(dir);
-    page.register("morpho", [{ name: "set-params", description: "d" }], "h1", {
-      tab: { chromeTabId: 10, windowId: 1, title: "Morphogen" },
-    });
-    page.register("aztec", [{ name: "report", description: "d" }], "h2", {
-      tab: { chromeTabId: 11, windowId: 1 },
-      url: "http://localhost/aztec",
-    });
-    activation(dir, page.clientId, { chromeTabId: 10, windowId: 1 }, true);
-
-    expect(formatPageToolsChanged(dir.list())).toBe(
-      "page tools changed: morpho/set-params, aztec/report (active tab: Morphogen)",
+  it("a tab that is not connected is its own error, naming what IS connected", async () => {
+    const { dir } = twoHosts();
+    await expect(dir.call({ name: "report", tab: { chromeTabId: 99 } })).rejects.toThrow(
+      /no connected page matches tab \{"chromeTabId":99\}.*connected:.*"chromeTabId":10.*"targetId":"T-AZTEC"/,
     );
   });
 
-  it("falls back to the url and degrades without an active tab", () => {
-    const { dir } = makeDirectory();
-    const page = connectPage(dir);
-    page.register("aztec", [{ name: "report", description: "d" }], "h1", {
-      tab: { chromeTabId: 11, windowId: 1, url: "http://localhost/aztec" },
-    });
-    expect(formatPageToolsChanged(dir.list())).toBe("page tools changed: aztec/report");
-
-    activation(dir, page.clientId, { chromeTabId: 11, windowId: 1 }, true);
-    expect(formatPageToolsChanged(dir.list())).toBe(
-      "page tools changed: aztec/report (active tab: http://localhost/aztec)",
+  it("a tool missing on the named tab says so, scoped to that tab", async () => {
+    const { dir } = twoHosts();
+    await expect(dir.call({ name: "regrow", tab: { chromeTabId: 10 } })).rejects.toThrow(
+      /no page tool "regrow" is registered on tab \{"chromeTabId":10\} \(available: morpho\/report\)/,
     );
   });
 
-  it("says so when the directory empties", () => {
-    expect(formatPageToolsChanged([])).toBe("page tools changed: none registered");
+  it("the ambiguity error tells the agent to name the tab, with each candidate's ids", async () => {
+    const { dir } = twoHosts();
+    await expect(dir.call({ name: "report" })).rejects.toThrow(
+      /name the tab \(chromeTabId \/ targetId \/ driverTab \/ url\).*"chromeTabId":10.*"targetId":"T-AZTEC","driverTab":4/,
+    );
+  });
+
+  it("a url prefix that spans two tabs errors as ambiguous rather than guessing", async () => {
+    const { dir } = twoHosts();
+    await expect(
+      dir.call({ name: "report", tab: { url: "http://localhost:5173/" } }),
+    ).rejects.toThrow(/ambiguous tool "report"/);
+  });
+
+  it("registers only the tab-record fields it knows, type-checked", () => {
+    const { dir } = makeDirectory();
+    const page = connectPage(dir);
+    page.register("morpho", [{ name: "x", description: "d" }], "h1", {
+      tab: { chromeTabId: "ten", targetId: 7, driverTab: 2, title: "T", bogus: true },
+    });
+    expect(dir.list()[0].tab).toEqual({ driverTab: 2, title: "T" });
   });
 });

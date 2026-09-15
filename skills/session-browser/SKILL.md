@@ -13,18 +13,28 @@ tools over MCP (below), and the channel server exposes endpoints worth knowing.
 
 Pages built with `agentToolkit` (from `@habemus-papadum/aiui-viz`) publish their tool surface
 into `window.__AIUI__.tools`; the **intent client** (the side panel, or the `/intent/` page)
-relays each tab's tools to the channel over one WebSocket per tab. The session sees them as two
-MCP tools alongside `channel_info` and `channel_reload`:
+relays each tab's tools to the channel over one WebSocket per tab. The session sees them through
+two fixed **meta-tools** alongside `channel_info` and `channel_reload` — page tools are never
+individual MCP tools, and **nothing is pushed to you when they change**: the channel keeps a
+routing table, not an event feed. Ask when you have a question.
 
-- **`page_tools_list`** — discover. One entry per connected page namespace: `clientId`, `ns`,
-  `url`, tab identity, `activeTab`, `parked` (the activity bit — a page that routed away parks
-  its namespace; parked tools stay listed and callable), `shadowed` (loser of a namespace
-  collision), and each tool's `name`/`description`/`inputSchema`. **Call this first.** An
-  EMPTY list usually means **no intent client is running** — the page dials nothing itself;
-  the panel owns the socket.
-- **`page_tools_call`** — invoke. Args `{ name, args?, ns?, clientId? }`. Ambiguity resolves
-  automatically in two stages — the active tab first, then a live (non-parked) namespace —
-  and only then errors, **listing the candidates**; pass `ns` and/or `clientId` to pick one.
+- **`page_tools_list`** — discover, **by tab**. Returns one entry per connected tab: `clientId`,
+  `url`, the `tab` record (url, title, and the ids the host has — `chromeTabId`/`windowId`/
+  `tabIndex` under the extension, `targetId`/`driverTab` under the plain-page CDP host),
+  `activeTab` (the tab the user is looking at, when known), and `namespaces[]` — each with `ns`,
+  `active` (false = the app parked it, off-route; still callable), `shadowed`, and its
+  `tools[]` (`name`/`description`/`inputSchema`). Name a tab with any of `chromeTabId`,
+  `targetId`, `driverTab`, `url` (exact href or a prefix), or `clientId`; no arguments lists
+  every tab. A named tab that is not connected errors and **names the tabs that are**. An EMPTY
+  list means **no intent client is running** — the page dials nothing itself.
+- **`page_tools_call`** — invoke. Args `{ name, args?, ns?, <the same tab args> }`. **Always name
+  the tab when more than one is connected.** Un-addressed, a unique match routes, the tab in view
+  wins a tie, and anything still ambiguous errors listing the candidates with their ids.
+
+**Where the tab ids come from.** The prompt's `[current tab: <tab …/>]` marker carries them —
+copy `chrome-tab-id` → `chromeTabId`, `cdp-target-id` → `targetId`, `driver-tab` → `driverTab`.
+For a tab you opened through the DevTools MCP, `list_pages` prints its url: pass that as `url`.
+Whichever host is running, the tab's url works in both directions.
 
 Every aiui app carries a standard surface via `registerStandardTools`: `report`
 (`format: "brief" | "full"` — controls, cells, actions, bridge failures, and the live
@@ -33,12 +43,8 @@ re-read), `locate` (element → source/cell stamps), plus **one real named tool 
 `action()`**. A page without its own reporter still gets a synthetic `report` — the single
 most useful call.
 
-Flow: **list, then call.** After a call that mutates state, **read back in a separate call,
-not the same tick** — Solid batches writes; a same-tick read lies.
-
-Tool-set changes announce themselves: the channel pushes a session line
-(`page tools changed: …`) plus `tools/list_changed` when the directory genuinely changes —
-never on mere tab switches, activation flips, or same-hash re-registrations.
+Flow: **list (by tab), then call (by tab).** After a call that mutates state, **read back in a
+separate call, not the same tick** — Solid batches writes; a same-tick read lies.
 
 ## Channel server endpoints
 
@@ -77,7 +83,7 @@ Prompts delivered by the aiui channel open with a context block: a sentence nami
 tool (and whether an instrumented aiui app was detected), the tab as a canonical XML marker —
 
 > [current tab: &lt;tab url="…" title="…" aiui-app="true" chrome-tab-id="…" window-id="…"
-> tab-index="…" cdp-target-id="…"/&gt;]
+> tab-index="…" cdp-target-id="…" driver-tab="…"/&gt;]
 
 — a source-root line ("Relative paths in this prompt are relative to: …"), and a
 **browser-tooling alignment sentence**: whether the Chrome DevTools MCP attached to this
@@ -88,16 +94,19 @@ computed per launch, not boilerplate. The other injection markers (`[screenshot 
 outputs in the
 [Prompt Rendering Reference](../../packages/aiui-claude-channel/docs/prompt-rendering.md).
 
-The `<tab>` ids live in **different namespaces**, and none of them is an MCP pageId:
+There are **two consumers** of a tab reference, and the marker's ids serve them differently:
 
-| Id in the marker | Namespace | What you can do with it |
-| ---------------- | --------- | ----------------------- |
-| `chrome-tab-id`, `window-id`, `tab-index` | Chrome extension Tabs API | Correlation hints only. No MCP tool accepts them. Tab index drifts as tabs move. |
-| `cdp-target-id` | Chrome DevTools Protocol `Target` domain | Only useful with raw CDP access. Not accepted by the MCP tools. |
-| `driver-tab` | The plain-page CDP host's own tab handle | Another hint; same rules. |
-| `pageId` | Chrome DevTools MCP | The **only** id `select_page` accepts — and it exists only in `list_pages` output. Never guess it. |
+| Id in the marker | Namespace | Page tools (`page_tools_*`) | DevTools MCP |
+| ---------------- | --------- | --------------------------- | ------------ |
+| `chrome-tab-id` (+ `window-id`, `tab-index`) | Chrome extension Tabs API | Pass as `chromeTabId` — exact. | Hint only. |
+| `cdp-target-id` | CDP `Target` domain | Pass as `targetId` — exact. | Hint only; no MCP tool accepts it. |
+| `driver-tab` | The plain-page host's own handle | Pass as `driverTab` — exact. | Hint only. |
+| `url` (+ `title`) | The page itself | Pass as `url`. | **The join**: match it in `list_pages`. |
+| `pageId` | Chrome DevTools MCP | — | The **only** id `select_page` accepts, and it exists only in `list_pages` output. Never guess it. |
 
-The workflow:
+**For page tools**: copy an id from the marker into `page_tools_list` / `page_tools_call`. Done.
+
+**For the DevTools MCP** (screenshots, evaluate, clicks):
 
 1. Call `list_pages`.
 2. Match the intended page by **URL and title** from the context block.
@@ -107,7 +116,8 @@ The workflow:
 
 If several tabs show the same URL and title (duplicate tabs of one app), there is no page-side
 tab stamp to read — disambiguate by observable state (evaluate a distinguishing value in each
-candidate), or ask the user which tab they mean.
+candidate), or ask the user which tab they mean. Going the other way — from a tab you opened
+with `new_page` to its page tools — pass the url `list_pages` prints as `url`.
 
 The context block's **source root** is the code that renders the page in that tab: edit
 there, and the dev server hot-reloads the tab you just selected.

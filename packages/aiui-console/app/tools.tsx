@@ -1,8 +1,9 @@
 /**
  * The page-tools ledger — the CHANNEL's view of every registered namespace
- * (the page-tools design notes, step 3 — git history). This is what the
- * agent's `page_tools_list` actually sees: registrations with their activity
- * bits and shadow marks, one row per (registration, tool). The page-side twin is
+ * (the page-tools design notes, step 3 — git history). This is the directory
+ * the agent's `page_tools_list` serves (grouped by tab there; flat rows here):
+ * registrations with their activity bits and shadow marks, one row per
+ * (registration, tool). The page-side twin is
  * `window.__AIUI__.tools.ledger()` in the app's own console; when the two
  * disagree, THIS one is the truth the agent acts on.
  *
@@ -61,7 +62,7 @@ export function ToolsPage(): JSX.Element {
       <header class="masthead">
         <h1>page tools</h1>
         <p class="tagline">
-          the channel's ledger — what <code>page_tools_list</code> serves the agent.{" "}
+          the channel's ledger — the directory <code>page_tools_list</code> serves the agent.{" "}
           <a href={CONSOLE_HOME_PATH}>← console</a>
         </p>
       </header>

@@ -48,8 +48,9 @@ Grouped by role. Each line names the file(s) that own it.
   "read the registry dir" — nothing more.
 
 ### 5. Session / tab description — three distinct things
-- **`page-tools.ts`** (`/tools`): which tabs expose which tools; drives
-  `tools/list_changed` + the page-tools push.
+- **`page-tools.ts`** (`/tools`): which tabs expose which tools — a routing
+  table the agent queries per tab (`page_tools_list` / `page_tools_call`),
+  never an event source: nothing about it is pushed into the session.
 - **`session-hub.ts`** (`/session`): presence and arming across a session's tabs
   and the iPad.
 - **`launch-info.ts`**: how *this* session was assembled (browser wiring),

@@ -57,7 +57,10 @@ export {
   type PageToolRegistration,
   type PageToolSend,
   type PageToolSummary,
+  type PageToolTab,
+  type PageToolTabEntry,
   type ServerToClientMessage,
+  type TabSelector,
 } from "./page-tools";
 export { augmentTextPrompt, defaultFormats, textConcatFormat } from "./processors";
 export {

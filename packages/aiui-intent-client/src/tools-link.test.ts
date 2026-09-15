@@ -2,8 +2,8 @@
 /**
  * tools-link.test.ts — the panel's page-tools bridge: one socket per
  * tab-with-tools, lifecycle-by-disconnect, call round trips, activation on
- * tab change. Driven through the FakeBus (page events in) and a fake socket
- * factory (the channel side observed).
+ * tab change, and the honest per-host tab record. Driven through the FakeBus
+ * (page events in) and a fake socket factory (the channel side observed).
  */
 import type { PageToolDescriptor } from "@habemus-papadum/aiui-claude-channel";
 import { describe, expect, expectTypeOf, it } from "vitest";
@@ -57,7 +57,13 @@ describe("createToolsLink", () => {
   it("one socket per tab-with-tools; registration carries tab identity", () => {
     const bus = fakeBus({ activeTab: 7 });
     const { all, factory } = fakeSockets();
-    createToolsLink({ host: bus, port: () => 5050, windowId: 3, socketFactory: factory });
+    createToolsLink({
+      host: bus,
+      port: () => 5050,
+      tabIdKey: "chromeTabId",
+      windowId: 3,
+      socketFactory: factory,
+    });
 
     bus.firePageEvent({ kind: "pageTools", tab: 7, registrations: REGS });
     bus.firePageEvent({ kind: "pageTools", tab: 9, registrations: REGS });
@@ -77,7 +83,12 @@ describe("createToolsLink", () => {
   it("an EMPTY registration closes the socket — the directory forgets on close", () => {
     const bus = fakeBus({ activeTab: 7 });
     const { all, factory } = fakeSockets();
-    createToolsLink({ host: bus, port: () => 5050, socketFactory: factory });
+    createToolsLink({
+      host: bus,
+      port: () => 5050,
+      tabIdKey: "chromeTabId",
+      socketFactory: factory,
+    });
 
     bus.firePageEvent({ kind: "pageTools", tab: 7, registrations: REGS });
     all[0].emit("open");
@@ -89,7 +100,12 @@ describe("createToolsLink", () => {
   it("routes a call to the page and the result back on the same socket", async () => {
     const bus = fakeBus({ activeTab: 7 });
     const { all, factory } = fakeSockets();
-    createToolsLink({ host: bus, port: () => 5050, socketFactory: factory });
+    createToolsLink({
+      host: bus,
+      port: () => 5050,
+      tabIdKey: "chromeTabId",
+      socketFactory: factory,
+    });
     bus.firePageEvent({ kind: "pageTools", tab: 7, registrations: REGS });
     all[0].emit("open");
     bus.clearLog();
@@ -118,7 +134,13 @@ describe("createToolsLink", () => {
   it("sends activation on tab change — engagement follows the eye", () => {
     const bus = fakeBus({ activeTab: 7 });
     const { all, factory } = fakeSockets();
-    createToolsLink({ host: bus, port: () => 5050, windowId: 3, socketFactory: factory });
+    createToolsLink({
+      host: bus,
+      port: () => 5050,
+      tabIdKey: "chromeTabId",
+      windowId: 3,
+      socketFactory: factory,
+    });
     bus.firePageEvent({ kind: "pageTools", tab: 7, registrations: REGS });
     all[0].emit("open");
 
@@ -132,10 +154,81 @@ describe("createToolsLink", () => {
     });
   });
 
+  it("the CDP tier registers its handle as driverTab and tabInfo's target id — never a chrome id", async () => {
+    const bus = fakeBus({ activeTab: 7 });
+    // A plain-page host: tabInfo knows the CDP target and the driver handle.
+    const host = {
+      ...bus,
+      targeting: {
+        ...bus.targeting,
+        tabInfo: async (tab: number) => ({
+          url: `http://app/${tab}`,
+          title: `app ${tab}`,
+          targetId: `T-${tab}`,
+          driverTab: tab,
+        }),
+      },
+    };
+    const { all, factory } = fakeSockets();
+    createToolsLink({ host, port: () => 5050, tabIdKey: "driverTab", socketFactory: factory });
+    bus.firePageEvent({ kind: "pageTools", tab: 7, registrations: REGS });
+    all[0].emit("open");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const registers = all[0].sent.map((s) => JSON.parse(s)).filter((m) => m.type === "register");
+    // The first register (before tabInfo answered) already names the tab honestly…
+    expect(registers[0].tab).toEqual({ driverTab: 7 });
+    expect(registers[0].tab.chromeTabId).toBeUndefined();
+    // …and the enriched one carries the target id + url/title the agent joins on.
+    expect(registers.at(-1)).toMatchObject({
+      url: "http://app/7",
+      tab: { driverTab: 7, targetId: "T-7", url: "http://app/7", title: "app 7" },
+    });
+    expect(registers.at(-1).tab.chromeTabId).toBeUndefined();
+
+    bus.switchTab(9);
+    const activation = all[0].sent.map((s) => JSON.parse(s)).find((m) => m.type === "activation");
+    expect(activation.tab).toEqual({ driverTab: 9, windowId: 0 });
+  });
+
+  it("a navigation re-registers with the new url (the title dropped until the page reports)", async () => {
+    const bus = fakeBus({ activeTab: 7 });
+    bus.setTabUrl(7, "http://app/a", "Page A");
+    const { all, factory } = fakeSockets();
+    createToolsLink({
+      host: bus,
+      port: () => 5050,
+      tabIdKey: "chromeTabId",
+      socketFactory: factory,
+    });
+    bus.firePageEvent({ kind: "pageTools", tab: 7, registrations: REGS });
+    all[0].emit("open");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const before = all[0].sent.map((s) => JSON.parse(s)).filter((m) => m.type === "register");
+    expect(before.at(-1)).toMatchObject({ url: "http://app/a", tab: { title: "Page A" } });
+
+    bus.firePageEvent({ kind: "navigation", tab: 7, from: "http://app/a", to: "http://app/b" });
+    const after = all[0].sent.map((s) => JSON.parse(s)).filter((m) => m.type === "register");
+    expect(after).toHaveLength(before.length + 1);
+    expect(after.at(-1)).toMatchObject({
+      url: "http://app/b",
+      tab: { chromeTabId: 7, url: "http://app/b" },
+    });
+    expect(after.at(-1).tab.title).toBeUndefined();
+    // A navigation on a tab with no link is nothing to re-register.
+    bus.firePageEvent({ kind: "navigation", tab: 8, from: "x", to: "y" });
+    expect(all).toHaveLength(1);
+  });
+
   it("registration carries the activity bit and a content hash (change detection)", () => {
     const bus = fakeBus({ activeTab: 7 });
     const { all, factory } = fakeSockets();
-    createToolsLink({ host: bus, port: () => 5050, socketFactory: factory });
+    createToolsLink({
+      host: bus,
+      port: () => 5050,
+      tabIdKey: "chromeTabId",
+      socketFactory: factory,
+    });
     bus.firePageEvent({
       kind: "pageTools",
       tab: 7,
@@ -148,7 +241,7 @@ describe("createToolsLink", () => {
     expect(register.hash.length).toBeGreaterThan(0);
 
     // A route flip re-registers with the SAME hash (activity rides outside
-    // it), so the directory updates the bit without a "changed" broadcast.
+    // it), so the directory updates the bit without logging a new set.
     bus.firePageEvent({ kind: "pageTools", tab: 7, registrations: REGS });
     const second = all[0].sent.map((s) => JSON.parse(s)).filter((m) => m.type === "register")[1];
     expect(second.active).toBe(true);
@@ -158,7 +251,12 @@ describe("createToolsLink", () => {
   it("a CLOSED tab drops its socket — the leak that kept dead namespaces registered", () => {
     const bus = fakeBus({ activeTab: 7 });
     const { all, factory } = fakeSockets();
-    createToolsLink({ host: bus, port: () => 5050, socketFactory: factory });
+    createToolsLink({
+      host: bus,
+      port: () => 5050,
+      tabIdKey: "chromeTabId",
+      socketFactory: factory,
+    });
     bus.firePageEvent({ kind: "pageTools", tab: 7, registrations: REGS });
     all[0].emit("open");
 
@@ -174,7 +272,12 @@ describe("createToolsLink", () => {
   it("dispose closes every socket and stops listening", () => {
     const bus = fakeBus({ activeTab: 7 });
     const { all, factory } = fakeSockets();
-    const link = createToolsLink({ host: bus, port: () => 5050, socketFactory: factory });
+    const link = createToolsLink({
+      host: bus,
+      port: () => 5050,
+      tabIdKey: "chromeTabId",
+      socketFactory: factory,
+    });
     bus.firePageEvent({ kind: "pageTools", tab: 7, registrations: REGS });
     link.dispose();
     expect(all[0].closed).toBe(true);

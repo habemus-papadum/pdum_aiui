@@ -69,13 +69,7 @@ export function buildProgram(): Command {
       "--launch-info <json>",
       "launcher-provided session summary (browser/DevTools MCP wiring), surfaced at /debug/api/info",
     );
-  addChannelServerOptions(mcp)
-    .option(
-      "--no-page-tools-notify",
-      "don't push 'page tools changed' notes into the session when the page-tool " +
-        "directory changes (the tools/list_changed MCP notification is still sent)",
-    )
-    .action(runMcp);
+  addChannelServerOptions(mcp).action(runMcp);
 
   program
     .command("quick")

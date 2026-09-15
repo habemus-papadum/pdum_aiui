@@ -1,0 +1,16 @@
+{
+  "name": "live-probe",
+  "private": true,
+  "type": "module",
+  "description": "Standalone spike: measure GPT-Live (gpt-live-1) delegation latencies over the primary WebSocket with synthesized speech.",
+  "scripts": {
+    "probe": "tsx probe.mts"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.13",
+    "tsx": "^4.19.0"
+  }
+}

@@ -182,8 +182,15 @@ async function boot(): Promise<{
     // The session bus is the `connected` fact (and, later, peers/slots —
     // the iPad paint presence). Outages never disarm; they just gray the pill.
     // The page-tools bridge: pages populate __AIUI__.tools; this represents
-    // them to the channel (CDP tab numbers ride as hints — the decided shape).
-    createToolsLink({ host, port: () => port, log: (m) => console.info("[tools]", m) });
+    // them to the channel. This tier's tab numbers are the CDP driver's own
+    // handles (registered as `driverTab`, never as chrome ids); tabInfo adds
+    // the CDP target id, which the prompt's <tab> marker also carries.
+    createToolsLink({
+      host,
+      port: () => port,
+      tabIdKey: "driverTab",
+      log: (m) => console.info("[tools]", m),
+    });
     sessionBus = connectSessionBus({ port, label: "intent client (detached page)" });
     const bus2 = sessionBus;
     let recovered = false;

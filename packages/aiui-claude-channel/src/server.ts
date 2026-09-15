@@ -75,19 +75,18 @@ export const INSTRUCTIONS = [
  * what marks it as a Claude Code channel (rather than a plain tool/resource
  * server), plus a `tools` capability for `channel_info` and — when supplied —
  * `page_tools_list`/`page_tools_call` (a page-tool directory) and `channel_reload`
- * (a reload handle) (see {@link registerChannelTools}). `tools.listChanged` is
- * declared so the channel may send `notifications/tools/list_changed` when the
- * page-tool directory changes; the advertised MCP tool list itself stays the
- * static meta-tools — the notification's value is the refresh cycle it triggers
- * (measured safe cross- and mid-turn: the extension-spike results, M3, git history).
- * It is returned unconnected so callers (and tests) can inspect it without
- * wiring up a transport.
+ * (a reload handle) (see {@link registerChannelTools}). The advertised tool list
+ * is STATIC and the server never sends `notifications/tools/list_changed`: page
+ * tools are discovered per tab on demand through the meta tools, and nothing
+ * about them is ever pushed into the session (the channel-wakeups decision —
+ * page-tools.ts). It is returned unconnected so callers (and tests) can inspect
+ * it without wiring up a transport.
  */
 export function createChannelServer(version: string, options: ChannelServerOptions = {}): Server {
   const server = new Server(
     { name: "aiui", version },
     {
-      capabilities: { experimental: { "claude/channel": {} }, tools: { listChanged: true } },
+      capabilities: { experimental: { "claude/channel": {} }, tools: {} },
       instructions: INSTRUCTIONS,
     },
   );

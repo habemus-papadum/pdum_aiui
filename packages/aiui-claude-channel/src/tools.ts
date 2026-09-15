@@ -1,15 +1,20 @@
 /**
  * The MCP tools the channel server exposes to its Claude Code session.
  *
- * There's one — `channel_info` — and it reports *this* server's own info: its
- * tag, pid, port, cwd, and the Claude Code session it's attached to. A server
- * describes itself, not its siblings. (Enumerating every running channel is a
- * separate concern — `listMcpServers` / `listChannels`, the library utilities
- * the CLI uses.)
+ * `channel_info` reports *this* server's own info: its tag, pid, port, cwd, and
+ * the Claude Code session it's attached to. A server describes itself, not its
+ * siblings. (Enumerating every running channel is a separate concern —
+ * `listMcpServers` / `listChannels`, the library utilities the CLI uses.)
+ *
+ * `page_tools_list` / `page_tools_call` are the META tools over the page-tool
+ * directory: the tool list advertised here is static, the tools that live in
+ * the browser are discovered per TAB on demand, and nothing is ever pushed
+ * into the session when they change (the channel-wakeups decision — see
+ * page-tools.ts).
  */
 import type { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
-import type { PageToolDirectory } from "./page-tools";
+import type { PageToolDirectory, TabSelector } from "./page-tools";
 import { type EnrichedChannel, listChannels } from "./registry";
 import type { ChannelReload } from "./web";
 
@@ -42,22 +47,26 @@ export function selfChannelInfo(): ChannelInfo | UnregisteredInfo {
 }
 
 const PAGE_TOOLS_LIST_DESCRIPTION =
-  "List the tools that live in the connected browser page(s) under development " +
-  "(registered by the page's aiui instrumentation). Returns a JSON array of directory entries: " +
-  "clientId, ns (page namespace), url, tab, and each tool's name/description/inputSchema. " +
-  "Entries from the browser's active tab sort first and carry activeTab: true (when a " +
-  "client reports tab activation; otherwise the flag is simply absent). " +
-  "Call this FIRST to discover what's available, then invoke one with page_tools_call. " +
-  "The list is empty when no dev page is connected.";
+  "List the tools that live in the connected browser page(s) under development, grouped by TAB. " +
+  "Returns a JSON array with one entry per connected tab: clientId, url, tab (the tab record — " +
+  "url, title, and the ids the intent-client host has: chromeTabId/windowId/tabIndex under the " +
+  "browser extension, targetId/driverTab under the plain-page CDP host), activeTab: true when the " +
+  "user is looking at that tab (when known), and namespaces[] — each with ns, active (false = " +
+  "the app parked it, off-route; still callable), and tools[] (name/description/inputSchema). " +
+  "To narrow to ONE tab pass any id copied from the prompt's <tab …/> marker (chrome-tab-id → " +
+  "chromeTabId, cdp-target-id → targetId, driver-tab → driverTab) or the tab's url (exact href, " +
+  "or a prefix — the url list_pages prints works); no arguments lists every connected tab. " +
+  "Nothing is pushed to you when page tools change — call this whenever you need the current " +
+  "set. Empty when no intent client is running (pages dial nothing themselves).";
 
 const PAGE_TOOLS_CALL_DESCRIPTION =
-  "Invoke one of the browser page's tools (discover them with page_tools_list first) and " +
-  "return its JSON result. Args: { name (required), args? (must match that tool's " +
-  "inputSchema), ns? and clientId? to disambiguate }. When exactly one registered tool has " +
-  "the given name you may omit ns/clientId; if several pages expose the same name, the one " +
-  "on the browser's active tab wins — when that still doesn't single one out the call " +
-  "errors and lists the candidates (pass ns and/or clientId to pick one). Errors if no page " +
-  "is connected, no tool matches, the page is mid-reload, or the call times out.";
+  "Invoke one tool in one browser page and return its JSON result. Args: { name (required), " +
+  "args? (must match that tool's inputSchema), WHICH TAB — any one of chromeTabId | targetId | " +
+  "driverTab | url | clientId, copied from page_tools_list or the prompt's <tab …/> marker — " +
+  "and ns? when that tab holds several namespaces }. Always name the tab when more than one is " +
+  "connected. With no tab named: a unique match routes, the tab the user is looking at wins a " +
+  "tie, and anything still ambiguous errors listing the candidates. Errors if no page matches " +
+  "the tab, no tool matches, the page is mid-reload, or the call times out (15 s).";
 
 const CHANNEL_RELOAD_DESCRIPTION =
   "After you edit this channel's own source, reload its lowering layer in place — the format " +
@@ -66,6 +75,47 @@ const CHANNEL_RELOAD_DESCRIPTION =
   "MCP stdio session and web port are unaffected. Returns { reloaded, generation, socketsDropped }. " +
   "Only reloads the format-entry modules (processors, intent-v1) and their edits; changes deeper " +
   "in the import graph still need a full relaunch.";
+
+/** The tab-naming arguments both page tools accept (flat — easier for a model than a nested object). */
+const TAB_ARG_PROPERTIES = {
+  chromeTabId: {
+    type: "number",
+    description: "The tab's chrome.tabs id (the <tab> marker's chrome-tab-id; extension host).",
+  },
+  targetId: {
+    type: "string",
+    description: "The tab's CDP target id (the <tab> marker's cdp-target-id; plain-page host).",
+  },
+  driverTab: {
+    type: "number",
+    description: "The plain-page host's tab handle (the <tab> marker's driver-tab).",
+  },
+  url: {
+    type: "string",
+    description: "The page url — an exact location.href, or a prefix of it.",
+  },
+  clientId: {
+    type: "string",
+    description: "An exact connection handle from page_tools_list.",
+  },
+} as const;
+
+/** Read the flat tab-naming arguments into a directory selector (+ clientId). */
+function readTabArgs(params: Record<string, unknown>): {
+  tab: TabSelector | undefined;
+  clientId: string | undefined;
+} {
+  const tab: TabSelector = {
+    ...(typeof params.chromeTabId === "number" ? { chromeTabId: params.chromeTabId } : {}),
+    ...(typeof params.targetId === "string" ? { targetId: params.targetId } : {}),
+    ...(typeof params.driverTab === "number" ? { driverTab: params.driverTab } : {}),
+    ...(typeof params.url === "string" ? { url: params.url } : {}),
+  };
+  return {
+    tab: Object.keys(tab).length > 0 ? tab : undefined,
+    clientId: typeof params.clientId === "string" ? params.clientId : undefined,
+  };
+}
 
 /** JSON text tool result. */
 const jsonResult = (value: unknown) => ({
@@ -109,7 +159,11 @@ export function registerChannelTools(server: Server, handles: ChannelToolHandles
             {
               name: PAGE_TOOLS_LIST_TOOL,
               description: PAGE_TOOLS_LIST_DESCRIPTION,
-              inputSchema: { type: "object", properties: {}, additionalProperties: false },
+              inputSchema: {
+                type: "object",
+                properties: TAB_ARG_PROPERTIES,
+                additionalProperties: false,
+              },
             },
             {
               name: PAGE_TOOLS_CALL_TOOL,
@@ -122,8 +176,11 @@ export function registerChannelTools(server: Server, handles: ChannelToolHandles
                     type: "object",
                     description: "Arguments matching the tool's inputSchema.",
                   },
-                  ns: { type: "string", description: "Page namespace, to disambiguate." },
-                  clientId: { type: "string", description: "Connection id, to disambiguate." },
+                  ns: {
+                    type: "string",
+                    description: "Page namespace, when the tab holds several.",
+                  },
+                  ...TAB_ARG_PROPERTIES,
                 },
                 required: ["name"],
                 additionalProperties: false,
@@ -157,18 +214,41 @@ export function registerChannelTools(server: Server, handles: ChannelToolHandles
       }
     }
     if (pageTools && name === PAGE_TOOLS_LIST_TOOL) {
-      return jsonResult(pageTools.list());
+      const { tab, clientId } = readTabArgs((args ?? {}) as Record<string, unknown>);
+      const entries = pageTools.tabs({ ...tab, ...(clientId !== undefined ? { clientId } : {}) });
+      if (entries.length === 0 && (tab !== undefined || clientId !== undefined)) {
+        // A named tab that isn't connected is worth an error the agent can act
+        // on (which tabs ARE connected), not a silently empty list.
+        const connected = pageTools.tabs();
+        return errorResult(
+          `no connected page matches ${JSON.stringify({ ...tab, ...(clientId ? { clientId } : {}) })}` +
+            (connected.length > 0
+              ? ` — connected tabs: ${JSON.stringify(
+                  connected.map((e) => ({
+                    clientId: e.clientId,
+                    ...(e.url ? { url: e.url } : {}),
+                    ...(e.tab ? { tab: e.tab } : {}),
+                    ...(e.activeTab ? { activeTab: true } : {}),
+                    namespaces: e.namespaces.map((n) => n.ns),
+                  })),
+                )}`
+              : " — no page has registered tools (is an intent client running?)"),
+        );
+      }
+      return jsonResult(entries);
     }
     if (pageTools && name === PAGE_TOOLS_CALL_TOOL) {
       const params = (args ?? {}) as Record<string, unknown>;
       if (typeof params.name !== "string") {
         return errorResult('page_tools_call requires a string "name" argument');
       }
+      const { tab, clientId } = readTabArgs(params);
       try {
         const value = await pageTools.call({
           name: params.name,
+          ...(tab !== undefined ? { tab } : {}),
+          ...(clientId !== undefined ? { clientId } : {}),
           ...(typeof params.ns === "string" ? { ns: params.ns } : {}),
-          ...(typeof params.clientId === "string" ? { clientId: params.clientId } : {}),
           ...(params.args !== undefined ? { args: params.args } : {}),
         });
         return jsonResult(value ?? null);

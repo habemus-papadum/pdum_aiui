@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readEntry as readEntryV2 } from "@habemus-papadum/aiui-registry";
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from "vitest";
-import WebSocket from "ws";
 import { connectChannelClient } from "../client";
 import type { FrameLogEntry } from "../frame-log";
 import { listMcpServers } from "../registry";
@@ -127,43 +126,6 @@ describe("runServe (standalone debug channel server)", () => {
 
     const block = stdout.find((line) => line.startsWith("--- lowered prompt ---"));
     expect(block).toBe("--- lowered prompt ---\nmake the plot wider\n--- end ---\n");
-  });
-
-  it("narrates page-tool register/unregister transitions to stdout as text", async () => {
-    handle = await runServe({ cacheDir: freshCache() });
-
-    // A page connects to /tools and declares a namespace — exactly what the
-    // in-browser bridge does. The directory debounces (500ms) before signalling.
-    const socket = new WebSocket(`ws://127.0.0.1:${handle.port}/tools`);
-    await new Promise<void>((resolve, reject) => {
-      socket.once("open", resolve);
-      socket.once("error", reject);
-    });
-    socket.send(
-      JSON.stringify({
-        v: 1,
-        type: "register",
-        ns: "morpho",
-        hash: "h1",
-        tools: [{ name: "plot_spectrum" }, { name: "set_range" }],
-        url: "http://app/",
-      }),
-    );
-
-    const pageToolsBlock = () => stdout.find((line) => line.startsWith("--- page tools ---"));
-    await waitFor(() => pageToolsBlock() !== undefined);
-    expect(pageToolsBlock()).toBe(
-      "--- page tools ---\n+ morpho/plot_spectrum, morpho/set_range\n" +
-        "= now: morpho/plot_spectrum, morpho/set_range\n--- end ---\n",
-    );
-
-    // Closing the socket drops the namespace — the unregister transition.
-    stdout.length = 0;
-    socket.close();
-    await waitFor(() => pageToolsBlock() !== undefined);
-    expect(pageToolsBlock()).toBe(
-      "--- page tools ---\n- morpho/plot_spectrum, morpho/set_range\n= now: none\n--- end ---\n",
-    );
   });
 
   it("narrates connections and a coalesced media summary to stderr (not stdout)", async () => {

@@ -479,40 +479,75 @@ several `data` frames on one thread and reassemble in the processor, marking the
 ## The `/tools` endpoint
 
 `/ws` pushes data *into* the session. `/tools` is the other direction of the loop: it lets a
-browser page under development **expose tools to the agent**. A page (via the aiui dev overlay's
-tools bridge) declares the tools it can honestly support — name, description, JSON Schema — and the
-channel surfaces them to the Claude Code session as the MCP tools `page_tools_list` and
-`page_tools_call`. When the agent calls one, the channel routes it back down this socket to the live
-page function, and the result returns the same way.
+browser page under development **expose tools to the agent**. A page (relayed by the intent
+client's tools-link — pages dial nothing themselves) declares the tools it can honestly support —
+name, description, JSON Schema — and the channel surfaces them to the Claude Code session through
+two fixed MCP meta-tools, `page_tools_list` and `page_tools_call`. When the agent calls one, the
+channel routes it back down this socket to the live page function, and the result returns the
+same way.
 
 Unlike `/ws`, this is a **request/response JSON protocol**, not a binary media stream: every message
 is a single WebSocket **text** frame carrying one JSON object. The payloads are tiny (schemas,
 argument objects, results), so the binary framing `/ws` uses would buy nothing here. Like `/ws`,
 there is no authentication — it assumes a cooperative same-host client.
 
+### The directory is a routing table, not an event source
+
+The channel keeps a **directory** of registrations so it can route a call to the socket that owns
+the page. That is the whole of its job. It never tells the session that its contents changed: no
+channel push, no MCP `notifications/tools/list_changed`, no CLI flag to turn either on. The
+advertised MCP tool list is the static pair above, and the agent asks `page_tools_list` when it
+has a question — **addressed by tab**.
+
+The reason is measured, not aesthetic (the channel-wakeups finding, 2026-09-15, git history): a
+channel push becomes a **user turn** in the attached session, i.e. a full model request over the
+whole context — and after an hour idle, a full re-write of it. The "page tools changed" push fired
+on nothing more than the user opening a second tab of the same app, a dev-server reload that
+outlasted the debounce, or the agent's own `new_page`/`close_page` verification loop; an idle
+session with a big context paid for each. The rule that fell out of it: a channel push must be
+something the model can act on by itself (an intent prompt is); a tool-list delta is not.
+
 ### Directory model
 
-The channel keeps a **directory** of registrations. A registration is one namespace's full tool set
-on one connection:
+A registration is one namespace's full tool set on one connection:
 
 ```ts
 interface PageToolRegistration {
-  clientId: string;        // server-assigned, per connection
+  clientId: string;        // server-assigned, per connection — one connection is one TAB
   ns: string;              // page namespace ("morpho", "aztec", …), unique per connection
-  url?: string;            // the page's location.href at registration
-  tab?: TabInfo;           // browser tab identity (correlation hints — see /ws HelloMeta)
+  url?: string;            // the page's live location.href (the client re-registers on navigation)
+  tab?: PageToolTab;       // the registering HOST's honest tab record (below)
   source?: SourceInfo;     // the page's source root
   hash: string;            // page-computed content hash of the tool set (identity across reloads)
   tools: { name: string; description: string; inputSchema?: object }[];
   registeredAt: string;    // ISO timestamp of the latest registration
-  activeTab?: true;        // derived at list time: this entry's tab is a window's active tab
+  active: boolean;         // the namespace's activity bit (false = parked off-route; still callable)
+  activeTab?: true;        // derived at list time: this tab is the one the user is looking at
+  shadowed?: true;         // derived at list time: an UN-addressed call would pick another tab's twin
 }
+
+// url/title plus whichever ids the registering host has — never both sets.
+type PageToolTab = {
+  url?: string; title?: string;
+  chromeTabId?: number; windowId?: number; tabIndex?: number;   // the browser extension
+  targetId?: string; driverTab?: number;                        // the plain-page CDP host
+};
 ```
+
+**The tab record is honest per host.** The MV3 side panel registers real `chrome.tabs` ids; the
+plain-page CDP host registers the CDP `targetId` plus its own `driverTab` handle. The intent
+client's tools-link states its id namespace (`tabIdKey`) so a driver handle can never masquerade
+as a chrome id. These are exactly the attributes the prompt's `<tab …/>` marker renders
+(`chrome-tab-id`, `window-id`, `tab-index`, `cdp-target-id`, `driver-tab`), so the agent copies
+them straight from the prompt into a tool call. None of them is the Chrome DevTools MCP's
+`pageId` — that id exists only in `list_pages` output, which prints url and title; the url is the
+join.
 
 A connection may hold **several namespaces**; a page reload **replaces** a namespace's entry rather
 than adding one (identity is `(clientId, ns)`); and a registration is dropped when its socket closes
 (pages don't get to run code when they die). The whole directory lives only in the channel process's
-memory.
+memory. `page_tools_list` serves it **grouped by tab**: one entry per connection with its record and
+every namespace it holds.
 
 ### Messages
 
@@ -520,8 +555,11 @@ memory.
 
 ```jsonc
 // declare the full tool set for one namespace (idempotent; replaces the ns entry)
-{ "v": 1, "type": "register", "ns": "morpho", "url": "http://localhost:5173/",
-  "tab": { "title": "morpho" }, "source": { "root": "/repo/app" }, "hash": "a1b2c3d4",
+{ "v": 1, "type": "register", "ns": "morpho", "url": "http://localhost:5173/morpho",
+  "tab": { "chromeTabId": 10, "windowId": 1, "tabIndex": 2,
+           "url": "http://localhost:5173/morpho", "title": "Morphogen" },   // extension host
+  // or:  { "driverTab": 4, "targetId": "8A1F…", "url": "…", "title": "…" }  // plain-page host
+  "source": { "root": "/repo/app" }, "hash": "a1b2c3d4", "active": true,
   "tools": [ { "name": "set-params", "description": "set the sim parameters",
               "inputSchema": { "type": "object", "properties": { /* … */ } } } ] }
 
@@ -529,9 +567,9 @@ memory.
 { "v": 1, "type": "result", "callId": "…", "ok": true,  "value": <any JSON> }
 { "v": 1, "type": "result", "callId": "…", "ok": false, "error": "human-readable message" }
 
-// report a tab (de)activation — sent by a browser-extension client whose service
-// worker watches chrome.tabs.onActivated; a page client never sends it
+// report which tab the user is looking at — a tab record in the SENDER's id namespace
 { "v": 1, "type": "activation", "tab": { "chromeTabId": 10, "windowId": 1 }, "active": true }
+{ "v": 1, "type": "activation", "tab": { "driverTab": 4, "windowId": 0 }, "active": true }
 ```
 
 **server → client**
@@ -547,61 +585,56 @@ memory.
 ### Two design rules the client must honor
 
 - **Registration is declarative, and forwarding is hashed.** The client always re-declares its
-  *complete* current set for a namespace (on connect, on reload, on HMR graph-swap) and carries a
-  content hash of the schema-relevant fields (name, description, inputSchema — never the function).
-  The server logs a registration line **only when the hash changes**, so the constant churn of dev
-  reloads with an unchanged tool set is invisible to the agent, and the MCP tool list never flickers.
+  *complete* current set for a namespace (on connect, on reload, on HMR graph-swap, on navigation)
+  and carries a content hash of the schema-relevant fields (name, description, inputSchema — never
+  the function). The server logs a registration line **only when the hash changes**, so the
+  constant churn of dev reloads with an unchanged tool set is invisible. The activity bit rides
+  outside the hash.
 - **Implementations resolve at call time.** The client holds no function references across reloads —
   when a `call` arrives it looks the implementing function up in the *current* registry by name.
   Then HMR replacing every closure changes nothing observable.
 
-### Calls, ambiguity, and lifecycle
+### Naming a tab
 
-`page_tools_call` takes `{ name, args?, ns?, clientId? }`. The directory routes to the **one**
-registration that matches (a tool with that `name`, narrowed by `ns`/`clientId` when given):
+Both meta-tools take the same flat tab arguments — `chromeTabId`, `targetId`, `driverTab`, `url`,
+`clientId` — and every given one must hold. `url` matches the registration's live url exactly when
+an exact match exists, else by prefix (the app's origin, or the url `list_pages` printed before the
+page navigated within it). Ids from the other host's namespace match nothing rather than the wrong
+tab.
 
-- **exactly one match** → the call is sent to that connection; the promise resolves on the matching
-  `result` (default timeout 15 s).
-- **several matches, exactly one on the browser's active tab** → that one wins (MCP-B's routing
-  rule: active tab first, else any tab holding the tool). Requires an `activation` reporter; with
-  none connected, this rung never engages.
-- **several matches otherwise** → the call errors, listing the candidates (`clientId`, `ns`, `url`,
-  `tab`, `activeTab`) so the agent can retry with `ns` and/or `clientId`.
-- **no page connected / no tool matches** → a clear error.
-- **the page disconnects before answering** → any in-flight call for that connection rejects.
+- `page_tools_list` with no arguments lists every connected tab; with a tab named, only that tab.
+  A named tab that is not connected is an **error naming the tabs that are** — never a silently
+  empty list.
+- `page_tools_call` takes `{ name, args?, ns?, <tab args> }` and routes to the **one** registration
+  that matches. With the tab named, the only remaining choice is `ns` when that tab holds several
+  namespaces. Un-addressed (the lazy case, fine while one page is connected): a unique match
+  routes; among several, a single one on the tab the user is looking at wins, then a single live
+  (non-parked) one; anything still ambiguous errors **listing the candidates with their ids**, so
+  the retry names the tab. No tool of that name on the named tab, a page that disconnects
+  mid-call, and a timeout (default 15 s) are each their own clear error.
 
-### Activation and change notifications
+### Activation
 
-`activation` messages keep a directory-global map of each window's active tab (`windowId` →
-`chromeTabId`). The map only ever *adds* precision: with no activation reporter connected (the
-plain dev-overlay world), no entry carries `activeTab`, `page_tools_list` keeps its natural
-order, and calls behave exactly as before. A deactivation (`"active": false`) only clears the
+`activation` messages keep a directory-global map of each window's active tab (`windowId` → tab
+record, matched on any shared id). It only ever *adds* precision: with no activation reporter
+connected, no entry carries `activeTab`, `page_tools_list` keeps registration order, and calls
+behave exactly as above minus the tie-break. A deactivation (`"active": false`) only clears the
 window's slot when it names the currently-active tab, so a stale deactivation cannot clobber a
-newer activation.
-
-The directory also emits a **debounced change signal** (default 500 ms) whenever its observable
-state changes: a namespace registered under a new hash, registrations lost to a socket close, or
-an activation flip that re-flags an entry. The signal is gated by a content signature
-(`ns|hash|active` per registration — deliberately excluding the connection id), so same-hash HMR
-re-registrations stay silent and a reload's close-plus-reconnect that restores an identical set
-within the window nets to nothing. The `mcp` command wires the signal to two agent-facing
-notifications (the browser-extension intent-tool proposal §7, in git history):
-the spec-blessed MCP `notifications/tools/list_changed` (the advertised tool list is still the
-static meta-tools; the notification's value is the client's refresh cycle), and a terse
-`page tools changed: <ns>/<name>, … (active tab: <title|url>)` push over the channel
-(`kind: "page-tools"`), on by default and disabled with `--no-page-tools-notify`.
+newer activation. A tab switch changes the flag and nothing else — it is deliberately not an event
+anyone is told about.
 
 `GET /health` includes a cheap `pageTools` summary (`{ clients, namespaces, tools }`) and is
 served with `Access-Control-Allow-Origin: *`: browsers log failed websocket handshakes as
-unsuppressable console errors, so a well-behaved client (the dev overlay's tools bridge) probes
-`/health` cross-origin first and only dials `/tools` when the payload advertises `pageTools`.
-The CORS header shipped together with `/tools`, so its absence identifies a pre-`/tools` server.
+unsuppressable console errors, so a well-behaved client probes `/health` cross-origin first and
+only dials `/tools` when the payload advertises `pageTools`. The full ledger is
+`GET /debug/api/page-tools` (the console's `/__aiui/tools` page renders it).
 
-### Not yet: per-tool MCP registration
+### Never: per-tool MCP registration
 
-This iteration exposes page tools through the two fixed MCP tools (`page_tools_list` /
-`page_tools_call`); it does **not** register each page tool as its own dynamically-named MCP tool.
-That is the natural follow-up.
+Page tools are exposed only through the two fixed meta-tools; each page tool is **not** registered
+as its own dynamically-named MCP tool, and that is a decision, not a backlog item. Per-tool
+registration would make the advertised tool list track the tab set, and every change to it would
+have to be announced — exactly the push this design retired.
 
 ## Hot reload
 

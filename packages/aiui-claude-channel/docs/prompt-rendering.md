@@ -1212,25 +1212,25 @@ method: "notifications/claude/channel"
 params: { content: <the wrapped prompt>, meta: { kind: "prompt", ...optionC attachment paths } }
 ````
 
-### 34. Tool: `channel_info` (tools.ts:130)
+### 34. Tool: `channel_info` (tools.ts:153)
 
 ````text
 Return this aiui channel's own info: its tag, pid, ppid, port, cwd, and the Claude Code session it's attached to (name, sessionId, status). Returns a JSON object.
 ````
 
-### 35. Tool: `page_tools_list` (tools.ts:72)
+### 35. Tool: `page_tools_list` (tools.ts:49)
 
 ````text
-List the tools that live in the connected browser page(s) under development (registered by the page's aiui instrumentation). Returns a JSON array of directory entries: clientId, ns (page namespace), url, tab, and each tool's name/description/inputSchema. Entries from the browser's active tab sort first and carry activeTab: true (when a client reports tab activation; otherwise the flag is simply absent). Call this FIRST to discover what's available, then invoke one with page_tools_call. The list is empty when no dev page is connected.
+List the tools that live in the connected browser page(s) under development, grouped by TAB. Returns a JSON array with one entry per connected tab: clientId, url, tab (the tab record — url, title, and the ids the intent-client host has: chromeTabId/windowId/tabIndex under the browser extension, targetId/driverTab under the plain-page CDP host), activeTab: true when the user is looking at that tab (when known), and namespaces[] — each with ns, active (false = the app parked it, off-route; still callable), and tools[] (name/description/inputSchema). To narrow to ONE tab pass any id copied from the prompt's <tab …/> marker (chrome-tab-id → chromeTabId, cdp-target-id → targetId, driver-tab → driverTab) or the tab's url (exact href, or a prefix — the url list_pages prints works); no arguments lists every connected tab. Nothing is pushed to you when page tools change — call this whenever you need the current set. Empty when no intent client is running (pages dial nothing themselves).
 ````
 
-### 36. Tool: `page_tools_call` (tools.ts:81)
+### 36. Tool: `page_tools_call` (tools.ts:62)
 
 ````text
-Invoke one of the browser page's tools (discover them with page_tools_list first) and return its JSON result. Args: { name (required), args? (must match that tool's inputSchema), ns? and clientId? to disambiguate }. When exactly one registered tool has the given name you may omit ns/clientId; if several pages expose the same name, the one on the browser's active tab wins — when that still doesn't single one out the call errors and lists the candidates (pass ns and/or clientId to pick one). Errors if no page is connected, no tool matches, the page is mid-reload, or the call times out.
+Invoke one tool in one browser page and return its JSON result. Args: { name (required), args? (must match that tool's inputSchema), WHICH TAB — any one of chromeTabId | targetId | driverTab | url | clientId, copied from page_tools_list or the prompt's <tab …/> marker — and ns? when that tab holds several namespaces }. Always name the tab when more than one is connected. With no tab named: a unique match routes, the tab the user is looking at wins a tie, and anything still ambiguous errors listing the candidates. Errors if no page matches the tab, no tool matches, the page is mid-reload, or the call times out (15 s).
 ````
 
-### 37. Tool: `channel_reload` (tools.ts:90)
+### 37. Tool: `channel_reload` (tools.ts:71)
 
 ````text
 After you edit this channel's own source, reload its lowering layer in place — the format registry is rebuilt from the code now on disk, no session restart. Live websockets drop and reconnect on their own (an in-flight intent turn is abandoned; the page stays up), and the MCP stdio session and web port are unaffected. Returns { reloaded, generation, socketsDropped }. Only reloads the format-entry modules (processors, intent-v1) and their edits; changes deeper in the import graph still need a full relaunch.

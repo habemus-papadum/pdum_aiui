@@ -71,7 +71,15 @@ export interface PageToolRegistrationInfo {
   clientId?: string;
   ns?: string;
   url?: string;
-  tab?: { url?: string; title?: string; chromeTabId?: number; windowId?: number };
+  tab?: {
+    url?: string;
+    title?: string;
+    chromeTabId?: number;
+    windowId?: number;
+    tabIndex?: number;
+    targetId?: string;
+    driverTab?: number;
+  };
   hash?: string;
   tools?: Array<{ name?: string; description?: string }>;
   registeredAt?: string;
