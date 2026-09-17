@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/demo-live",
-  "version": "0.17.3+dev",
+  "version": "0.18.0",
   "description": "GPT-Live lab: raw wire timing, delegation backends (Responses / Claude Code), and a full aiui app driven by voice.",
   "private": true,
   "type": "module",
