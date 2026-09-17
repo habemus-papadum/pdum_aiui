@@ -1,10 +1,11 @@
 # The oracle and GPT-Live — what changes, what it unlocks, how to build it
 
-Status: **RESEARCH, 2026-09-15.** Everything below was checked against OpenAI's live docs
-(the `.md` versions of the six GPT-Live guides plus the WebRTC / WebSockets / server-controls
-/ cost pages) and against the real API with this repo's `OPENAI_API_KEY`, using the probe in
-[`exploration/live-probe/`](../../exploration/live-probe/). Numbers marked *measured* come
-from those runs; everything else is the vendor's documentation. Nothing has been built yet.
+Status: **RESEARCHED and BUILT, 2026-09-15.** Everything below was checked against OpenAI's
+live docs (the `.md` versions of the six GPT-Live guides plus the WebRTC / WebSockets /
+server-controls / cost pages) and against the real API with this repo's `OPENAI_API_KEY`,
+using the probe in [`exploration/live-probe/`](../../exploration/live-probe/). Numbers marked
+*measured* come from those runs; everything else is the vendor's documentation. The package
+and demo the document argues for now exist — see [§10](#10-what-was-built).
 
 The oracle today is `@habemus-papadum/aiui-oracle` — a WebRTC session from the browser to
 the **Realtime API** (`gpt-realtime-2.1`) with the app's controls projected as tools, plus its
@@ -341,6 +342,37 @@ the place to add scenarios before anything touches a package.
 - **SDK** — the workspace's `openai` package (7.4, only in `aiui-cf-creds`) predates Live;
   the probe uses raw `ws`, which is enough.
 
+## 10. What was built
+
+Same day, from this document: [`packages/aiui-live`](../../packages/aiui-live/) and
+[`demos/live`](../../demos/live/). The decisions above held; the shape that emerged:
+
+- **`LiveSession`** owns the task table, the append/ack ledger (chunked under the 500-token
+  cap), the two transcript tracks regrouped by silence, a progress line for quiet tasks
+  (measured: the voice model stays silent otherwise, then says "Okay. Checking." on its own),
+  and the idle close + re-seed. Transports: WebRTC in the browser, WebSocket in node. Brokers:
+  paste-key, dev-key, and a server route that does the SDP exchange (201 in 275 ms, measured).
+- **Delegators** are one interface (`handle(req)` with `say`/`note`/`steer`/`log`, tools, an
+  abort signal): a scripted stand-in, a Responses loop run by us, a relay to a server, and
+  **Claude Code** through the Agent SDK. The relay round-trips page-owned tools, so a server
+  backend can move a slider that only exists in the browser.
+- **Claude Code as the backend, measured**: one long-lived `query()` per delegator in
+  streaming-input mode. A message pushed while a turn runs is *not* interleaved (it was never
+  answered), so delegations are serialized on `result`; `interrupt()` aborts the turn and keeps
+  the query, which is the cancel path; the CLI's own login authenticates (no API key); MCP tools
+  need `alwaysLoad` or the first `say` pays a ~4 s ToolSearch detour. Asked "why does the trace
+  look jagged when the samples are low?" with the demo as its working directory, it read
+  `graph.ts` and answered in 17.7 s; the voice model relayed the numbers faithfully. The
+  Responses fast path (`gpt-5.4-mini`, low effort) did three tool rounds in 4.1 s.
+- **Two traps found on the way**: installing the SDK's 210 MB per-platform binary package
+  crashes pnpm under Node 24.4.0 exactly (a Node regression, nodejs/node#59057, fixed in 24.5 —
+  the repo now requires Node ≥ 24.5 and the SDK's bundled CLI installs normally), and in Solid
+  2's beta an effect's cleanup must be its return value, not an `onCleanup` inside the body —
+  the oracle's level meter was leaking that way.
+
+Still open from §9: the sideband on a real WebRTC session, echo with a laptop mic (needs a
+person), and mid-session `delegation.responses.tools` updates.
+
 ## Pointers
 
 - OpenAI docs (append `.md` to any page for the source): `guides/live`, `live-prompting`,
@@ -353,3 +385,6 @@ the place to add scenarios before anything touches a package.
   embedding whose tool-source rule carries over.
 - [channel-wakeups](./channel-wakeups.md) — the rule a delegation push into Claude Code
   satisfies (actionable by the model alone).
+- [live-delegation](./live-delegation.md) — the next design: delegation trees (a
+  server-side router, race/classify/fallback), Claude Code over the SDK or over the channel,
+  preemption layers, and the four visibility levels.

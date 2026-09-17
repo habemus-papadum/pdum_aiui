@@ -5,7 +5,7 @@ Setting up to work **on this repo**. (To *use* the tools, start at
 
 ## Requirements
 
-- Node 24+
+- Node 24.5+
 - pnpm 11+
 
 ```sh

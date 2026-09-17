@@ -13,7 +13,7 @@ you're still here, you've decided to trust this code.
 
 ## Prerequisites
 
-- **Node ≥ 24** and a package manager.
+- **Node ≥ 24.5** and a package manager.
 - The **[Claude Code](https://claude.com/claude-code) CLI** (`claude`) on your PATH, logged in.
 - **A browser aiui can manage.** Interactive launches offer to install a managed browser —
   **Chromium** by default (version-pinned, auto-loads the intent client's extension) — so say

@@ -7,7 +7,7 @@
   "author": "Nehal Patel <nehal@alum.mit.edu>",
   "license": "MIT",
   "engines": {
-    "node": ">=24",
+    "node": ">=24.5.0",
     "pnpm": ">=11"
   },
   "scripts": {

@@ -35,7 +35,7 @@ publication level — public, private, or never-published — when it's created 
 
 ## Requirements
 
-- Node 24+
+- Node 24.5+ (24.4.0 exactly cannot install the workspace: a Node bug OOMs on one 210 MB tarball)
 - pnpm 11+ — install it however you like (`brew install pnpm`, the
   [standalone script](https://pnpm.io/installation#using-a-standalone-script), or
   `npm i -g pnpm`). You do **not** need corepack: this repo pins an exact pnpm in

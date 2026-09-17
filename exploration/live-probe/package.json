@@ -2,12 +2,16 @@
   "name": "live-probe",
   "private": true,
   "type": "module",
-  "description": "Standalone spike: measure GPT-Live (gpt-live-1) delegation latencies over the primary WebSocket with synthesized speech.",
+  "description": "Standalone spike: measure GPT-Live (gpt-live-1) delegation latencies over the primary WebSocket with synthesized speech; plus two Claude Agent SDK probes (auth, streaming input, interrupt).",
   "scripts": {
-    "probe": "tsx probe.mts"
+    "probe": "tsx probe.mts",
+    "claude:auth": "node claude-auth-spike.mjs",
+    "claude:stream": "node claude-stream-spike.mjs"
   },
   "dependencies": {
-    "ws": "^8.18.0"
+    "@anthropic-ai/claude-agent-sdk": "^0.3.272",
+    "ws": "^8.18.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/ws": "^8.5.13",
