@@ -40,6 +40,7 @@
  */
 import { PageBoundary } from "@habemus-papadum/aiui-viz";
 import { installKeys, resolveKey } from "@habemus-papadum/aiui-viz/modal";
+import { LensLayer } from "@habemus-papadum/aiui-viz/site/lens";
 import type { JSX } from "@solidjs/web";
 import { createEffect, createSignal, For, getOwner, onCleanup, runWithOwner, Show } from "solid-js";
 import { SlideContext } from "./deck-context";
@@ -47,7 +48,6 @@ import { DeckNav } from "./deck-nav";
 import { createTouchIntent, createWheelIntent } from "./gestures";
 import { DeckHud } from "./hud";
 import { type DeckCommand, type DeckKeyState, deckKeyLayers } from "./keys";
-import { LensLayer } from "./lens";
 import type { DeckModel } from "./model";
 import { bindDeckToPath } from "./path-binding";
 import { ScrollCue } from "./scroll-cue";

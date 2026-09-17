@@ -21,6 +21,7 @@
     "./duckdb": "./src/duckdb.ts",
     "./site": "./src/site/index.ts",
     "./site/color-mode": "./src/site/color-mode.ts",
+    "./site/lens": "./src/site/lens.tsx",
     "./modal": "./src/modal/index.ts",
     "./testing": "./src/testing.ts"
   },
@@ -86,6 +87,11 @@
         "types": "./dist/site/color-mode.d.ts",
         "import": "./dist/color-mode.js",
         "default": "./dist/color-mode.js"
+      },
+      "./site/lens": {
+        "types": "./dist/site/lens.d.ts",
+        "import": "./dist/lens.js",
+        "default": "./dist/lens.js"
       },
       "./modal": {
         "types": "./dist/modal/index.d.ts",

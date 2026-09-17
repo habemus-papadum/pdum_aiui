@@ -75,8 +75,10 @@ What the declaration buys, everywhere at once:
   a control with `options: [...]` (an enum) rejects anything else; wrong types throw.
 - **Widgets for free-ish.** `<ControlSlider of={kappa} />` renders a slider whose bounds, step,
   and unit come from the declaration (never re-type them in the UI); `<ControlToggle of={flag} />`
-  does booleans. These are ordinary components you compose into your own layout — there is
-  deliberately no auto-generated panel.
+  does booleans; `<ControlScrub of={kappa} />` is the same number as a pill *in the prose* (press
+  and drag sideways; `log` for a range spanning decades); `<ControlSelect of={mode} />` binds an
+  enum control's `options` to a `<select>`. These are ordinary components you compose into your
+  own layout — there is deliberately no auto-generated panel.
 - **Agent access, with zero extra code** — Step 13 shows the derived tools.
 - **Durability**: like `durableSignal`, a control survives live code edits. One consequence to
   know: the name is the storage key, so *renaming the variable resets the stored value* — pass an
@@ -569,7 +571,8 @@ they're written down. The full ledger, with the debugging stories, is
   throws `REACTIVE_WRITE_IN_OWNED_SCOPE`. State changes belong in event handlers and tools; if a
   compute truly must flag something, defer it: `queueMicrotask(() => flag.set(true))`.
 - **`myCell()` throws when the cell isn't ready.** Fine inside `deps` and `CellView`; everywhere
-  else, `myCell.latest()`.
+  else, `myCell.latest()` — or `<CellText of={myCell}>{(v) => …}</CellText>` for a value inside a
+  sentence ("…" until ready, the last value kept through refreshes, stamped like CellView).
 - **An errored cell shows the error box even though `latest()` still has a value.** Errors win —
   by design, so failures aren't papered over. The Retry button calls `refetch()`.
 - **`<Show>`'s function child gets an accessor,** like `CellView`'s: `{(v) => v().thing}`.

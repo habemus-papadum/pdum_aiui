@@ -28,7 +28,9 @@ contract; resolve `@habemus-papadum/aiui-viz` in node_modules and read the modul
 Library surface (`@habemus-papadum/aiui-viz`): plumbing on the root barrel (`cell`,
 `settledOnly`, `CellView`, **`control`/`action`** (the declared control surface — names, locs,
 and descriptions injected by the aiui compiler), `scope` (identity — every app declares one),
-`ControlSlider`/`ControlToggle`/`Dropdown` (widgets that read bounds from the declaration),
+`ControlSlider`/`ControlToggle`/`ControlScrub`/`ControlSelect`/`Dropdown` (widgets that read
+bounds and options from the declaration; the scrub is the number-in-the-prose pill),
+**`CellText`** (a cell's value as quiet prose — `latest()`, "…" until ready, stamped),
 `workerStream`/`fromWorker`, `durable`/`durableSignal`, `hotCellGraph`, **`PageBoundary`**
 (the mount-seam error boundary), **`bridgeEffect`** (the hardened crossing into imperative
 systems), **`throttled`** (the outbound valve), `adopt`/`durableCanvas` (durable-DOM
@@ -41,7 +43,9 @@ heavyweight optional peer — `…/plot` → `PlotFigure` (Observable Plot); `�
 Plot out, marks disconnected on dispose); `…/duckdb` → `instantiateDuckDB` +
 `fetchWithProgress` (DuckDB-WASM from app-bundled `?url` assets — the four asset imports stay
 in YOUR app, see the module docblock); `…/site` → `SiteNav` (left sidebar, collapsing to a
-top bar + drawer on a phone), `TocRail`, `TeX`, `colorMode`; `…/modal` → the framework-free
+top bar + drawer on a phone), `TocRail`, `TeX`, `Lens`/`LensLayer` (levels of detail: inline
+trigger → hover peek → detail panel in the page's own graph; aiui-slides re-exports it),
+`colorMode`; `…/modal` → the framework-free
 modal interaction kit + mode-engine core (`createModeEngine`, `createClaims`, the region
 constructors `ladder`/`toggle`/`choice`, `barModel`, `installKeys`/`resolveKey`,
 `LiveDiffText`/`wordDiff`; the Solid adapter `solidModeEngine` is on the root barrel — see
@@ -210,8 +214,9 @@ an inline options object; genuinely dynamic registration — a library minting c
 data — passes a PREBUILT spec object, which the compiler leaves alone and the runtime name
 guard backstops), and reserve `kit.registerTool` for the genuinely bespoke
 (name+description+`inputSchema`, idempotent by name). Bind controls in the UI through
-`ControlSlider`/`ControlToggle`/`Dropdown` (they stamp `data-control` and read meta) or a
-hand-rolled binding that declares `data-control="<name>"` itself.
+`ControlSlider`/`ControlToggle`/`ControlScrub`/`ControlSelect`/`Dropdown` (they stamp
+`data-control` and read meta) or a hand-rolled binding that declares `data-control="<name>"`
+itself.
 
 Forwarding is unconditional: the toolkit publishes every namespace into
 `window.__AIUI__.tools` (installed by the runtime, production included — the page dials

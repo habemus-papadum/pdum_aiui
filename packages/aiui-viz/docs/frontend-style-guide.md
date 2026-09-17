@@ -22,7 +22,9 @@ The library splits along a deliberate seam:
 
 **Porcelain grows by extraction, not speculation.** A pattern is first built and proven inside a
 reference notebook (where it may be rough), then promoted to the library once a second page
-wants it. `TeX`, `TocRail`, `SiteNav`, and the Mosaic/DuckDB pair (proven in seismos) all
+wants it. `TeX`, `TocRail`, `SiteNav`, the Mosaic/DuckDB pair (proven in seismos), the `Lens`
+(proven in a deck, then copied verbatim into a plain notes site — promoted from aiui-slides to
+`aiui-viz/site`), and the scrub pill and select widgets (three and five hand-rolled copies) all
 followed that path. One package holds both layers for now — if porcelain ever outgrows it, the
 seam is already drawn.
 

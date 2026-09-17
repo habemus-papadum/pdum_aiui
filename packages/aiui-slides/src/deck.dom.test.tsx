@@ -7,11 +7,11 @@
  * and the cue invites, retires, and returns on idle.
  */
 import { scope } from "@habemus-papadum/aiui-viz";
+import { Lens } from "@habemus-papadum/aiui-viz/site/lens";
 import { resetControlSurface } from "@habemus-papadum/aiui-viz/testing";
 import { render } from "@solidjs/web";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Deck } from "./deck";
-import { Lens } from "./lens";
 import { createDeckModel } from "./model";
 import { Step } from "./step";
 import type { SlideDef } from "./types";

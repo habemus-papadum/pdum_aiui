@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 /**
- * lens.dom.test.tsx — the Lens's tier lifecycle: click opens the detail
- * overlay (portaled to body, mounted on open), Escape and the close button
- * dismiss it (disposed on close), focus returns to the trigger.
+ * lens.test.tsx — the Lens's tier lifecycle: click opens the detail overlay
+ * (mounted on open), Escape and the close button dismiss it (disposed on
+ * close), focus returns to the trigger, nested lenses close as a ladder.
  */
 import { render } from "@solidjs/web";
 import { afterEach, describe, expect, it } from "vitest";

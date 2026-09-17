@@ -29,6 +29,9 @@ through the derived tools).
   bare base).
 - **`Lens`** — levels of detail for any page: inline trigger → hover peek →
   interactive detail overlay, folded into the page's own reactive graph.
+  It lives in `@habemus-papadum/aiui-viz/site` (a plain page wants it as
+  much as a slide does) and is re-exported here; `styles.css` ships its
+  default look for decks.
 - **`useSlide()`** — a slide's handle (`index`, `deck`, `active()`,
   `step()`); gate rAF loops on `active()` so off-screen slides park
   themselves.

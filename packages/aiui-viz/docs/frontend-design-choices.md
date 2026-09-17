@@ -224,9 +224,10 @@ each cell's deps run), `set` (validated write, returns what was actually written
 **one real named tool per registered action**. The hand-written get-params/set-params pair this
 framework once required is gone; hand-written tools remain only for the genuinely bespoke
 (gallery's `set-filter`, `query`). Deliberately absent: a generated control panel. Widgets are
-hand-placed (`ControlSlider`/`ControlToggle` read bounds from the declaration and stamp
-`data-control`), and porcelain is extracted from repetition in real apps, never invented ahead
-of evidence.
+hand-placed (`ControlSlider`/`ControlToggle`/`ControlScrub`/`ControlSelect` read bounds and
+options from the declaration and stamp `data-control`), and porcelain is extracted from
+repetition in real apps, never invented ahead of evidence — the scrub pill arrived as three
+verbatim copies across two sites, the select as five in one.
 
 ## 7 · Attribution: boundaries, not magic
 

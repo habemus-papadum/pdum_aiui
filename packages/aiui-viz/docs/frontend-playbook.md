@@ -142,10 +142,12 @@ one discipline that keeps this layer almost logic-free: **components are pure re
 (through the `graph()` accessor), DOM out; parameters written back through their signals; nothing
 computed in the component that belongs in a cell. `<CellView of={…}>` supplies the whole
 lifecycle (pending, error + retry, keep-latest, progress, the attribution stamps) so the
-component body is just "value → markup". Controls bind through `ControlSlider`/`ControlToggle`
-(bounds, step, and unit come from the declaration — never re-typed in JSX; the label carries the
-`data-control` stamp), with hand-rolled bindings for shapes the porcelain doesn't cover — which
-is exactly how the next porcelain earns its extraction evidence.
+component body is just "value → markup"; `<CellText>` is the same reader for a value inside a
+sentence (quiet: "…" until ready, no chrome). Controls bind through
+`ControlSlider`/`ControlToggle`/`ControlScrub`/`ControlSelect` (bounds, step, unit, and options
+come from the declaration — never re-typed in JSX; the root carries the `data-control` stamp),
+with hand-rolled bindings for shapes the porcelain doesn't cover — which is exactly how the next
+porcelain earns its extraction evidence.
 
 Reuse falls out of purity: the same component renders in the hero overview and again in a
 deep-dive section, reading the same cell — double-mounting shared cells is free and intended.

@@ -10,16 +10,17 @@
  *     tap goes straight to tier 3 — by design, not simulation.
  *  3. Click → the DETAIL overlay: a centered panel rendering `detail` —
  *     full, interactive, and **in the same reactive graph** as the page: the
- *     Portal keeps Solid ownership under this component, so the detail view
- *     reads (and writes) the very cells and controls the page uses.
+ *     surfaces stay under this component's Solid ownership, so the detail
+ *     view reads (and writes) the very cells and controls the page uses.
  *     Mount-on-open / dispose-on-close is the components-are-pure-readers
  *     discipline — nothing is lost on close.
  *
- * DECK-INDEPENDENT by construction: no deck imports, no deck context, no new
- * dependencies (viewport clamping is arithmetic, not a floating-ui
- * dependency) — a research notebook wants this component exactly as much as
- * a slide does, and its upstream home is aiui-viz once it has proven out in
- * both (docs/proposals/slides.md).
+ * Born in aiui-slides (docs/proposals/slides.md), where it proved out in a
+ * deck; promoted here once the FAI Labs research notes — plain pages, no
+ * deck — carried a verbatim copy (2026-09). DECK-INDEPENDENT by
+ * construction: no deck imports, no deck context, no new dependencies
+ * (viewport clamping is arithmetic, not a floating-ui dependency).
+ * aiui-slides re-exports it, and its Deck provides the {@link LensLayer}.
  *
  * Interaction conventions are the Dropdown's: outside-pointerdown and Escape
  * close, listeners attach in the component body and detach via onCleanup
@@ -33,12 +34,18 @@
  * class) must reach them by inheritance, and a body-mounted portal would sit
  * outside that scope. `position: fixed` escapes every ancestor's overflow
  * clipping on its own. A transformed/filtered ancestor DOES become the
- * fixed-position containing block — and the deck's translated track is
+ * fixed-position containing block — and a deck's translated track is
  * exactly that for every slide past the first — so both surfaces measure
  * that block's viewport origin and subtract it (`fixedOrigin`), staying
  * viewport-true under any ancestor.
+ *
+ * Styling is the consumer's: the stable classes are `aiui-lens-trigger`,
+ * `aiui-lens-peek`, `aiui-lens-overlay`, `aiui-lens-backdrop`,
+ * `aiui-lens-panel`, `aiui-lens-head`, `aiui-lens-title`, `aiui-lens-close`,
+ * `aiui-lens-body`. aiui-slides' `styles.css` ships a default look for
+ * decks; a design system styles the same classes on its own tokens.
  */
-import { PageBoundary } from "@habemus-papadum/aiui-viz";
+
 import type { JSX } from "@solidjs/web";
 import {
   type Component,
@@ -49,6 +56,7 @@ import {
   Show,
   useContext,
 } from "solid-js";
+import { PageBoundary } from "../page-boundary";
 
 type LensState = "closed" | "peek" | "open";
 

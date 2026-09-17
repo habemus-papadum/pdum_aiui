@@ -30,13 +30,17 @@
  *    Slide-grained, like the HUD.
  *  - **{@link Lens}** — levels of detail for any page, deck or not: inline
  *    trigger → hover peek → interactive detail overlay, all in the page's
- *    own reactive graph.
+ *    own reactive graph. It lives in aiui-viz (`/site/lens`) since 2026-09
+ *    and is re-exported here; the Deck provides its {@link LensLayer}.
  *
  * Default styling is the opt-in `./styles.css` (token-overridable
  * `aiui-deck-*` / `aiui-lens-*` classes). The reference deck is
  * demos/gear-talk.
  */
 
+// The Lens moved to aiui-viz once plain pages wanted it; re-exported so a
+// deck keeps one import, and so the Deck's LensLayer is the same context.
+export { Lens, LensLayer } from "@habemus-papadum/aiui-viz/site/lens";
 export { Deck } from "./deck";
 export { type SlideHandle, useSlide } from "./deck-context";
 export { DeckNav } from "./deck-nav";
@@ -51,7 +55,6 @@ export {
 } from "./gestures";
 export { DeckHud } from "./hud";
 export { type DeckCommand, type DeckKeyState, deckKeyLayers } from "./keys";
-export { Lens, LensLayer } from "./lens";
 export { createDeckModel, type DeckFrame, type DeckModel } from "./model";
 export { bindDeckToPath, deckBase, pathForSlide, slideFromPath } from "./path-binding";
 export { ScrollCue } from "./scroll-cue";

@@ -38,7 +38,8 @@ export default defineConfig({
       // DuckDB-WASM instantiation glue (`./duckdb`) — so @observablehq/plot,
       // @uwdata/mosaic-plot, @duckdb/duckdb-wasm, and katex stay optional
       // peers that core consumers never import; the page-chrome porcelain
-      // (`./site`); and the modal interaction kit (`./modal`: framework-free,
+      // (`./site`, plus `./site/color-mode` and `./site/lens` alone — the
+      // katex-free pieces a deck or a theme reaches for); and the modal interaction kit (`./modal`: framework-free,
       // no Solid import, so node-side consumers can reach it —
       // aiui-lowering-pipeline re-exports `wordDiff` from it).
       entry: {
@@ -52,6 +53,7 @@ export default defineConfig({
         duckdb: "src/duckdb.ts",
         site: "src/site/index.ts",
         "color-mode": "src/site/color-mode.ts",
+        lens: "src/site/lens.tsx",
         modal: "src/modal/index.ts",
         testing: "src/testing.ts",
       },

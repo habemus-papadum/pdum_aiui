@@ -36,6 +36,9 @@ export {
 export type { Cell, CellCompute, CellContext, CellOptions, CellState } from "./cell";
 // cell.ts — Observable-style async dataflow cells for SolidJS 2.0.
 export { cell, cellGraph, cellRegistry, settledOnly } from "./cell";
+// cell-text.tsx — a cell's value as quiet prose (latest(): "…" until ready,
+// never suspends, keeps the last value through refreshes and errors).
+export { CellText } from "./cell-text";
 // cell-view.tsx — the notebook-feel wrapper (spinner, error+retry, keep-latest).
 export { CellView } from "./cell-view";
 export type {
@@ -55,8 +58,9 @@ export {
   controlSurface,
   subscribeControlSurface,
 } from "./control";
-// control-widgets.tsx — the earned control-bound widgets (slider, toggle).
-export { ControlSlider, ControlToggle } from "./control-widgets";
+// control-widgets.tsx — the earned control-bound widgets (slider, toggle,
+// scrub pill, select).
+export { ControlScrub, ControlSelect, ControlSlider, ControlToggle } from "./control-widgets";
 export { Dropdown } from "./dropdown";
 export type { SignalBox } from "./durable";
 // durable.ts — the durable/disposable registry that makes HMR safe.

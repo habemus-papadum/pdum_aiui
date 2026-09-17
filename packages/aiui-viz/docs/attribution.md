@@ -21,9 +21,9 @@ Attribution is deliberately framework-neutral. The entire contract is data in th
 | Attribute | Meaning | Emitted by |
 | --- | --- | --- |
 | `data-source-loc="src/ui/Controls.tsx:44:7"` | this element's **authoring site** (the JSX that wrote it), app-root-relative | the aiui compiler's JSX-stamping half, at compile time, dev-only (its factory-identity half runs in production builds too) |
-| `data-cell="analysis"` | the **dataflow node** whose value is rendered inside this boundary | `CellView` (from the babel-injected cell name); a component rendering a cell's value *outside* CellView may declare it — the one manual attribute in the contract, and it is a *name*, so it cannot drift |
+| `data-cell="analysis"` | the **dataflow node** whose value is rendered inside this boundary | `CellView` and `CellText` (from the babel-injected cell name); a component rendering a cell's value *outside* them may declare it — the one manual attribute in the contract, and it is a *name*, so it cannot drift |
 | `data-cell-loc="src/model/graph.ts:31"` | the cell's **definition site** — the `cell(…)` call itself | `CellView`, from the same injection |
-| `data-control="kappa"` | the **control** this widget binds — the writable end of the surface | `ControlSlider`/`ControlToggle` (from the control's injected name); a hand-rolled binding declares it the same way — a name, never a location |
+| `data-control="kappa"` | the **control** this widget binds — the writable end of the surface | `ControlSlider`/`ControlToggle`/`ControlScrub`/`ControlSelect` (from the control's injected name); a hand-rolled binding declares it the same way — a name, never a location |
 
 plus the live **cell registry** (`cellRegistry()` / the `cells` report section), which maps a
 `data-cell` name to the cell's current state, definition site, and description at runtime — and
