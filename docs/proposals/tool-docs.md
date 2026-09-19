@@ -3,11 +3,13 @@
 Per-tool usage text and a per-kit brief that travel with the registration, one renderer
 per consumer, a library-grade DuckDB query tool, and an on-page record of who called what.
 
-Status: **DECIDED 2026-09-19, nothing built.** The owner asked for a synthesis of five
-requests (tool instructions in system prompts, a generic DuckDB query tool, result
-truncation and error return, an on-page tool-call debugger, tool pass-through for the live
-oracle) and deferred every open decision to "simplest, least churn". Every claim about
-existing code cites the file. Milestones are in [§7](#7-milestones); non-goals in [§8](#8-non-goals).
+Status: **DECIDED 2026-09-19; milestones 1–4 SHIPPED the same day** (`tool docs I`–`IV`
+on main), **milestone 5 (live verification) PENDING** — it needs the session browser and
+a person at the mic. The owner asked for a synthesis of five requests (tool instructions in
+system prompts, a generic DuckDB query tool, result truncation and error return, an on-page
+tool-call debugger, tool pass-through for the live oracle) and deferred every open decision
+to "simplest, least churn". Every claim about existing code cites the file as it was before
+the work. Milestones are in [§7](#7-milestones); non-goals in [§8](#8-non-goals).
 
 ## 0. In one screen
 

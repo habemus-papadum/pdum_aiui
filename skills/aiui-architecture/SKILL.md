@@ -218,6 +218,23 @@ guard backstops), and reserve `kit.registerTool` for the genuinely bespoke
 `data-control` and read meta) or a hand-rolled binding that declares `data-control="<name>"`
 itself.
 
+**Document the tools — it is part of the surface.** A definition says *what* a tool does; a
+model also needs *when* to call it, what the result means, and how the app's tools relate.
+Write that in the code you already have: the doc comment's first paragraph is the
+`description`; a `@usage` section (when to call it, what to trust in the result) plus one
+`@example` become the tool's `usage`, lifted by the compiler exactly like the description;
+`agentToolkit(ns, { brief })` carries the kit's **brief** — what the app is, its data model,
+how the tools relate. Every consumer renders the same document from it (the oracle's
+`Tools:` section, a live delegation, `page_tools_list`), grouped read/write: an action is a
+**write** unless it declares `kind: "read"`. Keep the brief authored and standing; facts
+that change with the data belong in the tool that owns them — a DuckDB app registers the
+library's `sql`/`schema` tools (`registerSqlTools(kit, { runner })` from
+`@habemus-papadum/aiui-viz/duckdb`, over a connection dedicated to agent reads) and the table
+list is introspected into the tool's usage. To see what a model sees, mount `ToolLog`
+(`@habemus-papadum/aiui-viz/site/tool-log`, hidden until `#aiui-tools`): its *as rendered*
+view is the document, and its *calls* view is the page's call log (who called what —
+`channel`, `oracle`, `live:…`, `page` — and the result). User guide: "Documenting a tool".
+
 Forwarding is unconditional: the toolkit publishes every namespace into
 `window.__AIUI__.tools` (installed by the runtime, production included — the page dials
 nothing). When an intent client is running, it relays each tab's tools to the channel, and
