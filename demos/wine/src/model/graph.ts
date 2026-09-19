@@ -8,8 +8,9 @@
  * The agent surface is mostly derived: one `set-<dim>` tool per filter
  * dimension declared in store.ts (points, price, country, variety, and the
  * projx/projy region pair that draws the embedding map's box), the four
- * named-view verbs, `clear-selection`, and the reporters below. `query` is
- * the one bespoke tool — bounded read-only SQL over the wine table.
+ * named-view verbs, `clear-selection`, the library's `sql`/`schema` tools
+ * over the dedicated read connection (`registerSqlTools`), and the reporters
+ * below.
  */
 import {
   action,
@@ -19,6 +20,7 @@ import {
   hotCellGraph,
   registerStandardTools,
 } from "@habemus-papadum/aiui-viz";
+import { registerSqlTools } from "@habemus-papadum/aiui-viz/duckdb";
 import {
   registerClearSelection,
   selectionDimReport,
@@ -55,7 +57,7 @@ export type AppGraph = ReturnType<typeof graph>;
 
 function registerTools(): void {
   const kit = agentToolkit(appScope.name);
-  const { registerTool, registerReporter } = kit;
+  const { registerReporter } = kit;
   registerStandardTools(kit);
 
   /** Remove every cross-filter clause — dimensions, the map's region, the
@@ -71,29 +73,10 @@ function registerTools(): void {
   // ("wine/embedding", the whole region box); clause and visual both.
   registerClearSelection(appScope);
 
-  registerTool({
-    name: "query",
-    description:
-      "Run a bounded, read-only SQL SELECT against the `wine` table (columns: id, title, " +
-      "country, province, region_1, region_2, winery, description, points, price, variety, " +
-      "designation, variety_class, variety_cat, projection_x, projection_y, latitude, " +
-      "longitude, eq_x, eq_y) or the `province_geo` lookup (country, province, lat, lon). " +
-      "Row-capped.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        sql: { type: "string", description: "a single SELECT/WITH statement" },
-        limit: { type: "number", description: "row cap (≤5000, default 1000)" },
-      },
-      required: ["sql"],
-      additionalProperties: false,
-    },
-    run: (args) => {
-      const sql = String(args?.sql ?? "");
-      const limit = typeof args?.limit === "number" ? args.limit : 1000;
-      return store.runQuery(sql, limit);
-    },
-  });
+  // The agent's `sql` + `schema` tools over the dedicated read connection —
+  // the library's; the `wine` and `province_geo` tables are introspected into
+  // the tool's usage once loaded (the hand-typed column list is gone).
+  registerSqlTools(kit, { runner: store.sqlRunner });
 
   registerReporter("loadState", () => store.loadState());
   registerReporter("rowsTotal", () => store.summary()?.rowsTotal ?? null);

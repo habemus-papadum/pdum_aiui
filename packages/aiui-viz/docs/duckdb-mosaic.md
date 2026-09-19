@@ -328,6 +328,51 @@ and the encoded gotchas (2×1-D over 2-D boxes, preagg vs. cross-table
 clauses, report-after-a-task-boundary); `src/mosaic-selection.test.ts` pins
 the behaviors against the real pinned mosaic-core.
 
+### The agent's SQL tools — `sql` and `schema`
+
+Every DuckDB app used to hand-roll the same bounded `query` tool, with the column list typed
+into its description (and drifting). The `aiui-viz/duckdb` subpath now owns it:
+
+```ts
+import { duckdbRunner, registerSqlTools } from "@habemus-papadum/aiui-viz/duckdb";
+
+// In the store: a connection DEDICATED to agent reads, so a slow question
+// never contends with Mosaic's views. The runner resolves once loaded.
+queryCon = await db.connect();
+resolveRunner(duckdbRunner(queryCon));
+
+// In graph.ts, beside the standard tools:
+registerSqlTools(kit, { runner: store.sqlRunner });
+```
+
+Two read tools land on the kit, each carrying its usage (the tool-docs convention, so the
+oracle, a live delegation and `page_tools_list` all render the same guidance):
+
+- **`sql { sql, limit?, format? }`** — one `SELECT`/`WITH` statement, guarded: read-only, a
+  single statement, wrapped in a `LIMIT` one past the cap so truncation is *detected* rather
+  than guessed, a byte budget on the rows (32 KB, the panel's `read_file` precedent), bounded
+  cells (long strings clip at 256 chars with a marker; BigInt to number, dates to ISO,
+  binary to `<n bytes>`), and a timeout that cancels the statement (`cancelSent`). The answer
+  is **columnar** — `columns`, `types` (free from Arrow), `rows` as arrays (half the tokens of
+  row objects) — plus `truncated: { rows, bytes, limit, byteCap }`. `format: "markdown"`
+  returns a table with a row-count footer, for a voice model that summarizes rather than
+  reads. Errors are thrown with DuckDB's message untouched: it carries the position and the
+  candidate names, and every consumer forwards it, so the model fixes the statement and
+  retries.
+- **`schema { table?, summarize? }`** — tables and columns with types from
+  `information_schema` (every catalog, minus the system schemas); `summarize: true` with a
+  table adds DuckDB's `SUMMARIZE`, on request only since it scans the table.
+
+The table list is the one fact the `sql` tool's usage should carry and the app should not
+have to type: omitted, it is **introspected once the runner resolves** and the tool is
+re-registered with it (replace-by-name, HMR-safe — every consumer sees the new usage); pass
+`tables` to state it instead. The library still owns no connection and no Mosaic: the runner
+seam has two adapters, `duckdbRunner(connection)` for duckdb-wasm and
+`connectorRunner(connector)` for a Mosaic `Connector` (the Quack path, where the SQL string
+travels — no type names on that path, `schema` still answers). `runSql` and `schemaOf` are
+exported on their own for a bespoke tool; `src/duckdb.test.ts` pins the guards against a
+scripted runner.
+
 ### Beyond vgplot: the embedding view
 
 Any Mosaic client can join this coordinator — Apple's Embedding Atlas point

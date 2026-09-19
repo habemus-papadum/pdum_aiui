@@ -27,6 +27,7 @@
  */
 import type { AsyncDuckDB, AsyncDuckDBConnection } from "@duckdb/duckdb-wasm";
 import { scope } from "@habemus-papadum/aiui-viz";
+import { duckdbRunner, type SqlRunner } from "@habemus-papadum/aiui-viz/duckdb";
 import {
   bindSelectionComponents,
   categorySelection,
@@ -140,19 +141,9 @@ export interface WineStore {
   world: Accessor<BorderPoint[]>;
   /** Idempotent async load; forwards fraction-complete to `onProgress`. */
   ensureLoaded: (onProgress?: (fraction: number) => void) => Promise<Summary>;
-  /** Bounded, read-only SELECT for the agent query tool. */
-  runQuery: (sqlText: string, rowCap?: number) => Promise<Record<string, unknown>[]>;
-}
-
-/** Make an Arrow row JSON-safe: BigInt → number, Date → ISO string. */
-function sanitize(row: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(row)) {
-    if (typeof v === "bigint") out[k] = Number(v);
-    else if (v instanceof Date) out[k] = v.toISOString();
-    else out[k] = v;
-  }
-  return out;
+  /** The agent's SQL runner — the dedicated read connection, ready once the
+   * dataset is loaded (`registerSqlTools` awaits it). */
+  sqlRunner: Promise<SqlRunner>;
 }
 
 const num = (v: unknown): number => (typeof v === "bigint" ? Number(v) : Number(v));
@@ -264,9 +255,14 @@ export const store: WineStore = appScope.durable("store", () => {
   const [stats, setStats] = createSignal<SelectionStats | undefined>(undefined);
   const [world, setWorld] = createSignal<BorderPoint[]>([]);
 
-  // A second connection for our own reads (summary + the agent query tool),
-  // so they never contend with Mosaic's connection.
+  // A second connection for our own reads (summary + the agent's sql/schema
+  // tools), so they never contend with Mosaic's connection. The runner
+  // resolves once it exists; the tools register before that.
   let queryCon: AsyncDuckDBConnection | undefined;
+  let resolveRunner!: (runner: SqlRunner) => void;
+  const sqlRunner = new Promise<SqlRunner>((resolve) => {
+    resolveRunner = resolve;
+  });
 
   // The border overlay is optional chrome: fetched alongside the parquets,
   // never allowed to abort the dataset load.
@@ -309,6 +305,7 @@ export const store: WineStore = appScope.durable("store", () => {
     const db: AsyncDuckDB = await instantiateDuckDB(BUNDLES);
     const mosaicCon = await db.connect();
     queryCon = await db.connect();
+    resolveRunner(duckdbRunner(queryCon));
     coordinator.databaseConnector(wasmConnector({ duckdb: db, connection: mosaicCon }));
     report(0.75);
 
@@ -388,18 +385,6 @@ export const store: WineStore = appScope.durable("store", () => {
     return loadPromise;
   }
 
-  async function runQuery(sqlText: string, rowCap = 1000): Promise<Record<string, unknown>[]> {
-    if (!queryCon) throw new Error("dataset not loaded yet");
-    const trimmed = sqlText.trim().replace(/;\s*$/, "");
-    if (!/^(select|with)\b/i.test(trimmed)) {
-      throw new Error("only read-only SELECT/WITH queries are allowed");
-    }
-    if (trimmed.includes(";")) throw new Error("multiple statements are not allowed");
-    const cap = Math.max(1, Math.min(5000, Math.floor(rowCap)));
-    const t = await queryCon.query(`SELECT * FROM (${trimmed}) AS _q LIMIT ${cap}`);
-    return t.toArray().map((r) => sanitize(r as Record<string, unknown>));
-  }
-
   return {
     coordinator,
     brush,
@@ -416,6 +401,6 @@ export const store: WineStore = appScope.durable("store", () => {
     stats,
     world,
     ensureLoaded,
-    runQuery,
+    sqlRunner,
   } satisfies WineStore;
 });

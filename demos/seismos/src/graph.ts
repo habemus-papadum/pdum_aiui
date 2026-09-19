@@ -25,6 +25,7 @@ import {
   hotCellGraph,
   registerStandardTools,
 } from "@habemus-papadum/aiui-viz";
+import { registerSqlTools } from "@habemus-papadum/aiui-viz/duckdb";
 import {
   registerClearSelection,
   selectionDimReport,
@@ -147,25 +148,10 @@ function registerTools(): void {
     run: () => ({ mcSuggested: mcMaxCurvature(store.histo()) }),
   });
 
-  registerTool({
-    name: "query",
-    description:
-      "Run a bounded, read-only SQL SELECT against the `quakes` table (columns: time, year, longitude, latitude, depth, mag, magtype, type, depth_class). Row-capped.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        sql: { type: "string", description: "a single SELECT/WITH statement" },
-        limit: { type: "number", description: "row cap (≤5000, default 1000)" },
-      },
-      required: ["sql"],
-      additionalProperties: false,
-    },
-    run: (args) => {
-      const sql = String(args?.sql ?? "");
-      const limit = typeof args?.limit === "number" ? args.limit : 1000;
-      return store.runQuery(sql, limit);
-    },
-  });
+  // The agent's `sql` + `schema` tools over the dedicated read connection —
+  // the library's, with the table list introspected into the tool's usage
+  // once the catalog is loaded (the hand-typed column list is gone).
+  registerSqlTools(kit, { runner: store.sqlRunner });
 
   registerReporter("loadState", () => store.loadState());
   registerReporter("rowsTotal", () => store.summary()?.rowsTotal ?? null);
