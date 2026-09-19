@@ -7,6 +7,7 @@
 
 export type { ControlSurfaceToolsOptions, RegistryToolsOptions } from "./aiui-tools";
 export {
+  briefFromAiuiRegistry,
   controlValueSchema,
   onControlSurfaceChange,
   toolsFromAiuiRegistry,

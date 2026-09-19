@@ -55,6 +55,9 @@ export default defineConfig({
         "color-mode": "src/site/color-mode.ts",
         lens: "src/site/lens.tsx",
         "tool-log": "src/site/tool-log.tsx",
+        // Framework-free like `./modal`, so node-side consumers (aiui-live's
+        // delegators) render the same Tools: section the browser does.
+        "tool-brief": "src/tool-brief.ts",
         modal: "src/modal/index.ts",
         testing: "src/testing.ts",
       },

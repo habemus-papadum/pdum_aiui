@@ -20,7 +20,7 @@ import {
   currentThreadEvents,
   panelIntentConfig,
 } from "./lanes";
-import { oracleToolsForTab } from "./lanes/oracle";
+import { oracleBriefForTab, oracleToolsForTab } from "./lanes/oracle";
 import { intentSpec } from "./spec";
 
 const settle = async (rounds = 16): Promise<void> => {
@@ -903,6 +903,31 @@ describe("the oracle session's credential and its ending (O3a, owner 2026-07-30)
     oraclePageTools.set(true);
     await settle(20);
     expect(pageNames()).toEqual(["kick"]);
+  });
+
+  it("the projection carries the tool document — usage and kind per tool, the kit's brief", async () => {
+    const { transport } = fakeTransport();
+    const r = oracleRig({ oracleTransport: transport, oracleKeySource: countingKeySource([]) });
+    r.bus.firePageEvent({
+      kind: "pageTools",
+      tab: 7,
+      registrations: [
+        {
+          ns: "app",
+          brief: "One damped oscillator.",
+          tools: [{ name: "kick", description: "Kick it.", usage: "Once.", kind: "write" }],
+        },
+      ],
+    });
+    r.client.dispatch("oracle");
+    await settle(30);
+    expect(oracleToolsForTab(r.lanes.pageTools, 7)[0]).toMatchObject({
+      name: "kick",
+      usage: "Once.",
+      kind: "write",
+    });
+    expect(oracleBriefForTab(r.lanes.pageTools, 7)).toBe("One damped oscillator.");
+    expect(oracleBriefForTab(r.lanes.pageTools, 9)).toBeUndefined();
   });
 
   it("a projected tool CALLS the page — and the tab it was built for, not the one in view", async () => {

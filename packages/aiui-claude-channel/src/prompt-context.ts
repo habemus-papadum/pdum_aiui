@@ -44,6 +44,13 @@ export const CDP_NO_BROWSER_NOTE =
   "Browser tooling: this session drives no browser over CDP — rely on the shots and " +
   "selections in this prompt rather than browser-devtools tools.";
 
+/** The one static page-tools sentence an aiui prompt carries. Never per-tool
+ * text: the tool document (each namespace's brief, each tool's usage) is read
+ * at discovery time through page_tools_list, not on every billed prompt. */
+export const PAGE_TOOLS_NOTE =
+  "The app may expose page tools: call page_tools_list for this tab and read each " +
+  "namespace's brief before driving it.";
+
 /** The co-driving heads-up appended to the aligned note when other channels
  * share the browser (a supported multi-agent workflow — each session should
  * keep to its own tabs, but honesty beats surprise). */
@@ -136,6 +143,13 @@ export function promptContextSections(meta: HelloMeta | undefined): string[] {
 
   if (aiui && source?.root !== undefined) {
     sections.push(`Relative paths in this prompt are relative to: ${source.root}`);
+  }
+
+  // One static sentence, never per-tool text: the tool DOCUMENT (each
+  // namespace's brief, each tool's usage) is read at discovery time through
+  // page_tools_list, not carried on every prompt (the tool-docs proposal).
+  if (aiui && hasTab) {
+    sections.push(PAGE_TOOLS_NOTE);
   }
 
   // The CDP-alignment sentence (hello-fixed, like everything here): warn or

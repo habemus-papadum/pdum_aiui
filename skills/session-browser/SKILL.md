@@ -22,8 +22,10 @@ routing table, not an event feed. Ask when you have a question.
   `url`, the `tab` record (url, title, and the ids the host has — `chromeTabId`/`windowId`/
   `tabIndex` under the extension, `targetId`/`driverTab` under the plain-page CDP host),
   `activeTab` (the tab the user is looking at, when known), and `namespaces[]` — each with `ns`,
-  `active` (false = the app parked it, off-route; still callable), `shadowed`, and its
-  `tools[]` (`name`/`description`/`inputSchema`). Name a tab with any of `chromeTabId`,
+  `active` (false = the app parked it, off-route; still callable), `shadowed`, its `brief`
+  (what the app is and how its tools relate — **read it before driving the app**), and its
+  `tools[]` (`name`/`description`/`usage`/`kind`/`inputSchema`; `usage` says when to call a
+  tool and what its result means, `kind` is `read` or `write`). Name a tab with any of `chromeTabId`,
   `targetId`, `driverTab`, `url` (exact href or a prefix), or `clientId`; no arguments lists
   every tab. A named tab that is not connected errors and **names the tabs that are**. An EMPTY
   list means **no intent client is running** — the page dials nothing itself.

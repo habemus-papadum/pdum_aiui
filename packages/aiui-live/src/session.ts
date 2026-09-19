@@ -21,7 +21,8 @@
  * what to say (the delegator's), or know which side of a wire it is on.
  */
 
-import { livePrompt } from "./prompt";
+import { renderToolBrief } from "@habemus-papadum/aiui-viz/tool-brief";
+import { backendToolsFromTools, livePrompt } from "./prompt";
 import {
   APPENDED_EVENT,
   type AppendKind,
@@ -144,6 +145,7 @@ export class LiveSession {
   private assistant: TranscriptTrack;
   private delegator: Delegator | undefined;
   private tools: LiveTool[];
+  private toolBrief: string | undefined;
   private seq = 0;
   private taskSeq = 0;
   private t0 = 0;
@@ -340,9 +342,18 @@ export class LiveSession {
     return this.delegator;
   }
 
-  setTools(tools: LiveTool[]): void {
+  /** Replace the tool surface. `brief` is the app's brief (aiui-viz's
+   * tool-docs convention), rendered above the tools wherever the backend's
+   * instructions are composed — never sent in the tool array. */
+  setTools(tools: LiveTool[], options?: { brief?: string }): void {
     this.tools = tools;
+    this.toolBrief = options?.brief;
     this.record("local", "note", `tools → ${tools.length}`);
+  }
+
+  /** The app's brief as last set (see {@link setTools}). */
+  currentBrief(): string | undefined {
+    return this.toolBrief;
   }
 
   currentTools(): readonly LiveTool[] {
@@ -485,15 +496,32 @@ export class LiveSession {
 
   private composeWire(): LiveSessionConfig {
     const config = this.options.config ?? {};
+    // The voice model's capability list, derived from the tools when the
+    // slots leave it unset (see backendToolsFromTools).
+    const slots = typeof config.instructions === "string" ? undefined : (config.instructions ?? {});
+    const derived =
+      slots !== undefined && slots.backendTools === undefined
+        ? backendToolsFromTools(this.tools, this.toolBrief)
+        : undefined;
     const instructions =
       typeof config.instructions === "string"
         ? config.instructions
-        : livePrompt(config.instructions);
+        : livePrompt(derived !== undefined ? { ...slots, backendTools: derived } : slots);
     let delegation: LiveDelegationConfig = config.delegation ?? { type: "client" };
     if (delegation.type === "responses" && delegation.responses.tools === undefined) {
+      // The session manages the hosted backend's tool config: the tool array,
+      // and the tool DOCUMENT (brief + usage, the same Tools: section every
+      // consumer renders) appended to its instructions.
+      const toolBrief = renderToolBrief([{ ns: "app", brief: this.toolBrief, tools: this.tools }]);
+      const base = delegation.responses.instructions;
+      const withBrief = [base, toolBrief].filter((p) => p !== undefined && p !== "").join("\n\n");
       delegation = {
         type: "responses",
-        responses: { ...delegation.responses, tools: this.tools.map(backendToolFor) },
+        responses: {
+          ...delegation.responses,
+          tools: this.tools.map(backendToolFor),
+          ...(withBrief !== "" ? { instructions: withBrief } : {}),
+        },
       };
     }
     const audio: LiveAudioConfig = {
@@ -907,6 +935,7 @@ export class LiveSession {
       text: task.request,
       transcript: this.transcript(),
       tools: this.tools,
+      ...(this.toolBrief !== undefined ? { brief: this.toolBrief } : {}),
       signal: controller.signal,
       say: async (text) => {
         await this.append("commentary", text, wireId, task.id);

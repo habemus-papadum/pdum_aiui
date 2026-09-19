@@ -10,6 +10,7 @@
  * output items plus our `function_call_output`s). `store: false` throughout.
  */
 
+import { renderToolBrief } from "@habemus-papadum/aiui-viz/tool-brief";
 import { backendPrompt } from "../prompt.ts";
 import type { ReasoningEffort } from "../protocol.ts";
 import { backendToolFor, type DelegationRequest, type Delegator, runTool } from "../types.ts";
@@ -62,7 +63,13 @@ export function responsesDelegator(options: ResponsesDelegatorOptions): Delegato
         );
       }
       const doFetch = options.fetchImpl ?? fetch;
-      const instructions = options.instructions ?? backendPrompt({ app: options.app });
+      // The task prompt, then the app's tools as a document (the brief, each
+      // tool's usage, read/write classes) — the same section every consumer
+      // renders, computed from the very tool array sent below.
+      const toolBrief = renderToolBrief([{ ns: "app", brief: req.brief, tools: req.tools }]);
+      const instructions = [options.instructions ?? backendPrompt({ app: options.app }), toolBrief]
+        .filter((part) => part !== "")
+        .join("\n\n");
       const tools = req.tools.map(backendToolFor);
       const input: unknown[] = [
         { role: "user", content: requestMessage(req, options.contextUtterances ?? 8) },

@@ -271,6 +271,7 @@ async function serveRelay(
             text: frame.text,
             transcript: frame.transcript,
             tools,
+            ...(typeof frame.brief === "string" ? { brief: frame.brief } : {}),
             signal: controller.signal,
             say: async (text) => send({ type: "say", id: frame.id, text }),
             note: async (text) => send({ type: "note", id: frame.id, text }),

@@ -250,9 +250,20 @@ persona, published verbatim (`ORACLE_BASE_PERSONA` in `packages/aiui-oracle/src/
 > that are currently available; if something asked for has no tool, say so plainly. If unsure
 > what the app currently shows, consult your tools before guessing.
 
-The woven prompt stays **generic about which tools exist** — the `tools` array is the single
+The woven slots stay **generic about which tools exist** — the `tools` array is the single
 source of truth (a prompt naming an absent tool makes realtime models invent or pretend; the
-vendor documents this failure mode).
+vendor documents this failure mode). The one place the prompt names tools is a **`Tools:`
+section the session appends itself**, rendered from its own tool array in the same breath as
+`setTools` (aiui-viz's `renderToolBrief`): the app's brief, then each tool with its usage,
+grouped into read tools (called freely once the intent is clear) and write tools (they change
+the app; the result is the value actually applied), and the one-line failure rule. Because the
+text is derived, it cannot name a tool the array lacks; because `refreshPrompt` sends only when
+the text moved, a `setTools` that changes nothing costs nothing. Both halves come from the app's
+declarations: a tool's `usage` is its doc comment's `@usage`/`@example`, the brief is
+`agentToolkit(ns, { brief })` — see the user guide's "Documenting a tool". Pass the brief with
+the tools: `session.setTools(tools, { brief })`; `briefFromAiuiRegistry()` collects it from the
+page registry, as `toolsFromAiuiRegistry()` collects the tools. A plain-string `instructions`
+gets no section: a string is the whole prompt, stated.
 
 ## The lab
 

@@ -185,6 +185,7 @@ export function remoteDelegator(options: RemoteDelegatorOptions = {}): Delegator
             text: req.text,
             transcript: req.transcript,
             tools: req.tools.map(toolSpec),
+            ...(req.brief !== undefined ? { brief: req.brief } : {}),
           }),
         );
       });

@@ -1,4 +1,23 @@
 import { describe, expect, it } from "vitest";
+import { backendToolsFromTools } from "./prompt";
+
+describe("backendToolsFromTools", () => {
+  it("derives the voice model's capability list from the tools and the brief's first sentence", () => {
+    expect(
+      backendToolsFromTools(
+        [
+          { name: "set_freq", description: "Set the frequency." },
+          { name: "kick", description: "Add a phase impulse." },
+        ],
+        "A damped oscillator. It has a trace.",
+      ),
+    ).toBe(
+      "- App: A damped oscillator.\n- set_freq: Set the frequency.\n- kick: Add a phase impulse.",
+    );
+    expect(backendToolsFromTools([])).toBeUndefined();
+  });
+});
+
 import { backendPrompt, DELEGATION_CLOSING, livePrompt } from "./prompt";
 
 describe("livePrompt", () => {

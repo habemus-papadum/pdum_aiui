@@ -8,7 +8,8 @@
  */
 
 import type { LiveSession, LiveTool } from "@habemus-papadum/aiui-live";
-import { onControlSurfaceChange, toolsFromControlSurface } from "@habemus-papadum/aiui-oracle";
+import { briefFromAiuiRegistry, toolsFromAiuiRegistry } from "@habemus-papadum/aiui-oracle";
+import { ensureAiuiGlobal } from "@habemus-papadum/aiui-viz";
 import { createEffect, createSignal, onCleanup, untrack } from "solid-js";
 import { Bench } from "../live/Bench";
 import { LIVE_SLOTS } from "../live/prompt";
@@ -17,15 +18,22 @@ import { Nav } from "./Nav";
 import { Oscilloscope } from "./Oscilloscope";
 
 export function App() {
-  const project = () => toolsFromControlSurface({ scope: appScope }) as LiveTool[];
-  const [tools, setTools] = createSignal<LiveTool[]>(untrack(project));
-  onCleanup(onControlSurfaceChange(() => setTools(untrack(project))));
+  // The app's PAGE TOOLS — the kit's whole surface (report/set/locate, the
+  // actions, anything registerTool added), with each tool's usage and the
+  // kit's brief — exactly what the intent panel's oracle and Claude Code see.
+  const namespaces = [appScope.name];
+  const project = () => ({
+    tools: (toolsFromAiuiRegistry({ namespaces }) ?? []) as LiveTool[],
+    brief: briefFromAiuiRegistry({ namespaces }),
+  });
+  const [surface, setSurface] = createSignal(untrack(project));
+  onCleanup(ensureAiuiGlobal()?.tools?.onChange(() => setSurface(untrack(project))) ?? (() => {}));
   const [session, setSession] = createSignal<LiveSession | undefined>(undefined);
   // The surface is LIVE: a re-projection reaches the current session's tools
   // (and, in hosted mode, the next session's registration).
   createEffect(
-    () => ({ s: session(), t: tools() }),
-    ({ s, t }) => s?.setTools(t),
+    () => ({ s: session(), surface: surface() }),
+    ({ s, surface }) => s?.setTools(surface.tools, { brief: surface.brief }),
   );
 
   return (
@@ -42,14 +50,20 @@ export function App() {
       </header>
       <Oscilloscope />
       <Bench
-        options={{ slots: LIVE_SLOTS, app: "a damped-oscillator visualizer", tools }}
+        options={{
+          slots: LIVE_SLOTS,
+          app: "a damped-oscillator visualizer",
+          // The initial surface; the effect above keeps the session's tools
+          // and brief current from then on.
+          tools: () => surface().tools,
+        }}
         initial="responses-browser"
         onSession={setSession}
       />
       <p class="app-foot">
         tools currently projected:{" "}
-        {tools()
-          .map((tool) => tool.name)
+        {surface()
+          .tools.map((tool) => tool.name)
           .join(", ")}
       </p>
     </div>

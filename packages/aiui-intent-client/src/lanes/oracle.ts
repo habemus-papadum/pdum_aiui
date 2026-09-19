@@ -143,6 +143,8 @@ export function oracleToolsForTab(
     registration.tools.map((tool) => ({
       name: vendorToolName(prefixed ? `${registration.ns}_` : "", tool.name),
       description: tool.description,
+      ...(tool.usage !== undefined ? { usage: tool.usage } : {}),
+      ...(tool.kind !== undefined ? { kind: tool.kind } : {}),
       parameters: tool.inputSchema ?? {
         type: "object",
         properties: {},
@@ -156,6 +158,22 @@ export function oracleToolsForTab(
         registry.call(tab, registration.ns, tool.name, args),
     })),
   );
+}
+
+/** The tab's kits' briefs, joined — rendered above the tool list by the
+ * session (`setTools(tools, { brief })`). Same namespaces as
+ * {@link oracleToolsForTab}, so the brief and the tools describe one surface. */
+export function oracleBriefForTab(
+  registry: PageToolsRegistry,
+  tab: number | undefined,
+): string | undefined {
+  if (tab === undefined) {
+    return undefined;
+  }
+  const briefs = activeNamespaces(registry, tab)
+    .map((registration) => registration.brief?.trim())
+    .filter((brief): brief is string => brief !== undefined && brief !== "");
+  return briefs.length > 0 ? briefs.join("\n\n") : undefined;
 }
 
 /**
@@ -408,6 +426,7 @@ export function createOracleLanes(ctx: OracleLaneContext): OracleLanes {
    */
   const applyTools = (): void => {
     const tools: OracleTool[] = [];
+    let brief: string | undefined;
     if (oraclePageTools.get() === true) {
       // The eye when it is on an app, else the last app — and REMEMBER what we
       // resolved to, which is what makes "the last one" mean anything.
@@ -416,6 +435,7 @@ export function createOracleLanes(ctx: OracleLaneContext): OracleLanes {
       toolTab = tab;
       const appTools = oracleToolsForTab(pageTools, tab);
       tools.push(...appTools);
+      brief = oracleBriefForTab(pageTools, tab);
       // Published BEFORE the unchanged-surface early return below: looking at
       // another tab changes `inView` without changing a single tool, and that
       // is the transition the panel most needs to show.
@@ -433,20 +453,22 @@ export function createOracleLanes(ctx: OracleLaneContext): OracleLanes {
     // toggle off means its tools are ABSENT, never stale — and the persona
     // stays generic about what exists, because the array is the single source
     // of truth (the documented vendor failure mode: a prompt naming an absent
-    // tool makes the model invent one).
+    // tool makes the model invent one). The `Tools:` section the session
+    // appends is rendered from this very array, in the same call.
     //
     // Skipped when nothing actually changed. The inputs move more often than
     // the SURFACE does — every glance at another tab re-runs this and, under
     // the last-app rule, resolves to the same tools — and each `setTools` is a
     // mid-conversation `session.update`. The signature carries the tab because
     // the tools' closures are bound to it: same names on a different tab is a
-    // real change, even though the wire shape is identical.
-    const signature = `${toolTab ?? "-"}|${tools.map((tool) => tool.name).join(",")}`;
+    // real change, even though the wire shape is identical; and the brief,
+    // because a changed brief is a changed prompt.
+    const signature = `${toolTab ?? "-"}|${tools.map((tool) => tool.name).join(",")}|${brief ?? ""}`;
     if (signature === appliedSignature) {
       return;
     }
     appliedSignature = signature;
-    session.setTools(tools);
+    session.setTools(tools, brief !== undefined ? { brief } : undefined);
   };
 
   // The session's own narration rides the panel's status line and toasts — the

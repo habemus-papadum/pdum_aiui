@@ -11,6 +11,7 @@ import {
   CDP_NO_BROWSER_NOTE,
   cdpAlignmentNote,
   cdpSharedNote,
+  PAGE_TOOLS_NOTE,
   promptContextSections,
 } from "./prompt-context";
 
@@ -68,5 +69,23 @@ describe("promptContextSections carries the alignment sentence", () => {
   it("says nothing extra when the hello has no verdict (older clients unchanged)", () => {
     const sections = promptContextSections({ tab: { url: "http://app.example/" } });
     expect(sections.some((s) => s.includes("Browser tooling"))).toBe(false);
+  });
+});
+
+describe("promptContextSections and page tools", () => {
+  it("an aiui tab gets ONE static sentence pointing at page_tools_list — never per-tool text", () => {
+    const sections = promptContextSections({
+      tab: { url: "http://app.example/", title: "app" },
+      source: { root: "/repo" },
+    });
+    expect(sections).toContain(PAGE_TOOLS_NOTE);
+    expect(sections.filter((s) => s === PAGE_TOOLS_NOTE)).toHaveLength(1);
+  });
+
+  it("a non-aiui tab, or no tab, says nothing about page tools", () => {
+    expect(promptContextSections({ tab: { url: "http://x.example/" } })).not.toContain(
+      PAGE_TOOLS_NOTE,
+    );
+    expect(promptContextSections({ source: { root: "/repo" } })).not.toContain(PAGE_TOOLS_NOTE);
   });
 });

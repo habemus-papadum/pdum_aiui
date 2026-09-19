@@ -292,6 +292,10 @@ export interface DelegationRequest {
   transcript: TranscriptSnapshot;
   /** Tools the backend may call; executed wherever they live. */
   tools: LiveTool[];
+  /** The app's brief (aiui-viz's tool-docs convention): what the app is and
+   * how its tools relate. Rendered above the tool list in the backend's
+   * instructions, never sent in the tool array. */
+  brief?: string;
   /** Aborted on cancel or session close. */
   signal: AbortSignal;
   /** Spoken to the user (paraphrased by the voice model). */

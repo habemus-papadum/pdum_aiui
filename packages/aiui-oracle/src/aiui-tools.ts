@@ -257,6 +257,25 @@ export interface RegistryToolsOptions {
 }
 
 /**
+ * The kits' briefs, joined — the text a session renders above its tool list
+ * (`session.setTools(tools, { brief })`). Same selection as
+ * {@link toolsFromAiuiRegistry}, so the brief and the tools describe one
+ * surface. Undefined when no kit declared one, or the page has no registry.
+ */
+export function briefFromAiuiRegistry(options: RegistryToolsOptions = {}): string | undefined {
+  const registry = ensureAiuiGlobal()?.tools;
+  if (registry === undefined) {
+    return undefined;
+  }
+  const briefs = registry
+    .list()
+    .filter((r) => options.namespaces === undefined || options.namespaces.includes(r.ns))
+    .map((r) => r.brief?.trim())
+    .filter((b): b is string => b !== undefined && b !== "");
+  return briefs.length > 0 ? briefs.join("\n\n") : undefined;
+}
+
+/**
  * Wrap the page's `window.__AIUI__.tools` registrations — whatever surface
  * the page installed (the standard tools, custom kits), exactly as the intent
  * client sees it. Names are `ns_name`-prefixed when more than one namespace

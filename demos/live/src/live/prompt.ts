@@ -29,12 +29,12 @@ export const WIRE_SLOTS: LivePromptSlots = {
   dontDelegateWhen: "- The user only greets you.",
 };
 
-/** The backends bench: three toy tools, so a backend has something to call. */
+/** The backends bench: three toy tools, so a backend has something to call.
+ * `backendTools` is left unset on purpose: the session derives the voice
+ * model's capability list from the tool array itself (`backendToolsFromTools`),
+ * so the list it reads is the list the backend has. */
 export const BACKENDS_SLOTS: LivePromptSlots = {
   app: "This is a bench for comparing reasoning backends. The backend has a clock, a calculator, and a deliberately slow lookup.",
-  backendTools: `- clock: the current time.
-- add: add two numbers.
-- slow_lookup: look something up in a slow archive (takes as long as the user asks, in seconds).`,
   delegateWhen:
     "- The user asks the time, asks for arithmetic, asks to look something up, or asks anything factual.",
   dontDelegateWhen: "- The user only greets you or thanks you.",

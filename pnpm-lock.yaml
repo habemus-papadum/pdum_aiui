@@ -1189,6 +1189,9 @@ importers:
 
   packages/aiui-live:
     dependencies:
+      '@habemus-papadum/aiui-viz':
+        specifier: workspace:^
+        version: link:../aiui-viz
       '@solidjs/web':
         specifier: catalog:solid
         version: 2.0.0-beta.32(solid-js@2.0.0-beta.32)

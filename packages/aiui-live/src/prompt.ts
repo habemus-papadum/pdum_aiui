@@ -45,6 +45,25 @@ export interface LivePromptOptions {
   interruption?: string;
 }
 
+/**
+ * The voice model's `Backend tools:` capability list, DERIVED from the tool
+ * array and the app's brief (the vendor's template: one capability per line,
+ * "what the backend can do"). The session uses it when the slots leave
+ * `backendTools` unset, so the list the voice model reads is the list the
+ * backend actually has — the hand-maintained copy it replaces drifted.
+ * Returns undefined with nothing to say (the default text applies).
+ */
+export function backendToolsFromTools(
+  tools: ReadonlyArray<{ name: string; description: string }>,
+  brief?: string,
+): string | undefined {
+  const lines: string[] = [];
+  const first = brief?.trim().split(/(?<=[.!?])\s+/)[0];
+  if (first !== undefined && first !== "") lines.push(`- App: ${first}`);
+  for (const tool of tools) lines.push(`- ${tool.name}: ${tool.description}`);
+  return lines.length > 0 ? lines.join("\n") : undefined;
+}
+
 /** Compose the session instructions. Deterministic — the same slots always
  * weave the same text, so a prompt can be diffed across sessions. */
 export function livePrompt(slots: LivePromptSlots = {}, options: LivePromptOptions = {}): string {

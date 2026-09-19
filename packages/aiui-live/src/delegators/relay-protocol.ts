@@ -16,6 +16,8 @@ export type RelayClientFrame =
       text: string;
       transcript: TranscriptSnapshot;
       tools: LiveToolSpec[];
+      /** The app's brief, rendered above the tools by the server-side delegator. */
+      brief?: string;
     }
   | { type: "cancel"; id: string }
   | { type: "tool_result"; callId: string; output: unknown };

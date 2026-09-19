@@ -17,6 +17,7 @@
  *  - unrecognized vendor events land in the ledger as `raw`, never dropped.
  */
 
+import { renderToolBrief } from "@habemus-papadum/aiui-viz";
 import { priceRealtimeUsage, usageFromRealtimeResponse } from "./cost";
 import { pruneTurnDetection, setPath, TURN_DETECTION_TYPE } from "./params";
 import { weaveInstructions } from "./prompt";
@@ -135,6 +136,8 @@ export class OracleSession {
    * send reads this, so "what did we tell it" has exactly one answer.
    */
   private instructionsText = "";
+  /** The app's brief, rendered above the tools in the `Tools:` section. */
+  private toolBrief: string | undefined;
   /**
    * The greeting for THIS session, resolved once at start.
    *
@@ -352,10 +355,19 @@ export class OracleSession {
 
   /** Replace the tool surface mid-session (wholesale — the vendor semantics).
    * Reconciled against the `session.updated` ack; drift lands in the ledger. */
-  setTools(tools: OracleTool[]): void {
+  /**
+   * Replace the tool surface (wholesale — the vendor's semantics). `brief` is
+   * the app's brief (aiui-viz's tool-docs convention), rendered above the
+   * tools in the instructions' `Tools:` section. On a live session the
+   * prompt is refreshed in the same breath, so the section and the array can
+   * never disagree; {@link refreshPrompt} sends only when the text moved.
+   */
+  setTools(tools: OracleTool[], options?: { brief?: string }): void {
     this.applyTools(tools);
+    this.toolBrief = options?.brief;
     if (this.handle !== undefined) {
       this.sendSessionUpdate({ tools: this.toolSchemas() });
+      void this.refreshPrompt();
     }
   }
 
@@ -414,10 +426,31 @@ export class OracleSession {
     }
   }
 
-  /** Resolve the configured recipe into the text that goes on the wire. */
+  /**
+   * Resolve the configured recipe into the text that goes on the wire. A
+   * woven recipe gets the `Tools:` section appended — rendered from THIS
+   * session's tool array and brief (the sync rule, prompt.ts). A plain-string
+   * prompt is the whole prompt, stated: an app that took the wheel keeps it.
+   */
   private async composeInstructions(reason: PromptContext["reason"]): Promise<string> {
     const resolved = await this.resolve(this.options.config.instructions, reason);
-    return typeof resolved === "string" ? resolved : weaveInstructions(resolved);
+    if (typeof resolved === "string") {
+      return resolved;
+    }
+    const woven = weaveInstructions(resolved);
+    const section = this.toolBriefSection();
+    return section === "" ? woven : `${woven}\n\n${section}`;
+  }
+
+  /** The `Tools:` section for the current tool array (empty with no tools). */
+  private toolBriefSection(): string {
+    const tools = [...this.toolsByName.values()].map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+      ...(tool.usage !== undefined ? { usage: tool.usage } : {}),
+      ...(tool.kind !== undefined ? { kind: tool.kind } : {}),
+    }));
+    return renderToolBrief([{ ns: "app", brief: this.toolBrief, tools }]);
   }
 
   /** Run a {@link Resolved} value, handing a resolver the session's own facts.

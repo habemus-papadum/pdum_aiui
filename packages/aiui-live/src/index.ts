@@ -40,6 +40,7 @@ export { requestMessage, responsesDelegator } from "./delegators/responses";
 export type { BackendPromptOptions, LivePromptOptions } from "./prompt";
 export {
   backendPrompt,
+  backendToolsFromTools,
   DEFAULT_BACKCHANNEL_POLICY,
   DEFAULT_BACKEND_TOOLS,
   DEFAULT_DELEGATE_WHEN,

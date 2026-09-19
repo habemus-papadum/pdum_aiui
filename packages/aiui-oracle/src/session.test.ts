@@ -295,6 +295,63 @@ describe("the live surface", () => {
   });
 });
 
+describe("the Tools: section (the tool document in the prompt)", () => {
+  const kick: OracleTool = {
+    name: "kick",
+    description: "Add a phase impulse.",
+    usage: "Call once; the trace settles in a second.",
+    kind: "write",
+    parameters: { type: "object" },
+    execute: () => null,
+  };
+  const updates = (rig: ReturnType<typeof fakeTransport>) =>
+    rig.sent
+      .map((m) => (m as { session?: { instructions?: string } }).session?.instructions)
+      .filter((i): i is string => typeof i === "string");
+
+  it("a woven recipe carries the section, rendered from the tool array and the brief", async () => {
+    const rig = fakeTransport();
+    const session = new OracleSession({
+      config: { instructions: { app: "A wave app." }, tools: [kick] },
+      keySource: testKeys,
+      transport: rig.transport,
+    });
+    session.setTools([kick], { brief: "One damped oscillator." });
+    await session.start();
+    const text = String(session.sessionConfig().instructions ?? "");
+    expect(text).toContain("About this app: A wave app.");
+    expect(text).toContain("Tools:\nOne damped oscillator.");
+    expect(text).toContain(
+      "- kick: Add a phase impulse. Call once; the trace settles in a second.",
+    );
+    expect(text.indexOf("Tools:")).toBeGreaterThan(text.indexOf("About this app:"));
+  });
+
+  it("setTools on a live session refreshes the section — and only when the text moved", async () => {
+    const rig = fakeTransport();
+    const session = new OracleSession({
+      config: { instructions: { app: "A wave app." }, tools: [kick] },
+      keySource: testKeys,
+      transport: rig.transport,
+    });
+    await session.start();
+    rig.sent.length = 0;
+    session.setTools([kick]); // same surface, same text
+    await settle();
+    expect(updates(rig)).toEqual([]);
+    session.setTools([kick, { ...kick, name: "reset", description: "Reset the trace." }]);
+    await settle();
+    const [refreshed] = updates(rig);
+    expect(refreshed).toContain("- reset: Reset the trace.");
+  });
+
+  it("a plain-string prompt is the whole prompt — no section is appended", async () => {
+    const { session } = makeSession([kick]);
+    await session.start();
+    expect(session.sessionConfig().instructions).toBe("be helpful");
+  });
+});
+
 describe("park", () => {
   it("gates the mic without closing, and resume reopens it", async () => {
     const { session, rig } = makeSession([]);

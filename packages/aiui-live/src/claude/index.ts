@@ -31,6 +31,7 @@ import {
   type SDKUserMessage,
   tool,
 } from "@anthropic-ai/claude-agent-sdk";
+import { renderToolBrief } from "@habemus-papadum/aiui-viz/tool-brief";
 import { z } from "zod";
 import { requestMessage } from "../delegators/responses.ts";
 import { type DelegationRequest, type Delegator, runTool } from "../types.ts";
@@ -340,10 +341,12 @@ export function claudeDelegator(options: ClaudeDelegatorOptions = {}): Delegator
         },
         { once: true },
       );
-      const tools =
-        req.tools.length === 0
-          ? "(none)"
-          : req.tools.map((t) => `${t.name} — ${t.description}`).join("\n");
+      // The app's tools as a DOCUMENT — the same Tools: section the oracle
+      // and the Responses backend render (aiui-viz's renderToolBrief), so
+      // every consumer reads one text: the brief, then each tool with its
+      // usage, grouped read/write.
+      const brief = renderToolBrief([{ ns: "app", brief: req.brief, tools: req.tools }]);
+      const tools = brief === "" ? "(none)" : brief;
       push(
         `<delegation id="${req.id}">\n${requestMessage(req, 10)}\n\nApp tools available through app_call:\n${tools}\n</delegation>`,
       );

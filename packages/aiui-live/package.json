@@ -63,6 +63,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@habemus-papadum/aiui-viz": "workspace:^",
     "@solidjs/web": "catalog:solid",
     "solid-js": "catalog:solid",
     "ws": "catalog:"
