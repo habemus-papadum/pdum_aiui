@@ -772,7 +772,10 @@ export class LiveSession {
     if (call !== undefined) {
       task.log.push({ t: this.now(), line: `call ${call.name}(${call.arguments})` });
       this.touchTask(task);
-      void runTool(this.tools, call.name, call.arguments).then((output) => {
+      void runTool(this.tools, call.name, call.arguments, {
+        caller: "live:hosted",
+        ref: task.id,
+      }).then((output) => {
         const eventId = this.nextEventId();
         for (const reply of functionCallOutputEvents(call.callId, output, eventId)) {
           this.send(reply);

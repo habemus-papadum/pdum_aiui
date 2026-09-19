@@ -143,6 +143,50 @@ function forwardToRegistry(ns: string, h: AgentToolkitHandle): void {
   }
 }
 
+/** Run a tool and record the outcome on the shared registry's call log as a
+ * `page` call. Best-effort: an adopted registry without `record` logs nothing. */
+function recordCall(ns: string, tool: string, args: unknown, run: () => unknown): unknown {
+  const registry = ensureAiuiGlobal()?.tools;
+  const t0 = Date.now();
+  const done = (ok: boolean, result?: unknown, error?: string): void => {
+    try {
+      registry?.record?.({
+        ns,
+        tool,
+        args,
+        caller: "page",
+        ok,
+        ...(ok ? { result } : { error }),
+        ms: Date.now() - t0,
+      });
+    } catch {
+      // the log is a convenience; never let it disturb the call
+    }
+  };
+  const message = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+  let out: unknown;
+  try {
+    out = run();
+  } catch (err) {
+    done(false, undefined, message(err));
+    throw err;
+  }
+  if (out instanceof Promise) {
+    return out.then(
+      (value) => {
+        done(true, value);
+        return value;
+      },
+      (err: unknown) => {
+        done(false, undefined, message(err));
+        throw err;
+      },
+    );
+  }
+  done(true, out);
+  return out;
+}
+
 /**
  * Create (or adopt) the tool registry for one notebook namespace: installs
  * `window.__<ns>` on first use. Call once per page module and share the
@@ -168,7 +212,9 @@ export function agentToolkit(ns: string, options?: AgentToolkitOptions): AgentTo
             const known = h.tools.map((t) => t.name).join(", ");
             throw new Error(`no tool "${name}" — registered tools: ${known}`);
           }
-          return tool.run(args);
+          // A direct call (the app itself, or a developer in the console) is
+          // recorded like any other, as `page`, so the log stays complete.
+          return recordCall(ns, name, args, () => tool.run(args));
         },
         report() {
           const out: Record<string, unknown> = {};

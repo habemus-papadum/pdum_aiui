@@ -124,8 +124,9 @@ window.addEventListener("message", (event) => {
     respond({ ok: false, error: "no tools registry" });
     return;
   }
+  const meta = { caller: call.caller ?? "panel", ref: call.callId };
   void Promise.resolve()
-    .then(() => r.call(call.ns, call.name, call.args))
+    .then(() => r.call(call.ns, call.name, call.args, meta))
     .then(
       (value) => respond({ ok: true, value }),
       (err: unknown) =>

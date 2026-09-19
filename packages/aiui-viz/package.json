@@ -22,6 +22,7 @@
     "./site": "./src/site/index.ts",
     "./site/color-mode": "./src/site/color-mode.ts",
     "./site/lens": "./src/site/lens.tsx",
+    "./site/tool-log": "./src/site/tool-log.tsx",
     "./modal": "./src/modal/index.ts",
     "./testing": "./src/testing.ts"
   },
@@ -92,6 +93,11 @@
         "types": "./dist/site/lens.d.ts",
         "import": "./dist/lens.js",
         "default": "./dist/lens.js"
+      },
+      "./site/tool-log": {
+        "types": "./dist/site/tool-log.d.ts",
+        "import": "./dist/tool-log.js",
+        "default": "./dist/tool-log.js"
       },
       "./modal": {
         "types": "./dist/modal/index.d.ts",

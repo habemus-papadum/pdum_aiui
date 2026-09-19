@@ -181,9 +181,14 @@ export function claudeDelegator(options: ClaudeDelegatorOptions = {}): Delegator
         "Call one of the app's live tools by name with JSON arguments; returns what the app answered.",
         { name: z.string(), arguments: z.record(z.string(), z.unknown()).optional() },
         async ({ name, arguments: args }) => {
-          const result = await withTurn((turn) => runTool(turn.req.tools, name, args ?? {}), {
-            error: "no active delegation",
-          });
+          const result = await withTurn(
+            (turn) =>
+              runTool(turn.req.tools, name, args ?? {}, {
+                caller: "live:claude",
+                ref: turn.req.id,
+              }),
+            { error: "no active delegation" },
+          );
           return {
             content: [
               { type: "text", text: typeof result === "string" ? result : JSON.stringify(result) },

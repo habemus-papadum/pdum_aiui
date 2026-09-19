@@ -41,6 +41,40 @@ export interface AiuiToolsNamespace {
   brief?: string;
 }
 
+/** Who called a tool, as the transport that carried the call knows it. */
+export interface AiuiCallMeta {
+  /** `channel` (Claude Code through `page_tools_call`), `oracle`, `panel`,
+   * `live:<delegator>`, `page` (the app itself, or the console)… free-form;
+   * each transport names itself. Absent ⇒ `unknown`. */
+  caller?: string;
+  /** The turn, delegation, or MCP call the call belongs to, when known. */
+  ref?: string;
+}
+
+/** One recorded call — a row of the on-page call log ({@link AiuiToolsRegistry.calls}). */
+export interface AiuiToolCall {
+  seq: number;
+  /** `Date.now()` when the call started. */
+  t: number;
+  ns: string;
+  tool: string;
+  /** The arguments, JSON-clipped like `result`. */
+  args?: unknown;
+  caller: string;
+  ref?: string;
+  ok: boolean;
+  /** The result, clipped to {@link CALL_RESULT_CAP} bytes of JSON (`{ clipped,
+   * bytes, head }` past that) so the log's memory stays bounded. */
+  result?: unknown;
+  error?: string;
+  ms: number;
+}
+
+/** How many calls the log keeps (oldest dropped). */
+export const CALL_LOG_CAP = 200;
+/** JSON bytes of a recorded result/args kept verbatim. */
+export const CALL_RESULT_CAP = 4096;
+
 export interface AiuiToolsRegistry {
   /** Declare a namespace's FULL current tool set (replace-by-namespace). The
    * brief is part of the declaration: omitted means none. */
@@ -48,8 +82,19 @@ export interface AiuiToolsRegistry {
   /** Every namespace's current tools — internal clients and bridges alike.
    * `active` is the namespace's activity bit (see {@link setActive}). */
   list(): AiuiToolsNamespace[];
-  /** Invoke one tool by namespace + name. Rejects on unknown. */
-  call(ns: string, name: string, args?: unknown): Promise<unknown>;
+  /** Invoke one tool by namespace + name. Rejects on unknown. Every call is
+   * recorded (see {@link calls}); `meta` names the caller. */
+  call(ns: string, name: string, args?: unknown, meta?: AiuiCallMeta): Promise<unknown>;
+  /**
+   * Record a call that ran OUTSIDE the registry — a projection that executes
+   * a control's setter directly (the oracle's control-surface tools) — so the
+   * log stays the one complete record of who drove the app.
+   */
+  record(call: Omit<AiuiToolCall, "seq" | "t"> & { t?: number }): void;
+  /** The last {@link CALL_LOG_CAP} calls, oldest first. */
+  calls(): AiuiToolCall[];
+  /** Fires after every recorded call. Returns the unsubscribe. */
+  onCall(handler: (call: AiuiToolCall) => void): () => void;
   /**
    * Flip a namespace's ACTIVITY bit (the page-tools design notes, git history).
    * Default **true** — a standalone app never calls this. A multi-page shell
@@ -92,6 +137,19 @@ export interface AiuiGlobal {
   [key: string]: unknown;
 }
 
+/** Bound a value's footprint in the log: past the cap, keep a JSON head. */
+function clip(value: unknown): unknown {
+  if (value === undefined) return undefined;
+  let text: string;
+  try {
+    text = JSON.stringify(value) ?? "undefined";
+  } catch {
+    return { unserializable: String(value) };
+  }
+  if (text.length <= CALL_RESULT_CAP) return value;
+  return { clipped: true, bytes: text.length, head: text.slice(0, CALL_RESULT_CAP) };
+}
+
 function createRegistry(): AiuiToolsRegistry {
   const byNs = new Map<string, AiuiPageTool[]>();
   const briefs = new Map<string, string>();
@@ -106,6 +164,30 @@ function createRegistry(): AiuiToolsRegistry {
         handler();
       } catch {
         // one bridge's error must not starve the others
+      }
+    }
+  };
+  // The call log: a bounded ring, its own subscribers (a call is not a
+  // registration change — the bridges relaying `onChange` must not re-register
+  // the namespace on every call).
+  const log: AiuiToolCall[] = [];
+  let seq = 0;
+  const callHandlers = new Set<(call: AiuiToolCall) => void>();
+  const record = (entry: Omit<AiuiToolCall, "seq" | "t"> & { t?: number }): void => {
+    const call: AiuiToolCall = {
+      ...entry,
+      seq: ++seq,
+      t: entry.t ?? Date.now(),
+      ...(entry.args !== undefined ? { args: clip(entry.args) } : {}),
+      ...(entry.result !== undefined ? { result: clip(entry.result) } : {}),
+    };
+    log.push(call);
+    if (log.length > CALL_LOG_CAP) log.splice(0, log.length - CALL_LOG_CAP);
+    for (const handler of callHandlers) {
+      try {
+        handler(call);
+      } catch {
+        // a log viewer's error must not disturb the call
       }
     }
   };
@@ -130,12 +212,33 @@ function createRegistry(): AiuiToolsRegistry {
         };
       });
     },
-    async call(ns, name, args) {
+    async call(ns, name, args, meta) {
+      const caller = meta?.caller ?? "unknown";
+      const ref = meta?.ref !== undefined ? { ref: meta.ref } : {};
       const tool = byNs.get(ns)?.find((t) => t.name === name);
       if (tool === undefined) {
-        throw new Error(`no such page tool: ${ns}.${name}`);
+        const error = `no such page tool: ${ns}.${name}`;
+        record({ ns, tool: name, args, caller, ...ref, ok: false, error, ms: 0 });
+        throw new Error(error);
       }
-      return await tool.run(args);
+      const t0 = Date.now();
+      try {
+        const result = await tool.run(args);
+        record({ ns, tool: name, args, caller, ...ref, ok: true, result, ms: Date.now() - t0 });
+        return result;
+      } catch (err) {
+        const error = err instanceof Error ? err.message : String(err);
+        record({ ns, tool: name, args, caller, ...ref, ok: false, error, ms: Date.now() - t0 });
+        throw err;
+      }
+    },
+    record,
+    calls() {
+      return [...log];
+    },
+    onCall(handler) {
+      callHandlers.add(handler);
+      return () => callHandlers.delete(handler);
     },
     setActive(ns, active) {
       const changed = parked.has(ns) === active; // parked+activate or live+park

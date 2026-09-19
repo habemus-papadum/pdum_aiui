@@ -29,7 +29,62 @@ import {
   subscribeControlSurface,
   surfaceViewFor,
 } from "@habemus-papadum/aiui-viz";
-import type { OracleTool } from "./types";
+import type { OracleTool, ToolCallContext } from "./types";
+
+/**
+ * Run a control-surface tool and report it to the page's call log. These
+ * tools execute a control's setter DIRECTLY (no registry in the loop), so
+ * without this the log would never see the in-page oracle drive the app.
+ * Best-effort: an adopted registry without `record` logs nothing.
+ */
+function logged<T>(
+  ns: string,
+  tool: string,
+  args: unknown,
+  context: ToolCallContext | undefined,
+  run: () => T,
+): T {
+  const registry = ensureAiuiGlobal()?.tools;
+  const t0 = Date.now();
+  const message = (err: unknown): string => (err instanceof Error ? err.message : String(err));
+  const done = (ok: boolean, result?: unknown, error?: string): void => {
+    try {
+      registry?.record?.({
+        ns,
+        tool,
+        args,
+        caller: context?.caller ?? "oracle",
+        ...(context?.ref !== undefined ? { ref: context.ref } : {}),
+        ok,
+        ...(ok ? { result } : { error }),
+        ms: Date.now() - t0,
+      });
+    } catch {
+      // the log is a convenience; never let it disturb the call
+    }
+  };
+  let out: T;
+  try {
+    out = run();
+  } catch (err) {
+    done(false, undefined, message(err));
+    throw err;
+  }
+  if (out instanceof Promise) {
+    return out.then(
+      (value) => {
+        done(true, value);
+        return value;
+      },
+      (err: unknown) => {
+        done(false, undefined, message(err));
+        throw err;
+      },
+    ) as T;
+  }
+  done(true, out);
+  return out;
+}
 
 /** OpenAI tool names must match `[a-zA-Z0-9_-]{1,64}`; scope separators don't. */
 function toolName(prefix: string, qualified: string): string {
@@ -114,6 +169,10 @@ export function toolsFromControlSurface(options: ControlSurfaceToolsOptions = {}
   const keep = surfaceFilter(options);
   const entries = controlSurface().filter(keep);
   const tools: OracleTool[] = [];
+  // The call log's namespace for this projection: the scope's name, else the
+  // document-global surface.
+  const logNs =
+    (typeof options.scope === "string" ? options.scope : options.scope?.name) ?? "surface";
   for (const entry of entries) {
     if (entry.kind === "control") {
       tools.push({
@@ -127,15 +186,16 @@ export function toolsFromControlSurface(options: ControlSurfaceToolsOptions = {}
           required: ["value"],
           additionalProperties: false,
         },
-        execute: (args) => {
-          const box = controlByName(entry.name);
-          if (box === undefined) {
-            throw new Error(`control no longer exists: ${entry.name}`);
-          }
-          // The validated setter returns the WRITTEN value — the only honest
-          // answer under staged commits.
-          return { applied: box.set(args.value as never) };
-        },
+        execute: (args, context) =>
+          logged(logNs, entry.name, args, context, () => {
+            const box = controlByName(entry.name);
+            if (box === undefined) {
+              throw new Error(`control no longer exists: ${entry.name}`);
+            }
+            // The validated setter returns the WRITTEN value — the only honest
+            // answer under staged commits.
+            return { applied: box.set(args.value as never) };
+          }),
       });
     } else {
       tools.push({
@@ -155,13 +215,14 @@ export function toolsFromControlSurface(options: ControlSurfaceToolsOptions = {}
             properties: {},
             additionalProperties: true,
           },
-        execute: (args) => {
-          const action = actionByName(entry.name);
-          if (action === undefined) {
-            throw new Error(`action no longer exists: ${entry.name}`);
-          }
-          return action.run(args) ?? null;
-        },
+        execute: (args, context) =>
+          logged(logNs, entry.name, args, context, () => {
+            const action = actionByName(entry.name);
+            if (action === undefined) {
+              throw new Error(`action no longer exists: ${entry.name}`);
+            }
+            return action.run(args) ?? null;
+          }),
       });
     }
   }
@@ -228,7 +289,11 @@ export function toolsFromAiuiRegistry(
           properties: {},
           additionalProperties: true,
         },
-        execute: (args) => registry.call(registration.ns, tool.name, args),
+        execute: (args, context) =>
+          registry.call(registration.ns, tool.name, args, {
+            caller: context?.caller ?? "oracle",
+            ...(context?.ref !== undefined ? { ref: context.ref } : {}),
+          }),
       });
     }
   }

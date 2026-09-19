@@ -108,7 +108,17 @@ export interface PageCapabilityMap {
   /** Invoke one page tool from `__AIUI__.tools` (the T2 bridge): the reply is
    * only the ack — the real answer rides the report wire as a `toolsResult`
    * PageEvent, correlated by callId (async — the call may take a while). */
-  toolsCall: { payload: { ns: string; name: string; args?: unknown; callId: string }; reply: Ack };
+  toolsCall: {
+    payload: {
+      ns: string;
+      name: string;
+      args?: unknown;
+      callId: string;
+      /** Who is asking, for the page's call log (`channel`, `oracle`; absent ⇒ `panel`). */
+      caller?: string;
+    };
+    reply: Ack;
+  };
   /**
    * ASK the page to re-announce its `__AIUI__.tools` registrations (owner,
    * 2026-07-30). The answer is only the ack — the registrations arrive on the

@@ -93,6 +93,14 @@ export type Resolved<T> = T | ((context: PromptContext) => T | Promise<T>);
  */
 export type Greeting = string | { instructions: string };
 
+/** Who is calling a tool, for the page's call log (aiui-viz `AiuiCallMeta`).
+ * The session passes nothing (the projection names itself `oracle`); another
+ * executor sharing the projection (aiui-live) names itself and its ticket. */
+export interface ToolCallContext {
+  caller?: string;
+  ref?: string;
+}
+
 /** A tool the model may call — executed locally, in the page. */
 export interface OracleTool {
   /** Vendor-visible name (the model calls this). */
@@ -110,9 +118,10 @@ export interface OracleTool {
   /**
    * Run the call. The return value is JSON-stringified into the
    * `function_call_output` (a thrown error becomes an `{ error }` output the
-   * model can read — the vendor has no error channel for tools).
+   * model can read — the vendor has no error channel for tools). `context`
+   * says who asked, for the page's call log; a tool may ignore it.
    */
-  execute(args: Record<string, unknown>): unknown | Promise<unknown>;
+  execute(args: Record<string, unknown>, context?: ToolCallContext): unknown | Promise<unknown>;
 }
 
 /**

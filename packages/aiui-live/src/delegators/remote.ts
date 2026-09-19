@@ -122,7 +122,7 @@ export function remoteDelegator(options: RemoteDelegatorOptions = {}): Delegator
               .then(() =>
                 tool === undefined
                   ? { error: `unknown tool ${frame.name}` }
-                  : tool.execute(frame.arguments),
+                  : tool.execute(frame.arguments, { caller: `live:${name}`, ref: item.req.id }),
               )
               .catch((error: unknown) => ({
                 error: error instanceof Error ? error.message : String(error),

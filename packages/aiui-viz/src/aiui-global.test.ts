@@ -171,6 +171,80 @@ describe("the tools registry", () => {
     expect(report.range).toEqual({ x: [0, 1] });
   });
 
+  it("records every call — caller, args, timing, result or error — in a bounded ring", async () => {
+    const tools = ensureAiuiGlobal()?.tools;
+    if (tools === undefined) {
+      throw new Error("no registry");
+    }
+    const seen: string[] = [];
+    const off = tools.onCall((c) => seen.push(`${c.caller}:${c.tool}:${c.ok}`));
+    tools.register("app", [
+      { name: "echo", description: "echo", run: (args) => ({ got: args }) },
+      {
+        name: "boom",
+        description: "throws",
+        run: () => {
+          throw new Error("kaboom");
+        },
+      },
+      { name: "big", description: "big", run: () => "x".repeat(10_000) },
+    ]);
+    await tools.call("app", "echo", { a: 1 }, { caller: "channel", ref: "call-7" });
+    await expect(tools.call("app", "boom", undefined, { caller: "oracle" })).rejects.toThrow(
+      "kaboom",
+    );
+    await expect(tools.call("app", "nope")).rejects.toThrow(/no such page tool/);
+    await tools.call("app", "big");
+
+    const [echo, boom, nope, big] = tools.calls();
+    expect(echo).toMatchObject({
+      seq: 1,
+      ns: "app",
+      tool: "echo",
+      args: { a: 1 },
+      caller: "channel",
+      ref: "call-7",
+      ok: true,
+      result: { got: { a: 1 } },
+    });
+    expect(boom).toMatchObject({ tool: "boom", caller: "oracle", ok: false, error: "kaboom" });
+    expect(nope).toMatchObject({ tool: "nope", caller: "unknown", ok: false });
+    // Results past the cap keep a JSON head, so the log's memory stays bounded.
+    expect(big?.result).toMatchObject({ clipped: true, bytes: 10_002 });
+    expect(seen).toEqual([
+      "channel:echo:true",
+      "oracle:boom:false",
+      "unknown:nope:false",
+      "unknown:big:true",
+    ]);
+    off();
+
+    // A direct record (a projection that bypassed the registry) joins the log…
+    tools.record({ ns: "surface", tool: "set_freq", caller: "oracle", ok: true, ms: 1 });
+    expect(tools.calls().at(-1)).toMatchObject({ seq: 5, tool: "set_freq" });
+    // …and the ring drops the oldest past its cap.
+    for (let i = 0; i < 250; i++) {
+      tools.record({ ns: "app", tool: `t${i}`, caller: "page", ok: true, ms: 0 });
+    }
+    const calls = tools.calls();
+    expect(calls).toHaveLength(200);
+    expect(calls[0]?.tool).toBe("t50");
+  });
+
+  it("a kit's own call() is recorded as `page`", async () => {
+    const kit = agentToolkit("direct");
+    kit.registerTool({ name: "t", description: "d", run: (args) => args?.n });
+    expect(kit.handle().call("t", { n: 3 })).toBe(3);
+    const tools = ensureAiuiGlobal()?.tools;
+    expect(tools?.calls().at(-1)).toMatchObject({
+      ns: "direct",
+      tool: "t",
+      caller: "page",
+      ok: true,
+      result: 3,
+    });
+  });
+
   it("a kit's brief reaches the registry, and a re-created kit replaces it (HMR)", () => {
     const kit = agentToolkit("briefed", { brief: "v1" });
     kit.registerTool({ name: "t", description: "d", run: () => 0 });

@@ -47,11 +47,12 @@ The division of labor: compile time owns *locations*, declarations own *identity
 
 Two properties of this contract carry most of the weight:
 
-- **Names are injected, not written.** The overlay's Vite plugin
-  (`aiui({ locator: { cellFactories: ["cell"] } })`) stamps JSX with `data-source-loc`
-  and rewrites `cell(...)` call sites to carry their declaration name and location. Application
-  code contains **zero** attribution affordances; delete the plugin and the app still runs, just
-  unresolvable.
+- **Names are injected, not written.** The aiui Vite plugin
+  (`aiui()` from `@habemus-papadum/aiui-source-processor`; the factory table is its
+  `locator.factories` option) stamps JSX with `data-source-loc` and rewrites `cell(...)` /
+  `control(...)` / `action(...)` call sites to carry their declaration name, location, and doc
+  comment. Application code contains **zero** attribution affordances; delete the plugin and the
+  app still runs, just unresolvable.
 - **Never hand-write a location stamp.** `data-source-loc` and `data-cell-loc` are *compiler
   output*, full stop — do not type one into application code, and if you find one there, delete it
   and enable the plugin instead. A hand-written `file:line:col` is wrong the moment the file is
@@ -159,6 +160,22 @@ The same contract serves the reverse direction. `registerStandardTools` gives ev
 description, and definition site, the dependency edges, and each registered action). An
 agent that received `<cell name="analysis" …/>` in a prompt can go from the name to the live
 cell's state without any further wiring. The VS Code extension's jump mode rides the same stamps.
+
+## The call log
+
+Attribution answers "which code made this?"; the call log answers the other question an
+agent-driven app raises — **"was my agent actually calling the tools?"** The page's registry
+(`window.__AIUI__.tools`) records every tool call it routes: who called (`channel` for Claude
+Code through `page_tools_call`, `oracle`, `panel`, `live:<delegator>`, `page` for the app or
+the console), with what, how long it took, and the result or error, clipped to 4 KB and kept
+to the last 200. `calls()` reads it; `onCall` follows it; a projection that executes a
+control's setter directly (the oracle's control-surface tools) reports through `record` so the
+log stays complete.
+
+The on-page viewer is `ToolLog` (`@habemus-papadum/aiui-viz/site/tool-log`, its own subpath):
+mount it once, hidden by default, opened by `#aiui-tools` in the URL or `toggleToolLog()`. Its
+third view, *as rendered*, shows what a model sees — the `Tools:` section every consumer
+renders from the same document, and the structured form `page_tools_list` returns.
 
 ## Where this can drift
 

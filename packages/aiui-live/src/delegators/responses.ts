@@ -112,7 +112,10 @@ export function responsesDelegator(options: ResponsesDelegatorOptions): Delegato
         for (const call of calls) {
           const name = call.name ?? "?";
           req.log(`call ${name}(${call.arguments ?? ""})`);
-          const value = await runTool(req.tools, name, call.arguments ?? "{}");
+          const value = await runTool(req.tools, name, call.arguments ?? "{}", {
+            caller: "live:responses",
+            ref: req.id,
+          });
           req.log(`${name} → ${JSON.stringify(value).slice(0, 200)}`);
           input.push({
             type: "function_call_output",

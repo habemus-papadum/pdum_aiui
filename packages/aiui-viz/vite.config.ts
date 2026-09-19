@@ -54,6 +54,7 @@ export default defineConfig({
         site: "src/site/index.ts",
         "color-mode": "src/site/color-mode.ts",
         lens: "src/site/lens.tsx",
+        "tool-log": "src/site/tool-log.tsx",
         modal: "src/modal/index.ts",
         testing: "src/testing.ts",
       },

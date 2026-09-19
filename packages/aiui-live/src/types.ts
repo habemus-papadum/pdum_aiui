@@ -19,6 +19,13 @@ import type { AppendKind, LiveBackendTool, LiveEvent, LiveSessionConfig } from "
  * an aiui control, the server for a file read). Structurally identical to
  * the oracle's `OracleTool`, so `toolsFromControlSurface()` output drops in.
  */
+/** Who is calling a tool, for the page's call log (aiui-viz `AiuiCallMeta`):
+ * the executor names itself (`live:responses`, `live:claude`) and the ticket. */
+export interface ToolCallContext {
+  caller?: string;
+  ref?: string;
+}
+
 export interface LiveTool {
   name: string;
   description: string;
@@ -29,7 +36,9 @@ export interface LiveTool {
   kind?: "read" | "write";
   /** JSON Schema for the arguments. */
   parameters: Record<string, unknown>;
-  execute(args: Record<string, unknown>): unknown | Promise<unknown>;
+  /** Run the call. `context` says who asked, for the page's call log; a tool
+   * that ignores it is fine. */
+  execute(args: Record<string, unknown>, context?: ToolCallContext): unknown | Promise<unknown>;
 }
 
 /** A tool without its executor — what crosses a wire. */
@@ -67,6 +76,7 @@ export async function runTool(
   tools: readonly LiveTool[],
   name: string,
   args: string | Record<string, unknown>,
+  context?: ToolCallContext,
 ): Promise<unknown> {
   const tool = tools.find((candidate) => candidate.name === name);
   if (tool === undefined) {
@@ -79,7 +89,7 @@ export async function runTool(
     return { error: `arguments for ${name} were not valid JSON` };
   }
   try {
-    const result = await tool.execute(parsed);
+    const result = await tool.execute(parsed, context);
     return result === undefined ? { ok: true } : result;
   } catch (error) {
     return { error: error instanceof Error ? error.message : String(error) };
