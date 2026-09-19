@@ -33,10 +33,22 @@
  */
 
 import { ensureAiuiGlobal } from "./aiui-global";
+import type { ToolKind } from "./tool-brief";
 
 export interface AgentTool {
   name: string;
   description: string;
+  /**
+   * How to use it: when to call it, what the result means, one example.
+   * Compiler-lifted from `@usage` / `@example` in an action's doc comment, or
+   * explicit. Rendered into a consumer's prompt by `renderToolBrief`; the
+   * description stays the one-paragraph "what".
+   */
+  usage?: string;
+  /** Eagerness class for renderers: `read` is called freely once the intent is
+   * clear, `write` changes the app. Library-derived tools set it; a custom
+   * tool without one is listed under neither class. */
+  kind?: ToolKind;
   /** Human/agent-readable parameter description, WebMCP-style (loose schema). */
   params?: Record<string, string>;
   /**
@@ -55,6 +67,21 @@ export interface AgentToolkitHandle {
   report(): unknown;
   /** Pluggable report sections, registered by feature modules. */
   reporters: Map<string, () => unknown>;
+  /** The kit's BRIEF (see {@link AgentToolkitOptions.brief}); shared by every
+   * kit object for this namespace, forwarded with every registration. */
+  brief?: string;
+}
+
+/** Options for {@link agentToolkit}. */
+export interface AgentToolkitOptions {
+  /**
+   * The kit's brief: what the app is, its data model, how its tools relate —
+   * the cross-tool text a consumer renders ABOVE the tool list (the oracle's
+   * prompt, the live delegation, `page_tools_list`). Purely authored; derived
+   * facts (a table list) belong in the relevant tool's `usage`. Re-calling
+   * `agentToolkit` with a new brief (HMR) replaces it.
+   */
+  brief?: string;
 }
 
 export interface AgentToolkit {
@@ -94,6 +121,8 @@ function forwardToRegistry(ns: string, h: AgentToolkitHandle): void {
       .map((t) => ({
         name: t.name,
         description: t.description,
+        ...(t.usage !== undefined ? { usage: t.usage } : {}),
+        ...(t.kind !== undefined ? { kind: t.kind } : {}),
         ...(t.inputSchema ? { inputSchema: t.inputSchema } : {}),
         run: (args?: unknown) => t.run(args as Record<string, unknown> | undefined),
       }));
@@ -101,10 +130,13 @@ function forwardToRegistry(ns: string, h: AgentToolkitHandle): void {
       tools.push({
         name: "report",
         description: "bounded snapshot of page state",
+        kind: "read",
         run: () => h.report(),
       });
     }
-    bridge.register(ns, tools);
+    // The brief rides as a third argument so an ADOPTED registry from an
+    // older bundle (two-argument `register`) still receives the tools.
+    bridge.register(ns, tools, h.brief !== undefined ? { brief: h.brief } : undefined);
   } catch {
     // Forwarding is a convenience layered on the local registry; never let it
     // disturb the page (or a windowless test).
@@ -116,14 +148,20 @@ function forwardToRegistry(ns: string, h: AgentToolkitHandle): void {
  * `window.__<ns>` on first use. Call once per page module and share the
  * returned toolkit.
  */
-export function agentToolkit(ns: string): AgentToolkit {
+export function agentToolkit(ns: string, options?: AgentToolkitOptions): AgentToolkit {
   const key = `__${ns}`;
   const handle = (): AgentToolkitHandle => {
     const w = window as unknown as Record<string, AgentToolkitHandle | undefined>;
-    if (!w[key]) {
+    const existing = w[key];
+    if (existing) {
+      if (options?.brief !== undefined) existing.brief = options.brief;
+      return existing;
+    }
+    {
       const h: AgentToolkitHandle = {
         tools: [],
         reporters: new Map(),
+        ...(options?.brief !== undefined ? { brief: options.brief } : {}),
         call(name, args) {
           const tool = h.tools.find((t) => t.name === name);
           if (!tool) {
@@ -148,8 +186,8 @@ export function agentToolkit(ns: string): AgentToolkit {
       console.info(
         `${ns}: agent tools at window.${key} — .tools (discover), .call(name, args), .report()`,
       );
+      return h;
     }
-    return w[key] as AgentToolkitHandle;
   };
 
   return {

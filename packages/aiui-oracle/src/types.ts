@@ -99,6 +99,11 @@ export interface OracleTool {
   name: string;
   /** What the model reads to decide when to call it. */
   description: string;
+  /** How to use it (aiui-viz's tool-docs convention). Not sent in the tool
+   * array — rendered into the instructions' `Tools:` section instead. */
+  usage?: string;
+  /** Eagerness class, `read` or `write` — groups the `Tools:` section. */
+  kind?: "read" | "write";
   /** JSON Schema for the arguments. Realtime has NO strict mode — the bridge
    * validates defensively; this schema is advisory to the model. */
   parameters: Record<string, unknown>;

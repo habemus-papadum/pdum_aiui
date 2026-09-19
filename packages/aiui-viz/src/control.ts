@@ -71,6 +71,9 @@ export interface ControlSpec<T> extends ControlMeta<T> {
   value: T;
   /** Human description — compiler-lifted from the doc comment, or explicit. */
   description?: string;
+  /** How to use it — compiler-lifted from `@usage` / `@example`, or explicit.
+   * Rendered into a consumer's prompt beside the generic `set` tool. */
+  usage?: string;
   /** Definition site "file:line" — compiler-injected. */
   loc?: string;
 }
@@ -82,6 +85,7 @@ export interface ControlBox<T> extends SignalBox<T> {
   /** The declaring scope's name, when scoped ("left" of "left/freq"). */
   readonly scope?: string;
   readonly description?: string;
+  readonly usage?: string;
   readonly loc?: string;
   readonly meta: ControlMeta<T>;
   /** The declared initial value (reset affordances; test resets). */
@@ -97,6 +101,12 @@ export interface ActionSpec {
   scope?: Scope;
   /** Human description — compiler-lifted from the doc comment, or explicit. */
   description?: string;
+  /** How to use the derived tool: when to call it, what the result means, one
+   * example — compiler-lifted from `@usage` / `@example`, or explicit. */
+  usage?: string;
+  /** Eagerness class of the derived tool. An action changes the app, so the
+   * default is `write`; declare `read` for a pure query. */
+  kind?: "read" | "write";
   /** Definition site "file:line" — compiler-injected. */
   loc?: string;
   /** Human/agent-readable parameter docs (WebMCP-style loose schema). */
@@ -121,6 +131,7 @@ export type ControlSurfaceEntry =
       scope?: string;
       value: unknown;
       description?: string;
+      usage?: string;
       loc?: string;
       meta: ControlMeta<unknown>;
     }
@@ -129,6 +140,9 @@ export type ControlSurfaceEntry =
       name: string;
       scope?: string;
       description?: string;
+      usage?: string;
+      /** The derived tool's eagerness class (see {@link ActionSpec.kind}). */
+      toolKind?: "read" | "write";
       loc?: string;
       params?: Record<string, string>;
     };
@@ -288,6 +302,7 @@ export function control<T>(spec: ControlSpec<T>): ControlBox<T> {
     name,
     ...(spec.scope !== undefined ? { scope: spec.scope.name } : {}),
     ...(spec.description !== undefined ? { description: spec.description } : {}),
+    ...(spec.usage !== undefined ? { usage: spec.usage } : {}),
     ...(spec.loc !== undefined ? { loc: spec.loc } : {}),
     meta,
     initial: spec.value,
@@ -342,6 +357,7 @@ export function controlSurface(): ControlSurfaceEntry[] {
       ...(c.scope !== undefined ? { scope: c.scope } : {}),
       value: c.get(),
       ...(c.description !== undefined ? { description: c.description } : {}),
+      ...(c.usage !== undefined ? { usage: c.usage } : {}),
       ...(c.loc !== undefined ? { loc: c.loc } : {}),
       meta: c.meta,
     });
@@ -352,6 +368,8 @@ export function controlSurface(): ControlSurfaceEntry[] {
       name: a.name,
       ...(a.scope !== undefined ? { scope: a.scope } : {}),
       ...(a.description !== undefined ? { description: a.description } : {}),
+      ...(a.usage !== undefined ? { usage: a.usage } : {}),
+      ...(a.kind !== undefined ? { toolKind: a.kind } : {}),
       ...(a.loc !== undefined ? { loc: a.loc } : {}),
       ...(a.params !== undefined ? { params: a.params } : {}),
     });

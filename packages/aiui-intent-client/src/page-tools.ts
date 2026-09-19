@@ -29,16 +29,22 @@ import type { IntentHost } from "./transport";
 export interface PageToolDescriptor {
   name: string;
   description: string;
+  /** How to use it — the tool-docs convention (aiui-viz `AgentTool.usage`). */
+  usage?: string;
+  /** Eagerness class (aiui-viz `AgentTool.kind`). */
+  kind?: "read" | "write";
   inputSchema?: Record<string, unknown>;
 }
 
 /** A namespace's worth of registrations, as `pageTools` reports them.
  * `active` is the namespace's activity bit (absent = active): the oracle's
- * projection filters on it, the ledger renders it. */
+ * projection filters on it, the ledger renders it. `brief` is the kit's
+ * brief, rendered above the tool list by consumers. */
 export interface PageToolNamespace {
   ns: string;
   tools: PageToolDescriptor[];
   active?: boolean;
+  brief?: string;
 }
 
 export interface PageToolsRegistry {

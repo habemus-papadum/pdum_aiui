@@ -19,16 +19,35 @@
 export interface AiuiPageTool {
   name: string;
   description: string;
+  /** How to use it (see `AgentTool.usage`). */
+  usage?: string;
+  /** Eagerness class (see `AgentTool.kind`). */
+  kind?: "read" | "write";
   inputSchema?: Record<string, unknown>;
   run: (args?: unknown) => unknown;
 }
 
+/** Namespace-level registration options. */
+export interface AiuiRegisterOptions {
+  /** The kit's brief — the text a consumer renders above the tool list. */
+  brief?: string;
+}
+
+/** One namespace as `list()` reports it. */
+export interface AiuiToolsNamespace {
+  ns: string;
+  tools: AiuiPageTool[];
+  active: boolean;
+  brief?: string;
+}
+
 export interface AiuiToolsRegistry {
-  /** Declare a namespace's FULL current tool set (replace-by-namespace). */
-  register(ns: string, tools: AiuiPageTool[]): void;
+  /** Declare a namespace's FULL current tool set (replace-by-namespace). The
+   * brief is part of the declaration: omitted means none. */
+  register(ns: string, tools: AiuiPageTool[], options?: AiuiRegisterOptions): void;
   /** Every namespace's current tools — internal clients and bridges alike.
    * `active` is the namespace's activity bit (see {@link setActive}). */
-  list(): Array<{ ns: string; tools: AiuiPageTool[]; active: boolean }>;
+  list(): AiuiToolsNamespace[];
   /** Invoke one tool by namespace + name. Rejects on unknown. */
   call(ns: string, name: string, args?: unknown): Promise<unknown>;
   /**
@@ -47,7 +66,14 @@ export interface AiuiToolsRegistry {
    * namespace's activity riding each row. `console.table`-friendly; the
    * same truth `list()` carries, flattened for eyes.
    */
-  ledger(): Array<{ ns: string; tool: string; description: string; active: boolean }>;
+  ledger(): Array<{
+    ns: string;
+    tool: string;
+    description: string;
+    active: boolean;
+    kind?: "read" | "write";
+    usage?: string;
+  }>;
   /** Fires after every `register` AND every activity flip. Returns the
    * unsubscribe. */
   onChange(handler: () => void): () => void;
@@ -68,6 +94,7 @@ export interface AiuiGlobal {
 
 function createRegistry(): AiuiToolsRegistry {
   const byNs = new Map<string, AiuiPageTool[]>();
+  const briefs = new Map<string, string>();
   // Parked namespaces, kept SEPARATE from the tool sets so the bit survives
   // re-registration (HMR) and can be set before the namespace registers
   // (route decided, module still lazy-loading). Absence = active.
@@ -83,16 +110,25 @@ function createRegistry(): AiuiToolsRegistry {
     }
   };
   return {
-    register(ns, tools) {
+    register(ns, tools, options) {
       byNs.set(ns, [...tools]);
+      if (options?.brief !== undefined) {
+        briefs.set(ns, options.brief);
+      } else {
+        briefs.delete(ns);
+      }
       notify();
     },
     list() {
-      return [...byNs.entries()].map(([ns, tools]) => ({
-        ns,
-        tools: [...tools],
-        active: !parked.has(ns),
-      }));
+      return [...byNs.entries()].map(([ns, tools]) => {
+        const brief = briefs.get(ns);
+        return {
+          ns,
+          tools: [...tools],
+          active: !parked.has(ns),
+          ...(brief !== undefined ? { brief } : {}),
+        };
+      });
     },
     async call(ns, name, args) {
       const tool = byNs.get(ns)?.find((t) => t.name === name);
@@ -119,6 +155,8 @@ function createRegistry(): AiuiToolsRegistry {
           tool: t.name,
           description: t.description,
           active: !parked.has(ns),
+          ...(t.kind !== undefined ? { kind: t.kind } : {}),
+          ...(t.usage !== undefined ? { usage: t.usage } : {}),
         })),
       );
     },

@@ -543,6 +543,51 @@ the genuinely bespoke operation (a database query, say). Declaring is exposing �
 the agent verifies its own work: `set` a parameter, read the `report`, check the cell states —
 rather than squinting at screenshots.
 
+### Documenting a tool
+
+A tool definition says *what* a tool does; a model also needs to know *when* to call it, what
+the result means, and how the app's tools fit together. That text is part of the surface, and
+it travels with the registration to every consumer (the oracle's prompt, a live delegation,
+`page_tools_list`), rendered by each from the same document — so the prompt can never name a
+tool the tool list does not carry.
+
+Two places to write it, both in the code you already have:
+
+- **Per tool, in the doc comment.** The first paragraph is the `description` (Step 2). A
+  `@usage` section is the tool's *usage*: when to call it, what to trust in the result, and
+  one `@example`. The compiler lifts both, exactly as it lifts the description:
+
+  ```ts
+  /**
+   * Re-seed the field with a fresh random pattern.
+   * @usage Call after changing the regime; the field settles within a few hundred steps,
+   *   so read the report again before judging the result.
+   * @example reseed({ seed: 42 })
+   */
+  export const reseed = action({ run: () => sim.reseed() });
+  ```
+
+  An action is a **write** unless it declares `kind: "read"` (a pure query); the standard
+  tools and every library-derived tool already carry their class, and consumers group the
+  rendered list by it — reads are called freely, writes are the ones a voice model
+  confirms.
+- **Per kit, the brief.** What the app *is*, its data model, and how the tools relate — the
+  paragraph a consumer renders above the tool list:
+
+  ```ts
+  const kit = agentToolkit("app", {
+    brief:
+      "A 1-D diffusion lab: a heat profile evolves under one control (kappa). " +
+      "Set kappa, then read the report; the profile cell settles within a second.",
+  });
+  ```
+
+  Keep the brief authored and standing. Facts that change with the data (a table list) belong
+  in the tool that owns them.
+
+Everything above is optional — an undocumented action still becomes a tool with its
+description — but it is cheap, and it is the part of the surface a model reads most.
+
 ## Gotchas that bite exactly once
 
 Collected here so they bite zero times. The first two you have already met; the rest come from the

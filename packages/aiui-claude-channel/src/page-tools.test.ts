@@ -103,6 +103,32 @@ describe("PageToolDirectory registration", () => {
     expect(dir.summary()).toEqual({ clients: 1, namespaces: 1, tools: 1 });
   });
 
+  it("keeps the tool document: usage + kind per tool, the brief per namespace", () => {
+    const { dir } = makeDirectory();
+    const page = connectPage(dir);
+    page.register(
+      "seismos",
+      [
+        { name: "sql", description: "run SQL", usage: "aggregate in SQL", kind: "read" },
+        { name: "odd", description: "d", kind: "sideways" }, // an unknown kind is dropped
+      ],
+      "h1",
+      { brief: "An earthquake catalog." },
+    );
+    const [reg] = dir.list();
+    expect(reg?.brief).toBe("An earthquake catalog.");
+    expect(reg?.tools).toEqual([
+      { name: "sql", description: "run SQL", usage: "aggregate in SQL", kind: "read" },
+      { name: "odd", description: "d" },
+    ]);
+    // …and `tabs()` — what page_tools_list returns — carries the brief above the tools.
+    expect(dir.tabs()[0]?.namespaces[0]).toMatchObject({
+      ns: "seismos",
+      brief: "An earthquake catalog.",
+      tools: [expect.objectContaining({ usage: "aggregate in SQL" }), expect.anything()],
+    });
+  });
+
   it("logs only when the tool-set hash changes (reloads are silent)", () => {
     const { dir, log } = makeDirectory();
     const page = connectPage(dir);

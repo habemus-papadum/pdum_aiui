@@ -81,8 +81,9 @@ export interface FactorySpec {
    * backstop for those.
    */
   optionsArg: number;
-  /** Keys injected when absent. `name` behavior is governed by `namePolicy`. */
-  inject: ReadonlyArray<"name" | "loc" | "description">;
+  /** Keys injected when absent. `name` behavior is governed by `namePolicy`.
+   * `usage` is lifted from the doc comment's `@usage` / `@example` tags. */
+  inject: ReadonlyArray<"name" | "loc" | "description" | "usage">;
   /**
    * What happens when a call has no explicit `name` and no inferrable
    * binding (not assigned to a `const`, an object property, or a plain
@@ -107,13 +108,15 @@ export function cellFactory(callee = "cell"): FactorySpec {
   };
 }
 
-/** The single-options-object shape (`control({…})`, `action({…})`). */
+/** The single-options-object shape (`control({…})`, `action({…})`). These are
+ * the declarations that become agent tools, so their doc comments also carry
+ * `@usage` / `@example`, lifted into `usage`. */
 export function optionsFactory(callee: string): FactorySpec {
   return {
     callee,
     args: { min: 1, max: 1 },
     optionsArg: 0,
-    inject: ["name", "loc", "description"],
+    inject: ["name", "loc", "description", "usage"],
     namePolicy: "required",
   };
 }
@@ -191,20 +194,35 @@ function relativizeFile(root: string, file: string): string {
 const DIRECTIVE_COMMENT =
   /^\s*(?:biome-ignore|eslint|@ts-|prettier-|@vitest-environment|<\/?aiui-scenery|@__PURE__|#__PURE__|v8 ignore|-{2,})/;
 
+/** What a doc comment yields: the summary, and the tool-usage text. */
+interface CommentDocs {
+  description?: string;
+  usage?: string;
+}
+
 /**
- * A human description from a node's leading comments: the LAST non-directive
- * comment (closest to the declaration; a section banner further up loses to
- * the docblock), with `//` runs merged when the lines are contiguous. JSDoc
- * margins are stripped, tag sections (`@param …`) dropped, whitespace
- * collapsed — the same characters that render as the editor tooltip become the
- * registry description (the ratified JSDoc convention; `//` accepted too).
+ * The docs a node's leading comments carry: the LAST non-directive comment
+ * (closest to the declaration; a section banner further up loses to the
+ * docblock), with `//` runs merged when the lines are contiguous. JSDoc
+ * margins are stripped and whitespace collapsed.
+ *
+ * `description` is the text BEFORE the first tag line — the same characters
+ * that render as the editor tooltip become the registry description (the
+ * ratified JSDoc convention; `//` accepted too). Other tag sections (`@param`,
+ * `@remarks`) are metadata and are dropped.
+ *
+ * `usage` is the tool-docs convention (docs/proposals/tool-docs.md): the
+ * `@usage` section's text, followed by each `@example` section as
+ * `Example: …`, in source order. A declaration that becomes an agent tool
+ * carries "when to call it, what the result means, one example" this way;
+ * consumers render it beside the description in their prompts.
  */
-function descriptionFromComments(
+function docsFromComments(
   comments: ReadonlyArray<BabelTypes.Comment> | null | undefined,
-): string | undefined {
-  if (!comments || comments.length === 0) return undefined;
+): CommentDocs {
+  if (!comments || comments.length === 0) return {};
   const usable = comments.filter((c) => !DIRECTIVE_COMMENT.test(c.value));
-  if (usable.length === 0) return undefined;
+  if (usable.length === 0) return {};
 
   const last = usable[usable.length - 1];
   let raw: string;
@@ -224,13 +242,38 @@ function descriptionFromComments(
     raw = run.join("\n");
   }
 
-  // Strip JSDoc margins first (`\s` does not match the `*` gutter), then cut
-  // at the first tag line — `@param`/`@remarks` sections are metadata, not
-  // description.
+  // Strip JSDoc margins first (`\s` does not match the `*` gutter), then split
+  // into the summary (before the first tag line) and the tag sections.
   const lines = raw.split("\n").map((l) => l.replace(/^\s*\*+\s?/, "").trim());
   const tagAt = lines.findIndex((l) => l.startsWith("@"));
-  const text = (tagAt === -1 ? lines : lines.slice(0, tagAt)).join(" ").replace(/\s+/g, " ").trim();
-  return text.length > 0 ? text : undefined;
+  const collapse = (ls: string[]): string => ls.join(" ").replace(/\s+/g, " ").trim();
+  const summary = collapse(tagAt === -1 ? lines : lines.slice(0, tagAt));
+
+  // Tag sections: a section runs from its `@tag` line to the next tag line.
+  const sections: Array<{ tag: string; text: string }> = [];
+  if (tagAt !== -1) {
+    let current: { tag: string; body: string[] } | undefined;
+    for (const l of lines.slice(tagAt)) {
+      const m = /^@(\w+)\s*(.*)$/.exec(l);
+      if (m) {
+        if (current) sections.push({ tag: current.tag, text: collapse(current.body) });
+        current = { tag: m[1], body: [m[2]] };
+      } else if (current) {
+        current.body.push(l);
+      }
+    }
+    if (current) sections.push({ tag: current.tag, text: collapse(current.body) });
+  }
+  const usageParts: string[] = [];
+  for (const s of sections) {
+    if (s.text === "") continue;
+    if (s.tag === "usage") usageParts.push(s.text);
+    else if (s.tag === "example") usageParts.push(`Example: ${s.text}`);
+  }
+  return {
+    ...(summary.length > 0 ? { description: summary } : {}),
+    ...(usageParts.length > 0 ? { usage: usageParts.join(" ") } : {}),
+  };
 }
 
 /**
@@ -406,10 +449,15 @@ function injectIdentity(
     const loc = `${rel}:${path.node.loc.start.line}`;
     inject.push(t.objectProperty(t.identifier("loc"), t.stringLiteral(loc)));
   }
-  if (spec.inject.includes("description") && !keys.has("description")) {
-    const description = descriptionFromComments(binding.commentNode?.leadingComments);
-    if (description !== undefined) {
-      inject.push(t.objectProperty(t.identifier("description"), t.stringLiteral(description)));
+  const wantsDescription = spec.inject.includes("description") && !keys.has("description");
+  const wantsUsage = spec.inject.includes("usage") && !keys.has("usage");
+  if (wantsDescription || wantsUsage) {
+    const docs = docsFromComments(binding.commentNode?.leadingComments);
+    if (wantsDescription && docs.description !== undefined) {
+      inject.push(t.objectProperty(t.identifier("description"), t.stringLiteral(docs.description)));
+    }
+    if (wantsUsage && docs.usage !== undefined) {
+      inject.push(t.objectProperty(t.identifier("usage"), t.stringLiteral(docs.usage)));
     }
   }
   if (inject.length === 0) return;

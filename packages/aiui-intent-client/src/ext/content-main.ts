@@ -46,9 +46,12 @@ const reportTools = (): void => {
           // Adopted registries predating the activity bit report no `active`
           // field — normalize to true rather than dropping the namespace.
           active: (entry as { active?: boolean }).active !== false,
+          ...(typeof entry.brief === "string" ? { brief: entry.brief } : {}),
           tools: entry.tools.map((tool) => ({
             name: tool.name,
             description: tool.description,
+            ...(typeof tool.usage === "string" ? { usage: tool.usage } : {}),
+            ...(tool.kind !== undefined ? { kind: tool.kind } : {}),
             ...(tool.inputSchema !== undefined ? { inputSchema: tool.inputSchema } : {}),
           })),
         })),

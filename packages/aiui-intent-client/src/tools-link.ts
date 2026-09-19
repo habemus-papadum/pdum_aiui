@@ -70,7 +70,7 @@ interface TabLink {
   socket?: ToolsSocket;
   open: boolean;
   /** The tab's current registrations (re-sent on open/reconnect). */
-  registrations: Array<{ ns: string; tools: unknown[]; active?: boolean }>;
+  registrations: Array<{ ns: string; tools: unknown[]; active?: boolean; brief?: string }>;
   /** The tab's identity as the host knows it — fetched once per link, url
    * kept current on navigation. Rides every register so the directory can
    * address the tab and name the page in its errors. */
@@ -85,9 +85,15 @@ const REDIAL_MS = 3000;
 /** A cheap, stable content hash (djb2 over the canonical JSON). The directory
  * logs a registration only when a namespace's hash changes, so HMR/reload
  * churn with an unchanged set stays silent. The ACTIVITY bit is deliberately
- * excluded: a route flip re-registers with an unchanged hash. */
-export function toolsHash(registration: { ns: string; tools: unknown[] }): string {
-  const canon = JSON.stringify({ ns: registration.ns, tools: registration.tools });
+ * excluded: a route flip re-registers with an unchanged hash. The kit's brief
+ * is part of the content (a changed brief is a changed declaration); absent,
+ * the canonical JSON is byte-identical to the pre-brief form. */
+export function toolsHash(registration: { ns: string; tools: unknown[]; brief?: string }): string {
+  const canon = JSON.stringify({
+    ns: registration.ns,
+    tools: registration.tools,
+    brief: registration.brief,
+  });
   let h = 5381;
   for (let i = 0; i < canon.length; i++) {
     h = ((h << 5) + h + canon.charCodeAt(i)) | 0;
@@ -157,6 +163,7 @@ export function createToolsLink(options: ToolsLinkOptions): { dispose(): void } 
         // The namespace's activity bit + a content hash: the directory's
         // registration log keys on the hash, projections filter on the bit.
         active: registration.active !== false,
+        ...(registration.brief !== undefined ? { brief: registration.brief } : {}),
         hash: toolsHash(registration),
         ...(link.meta?.url !== undefined ? { url: link.meta.url } : {}),
         tab: tabRecord(tab, link.meta),

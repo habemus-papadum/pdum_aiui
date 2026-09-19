@@ -16,6 +16,29 @@ describe("registerStandardTools", () => {
     expect(handle.report()).toHaveProperty("cells");
   });
 
+  it("classifies every derived tool (kind) and carries an action's usage", () => {
+    const s = scope("stdKinds");
+    const kit = agentToolkit("stdKinds");
+    action({
+      scope: s,
+      name: "reseed",
+      description: "New noise seed",
+      usage: "Call after changing the regime.",
+      run: () => "seeded",
+    });
+    action({ scope: s, name: "peek", description: "Read-only", kind: "read", run: () => 1 });
+    registerStandardTools(kit);
+    const byName = new Map(kit.handle().tools.map((t) => [t.name, t]));
+    expect(byName.get("report")?.kind).toBe("read");
+    expect(byName.get("locate")?.kind).toBe("read");
+    expect(byName.get("set")?.kind).toBe("write");
+    expect(byName.get("reseed")).toMatchObject({
+      kind: "write", // an action changes the app unless it says otherwise
+      usage: "Call after changing the regime.",
+    });
+    expect(byName.get("peek")?.kind).toBe("read");
+  });
+
   it("is idempotent — a re-evaluated module replaces rather than duplicates", () => {
     const kit = agentToolkit("stdSmokeIdem");
     registerStandardTools(kit);

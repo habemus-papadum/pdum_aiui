@@ -176,6 +176,9 @@ function toolOfAction(name: string, toolName: string): AgentTool | undefined {
   return {
     name: toolName,
     description: a.description ?? `Run the app's "${a.name}" action.`,
+    ...(a.usage !== undefined ? { usage: a.usage } : {}),
+    // An action changes the app unless it says otherwise.
+    kind: a.kind ?? "write",
     ...(a.params !== undefined ? { params: a.params } : {}),
     ...(a.inputSchema !== undefined ? { inputSchema: a.inputSchema } : {}),
     // Late-bound through the registry so an HMR re-declaration swaps the
@@ -225,6 +228,10 @@ export function registerStandardTools(
       "cell's deps read), and the app's custom sections. format: \"brief\" (default, compact " +
       'maps) or "full" (adds descriptions, definition sites file:line, and constraint ' +
       "metadata). Call this FIRST.",
+    usage:
+      "Call it before answering a question about the app's state or before the first " +
+      "write, and again after a write when a count or a derived value matters.",
+    kind: "read",
     params: { format: '"brief" (default) | "full"' },
     inputSchema: {
       type: "object",
@@ -241,6 +248,10 @@ export function registerStandardTools(
       "constraints via report). The write is validated by the control's own metadata: numbers " +
       "clamp to min/max and snap to step, enums must match an option, wrong types throw. " +
       "Returns the value actually written (never a re-read — writes are batched).",
+    usage:
+      "One control per call; trust the returned value over the request (it clamps and " +
+      "snaps). Names, bounds, and units come from report.",
+    kind: "write",
     params: { name: "control name (see report)", value: "the new value" },
     inputSchema: {
       type: "object",
@@ -271,6 +282,7 @@ export function registerStandardTools(
     description:
       "Map DOM elements to their source locations (compile-time data-source-loc stamps). " +
       "Combine with window.__AIUI__.sourceRoot for absolute paths.",
+    kind: "read",
     params: { selector: `CSS selector; first ${LOCATE_LIMIT} matches returned` },
     run: (args) => {
       const selector = String(args?.selector ?? "*");

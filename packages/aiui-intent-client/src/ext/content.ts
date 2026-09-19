@@ -196,7 +196,14 @@ window.addEventListener("message", (event) => {
     aiuiInstrumented?: boolean;
     aiuiTools?: Array<{
       ns: string;
-      tools: Array<{ name: string; description: string; inputSchema?: Record<string, unknown> }>;
+      brief?: string;
+      tools: Array<{
+        name: string;
+        description: string;
+        usage?: string;
+        kind?: "read" | "write";
+        inputSchema?: Record<string, unknown>;
+      }>;
     }>;
     // The toolsResult shape, reused from the PageReport union rather than
     // re-declared (the field-tagged envelope stays ad-hoc).

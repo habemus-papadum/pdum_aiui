@@ -106,6 +106,52 @@ describe("the tools registry", () => {
     ]);
   });
 
+  it("carries the tool document: usage + kind per tool, a brief per namespace", () => {
+    const tools = ensureAiuiGlobal()?.tools;
+    if (tools === undefined) {
+      throw new Error("no registry");
+    }
+    tools.register(
+      "app",
+      [
+        {
+          name: "sql",
+          description: "run SQL",
+          usage: "aggregate in SQL",
+          kind: "read",
+          run: () => 0,
+        },
+        { name: "reset", description: "reset", run: () => 0 },
+      ],
+      { brief: "An earthquake catalog." },
+    );
+    expect(tools.list()).toEqual([
+      {
+        ns: "app",
+        active: true,
+        brief: "An earthquake catalog.",
+        tools: [
+          expect.objectContaining({ name: "sql", usage: "aggregate in SQL", kind: "read" }),
+          expect.objectContaining({ name: "reset" }),
+        ],
+      },
+    ]);
+    expect(tools.ledger()).toEqual([
+      {
+        ns: "app",
+        tool: "sql",
+        description: "run SQL",
+        active: true,
+        kind: "read",
+        usage: "aggregate in SQL",
+      },
+      { ns: "app", tool: "reset", description: "reset", active: true },
+    ]);
+    // The brief is part of the declaration: a re-register without one drops it.
+    tools.register("app", [{ name: "reset", description: "reset", run: () => 0 }]);
+    expect(tools.list()[0]?.brief).toBeUndefined();
+  });
+
   it("agentToolkit lands in the registry with NO overlay anywhere (the prod path)", async () => {
     const kit = agentToolkit("plotapp");
     kit.registerTool({
@@ -123,5 +169,19 @@ describe("the tools registry", () => {
     await expect(tools?.call("plotapp", "set_range")).resolves.toBe("ok");
     const report = (await tools?.call("plotapp", "report")) as Record<string, unknown>;
     expect(report.range).toEqual({ x: [0, 1] });
+  });
+
+  it("a kit's brief reaches the registry, and a re-created kit replaces it (HMR)", () => {
+    const kit = agentToolkit("briefed", { brief: "v1" });
+    kit.registerTool({ name: "t", description: "d", run: () => 0 });
+    const tools = ensureAiuiGlobal()?.tools;
+    expect(tools?.list().find((e) => e.ns === "briefed")?.brief).toBe("v1");
+    // The module re-evaluates: same namespace, new brief, same handle.
+    const again = agentToolkit("briefed", { brief: "v2" });
+    again.registerTool({ name: "t", description: "d", run: () => 0 });
+    expect(tools?.list().find((e) => e.ns === "briefed")?.brief).toBe("v2");
+    // A kit created without a brief keeps the namespace's current one.
+    agentToolkit("briefed").registerTool({ name: "u", description: "d", run: () => 0 });
+    expect(tools?.list().find((e) => e.ns === "briefed")?.brief).toBe("v2");
   });
 });

@@ -144,6 +144,9 @@ interface BaseDimSpec {
   scope?: Scope;
   /** Human description — compiler-lifted from the doc comment, or explicit. */
   description?: string;
+  /** How to use the derived `set-<name>` tool — compiler-lifted from
+   * `@usage` / `@example`, or explicit. */
+  usage?: string;
   /** Definition site "file:line" — compiler-injected. */
   loc?: string;
   /** Where this dimension publishes (≥ 1; one per table vocabulary). */
@@ -440,6 +443,12 @@ function registerDimAction(
   const where = targetsPhrase(spec.targets);
   const prefix = spec.description !== undefined ? `${spec.description} — ` : "";
   const clearProp = { clear: { type: "boolean", description: "true removes this filter" } };
+  const docs = {
+    ...(spec.scope !== undefined ? { scope: spec.scope } : {}),
+    ...(spec.loc !== undefined ? { loc: spec.loc } : {}),
+    ...(spec.usage !== undefined ? { usage: spec.usage } : {}),
+    kind: "write" as const,
+  };
   let actionSpec: ActionSpec;
   if (spec.kind === "interval") {
     const unit = spec.unit !== undefined ? ` (${spec.unit})` : "";
@@ -449,8 +458,7 @@ function registerDimAction(
     };
     actionSpec = {
       name: `set-${leaf}`,
-      ...(spec.scope !== undefined ? { scope: spec.scope } : {}),
-      ...(spec.loc !== undefined ? { loc: spec.loc } : {}),
+      ...docs,
       description:
         `${prefix}Set the "${leaf}" cross-filter, an interval on ${where}${unit}: pass lo ` +
         "and/or hi (one side alone gives an open-ended range); { clear: true } removes the " +
@@ -485,8 +493,7 @@ function registerDimAction(
     const pointSpec = spec;
     actionSpec = {
       name: `set-${leaf}`,
-      ...(spec.scope !== undefined ? { scope: spec.scope } : {}),
-      ...(spec.loc !== undefined ? { loc: spec.loc } : {}),
+      ...docs,
       description:
         `${prefix}Set the "${leaf}" cross-filter, a categorical pick on ${where}: pass values ` +
         "(rows matching ANY of them pass); { clear: true } removes the filter. Every " +
@@ -680,6 +687,7 @@ export function registerClearSelection(scope?: Scope): void {
   const spec: ActionSpec = {
     name: "clear-selection",
     ...(scope !== undefined ? { scope } : {}),
+    kind: "write",
     description:
       'Clear ONE cross-filter by name, leaving the rest: a dimension ("mag") or an ' +
       'on-screen component ("<scope>/map") — its clause retracts and its visual (brush ' +

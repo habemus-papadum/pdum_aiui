@@ -15,12 +15,19 @@ export type { Adoption, DurableCanvas, Release } from "./adopt";
 // that is registered in the OWNER (a ref callback has none) and never takes a
 // resource back from a hot-swapped successor.
 export { adopt, durableCanvas } from "./adopt";
-export type { AgentTool, AgentToolkit, AgentToolkitHandle } from "./agent-tools";
+export type {
+  AgentTool,
+  AgentToolkit,
+  AgentToolkitHandle,
+  AgentToolkitOptions,
+} from "./agent-tools";
 // agent-tools.ts — the WebMCP-flavored tool surface an agent drives.
 export { agentToolkit } from "./agent-tools";
 export {
   type AiuiGlobal,
   type AiuiPageTool,
+  type AiuiRegisterOptions,
+  type AiuiToolsNamespace,
   type AiuiToolsRegistry,
   ensureAiuiGlobal,
 } from "./aiui-global";
@@ -114,6 +121,10 @@ export type { ThrottledBox } from "./throttle";
 // throttle.ts — the imperative boundary's outbound valve: a write policy (at most
 // hz commits/sec, latest wins, the last value always lands) over any SignalBox.
 export { throttled } from "./throttle";
+// tool-brief.ts — the tool surface rendered as a document for a model: one pure
+// function every consumer calls in the same breath as it sets its tool array.
+export type { KitDoc, RenderToolBriefOptions, ToolDoc, ToolKind } from "./tool-brief";
+export { renderToolBrief } from "./tool-brief";
 export type { WorkerCancel, WorkerReply, WorkerRequest, WorkerRun } from "./worker-stream";
 // worker-stream.ts — cancellable request/stream protocol for Web Workers.
 export { fromWorker, workerStream } from "./worker-stream";

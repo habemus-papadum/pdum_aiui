@@ -9,12 +9,18 @@ function installFakeBridge() {
     tools: Array<{
       name: string;
       description: string;
+      usage?: string;
+      kind?: string;
       inputSchema?: unknown;
       run: (a?: unknown) => unknown;
     }>;
+    options?: { brief?: string };
   }> = [];
   (window as unknown as { __AIUI__?: { tools?: unknown } }).__AIUI__ = {
-    tools: { register: (ns: string, tools: never[]) => calls.push({ ns, tools }) },
+    tools: {
+      register: (ns: string, tools: never[], options?: { brief?: string }) =>
+        calls.push({ ns, tools, options }),
+    },
   };
   return { calls, latest: () => calls[calls.length - 1] };
 }
@@ -56,6 +62,26 @@ describe("agentToolkit → overlay forwarding", () => {
     const report = byName.get("report");
     expect(report?.description).toBe("bounded snapshot of page state");
     expect(report?.run()).toEqual({ state: { n: 1 } });
+  });
+
+  it("forwards usage and kind per tool, and the kit's brief per namespace", () => {
+    const bridge = installFakeBridge();
+    const kit = agentToolkit("documented", { brief: "A wave lab." });
+    kit.registerTool({
+      name: "sql",
+      description: "run SQL",
+      usage: "aggregate in SQL",
+      kind: "read",
+      run: () => 1,
+    });
+    const latest = bridge.latest();
+    expect(latest.options).toEqual({ brief: "A wave lab." });
+    expect(latest.tools.find((t) => t.name === "sql")).toMatchObject({
+      usage: "aggregate in SQL",
+      kind: "read",
+    });
+    // The synthetic report tool is a read.
+    expect(latest.tools.find((t) => t.name === "report")?.kind).toBe("read");
   });
 
   it("skips tools without a description", () => {

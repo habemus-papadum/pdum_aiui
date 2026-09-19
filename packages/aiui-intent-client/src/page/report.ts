@@ -18,6 +18,10 @@ import type { PageTabRecord } from "@habemus-papadum/aiui-intent-runtime/instrum
 export type PageToolDescriptorReport = {
   name: string;
   description: string;
+  /** How to use it — the tool-docs convention (aiui-viz `AgentTool.usage`). */
+  usage?: string;
+  /** Eagerness class (aiui-viz `AgentTool.kind`). */
+  kind?: "read" | "write";
   inputSchema?: Record<string, unknown>;
 };
 
@@ -57,7 +61,13 @@ export type PageReport =
    * as active — the page-tools proposal, git history). */
   | {
       kind: "tools";
-      registrations: Array<{ ns: string; tools: PageToolDescriptorReport[]; active?: boolean }>;
+      registrations: Array<{
+        ns: string;
+        tools: PageToolDescriptorReport[];
+        active?: boolean;
+        /** The kit's brief (aiui-viz `AgentToolkitOptions.brief`). */
+        brief?: string;
+      }>;
     }
   /** A `toolsCall` capability's answer, correlated by callId. */
   | { kind: "toolsResult"; callId: string; ok: boolean; value?: unknown; error?: string };

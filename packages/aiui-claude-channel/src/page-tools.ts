@@ -39,6 +39,12 @@ import type { SourceInfo, TabInfo } from "./frame";
 export interface PageToolDescriptor {
   name: string;
   description: string;
+  /** How to use it: when to call it, what the result means, an example — the
+   * tool-docs convention (aiui-viz `AgentTool.usage`). */
+  usage?: string;
+  /** Eagerness class: `read` is called freely once the intent is clear,
+   * `write` changes the app (aiui-viz `AgentTool.kind`). */
+  kind?: "read" | "write";
   /** JSON Schema (draft 2020-12 object schema) for the tool's arguments. */
   inputSchema?: Record<string, unknown>;
 }
@@ -97,6 +103,9 @@ export interface PageToolRegistration {
   hash: string;
   /** The declared tools. */
   tools: PageToolDescriptor[];
+  /** The kit's brief: what the app is and how its tools relate — read it
+   * before driving the app. */
+  brief?: string;
   /** ISO timestamp of the (latest) registration. */
   registeredAt: string;
   /**
@@ -133,6 +142,8 @@ export interface PageToolTabEntry {
     hash: string;
     active: boolean;
     shadowed?: true;
+    /** The kit's brief — read it before driving the app. */
+    brief?: string;
     tools: PageToolDescriptor[];
   }>;
 }
@@ -367,6 +378,8 @@ export class PageToolDirectory {
       .map((t) => ({
         name: t.name as string,
         description: typeof t.description === "string" ? t.description : "",
+        ...(typeof t.usage === "string" ? { usage: t.usage } : {}),
+        ...(t.kind === "read" || t.kind === "write" ? { kind: t.kind } : {}),
         ...(asRecord(t.inputSchema) ? { inputSchema: asRecord(t.inputSchema) } : {}),
       }));
     const hash = typeof msg.hash === "string" ? msg.hash : "";
@@ -380,6 +393,7 @@ export class PageToolDirectory {
       ...(asRecord(msg.source) ? { source: asRecord(msg.source) as SourceInfo } : {}),
       hash,
       tools,
+      ...(typeof msg.brief === "string" ? { brief: msg.brief } : {}),
       // Absent on registrations from links predating the bit ⇒ active.
       active: msg.active !== false,
       registeredAt: this.now().toISOString(),
@@ -544,6 +558,7 @@ export class PageToolDirectory {
         hash: reg.hash,
         active: reg.active,
         ...(reg.shadowed ? { shadowed: true } : {}),
+        ...(reg.brief !== undefined ? { brief: reg.brief } : {}),
         tools: reg.tools,
       });
     }

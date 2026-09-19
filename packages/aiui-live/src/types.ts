@@ -22,6 +22,11 @@ import type { AppendKind, LiveBackendTool, LiveEvent, LiveSessionConfig } from "
 export interface LiveTool {
   name: string;
   description: string;
+  /** How to use it (aiui-viz's tool-docs convention) — rendered into the
+   * backend's instructions, not sent in the tool array. */
+  usage?: string;
+  /** Eagerness class, `read` or `write`. */
+  kind?: "read" | "write";
   /** JSON Schema for the arguments. */
   parameters: Record<string, unknown>;
   execute(args: Record<string, unknown>): unknown | Promise<unknown>;
@@ -31,11 +36,19 @@ export interface LiveTool {
 export interface LiveToolSpec {
   name: string;
   description: string;
+  usage?: string;
+  kind?: "read" | "write";
   parameters: Record<string, unknown>;
 }
 
 export function toolSpec(tool: LiveTool | LiveToolSpec): LiveToolSpec {
-  return { name: tool.name, description: tool.description, parameters: tool.parameters };
+  return {
+    name: tool.name,
+    description: tool.description,
+    ...(tool.usage !== undefined ? { usage: tool.usage } : {}),
+    ...(tool.kind !== undefined ? { kind: tool.kind } : {}),
+    parameters: tool.parameters,
+  };
 }
 
 /** The Responses-API function-tool shape for a tool. */

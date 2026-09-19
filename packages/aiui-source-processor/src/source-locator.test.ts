@@ -141,6 +141,40 @@ export const kappa = control({ value: 0.1 });`,
     );
     expect(out).toContain('description: "Diffusion constant, how fast heat spreads."');
     expect(out).not.toMatch(/description: "[^"]*@remarks/); // tags never leak in
+    expect(out).not.toContain("usage:"); // no @usage/@example → no usage key
+  });
+
+  it("lifts @usage and @example into `usage` (the tool-docs convention)", async () => {
+    const out = await run(
+      `/**
+ * Re-seed the field with a fresh random pattern.
+ * @usage Call after changing the regime; the field settles
+ *   within a few hundred steps.
+ * @param seed ignored
+ * @example reseed({ seed: 42 })
+ */
+export const reseed = action({ run: () => 1 });`,
+      "src/model/graph.ts",
+    );
+    expect(out).toContain('description: "Re-seed the field with a fresh random pattern."');
+    expect(out).toContain(
+      'usage: "Call after changing the regime; the field settles within a few hundred steps. ' +
+        'Example: reseed({ seed: 42 })"',
+    );
+    expect(out).not.toMatch(/usage: "[^"]*ignored/); // other tags stay out of usage
+  });
+
+  it("does not lift usage for cells (only the tool-bearing factories carry it)", async () => {
+    const out = await run(
+      `/**
+ * The profile.
+ * @usage never rendered
+ */
+export const profile = cell(deps, compute);`,
+      "src/model/graph.ts",
+    );
+    expect(out).toContain('description: "The profile."');
+    expect(out).not.toContain("usage:");
   });
 
   it("lifts a contiguous // run as one description, and takes the CLOSEST comment", async () => {

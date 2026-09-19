@@ -119,6 +119,8 @@ export function toolsFromControlSurface(options: ControlSurfaceToolsOptions = {}
       tools.push({
         name: toolName("set_", entry.name),
         description: `Set ${controlDescription(entry)}. Returns the value actually applied (snapped and clamped).`,
+        ...(entry.usage !== undefined ? { usage: entry.usage } : {}),
+        kind: "write",
         parameters: {
           type: "object",
           properties: { value: controlValueSchema(entry) },
@@ -139,6 +141,9 @@ export function toolsFromControlSurface(options: ControlSurfaceToolsOptions = {}
       tools.push({
         name: toolName("", entry.name),
         description: entry.description ?? entry.name,
+        ...(entry.usage !== undefined ? { usage: entry.usage } : {}),
+        // An action changes the app unless it says otherwise.
+        kind: entry.toolKind ?? "write",
         parameters:
           // An action that declares a real inputSchema hands it to the model —
           // the selection dims do, and realtime tools have no strict mode, so
@@ -165,6 +170,7 @@ export function toolsFromControlSurface(options: ControlSurfaceToolsOptions = {}
       name: "report",
       description:
         "Read the app's current state: every control's value and bounds. Call before answering questions about how the app is set.",
+      kind: "read",
       parameters: { type: "object", properties: {}, additionalProperties: false },
       execute: () =>
         controlSurface()
@@ -215,6 +221,8 @@ export function toolsFromAiuiRegistry(
       tools.push({
         name: toolName(prefix ? `${registration.ns}_` : "", tool.name),
         description: tool.description,
+        ...(tool.usage !== undefined ? { usage: tool.usage } : {}),
+        ...(tool.kind !== undefined ? { kind: tool.kind } : {}),
         parameters: tool.inputSchema ?? {
           type: "object",
           properties: {},

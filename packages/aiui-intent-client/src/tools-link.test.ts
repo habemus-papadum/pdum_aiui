@@ -9,7 +9,7 @@ import type { PageToolDescriptor } from "@habemus-papadum/aiui-claude-channel";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import type { PageToolDescriptorReport } from "./cdp/page-script";
 import { fakeBus } from "./fake-bus";
-import { createToolsLink, type ToolsSocket } from "./tools-link";
+import { createToolsLink, type ToolsSocket, toolsHash } from "./tools-link";
 
 interface FakeSocket extends ToolsSocket {
   url: string;
@@ -292,5 +292,29 @@ describe("createToolsLink", () => {
   // pass-2 S1 mirrors note (git history).
   it("the relayed tool descriptor is the channel's PageToolDescriptor (drift guard)", () => {
     expectTypeOf<PageToolDescriptorReport>().toEqualTypeOf<PageToolDescriptor>();
+  });
+
+  it("the register frame carries the kit's brief, and the hash covers it", () => {
+    const bus = fakeBus({ activeTab: 7 });
+    const { all, factory } = fakeSockets();
+    createToolsLink({
+      host: bus,
+      port: () => 5050,
+      tabIdKey: "chromeTabId",
+      socketFactory: factory,
+    });
+    const tools = REGS[0].tools;
+    bus.firePageEvent({
+      kind: "pageTools",
+      tab: 7,
+      registrations: [{ ns: "seismos", tools, brief: "A catalog." }],
+    });
+    all[0].emit("open");
+    const frame = JSON.parse(all[0].sent[0]) as { brief?: string; hash: string };
+    expect(frame.brief).toBe("A catalog.");
+    const withoutBrief = toolsHash({ ns: "seismos", tools });
+    expect(frame.hash).not.toBe(withoutBrief);
+    // Absent, the canonical form is the pre-brief one: old hashes stay valid.
+    expect(toolsHash({ ns: "seismos", tools, brief: undefined })).toBe(withoutBrief);
   });
 });

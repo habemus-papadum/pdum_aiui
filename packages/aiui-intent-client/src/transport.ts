@@ -235,10 +235,20 @@ export type PageEvent =
       tab: number;
       registrations: Array<{
         ns: string;
-        tools: Array<{ name: string; description: string; inputSchema?: Record<string, unknown> }>;
+        tools: Array<{
+          name: string;
+          description: string;
+          /** How to use it — the tool-docs convention (aiui-viz `AgentTool.usage`). */
+          usage?: string;
+          /** Eagerness class (aiui-viz `AgentTool.kind`). */
+          kind?: "read" | "write";
+          inputSchema?: Record<string, unknown>;
+        }>;
         /** The namespace's ACTIVITY bit (absent = active): route-following
          * consumers (the oracle) filter on it; the agent sees it as a flag. */
         active?: boolean;
+        /** The kit's brief — rendered above the tool list by consumers. */
+        brief?: string;
       }>;
     }
   /** The tab is GONE (window closed, target detached). Distinct from an empty

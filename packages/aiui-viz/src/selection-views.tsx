@@ -223,6 +223,7 @@ function registerViewActions(store: SelectionViewsStore, scope: Scope | undefine
   action({
     ...scoped,
     name: "list-views",
+    kind: "read",
     description: "List the saved cross-filter views: name, savedAt, and the values each holds.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
     run: () => ({ views: store.views() }),
