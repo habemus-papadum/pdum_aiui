@@ -15,6 +15,7 @@ export default defineConfig({
         oracle: "src/oracle.ts",
         stt: "src/stt.ts",
         mosaic: "src/mosaic.ts",
+        motherduck: "src/motherduck.ts",
       },
       formats: ["es"],
       fileName: (_format, entryName) => `${entryName}.js`,

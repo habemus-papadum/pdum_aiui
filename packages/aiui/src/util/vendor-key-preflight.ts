@@ -108,6 +108,10 @@ export function vendorKeyPreflightMessage(key: ResolvedVendorKey): PreflightMess
           "Add the key with `aiui keys set elevenlabs` (or, in a source checkout, export " +
           "ELEVEN_LABS_API_KEY).",
       };
+    case "motherduck":
+      // Opt-in: nothing in the intent pipeline needs it; a DuckDB app that
+      // does says so itself through the Vite plugin's devKeys warning.
+      return null;
   }
 }
 

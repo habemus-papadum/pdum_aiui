@@ -7,7 +7,7 @@
  * re-stated min/max/step that the control's meta now owns. That is the exact
  * boilerplate shape that produced `hotCellGraph` and `registerStandardTools`.
  * The scrub pill and the select arrived the same way (2026-09): three
- * verbatim copies of the pill across two FAI Labs repos, five of the enum
+ * verbatim copies of the pill across two downstream repos, five of the enum
  * select in one.
  *
  * These are deliberately NOT an auto-panel: an app composes them into its own

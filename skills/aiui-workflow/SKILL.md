@@ -85,11 +85,13 @@ at first run; `yolo` above is the only opt-in, and `--aiui-bind` overrides one l
 
 ## API keys (OS vault)
 
-Keys are **not** free-form config: `keys.openai|gemini|elevenlabs` hold only a decision —
+Keys are **not** free-form config: `keys.openai|gemini|elevenlabs|motherduck` hold only a decision —
 `"vault"` or `"skip"` — and the secrets live in the OS vault (macOS keychain / Secret
 Service). In a source checkout the environment (`.env`/direnv) wins and the vault fills
 gaps; in an installed CLI the environment is ignored entirely, so keys never enter the
-agent's env. Manage with **`aiui keys`**: `status` (mode, per-provider decision and
+agent's env. (`motherduck` — `MOTHERDUCK_BROWSER_TOKEN`, a read-scaling token — is opt-in: only a
+DuckDB app's `devKeys: ["motherduck"]` uses it, and no launch ever asks for it.) Manage with
+**`aiui keys`**: `status` (mode, per-provider decision and
 effective source — never the values), `interview`, `set <provider>` (masked prompt,
 round-trip verified), `unset <provider>`. `aiui claude` gap-fills undecided providers on
 interactive launches and validity-checks found keys against each vendor's cheapest

@@ -56,6 +56,55 @@
 import * as duckdb from "@duckdb/duckdb-wasm";
 import type { AgentToolkit } from "./agent-tools";
 
+// ── self-hosted assets ────────────────────────────────────────────────────────
+
+/** Where the aiui Vite plugin's `duckdbAssets` option published the binaries. */
+export interface DuckdbAssetsLocation {
+  /** The app's base, e.g. `/` or `/notes/x/` — what the MotherDuck client's
+   * `duckDBAssetsURLPrefix` takes. */
+  prefix: string;
+  /** The installed `@duckdb/duckdb-wasm` version, the layout's path segment. */
+  version: string;
+}
+
+/** The directory the layout hangs under — the MotherDuck client's convention. */
+export const DUCKDB_ASSETS_DIR = "duckdb-wasm-assets";
+
+/**
+ * The location the plugin seeded on the page (`window.__AIUI__.duckdbAssets`),
+ * or a loud error naming the remedy: this is the one wiring that MUST be in
+ * the app's Vite config, and nothing else can supply it at runtime.
+ */
+export function duckdbAssetsLocation(global: unknown = globalThis): DuckdbAssetsLocation {
+  const aiui = (global as { __AIUI__?: { duckdbAssets?: unknown } }).__AIUI__;
+  const location = aiui?.duckdbAssets as Partial<DuckdbAssetsLocation> | undefined;
+  if (typeof location?.prefix !== "string" || typeof location.version !== "string") {
+    throw new Error(
+      "no DuckDB-WASM assets location on the page — add `duckdbAssets: true` to the app's " +
+        "`aiui()` Vite plugin options (@habemus-papadum/aiui-source-processor) so the binaries " +
+        "are self-hosted at <base>duckdb-wasm-assets/<version>/ and the page knows where",
+    );
+  }
+  return { prefix: location.prefix, version: location.version };
+}
+
+/**
+ * The `mvp` + `eh` bundles at the self-hosted layout, for
+ * {@link instantiateDuckDB}. Same-origin, so a plain `new Worker` works; the
+ * same URLs the MotherDuck client forms from `duckDBAssetsURLPrefix`, so a
+ * plain-DuckDB app and a MotherDuck app share one asset store.
+ */
+export function duckdbAssetBundles(
+  location: DuckdbAssetsLocation = duckdbAssetsLocation(),
+): duckdb.DuckDBBundles {
+  const at = (file: string): string =>
+    `${location.prefix}${DUCKDB_ASSETS_DIR}/${location.version}/${file}`;
+  return {
+    mvp: { mainModule: at("duckdb-mvp.wasm"), mainWorker: at("duckdb-browser-mvp.worker.js") },
+    eh: { mainModule: at("duckdb-eh.wasm"), mainWorker: at("duckdb-browser-eh.worker.js") },
+  };
+}
+
 /**
  * Build an AsyncDuckDB from the app's bundles. The worker files are served
  * same-origin, so a plain `new Worker(url)` is enough — no cross-origin Blob

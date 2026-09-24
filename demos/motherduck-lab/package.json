@@ -1,0 +1,53 @@
+{
+  "name": "@habemus-papadum/demo-motherduck-lab",
+  "version": "0.18.0+dev",
+  "description": "In-repo lab (not in the gallery): the in-tab MotherDuck engine \u2014 dev key, self-hosted wasm, Mosaic over the stock connector, local tables beside cloud ones, rebuild.",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/habemus-papadum/pdum_aiui.git",
+    "directory": "demos/motherduck-lab"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./page": "./src/page.tsx",
+    "./card": "./src/card.tsx"
+  },
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "claude": "../../bin/aiui claude",
+    "dev": "vite",
+    "open": "../../bin/aiui open",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@duckdb/duckdb-wasm": "catalog:",
+    "@habemus-papadum/aiui-cf-creds": "workspace:^",
+    "@habemus-papadum/aiui-source-processor": "workspace:^",
+    "@habemus-papadum/aiui-viz": "workspace:^",
+    "@motherduck/wasm-client": "^1.5.5-r.1",
+    "@observablehq/plot": "catalog:",
+    "@solidjs/web": "catalog:solid",
+    "@uwdata/mosaic-core": "^0.28.1",
+    "@uwdata/mosaic-plot": "^0.28.1",
+    "@uwdata/mosaic-sql": "^0.28.1",
+    "@uwdata/vgplot": "0.28.1",
+    "apache-arrow": "^17.0.0",
+    "solid-js": "catalog:solid"
+  },
+  "devDependencies": {
+    "@babel/core": "catalog:",
+    "@habemus-papadum/aiui": "workspace:^",
+    "jsdom": "catalog:",
+    "typescript": "catalog:",
+    "typescript-language-server": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-solid": "catalog:solid",
+    "vitest": "catalog:"
+  }
+}

@@ -35,6 +35,7 @@ import {
   vendorKeysModeSelf,
 } from "@habemus-papadum/aiui-util";
 import type { Plugin } from "vite";
+import { type DuckdbAssetsOptions, duckdbAssets } from "./duckdb-assets.ts";
 import {
   defaultFactories,
   type FactorySpec,
@@ -76,6 +77,15 @@ export interface AiuiPluginOptions {
    * under `server.host: true`), which is why this is never on by default.
    */
   devKeys?: VendorProvider[];
+  /**
+   * Self-host the installed `@duckdb/duckdb-wasm` binaries at the MotherDuck
+   * client's layout (`<base>duckdb-wasm-assets/<version>/…`) — served in dev,
+   * emitted unhashed into the build — and tell the page where they are
+   * (`window.__AIUI__.duckdbAssets`; aiui-viz's `duckdbAssetBundles()` reads
+   * it back). `true` for the defaults; an object for `brotli` siblings. See
+   * ./duckdb-assets.ts.
+   */
+  duckdbAssets?: boolean | DuckdbAssetsOptions;
 }
 
 /** The dev-only `sourceRoot` seed (see the module doc). */
@@ -195,7 +205,20 @@ export function aiui(options: AiuiPluginOptions = {}): Plugin[] {
   if (options.devKeys !== undefined && options.devKeys.length > 0) {
     plugins.push(devKeysSeed(options.devKeys));
   }
+  if (options.duckdbAssets !== undefined && options.duckdbAssets !== false) {
+    plugins.push(duckdbAssets(options.duckdbAssets === true ? {} : options.duckdbAssets));
+  }
   return plugins;
 }
+
+export {
+  DUCKDB_ASSET_FILES,
+  DUCKDB_ASSETS_DIR,
+  type DuckdbAssetsLayout,
+  type DuckdbAssetsOptions,
+  duckdbAssetPath,
+  duckdbAssets,
+  locateDuckdbAssets,
+} from "./duckdb-assets.ts";
 
 export default aiui;

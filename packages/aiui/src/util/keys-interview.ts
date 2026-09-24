@@ -160,7 +160,7 @@ function gapFillDetail(spec: VendorKeySpec): string {
 }
 
 /**
- * The launch gap-fill: for each provider with NO recorded decision, either
+ * The launch gap-fill: for each non-opt-in provider with NO recorded decision, either
  * defer to an env key (source mode), adopt an existing vault entry silently
  * (it was `aiui keys set` outside an interview, or a pre-decision write), or
  * ask. Call only from an interactive session. Returns the config with any new
@@ -183,6 +183,12 @@ export async function ensureKeyDecisions(
   let keys = { ...config.keys };
   for (const spec of VENDOR_KEYS) {
     if (keys[spec.provider] !== undefined) {
+      continue;
+    }
+    // Opt-in providers are never a launch question: the full interview and
+    // `aiui keys set` are the deliberate paths, and the app that needs one
+    // warns for itself (the Vite plugin's devKeys).
+    if (spec.optIn === true) {
       continue;
     }
     // Source checkout with the env var set: the key resolves at runtime with no

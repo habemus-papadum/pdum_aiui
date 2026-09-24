@@ -57,7 +57,7 @@ Two ways to hand them to aiui:
   aiui keys status            # per-provider decision + effective source (never the values)
   aiui keys set elevenlabs    # store one key (masked prompt; piped stdin for scripts)
   aiui keys set openai
-  aiui keys interview         # revisit all three: keep / replace / skip
+  aiui keys interview         # revisit every provider: keep / replace / skip
   ```
 
 Working from a **source checkout** of this repo, the environment wins first — `ELEVEN_LABS_API_KEY`

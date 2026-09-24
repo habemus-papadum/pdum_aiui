@@ -94,13 +94,20 @@ export interface VendorKeySpec {
   label: string;
   /** What the key powers, for the interview's one-line context. */
   purpose: string;
+  /**
+   * An OPT-IN provider: nothing in the intent pipeline needs it, so the launch
+   * gap-fill never asks for it and the launch preflight never reports it
+   * missing. It is reached only deliberately — `aiui keys set <provider>`, the
+   * full `aiui keys interview`, or an app's `devKeys: [<provider>]`.
+   */
+  optIn?: true;
 }
 
-export type VendorProvider = "openai" | "gemini" | "elevenlabs";
+export type VendorProvider = "openai" | "gemini" | "elevenlabs" | "motherduck";
 
-/** The channel's three vendors, in priority order — the interview asks and
- * `aiui keys status` lists in this order (ElevenLabs is the critical one:
- * Scribe is dictation itself). */
+/** The vendors a key can be held for, in priority order — the interview asks
+ * and `aiui keys status` lists in this order (ElevenLabs is the critical one:
+ * Scribe is dictation itself; MotherDuck is opt-in, for DuckDB apps only). */
 export const VENDOR_KEYS: readonly VendorKeySpec[] = [
   {
     provider: "elevenlabs",
@@ -121,6 +128,20 @@ export const VENDOR_KEYS: readonly VendorKeySpec[] = [
     envVar: "GEMINI_API_KEY",
     label: "Gemini",
     purpose: "the Gemini Live realtime engine and the Gemini linter option",
+  },
+  {
+    // Deliberately NOT `MOTHERDUCK_TOKEN`: that name is what MotherDuck's own
+    // tooling reads and what a data repo's `.env` holds — usually the org
+    // admin's read-write token, which must never be seeded into a served page.
+    // The browser key is a READ-SCALING token of your own user (read-only; it
+    // sees the shares your roles grant), minted once and stored here.
+    provider: "motherduck",
+    envVar: "MOTHERDUCK_BROWSER_TOKEN",
+    label: "MotherDuck",
+    purpose:
+      "a browser-side MotherDuck engine in a DuckDB app under `vite serve` " +
+      '(the aiui Vite plugin\'s `devKeys: ["motherduck"]`) — a read-scaling token, never the admin token',
+    optIn: true,
   },
 ] as const;
 
@@ -212,7 +233,7 @@ export interface ResolveVendorKeysOptions {
 const DEFAULT_LOOKUP_TIMEOUT_MS = 3000;
 
 /**
- * Resolve all three vendor keys, non-interactively and without ever throwing:
+ * Resolve every vendor key, non-interactively and without ever throwing:
  *
  *   source mode:    env → vault (unless skipped) → missing
  *   installed mode:       vault (unless skipped) → missing

@@ -81,6 +81,27 @@ coordinator.databaseConnector(
 With `key`, the S3 region rides the broker's credential envelope; without one, pass
 `region` explicitly as before.
 
+### `aiui-cf-creds/motherduck` — the in-tab MotherDuck engine
+
+The kit's `motherDuckEngine` composed the way the oracle's key chain is: a DEV key the aiui Vite
+plugin injected (`devKeys: ["motherduck"]`, dev serve only, from `MOTHERDUCK_BROWSER_TOKEN`) wins,
+else the broker route under the key contract. One stock `AsyncDuckDB` with the MotherDuck extension
+attached comes back, in the stock types: Mosaic's `wasmConnector` and aiui-viz's `duckdbRunner`
+take it unchanged; `motherDuckRunner` is the agent's runner over the client's own connection
+(`MD_ALL_DATABASES()` under `connection.query()`'s blocking protocol wedges the whole engine; the
+client's `send()`-based path answers it — measured; the record is aiui-viz's duckdb-mosaic doc,
+shape 4, "The RUN_QUERY wedge").
+
+```ts
+import { motherDuckRunner, standardMotherDuckEngine } from "@habemus-papadum/aiui-cf-creds/motherduck";
+
+const engine = standardMotherDuckEngine({ key: "app", params: { sessionName: "app" } });
+const { db, connect, connection } = await engine.ready();
+coordinator.databaseConnector(wasmConnector({ duckdb: db, connection: await connect() }));
+registerSqlTools(kit, { runner: motherDuckRunner(connection) });
+engine.onRebuild(() => { /* re-wire, re-materialize: local tables are gone */ });
+```
+
 ## Two deployment knobs
 
 In production everything is same-origin relative (the kit's `/api/credentials/*` convention) —

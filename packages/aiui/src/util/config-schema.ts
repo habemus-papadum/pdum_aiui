@@ -196,6 +196,7 @@ export const CONFIG_SECTIONS: ConfigSectionSchema[] = [
         ["openai", "OpenAI (OPENAI_API_KEY)"],
         ["gemini", "Gemini (GEMINI_API_KEY)"],
         ["elevenlabs", "ElevenLabs (ELEVEN_LABS_API_KEY)"],
+        ["motherduck", "MotherDuck browser token (MOTHERDUCK_BROWSER_TOKEN, opt-in)"],
       ] as const
     ).map(([provider, label]) => ({
       key: provider,

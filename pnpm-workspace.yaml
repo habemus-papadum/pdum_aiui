@@ -28,7 +28,7 @@ catalog:
   # deliberately stays a literal ^25 pin — unify it when its tests can gate
   # the jump.)
   "@babel/core": ^7.29.7
-  "@duckdb/duckdb-wasm": 1.33.1-dev61.0 # exact; keep in step with the override below
+  "@duckdb/duckdb-wasm": 1.33.1-dev64.0 # exact; keep in step with the override below
   "@observablehq/plot": ^0.6.17
   "@types/express": ^5.0.0
   "@types/ws": ^8.5.0
@@ -67,7 +67,7 @@ catalogs:
 # catalog's @duckdb/duckdb-wasm entry above (which is what the consumers —
 # aiui-viz, demos/seismos, apps/cc-miner — declare via `catalog:`).
 overrides:
-  "@duckdb/duckdb-wasm": 1.33.1-dev61.0
+  "@duckdb/duckdb-wasm": 1.33.1-dev64.0
   # vite-plugin-solid@next floats babel-preset-solid across every 2.0 beta, but
   # the JSX compiler must match the @solidjs/web runtime beta — newer presets
   # emit helpers (claimElement, scope) that older runtimes don't export,
@@ -111,11 +111,11 @@ allowBuilds:
 minimumReleaseAgeExclude:
   # The cf_browser_credentials kit (aiui-cf-creds' substrate) is our own —
   # freshly published versions are consumed deliberately, pinned per version.
-  - '@habemus-papadum/cf-browser-credentials@0.4.0'
-  - '@habemus-papadum/cf-creds-aws@0.4.0'
-  - '@habemus-papadum/cf-creds-elevenlabs@0.4.0'
-  - '@habemus-papadum/cf-creds-mosaic@0.4.0'
-  - '@habemus-papadum/cf-creds-openai@0.4.0'
+  - '@habemus-papadum/cf-browser-credentials@0.4.0 || 0.5.0'
+  - '@habemus-papadum/cf-creds-aws@0.4.0 || 0.5.0'
+  - '@habemus-papadum/cf-creds-elevenlabs@0.4.0 || 0.5.0'
+  - '@habemus-papadum/cf-creds-mosaic@0.4.0 || 0.5.0'
+  - '@habemus-papadum/cf-creds-openai@0.4.0 || 0.5.0'
   - '@habemus-papadum/aiui-registry-host-darwin-arm64@0.1.0'
   - '@habemus-papadum/aiui-registry-host-darwin-x64@0.1.0'
   - '@habemus-papadum/aiui-registry-host-linux-arm64@0.1.0'
@@ -123,3 +123,4 @@ minimumReleaseAgeExclude:
   - '@habemus-papadum/aiui-registry@0.1.0'
   - vite-plugin-solid@3.0.0-next.24
   - '@anthropic-ai/claude-agent-sdk@0.3.272'
+  - '@habemus-papadum/cf-creds-motherduck@0.5.0'

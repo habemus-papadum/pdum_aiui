@@ -14,7 +14,8 @@
     ".": "./src/index.ts",
     "./oracle": "./src/oracle.ts",
     "./stt": "./src/stt.ts",
-    "./mosaic": "./src/mosaic.ts"
+    "./mosaic": "./src/mosaic.ts",
+    "./motherduck": "./src/motherduck.ts"
   },
   "main": "./src/index.ts",
   "module": "./src/index.ts",
@@ -48,6 +49,11 @@
         "types": "./dist/mosaic.d.ts",
         "import": "./dist/mosaic.js",
         "default": "./dist/mosaic.js"
+      },
+      "./motherduck": {
+        "types": "./dist/motherduck.d.ts",
+        "import": "./dist/motherduck.js",
+        "default": "./dist/motherduck.js"
       }
     }
   },
@@ -58,24 +64,41 @@
   },
   "dependencies": {
     "@habemus-papadum/aiui-oracle": "workspace:^",
-    "@habemus-papadum/cf-browser-credentials": "^0.4.0",
-    "@habemus-papadum/cf-creds-aws": "^0.4.0",
-    "@habemus-papadum/cf-creds-elevenlabs": "^0.4.0",
-    "@habemus-papadum/cf-creds-mosaic": "^0.4.0",
-    "@habemus-papadum/cf-creds-openai": "^0.4.0"
+    "@habemus-papadum/cf-browser-credentials": "^0.5.0",
+    "@habemus-papadum/cf-creds-aws": "^0.5.0",
+    "@habemus-papadum/cf-creds-elevenlabs": "^0.5.0",
+    "@habemus-papadum/cf-creds-mosaic": "^0.5.0",
+    "@habemus-papadum/cf-creds-motherduck": "^0.5.0",
+    "@habemus-papadum/cf-creds-openai": "^0.5.0"
   },
   "peerDependencies": {
-    "@uwdata/mosaic-core": ">=0.28"
+    "@duckdb/duckdb-wasm": ">=1.29",
+    "@motherduck/wasm-client": ">=1.5.5-r.1",
+    "@uwdata/mosaic-core": ">=0.28",
+    "@habemus-papadum/aiui-viz": ">=0.18"
   },
   "peerDependenciesMeta": {
     "@uwdata/mosaic-core": {
+      "optional": true
+    },
+    "@motherduck/wasm-client": {
+      "optional": true
+    },
+    "@duckdb/duckdb-wasm": {
+      "optional": true
+    },
+    "@habemus-papadum/aiui-viz": {
       "optional": true
     }
   },
   "devDependencies": {
     "@aws-sdk/client-sts": "^3.1104.0",
+    "@duckdb/duckdb-wasm": "catalog:",
     "@habemus-papadum/aiui-build-config": "workspace:^",
+    "@habemus-papadum/aiui-viz": "workspace:^",
+    "@motherduck/wasm-client": "1.5.5-r.1",
     "@uwdata/mosaic-core": "^0.28.1",
+    "apache-arrow": "^17.0.0",
     "openai": "^7.4.0"
   }
 }

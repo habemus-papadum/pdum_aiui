@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentToolkit } from "./agent-tools";
 import {
+  duckdbAssetBundles,
+  duckdbAssetsLocation,
   fetchWithProgress,
   formatMarkdown,
   instantiateDuckDB,
@@ -366,5 +368,25 @@ describe("registerSqlTools", () => {
     const { kit, tools } = fakeKit();
     registerSqlTools(kit, { runner: fakeRunner([]).runner, tables: ["wine", "province_geo"] });
     expect(tools.get("sql")?.usage).toContain("Tables: `wine`, `province_geo`");
+  });
+});
+
+describe("self-hosted assets (duckdbAssetsLocation / duckdbAssetBundles)", () => {
+  it("reads the plugin's seed and forms the MotherDuck layout, base included", () => {
+    const page = { __AIUI__: { duckdbAssets: { prefix: "/notes/x/", version: "1.2.3-dev4.0" } } };
+    const bundles = duckdbAssetBundles(duckdbAssetsLocation(page));
+    expect(bundles.eh?.mainModule).toBe("/notes/x/duckdb-wasm-assets/1.2.3-dev4.0/duckdb-eh.wasm");
+    expect(bundles.eh?.mainWorker).toBe(
+      "/notes/x/duckdb-wasm-assets/1.2.3-dev4.0/duckdb-browser-eh.worker.js",
+    );
+    expect(bundles.mvp.mainModule).toBe("/notes/x/duckdb-wasm-assets/1.2.3-dev4.0/duckdb-mvp.wasm");
+    expect("coi" in bundles).toBe(false);
+  });
+
+  it("names the remedy when the page carries no location", () => {
+    expect(() => duckdbAssetsLocation({})).toThrow(/duckdbAssets: true/);
+    expect(() => duckdbAssetsLocation({ __AIUI__: { duckdbAssets: { prefix: "/" } } })).toThrow(
+      /aiui\(\)/,
+    );
   });
 });

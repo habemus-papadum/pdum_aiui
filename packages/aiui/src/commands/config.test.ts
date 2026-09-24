@@ -59,6 +59,7 @@ describe("fieldStates", () => {
       "keys.openai",
       "keys.gemini",
       "keys.elevenlabs",
+      "keys.motherduck",
     ]);
   });
 });

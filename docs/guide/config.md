@@ -139,7 +139,7 @@ flag throws rather than leaking into the child command.
 | `AIUI_CACHE`          | Overrides the **user cache root** entirely. Everything user-level lives under it: the channel registry (`<cache>/mcp/`), `config.json`, managed browser installs (`<cache>/chromium/`, `<cache>/chrome/`), profiles (`<cache>/userdata/`), and the per-project caches (`<cache>/projects/<slug>-<hash8>/` — traces, logs, recordings). Tests and the e2e harness use this to sandbox a whole aiui world. |
 | `XDG_CACHE_HOME`      | Standard cache-home: when set (and absolute), the user cache root is `$XDG_CACHE_HOME/aiui`; otherwise `~/.cache/aiui`. `AIUI_CACHE` beats it. |
 | `CI`                  | Truthy values (anything but unset, empty, `"0"`, `"false"`) mean: session browser off by default, and **no interactive behavior at all** — no install/update prompts or downloads, no first-run questions. `--aiui-session-browser` opts the browser back in. |
-| `OPENAI_API_KEY` / `GEMINI_API_KEY` / `ELEVEN_LABS_API_KEY` | The three vendor keys the channel can use — honored from the environment **only when aiui runs from a source checkout** (where `.env`/direnv are the dev workflow, and the environment wins over everything). An **installed** aiui ignores these entirely and reads the [OS vault](#vendor-api-keys-openai--gemini--elevenlabs) instead — a stray shell export can't silently override the vault, and keys stay out of the agent's environment. Never read from `config.json` in either mode. |
+| `OPENAI_API_KEY` / `GEMINI_API_KEY` / `ELEVEN_LABS_API_KEY` / `MOTHERDUCK_BROWSER_TOKEN` | The vendor keys aiui can hold (the last is opt-in: a DuckDB app's browser-side MotherDuck engine under `vite serve`, never asked for at launch) — honored from the environment **only when aiui runs from a source checkout** (where `.env`/direnv are the dev workflow, and the environment wins over everything). An **installed** aiui ignores these entirely and reads the [OS vault](#vendor-api-keys-openai--gemini--elevenlabs) instead — a stray shell export can't silently override the vault, and keys stay out of the agent's environment. Never read from `config.json` in either mode. |
 | `AIUI_NO_SOURCE_MODE` | Force the **installed** key-resolution mode (vault-only, environment ignored) even from a source checkout — how the installed posture is exercised without installing. |
 | `VITE_AIUI_PORT`      | **The standalone intent panel's build-time channel port.** The intent client's own dev launcher (`scripts/dev.ts` in that package, or a manual `VITE_AIUI_PORT=… pnpm dev`) sets it so the panel — served on Vite's own origin during development — knows which channel to drive; read via `import.meta.env.VITE_AIUI_PORT`. When the channel itself serves the panel at `/intent/`, it is unset and the panel uses its own origin. (Prebuilt dist code cannot read it — the substitution happens when a bundler compiles the file.) |
 
@@ -150,7 +150,10 @@ shells out to Claude Code itself — those configure Claude Code, not aiui; see
 ## Vendor API keys (OpenAI · Gemini · ElevenLabs)
 
 The intent pipeline's model-backed features (transcription, the oracle, correction, the linter)
-run in the **channel process** `aiui claude` spawns, against three vendors. Where their keys come from
+run in the **channel process** `aiui claude` spawns, against three vendors; a fourth key, the
+**opt-in** `MOTHERDUCK_BROWSER_TOKEN`, is never asked for at launch — it exists for a DuckDB app that
+opts into `devKeys: ["motherduck"]` (a read-scaling token of your own MotherDuck user, never the
+admin token; `aiui keys set motherduck` stores it). Where the keys come from
 depends on how aiui itself is running:
 
 - **Source checkout (dev):** the environment wins — `.env`/direnv keep working exactly as

@@ -157,7 +157,20 @@ describe("ensureKeyDecisions — the launch gap-fill", () => {
     seams.lookup = () => Promise.reject(new Error("no D-Bus session"));
     const updated = await ensureKeyDecisions({}, seams, {});
     expect(updated.keys?.openai).toBeUndefined();
+    // Three, not four: the opt-in MotherDuck key is never a launch question.
     expect(r.warns.filter((w) => w.includes("no D-Bus session"))).toHaveLength(3);
+    expect(r.persisted).toEqual([]);
+  });
+
+  it("an opt-in provider is never asked at launch, even when undecided", async () => {
+    const r = rig();
+    const updated = await ensureKeyDecisions(
+      { keys: { openai: "skip", gemini: "skip", elevenlabs: "skip" } },
+      r.seams([], []),
+      {},
+    );
+    expect(updated.keys?.motherduck).toBeUndefined();
+    expect(r.asked).toEqual([]);
     expect(r.persisted).toEqual([]);
   });
 });
@@ -166,16 +179,19 @@ describe("runKeysInterview — the full keep/replace/skip pass", () => {
   it("keep marks vault; replace stores the new value; skip records the choice", async () => {
     const r = rig({ OPENAI_API_KEY: "sk-old", GEMINI_API_KEY: "g-old" });
     // elevenlabs (asked first, keyless) gets the bare paste prompt — the empty
-    // first secret is its skip; then openai keeps, gemini replaces.
+    // first secret is its skip; then openai keeps, gemini replaces; the opt-in
+    // motherduck (keyless) gets the bare prompt too — the full interview walks
+    // EVERY provider, opt-in included — and Enter skips it.
     await runKeysInterview(
       { keys: { openai: "vault", gemini: "vault", elevenlabs: "skip" } },
-      r.seams(["k", "r"], ["", "g-new"]),
+      r.seams(["k", "r"], ["", "g-new", ""]),
       {},
     );
     expect(r.persisted).toEqual([
       ["elevenlabs", "skip"],
       ["openai", "vault"],
       ["gemini", "vault"],
+      ["motherduck", "skip"],
     ]);
     expect(r.stored.get("OPENAI_API_KEY")).toBe("sk-old"); // kept, untouched
     expect(r.stored.get("GEMINI_API_KEY")).toBe("g-new"); // replaced
@@ -184,14 +200,15 @@ describe("runKeysInterview — the full keep/replace/skip pass", () => {
   it("a keyless provider gets the bare paste-or-Enter question, no menu at all", async () => {
     const r = rig();
     // Every provider keyless and no env: with nothing to keep and nothing to
-    // import there is no third answer, so all three are asked the same way the
-    // gap-fill asks. Zero menu answers scripted — an `ask` would throw.
-    await runKeysInterview({}, r.seams([], ["sk-new", "", ""]), {});
+    // import there is no third answer, so every provider is asked the same way
+    // the gap-fill asks. Zero menu answers scripted — an `ask` would throw.
+    await runKeysInterview({}, r.seams([], ["sk-new", "", "", ""]), {});
     expect(r.stored.get("ELEVEN_LABS_API_KEY")).toBe("sk-new");
     expect(r.persisted).toEqual([
       ["elevenlabs", "vault"],
       ["openai", "skip"],
       ["gemini", "skip"],
+      ["motherduck", "skip"],
     ]);
     expect(r.asked.every((q) => q.includes("|skip "))).toBe(true);
   });
@@ -215,12 +232,13 @@ describe("runKeysInterview — the full keep/replace/skip pass", () => {
 
   it("keeps the menu where there IS a third answer — an importable $VAR", async () => {
     const r = rig();
-    // elevenlabs and openai are keyless (bare paste prompt, answered with the
-    // empty-line skip); gemini has an importable $VAR, so it — and only it —
-    // gets the menu, which the single scripted answer proves.
+    // elevenlabs, openai and the opt-in motherduck are keyless (bare paste
+    // prompt, answered with the empty-line skip); gemini has an importable
+    // $VAR, so it — and only it — gets the menu, which the single scripted
+    // answer proves.
     await runKeysInterview(
       {},
-      { ...r.seams(["e"], ["", ""]), mode: "source" },
+      { ...r.seams(["e"], ["", "", ""]), mode: "source" },
       { GEMINI_API_KEY: "g-from-env" },
     );
     expect(r.stored.get("GEMINI_API_KEY")).toBe("g-from-env");
@@ -228,6 +246,7 @@ describe("runKeysInterview — the full keep/replace/skip pass", () => {
       ["elevenlabs", "skip"],
       ["openai", "skip"],
       ["gemini", "vault"],
+      ["motherduck", "skip"],
     ]);
   });
 });

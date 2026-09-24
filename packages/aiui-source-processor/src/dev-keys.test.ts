@@ -24,6 +24,12 @@ function resolved(openaiValue?: string): ResolvedVendorKeys {
       label: "ElevenLabs",
       source: "missing",
     },
+    motherduck: {
+      provider: "motherduck",
+      envVar: "MOTHERDUCK_BROWSER_TOKEN",
+      label: "MotherDuck",
+      source: "missing",
+    },
   };
 }
 

@@ -382,12 +382,173 @@ cloud rides the same Selections through the `aiui-viz/embedding` bridge
 
 ---
 
+## Part 4b — MotherDuck in the tab (shape 4)
+
+`@motherduck/wasm-client` is **the stock duckdb-wasm build plus an extension**: 1.5.5-r.1 vendors
+`@duckdb/duckdb-wasm@1.33.1-dev64.0` (byte-identical binaries, verified by hash), boots one ordinary
+`AsyncDuckDB`, then `INSTALL motherduck FROM 'https://ext.motherduck.com/<ver>'` + `LOAD motherduck`.
+The engine holds the tab's own `memory` catalog beside the attached MotherDuck databases and
+shares, and one statement can read both — the extension plans across the sides (dual execution)
+and moves the smaller one. So shape 4 is shape 1 with a different engine factory: Mosaic's stock
+`wasmConnector({ duckdb, connection })` drives it unchanged, and so does `duckdbRunner`.
+
+The engine, the token, and the rules live in two packages: the kit's `cf-creds-motherduck`
+(`motherDuckEngine`, the session-species manager, `staticMotherDuckToken`) and this repo's
+`@habemus-papadum/aiui-cf-creds/motherduck` (`standardMotherDuckEngine`: the dev key the aiui Vite
+plugin injects under `vite serve`, else the broker route; `motherDuckRunner`). The reference is
+`demos/motherduck-lab` (not in the gallery — it needs a token).
+
+```ts
+// store.ts — the durable island
+const engine = standardMotherDuckEngine({
+  key: "my-app",                                       // the broker's key contract (production)
+  params: { sessionName: "my-app", customUserAgent: "my-app/1",
+            duckDBAssetsURLPrefix: duckdbAssetsLocation().prefix },  // the self-hosted wasm
+});
+const { db, connect, connection } = await engine.ready();
+coordinator.databaseConnector(wasmConnector({ duckdb: db, connection: await connect() })); // Mosaic: raw
+registerSqlTools(kit, { runner: motherDuckRunner(connection) });                          // the agent: the client's
+```
+
+**Measured 2026-09-24 (headless Chrome, a service account's Standard flock), the rules:**
+
+- **The token is consumed once, at connect, and a live session outlives it.** `SET
+  motherduck_token` after init is refused; a 5-minute token's session kept answering for 8 minutes of
+  polling, a session idle 6.5 minutes (past expiry and the flock's cooldown) woke its replica in
+  700 ms with local tables intact, and revoking the token stopped nothing. So the engine never
+  rebuilds on rotation by itself; `rebuild()` (terminate + create) is explicit, drops every local
+  table, and `onRebuild` is where the app re-wires and re-materializes.
+- **`MD_ALL_DATABASES()` under the blocking `RUN_QUERY` protocol wedges the whole engine.**
+  `connection.query()` and Mosaic's `runQuery` never return from it — alone, every time — and every
+  connection on the engine hangs with them; the same statement on the same raw connection through
+  the pending-query protocol (`connection.send()`, what the client's `evaluateQuery` uses) answers
+  in about 200 ms. `md_user_info()`, `md_live_duckling_size()`, `duckdb_databases()`,
+  `information_schema.*`, `DESCRIBE`, and every table scan are fine either way. Mosaic keeps a raw
+  connection (its generated SQL never calls `md_*`); the agent's free-form `sql` tool — where a
+  model WILL type `MD_ALL_DATABASES()` — runs through `motherDuckRunner`, which rides the client's
+  `send()`-based path and also carries DuckDB's type names. The record and the choices: "The
+  RUN_QUERY wedge" below.
+- **A cloud table reaches a vgplot mark through a local view, not a qualified name.** `from("db.main.t")`
+  quotes one identifier; `from(["db","main","t"])` is spread into three tables and cross-joined
+  (`FROM "db", "main", "t"`). `CREATE OR REPLACE VIEW db__main__t AS SELECT * FROM "db"."main"."t"`
+  in the tab's catalog copies nothing, pushes the scan down, and the mark reads the plain name.
+  Re-create it after a rebuild (the lab's `view` cell depends on the engine generation).
+- **Pre-aggregation works, leave it on.** Over a 766 k-row cloud table through a view, two linked
+  histograms: the cube (`memory.mosaic.preagg_…`) was created in 59 ms — the group-by ran on the
+  Duckling, the cube came down — and every brush after was a 4–8 ms local query. After a rebuild the
+  next activation simply recreates the cube (`CREATE TABLE IF NOT EXISTS`); no coordinator reset
+  needed.
+- **`accessMode: "read_only"` is refused** by the kit: it governs the tab's own in-memory DuckDB
+  (which cannot open read-only); the read-scaling token is what makes the cloud side read-only.
+- **Rapid session creation is throttled**: the fourth session in a minute failed at the welcome
+  pack with `UNAVAILABLE`, and a cold replica after a burst took 34 s to open. A page opens one.
+- **Local beside cloud, measured in the lab:** 50 k rows materialized from a 46 M-row cloud table
+  in about a second; a hybrid question (cloud rows inside the local sample's range of a column —
+  the two bounds go up, one number comes down) answered in the same breath; both histograms'
+  first render 295 ms on a warm replica.
+
+### The RUN_QUERY wedge: background, mechanism, choices
+
+This is the record behind the second rule above, written so the rule can be revisited without
+re-deriving it. Everything marked *measured* was run 2026-09-24 in headless Chrome on
+`@motherduck/wasm-client` 1.5.5-r.1 (duckdb-wasm 1.33.1-dev64.0) against a service account's
+Standard flock; the one *inferred* sentence is labelled.
+
+**The setup.** One `AsyncDuckDB` is one Web Worker. Every connection opened on it (`db.connect()`,
+or the client's own) is a handle *inside that worker*, and every statement from every connection is
+one message into the worker's single queue. Connections isolate nothing: a call that never returns
+leaves the worker stuck inside it, the queue never advances, and every connection on the engine
+hangs — with no error, no rejection, no console line. A promise that never settles is the whole
+symptom, which is why this cost the most to find: the lab's cells sat "pending" forever, the
+statement was the fourth or fifth in a burst across two connections, and the first suspects (a
+failing statement poisoning its neighbours, concurrency, the number of connections, ordering) were
+all wrong. Replaying the lab's exact sequence concurrently and then serialized still hung; only
+running each statement *alone* in a fresh engine isolated the one function.
+
+**Two wire protocols, not two kinds of connection.** duckdb-wasm's main-thread API reaches the
+worker two ways, and that is the variable:
+
+| call | worker message | how the worker runs it |
+| --- | --- | --- |
+| `connection.query(sql)`, `bindings.runQuery(conn, sql)` | `RUN_QUERY` | one blocking call into wasm; the worker returns to its event loop only when the whole result exists |
+| `connection.send(sql)` | `START_PENDING_QUERY` + `POLL_PENDING_QUERY` | the worker runs a slice, answers "not done", and the main thread polls again; between polls the worker's event loop turns |
+
+Who uses which: Mosaic's `wasmConnector` calls `bindings.runQuery` through `useUnsafe` (to get
+Arrow IPC bytes directly); aiui-viz's `duckdbRunner` calls `connection.query()`; the MotherDuck
+client's `evaluateQuery` calls `connection.send()` under a sequencer (one statement at a time on
+its connection) and drains the stream.
+
+**Measured.** On the *same* raw `db.connect()` connection of a freshly built engine:
+
+| statement | via `send()` | via `query()` |
+| --- | --- | --- |
+| `SELECT 1` | 1 row, 6 ms | 1 row, 1 ms |
+| `SELECT alias, type FROM MD_ALL_DATABASES()` | 4 rows, 212 ms — engine healthy after | never returns |
+| anything, on any connection, after the `query()` above | never returns | never returns |
+
+So the trigger is the protocol. `MD_ALL_DATABASES()` completes through something the worker can
+only observe when its event loop turns — *inferred* from the two behaviours, not traced into the
+extension — so a blocking `RUN_QUERY` deadlocks on it, and the pending protocol does not. Ordinary
+cloud scans, hybrid joins, `md_user_info()`, `md_live_duckling_size()`, `duckdb_databases()`,
+`information_schema.*` and `DESCRIBE` all finish inside a blocking call, so they survive
+`RUN_QUERY`. No other `md_*` function was found to wedge, and none was proven safe beyond that list.
+
+**The design as built.** Mosaic keeps a raw connection: its connector cannot be switched off
+`runQuery`, and its generated SQL never calls an `md_*` function. The agent's free-form `sql` tool
+— the one place a model *will* type `MD_ALL_DATABASES()` — is `motherDuckRunner`, a `SqlRunner`
+over the client's `evaluateQuery`, which rides `send()`. The lab's `tables` cell lists catalogs
+through that runner too. Two runners on one engine is the price; the hazard for an app author is
+that `duckdbRunner(await connect())` on a MotherDuck engine *works* until someone types the one
+function, then hangs silently.
+
+**The choices, if this is revisited.**
+
+1. **Keep it** (the status quo): raw for Mosaic, the client's connection for free-form SQL. Zero
+   code; the hazard is documented, not removed.
+2. **Move `duckdbRunner` to `send()`.** The pending protocol on a raw connection answers
+   `MD_ALL_DATABASES()` (the table above), so a runner that drains a `send()` stream would make
+   *every* raw connection safe for free-form SQL, and `motherDuckRunner` would remain only for
+   DuckDB's own type names and the client's sequencing. Cost: the runner converts a streaming
+   `RecordBatchReader` instead of a `Table`; `cancelSent()` is already the cancel path. Re-run the
+   measurement above through the runner before trusting it.
+3. **Guard a `RUN_QUERY` runner.** Reject statements that mention `md_all_databases` (or any
+   `md_*` table function) with an error naming this section. Turns a silent hang into a message;
+   brittle (a local view or macro can hide the call), so it complements 1 or 2 rather than
+   replacing them.
+4. **A `send()`-based Mosaic connector.** Possible (a connector is `{ query({ type, sql }) }`), but
+   unneeded while Mosaic's SQL is its own. The one unmeasured edge: a *local view* whose body calls
+   `MD_ALL_DATABASES()`, then read by a mark, would send the call down `runQuery`. Probe before
+   building on it.
+5. **Re-check on every client bump.** The extension may answer under `RUN_QUERY` in a later
+   version. The regression test is four lines on a fresh engine:
+
+   ```ts
+   const raw = await db.connect();
+   for await (const b of await raw.send("SELECT alias FROM MD_ALL_DATABASES()")) void b; // must return
+   await raw.query("SELECT 1");                                                         // must return
+   await raw.query("SELECT alias FROM MD_ALL_DATABASES()");                             // the wedge: time it out
+   ```
+
+   A `query()` that returns means the rule can be retired; until then, an 8 s timeout around it is
+   the assertion.
+
+**Self-hosted wasm, one layout for every shape.** `aiui({ duckdbAssets: true })` (the aiui Vite
+plugin) publishes the installed duckdb-wasm's four files at `<base>duckdb-wasm-assets/<version>/…`
+— the MotherDuck client's own layout, served from the app's origin in dev and emitted unhashed into
+the build — and seeds `window.__AIUI__.duckdbAssets = { prefix, version }`. A plain-DuckDB app
+reads it back with `duckdbAssetBundles()` for `instantiateDuckDB`; a MotherDuck app passes
+`duckdbAssetsLocation().prefix` as `duckDBAssetsURLPrefix`. No CDN in either case. For a host with a
+per-file cap (Cloudflare Workers assets: 25 MiB), `duckdbAssets: { brotli: true }` also emits `.br`
+siblings (the eh wasm: 36 MB → ~6 MB) to serve with `Content-Encoding: br` — MotherDuck's own CDN
+serves exactly that, brotli at rest.
+
 ## Part 5 — Choosing
 
 | your situation | shape |
 | --- | --- |
 | Data < ~50 MB, want static hosting / offline | **1** — local Parquet, `registerFileBuffer` |
 | Data too big to download, server available | **3** — Quack + `quackConnector` |
+| Data lives in MotherDuck, no server of your own, local tables beside cloud ones | **4** — the MotherDuck client, the stock connector, a per-visitor read-scaling token |
 | Want both from one codebase | keep the connector behind one seam; the app's SQL is identical |
 
 The last row is the payoff: shapes 1 and 3 differ **only** in which connector the
@@ -457,3 +618,7 @@ works and `INSTALL` is unnecessary. Native builds need `INSTALL quack` first.
   is not pushed down either.
 - **Concurrency does not rescue the `ATTACH` route**: 8 parallel aggregates took 15.7 s via
   `ATTACH` versus 616 ms against a local table.
+- **A MotherDuck engine hangs silently, everywhere, after `MD_ALL_DATABASES()` through
+  `connection.query()`.** No error, no rejection: promises that never settle. Free-form SQL on
+  that engine goes through `motherDuckRunner` (or any `send()`-based path); Part 4b, "The
+  RUN_QUERY wedge", has the record and the four-line regression check for the next client bump.

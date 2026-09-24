@@ -11,7 +11,7 @@
  * cell directly in JSX outside a Loading boundary defers the WHOLE root mount
  * (`ASYNC_OUTSIDE_LOADING_BOUNDARY`), and CellText is the shape that avoids
  * it without every page hand-rolling the same ten lines (extracted from the
- * FAI Labs research notes, 2026-09).
+ * downstream research notes, 2026-09).
  *
  * Attribution: the span carries `data-cell` / `data-cell-loc` /
  * `data-cell-state` exactly as CellView does, so a drag over the number

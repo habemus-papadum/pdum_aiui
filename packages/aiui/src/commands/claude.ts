@@ -163,7 +163,7 @@ export async function runClaude(rawArgs: string[] = []): Promise<void> {
     }
   }
 
-  // Resolve the three vendor keys the way the channel itself will at boot
+  // Resolve the vendor keys the way the channel itself will at boot
   // (aiui-util/vendor-keys.ts): a source checkout honors the environment/.env
   // first, an installed aiui reads the OS vault only, a skip stays keyless by
   // choice (AIUI_NO_SOURCE_MODE forces the installed path in every process).

@@ -76,6 +76,8 @@ export interface AiuiConfig {
     openai?: KeyDecisionValue;
     gemini?: KeyDecisionValue;
     elevenlabs?: KeyDecisionValue;
+    /** Opt-in: the browser-side MotherDuck engine's read-scaling token (DuckDB apps only). */
+    motherduck?: KeyDecisionValue;
   };
 }
 

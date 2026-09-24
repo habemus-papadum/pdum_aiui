@@ -149,7 +149,7 @@ itself via `useSlide().active`, and a cross-demo link to `/gears` through the in
 
 ## v2 addendum — scenes, and scroll becomes interpreted (2026-08-24)
 
-The second deck (the FAI Labs pitch) needed in-slide animation steps, which retired v1's
+The second deck (a pitch deck) needed in-slide animation steps, which retired v1's
 "fragments are a non-goal" line and, with it, native scrolling. The decided v2 contract:
 
 - **The unit of navigation is the FRAME** — (slide, scene step). `SlideDef.steps: n` declares

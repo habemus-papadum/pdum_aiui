@@ -1,6 +1,7 @@
 /**
  * `aiui keys` — manage the vendor API keys (ElevenLabs · OpenAI · Gemini,
- * in priority order — ElevenLabs' Scribe is dictation itself).
+ * in priority order — ElevenLabs' Scribe is dictation itself — plus the
+ * opt-in MotherDuck browser token, which only DuckDB apps ask for).
  *
  * The secrets live in the OS vault (macOS login keychain / freedesktop Secret
  * Service — aiui-util/vault.ts); the per-provider DECISION ("vault" = in use,
@@ -32,8 +33,9 @@ import { printError, printNote, printWarning } from "../util/ui";
 
 function parseProvider(raw: string): VendorProvider {
   const provider = raw.trim().toLowerCase();
-  if (provider === "openai" || provider === "gemini" || provider === "elevenlabs") {
-    return provider;
+  const known = VENDOR_KEYS.find((k) => k.provider === provider);
+  if (known !== undefined) {
+    return known.provider;
   }
   printError(
     `unknown provider "${raw}"`,
@@ -60,7 +62,7 @@ export async function runKeysStatus(): Promise<void> {
     );
   }
   console.log(
-    "(`aiui keys interview` walks all three; `aiui keys set <provider>` stores one key.)",
+    "(`aiui keys interview` walks every provider; `aiui keys set <provider>` stores one key.)",
   );
 }
 

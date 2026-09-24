@@ -5,8 +5,8 @@ there is nothing to turn on), the directory is a routing table the agent queries
 (`page_tools_list` / `page_tools_call` take the `<tab>` marker's ids or the url; each host
 registers its honest ids), and the rule in §3 is the standing rule for any future channel push.
 The finding below is kept as the record of why. Measured in
-the `fai-labs/pitch` transcripts while the ciamac site was being built; the
-full forensics are in that repo's `TOKEN-FORENSICS.md`.
+the transcripts of a downstream site build; the full forensics are kept with
+that site.
 
 ## What happened
 
@@ -102,4 +102,4 @@ session listening to the page.
 - `packages/aiui-claude-channel/docs/websocket-protocol.md` — "The directory
   is a routing table, not an event source" and "Naming a tab".
 - `skills/session-browser/SKILL.md` — the agent-facing routing workflow.
-- `fai-labs/pitch/TOKEN-FORENSICS.md` §6 — the measurement.
+- the token forensics kept with the downstream site — the measurement.

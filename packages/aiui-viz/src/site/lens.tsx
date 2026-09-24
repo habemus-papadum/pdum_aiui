@@ -16,7 +16,7 @@
  *     discipline — nothing is lost on close.
  *
  * Born in aiui-slides (docs/proposals/slides.md), where it proved out in a
- * deck; promoted here once the FAI Labs research notes — plain pages, no
+ * deck; promoted here once downstream research notes — plain pages, no
  * deck — carried a verbatim copy (2026-09). DECK-INDEPENDENT by
  * construction: no deck imports, no deck context, no new dependencies
  * (viewport clamping is arithmetic, not a floating-ui dependency).
