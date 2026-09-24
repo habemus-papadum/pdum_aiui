@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-live",
-  "version": "0.19.0",
+  "version": "0.19.0+dev",
   "description": "The live oracle — a full-duplex voice front (OpenAI GPT-Live over WebRTC/WebSocket) with pluggable delegation backends: local tools, hosted Responses, or Claude Code.",
   "type": "module",
   "license": "MIT",
