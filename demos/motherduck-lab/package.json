@@ -1,7 +1,7 @@
 {
   "name": "@habemus-papadum/demo-motherduck-lab",
-  "version": "0.18.0+dev",
-  "description": "In-repo lab (not in the gallery): the in-tab MotherDuck engine \u2014 dev key, self-hosted wasm, Mosaic over the stock connector, local tables beside cloud ones, rebuild.",
+  "version": "0.19.0",
+  "description": "In-repo lab (not in the gallery): the in-tab MotherDuck engine — dev key, self-hosted wasm, Mosaic over the stock connector, local tables beside cloud ones, rebuild.",
   "private": true,
   "type": "module",
   "license": "MIT",
