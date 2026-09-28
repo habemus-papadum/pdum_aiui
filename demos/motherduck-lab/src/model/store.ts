@@ -2,7 +2,8 @@
  * store.ts — the durable roots of the lab, and the ONE thing the lab exists
  * to exercise: the in-tab MotherDuck engine as a durable island the rest of
  * an aiui app reaches through the same two seams as any DuckDB app —
- * Mosaic's coordinator (the stock `wasmConnector`) and the agent's SQL runner.
+ * Mosaic's coordinator (aiui-viz's `duckdbConnector`: the stock `wasmConnector`
+ * plus HUGEINT decoded to numbers) and the agent's SQL runner.
  *
  * What the island holds, and what survives what:
  *
@@ -48,7 +49,8 @@ import {
   type SqlResult,
   type SqlRunner,
 } from "@habemus-papadum/aiui-viz/duckdb";
-import { Coordinator, Selection, wasmConnector } from "@uwdata/mosaic-core";
+import { duckdbConnector } from "@habemus-papadum/aiui-viz/mosaic-connector";
+import { Coordinator, Selection } from "@uwdata/mosaic-core";
 import { type Accessor, createSignal } from "solid-js";
 import type { TableRef } from "./catalog";
 
@@ -126,7 +128,8 @@ export const store: LabStore = appScope.durable("store", () => {
     cancel: () => current?.cancel?.() ?? Promise.resolve(),
   };
 
-  // Wire one generation: a raw connection for Mosaic; the client's own
+  // Wire one generation: a raw connection for Mosaic (through the decoding
+  // connector — a brush's cube sums are HUGEINT, opaque bytes to flechette); the client's own
   // connection for the agent's reads (the md_* rule above).
   let wired = 0;
   let wiring: Promise<void> | undefined;
@@ -134,7 +137,7 @@ export const store: LabStore = appScope.durable("store", () => {
     if (wired === handle.generation) return Promise.resolve();
     wiring ??= (async () => {
       const mosaicCon = await handle.connect();
-      coordinator.databaseConnector(wasmConnector({ duckdb: handle.db, connection: mosaicCon }));
+      coordinator.databaseConnector(duckdbConnector({ duckdb: handle.db, connection: mosaicCon }));
       current = motherDuckRunner(handle.connection);
       wired = handle.generation;
       setGeneration(handle.generation);

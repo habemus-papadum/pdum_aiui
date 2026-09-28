@@ -10,9 +10,9 @@
  * survive rotation: they hold S3 paths, never credentials.
  *
  * This module only adapts the shape to how aiui apps already build their
- * data layer: the app constructs its own base connector (seismos:
- * `wasmConnector({ duckdb, connection })` over aiui-viz's
- * `instantiateDuckDB`) and hands the wrapped result to the coordinator it
+ * data layer: the app constructs its own base connector (seismos: aiui-viz's
+ * `duckdbConnector({ duckdb, connection })` over its `instantiateDuckDB`)
+ * and hands the wrapped result to the coordinator it
  * already owns. `MosaicView` never learns credentials exist — "the page
  * dials nothing; connectivity arrives from OUTSIDE" stays intact.
  */
@@ -44,7 +44,7 @@ export interface BrokerConnectorOptions extends BrokerOptions, CredentialAwareOp
  *
  * ```ts
  * coordinator.databaseConnector(
- *   brokerConnector(wasmConnector({ duckdb: db, connection }), { key: "app" }),
+ *   brokerConnector(duckdbConnector({ duckdb: db, connection }), { key: "app" }),
  * );
  * ```
  */

@@ -23,8 +23,8 @@
  * `turns/username=<any>/host=<any>` — see createLocalViews in store.ts.
  */
 import type { AsyncDuckDB } from "@duckdb/duckdb-wasm";
+import { duckdbConnector } from "@habemus-papadum/aiui-viz/mosaic-connector";
 import type { Connector } from "@uwdata/mosaic-core";
-import { wasmConnector } from "@uwdata/vgplot";
 import { fetchHostInfo, type HostInfo, quackConnector } from "./quack";
 import type { SourceMode } from "./source-mode";
 
@@ -151,7 +151,7 @@ export async function resolveSource(
   return {
     mode: "local",
     label: "local bytes",
-    connector: wasmConnector({ duckdb: db, connection } as never) as Connector,
+    connector: duckdbConnector({ duckdb: db, connection } as never),
     manifest,
     replayIndex,
     grains: Object.keys(byGrain),

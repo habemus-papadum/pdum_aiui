@@ -29,6 +29,7 @@
 import type { AsyncDuckDB, AsyncDuckDBConnection } from "@duckdb/duckdb-wasm";
 import { type ControlBox, control, scope } from "@habemus-papadum/aiui-viz";
 import { duckdbRunner, type SqlRunner } from "@habemus-papadum/aiui-viz/duckdb";
+import { duckdbConnector } from "@habemus-papadum/aiui-viz/mosaic-connector";
 import {
   bindSelectionComponents,
   categorySelection,
@@ -44,7 +45,7 @@ import {
   type SelectionViewsStore,
   selectionViews,
 } from "@habemus-papadum/aiui-viz/selection-views";
-import { Coordinator, loadParquet, Selection, wasmConnector } from "@uwdata/vgplot";
+import { Coordinator, loadParquet, Selection } from "@uwdata/vgplot";
 import { type Accessor, createSignal } from "solid-js";
 // The bundled catalog + optional border overlay, as hashed Vite assets — NOT
 // public/-dir fetches: asset imports resolve from THIS package, so the data
@@ -504,7 +505,7 @@ export const store: SeismosStore = seismosScope.durable("store", () => {
     resolveRunner(duckdbRunner(queryCon));
     // Hand Mosaic our locally-bundled instance (no jsDelivr): the connector uses
     // this connection for every view query.
-    coordinator.databaseConnector(wasmConnector({ duckdb: db, connection: mosaicCon }));
+    coordinator.databaseConnector(duckdbConnector({ duckdb: db, connection: mosaicCon }));
     report(0.1);
 
     const buf = await fetchWithProgress(DATA_URL, (f) => report(0.1 + 0.8 * f));

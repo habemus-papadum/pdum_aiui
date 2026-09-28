@@ -16,6 +16,7 @@
     "./mosaic": "./src/mosaic.tsx",
     "./embedding": "./src/embedding-view.tsx",
     "./mosaic-selection": "./src/mosaic-selection.ts",
+    "./mosaic-connector": "./src/mosaic-connector.ts",
     "./selection-views": "./src/selection-views.tsx",
     "./selection-inspector": "./src/selection-inspector.tsx",
     "./duckdb": "./src/duckdb.ts",
@@ -64,6 +65,11 @@
         "types": "./dist/mosaic-selection.d.ts",
         "import": "./dist/mosaic-selection.js",
         "default": "./dist/mosaic-selection.js"
+      },
+      "./mosaic-connector": {
+        "types": "./dist/mosaic-connector.d.ts",
+        "import": "./dist/mosaic-connector.js",
+        "default": "./dist/mosaic-connector.js"
       },
       "./selection-views": {
         "types": "./dist/selection-views.d.ts",
@@ -129,6 +135,7 @@
     "@uwdata/mosaic-core": ">=0.28",
     "@uwdata/mosaic-plot": ">=0.28",
     "@uwdata/mosaic-sql": ">=0.28",
+    "@uwdata/flechette": ">=2.5",
     "embedding-atlas": ">=0.24",
     "solid-js": ">=2.0.0-beta.32 <2.0.0-experimental.0",
     "katex": "^0.16 || ^0.17"
@@ -152,6 +159,9 @@
     "@uwdata/mosaic-sql": {
       "optional": true
     },
+    "@uwdata/flechette": {
+      "optional": true
+    },
     "katex": {
       "optional": true
     }
@@ -161,6 +171,7 @@
     "@habemus-papadum/aiui-build-config": "workspace:^",
     "@observablehq/plot": "catalog:",
     "@solidjs/web": "catalog:solid",
+    "@uwdata/flechette": "^2.5.0",
     "@uwdata/mosaic-core": "^0.28.1",
     "@uwdata/mosaic-plot": "^0.28.1",
     "@uwdata/mosaic-spec": "^0.28.1",

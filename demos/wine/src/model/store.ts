@@ -28,6 +28,7 @@
 import type { AsyncDuckDB, AsyncDuckDBConnection } from "@duckdb/duckdb-wasm";
 import { scope } from "@habemus-papadum/aiui-viz";
 import { duckdbRunner, type SqlRunner } from "@habemus-papadum/aiui-viz/duckdb";
+import { duckdbConnector } from "@habemus-papadum/aiui-viz/mosaic-connector";
 import {
   bindSelectionComponents,
   categorySelection,
@@ -43,7 +44,7 @@ import {
   type SelectionViewsStore,
   selectionViews,
 } from "@habemus-papadum/aiui-viz/selection-views";
-import { Coordinator, Selection, wasmConnector } from "@uwdata/mosaic-core";
+import { Coordinator, Selection } from "@uwdata/mosaic-core";
 import { type Accessor, createSignal } from "solid-js";
 // Bundled assets (NOT public/ fetches): they travel with the package into
 // any consumer's build. countries-110m is the same Natural Earth border
@@ -306,7 +307,7 @@ export const store: WineStore = appScope.durable("store", () => {
     const mosaicCon = await db.connect();
     queryCon = await db.connect();
     resolveRunner(duckdbRunner(queryCon));
-    coordinator.databaseConnector(wasmConnector({ duckdb: db, connection: mosaicCon }));
+    coordinator.databaseConnector(duckdbConnector({ duckdb: db, connection: mosaicCon }));
     report(0.75);
 
     await db.registerFileBuffer("dataset.parquet", reviews);

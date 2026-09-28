@@ -4,9 +4,11 @@
  * the way the oracle's key chain is composed — a DEV key injected by the aiui
  * Vite plugin (dev serve only) wins, else the broker route under the key
  * contract. The engine it yields is one stock duckdb-wasm `AsyncDuckDB` with
- * the MotherDuck extension attached: hand `db` + a connection to Mosaic's
- * `wasmConnector`, another connection to `duckdbRunner` for the agent's
- * `sql`/`schema` tools, and materialize local tables beside the cloud ones.
+ * the MotherDuck extension attached: hand `db` + a connection to aiui-viz's
+ * `duckdbConnector` (Mosaic's `wasmConnector` plus HUGEINT decoded to numbers;
+ * the stock one draws a NaN axis after the first brush — aiui-viz's
+ * duckdb-mosaic.md, Part 4), another connection to `duckdbRunner` for the
+ * agent's `sql`/`schema` tools, and materialize local tables beside the cloud ones.
  *
  * Three facts the kit measured (2026-09-24) and this module inherits: the
  * token is consumed once, at connect; a live session outlives its token
@@ -66,7 +68,7 @@ export { isMotherDuckAuthError } from "@habemus-papadum/cf-creds-motherduck";
 
 /** A live engine generation, in the stock duckdb-wasm types aiui consumers hold. */
 export interface MotherDuckEngineHandle {
-  /** The stock instance — what Mosaic's `wasmConnector({ duckdb, connection })` takes. */
+  /** The stock instance — what aiui-viz's `duckdbConnector({ duckdb, connection })` takes. */
   db: AsyncDuckDB;
   /** The client's own sequenced connection (`evaluateQuery`, prepared statements). */
   connection: KitHandle["connection"];

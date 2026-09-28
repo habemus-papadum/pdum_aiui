@@ -227,13 +227,28 @@ Smaller tables at the same ratio:
 ### Wiring Mosaic to local Wasm (shape 1)
 
 ```ts
-import { Coordinator, wasmConnector } from "@uwdata/mosaic-core";
+import { duckdbConnector } from "@habemus-papadum/aiui-viz/mosaic-connector";
+import { Coordinator } from "@uwdata/mosaic-core";
 import * as vg from "@uwdata/vgplot";
 
 const coordinator = new Coordinator();
-coordinator.databaseConnector(wasmConnector({ duckdb: db }));
+coordinator.databaseConnector(duckdbConnector({ duckdb: db }));
 const api = vg.createAPIContext({ coordinator });
 ```
+
+`duckdbConnector` is Mosaic's own `wasmConnector` plus one decode step, and the step is not
+optional. **DuckDB exports HUGEINT and UHUGEINT to Arrow as an `arrow.opaque` extension over 16
+raw bytes** (measured 2026-09-28 on duckdb-wasm 1.33.1-dev64.0, the stock build and the one the
+MotherDuck client vendors; `arrow_lossless_conversion` is a global setting and SET/RESET changes
+nothing). Flechette, Mosaic's decoder, hands each cell back as a `Uint8Array`. And `sum()` over
+any integer column is HUGEINT — which is what Mosaic's pre-aggregation issues on every brush
+(`coalesce(sum(count), 0)` over the cube's `count(*)` per bin). Over the stock connector a
+brushed histogram's `y` arrives as bytes, vgplot coerces it to NaN, the axis prints "NaN" and every
+bar goes full height, while the unbrushed render and every `count(*)` stay right — the shape of a
+bug that looks like a page problem. The decode replaces only the marked columns, returns a result
+without one as the same object after a scan of the field list, rewrites no SQL and downloads
+nothing extra. `numericConnector(base)` wraps any other connector the same way (a Quack or socket
+connector fronting a remote DuckDB).
 
 ### Wiring Mosaic to a Quack server (shape 3)
 
@@ -242,13 +257,14 @@ Delegate to Mosaic's own `wasmConnector` and rewrite only the SQL — the Wasm i
 becomes a pure protocol client.
 
 ```ts
+import { numericConnector } from "@habemus-papadum/aiui-viz/mosaic-connector";
 import { wasmConnector } from "@uwdata/mosaic-core";
 
 function quackConnector(connection, uri, token) {
   const inner = wasmConnector({ connection });
   const wrap = (sql) =>
     `FROM quack_query('${uri}', $q$${sql}$q$, disable_ssl => true, token => '${token}')`;
-  return { query: ({ type, sql }) => inner.query({ type, sql: wrap(sql) }) };
+  return numericConnector({ query: ({ type, sql }) => inner.query({ type, sql: wrap(sql) }) });
 }
 
 const coordinator = new Coordinator();
@@ -389,8 +405,9 @@ cloud rides the same Selections through the `aiui-viz/embedding` bridge
 `AsyncDuckDB`, then `INSTALL motherduck FROM 'https://ext.motherduck.com/<ver>'` + `LOAD motherduck`.
 The engine holds the tab's own `memory` catalog beside the attached MotherDuck databases and
 shares, and one statement can read both — the extension plans across the sides (dual execution)
-and moves the smaller one. So shape 4 is shape 1 with a different engine factory: Mosaic's stock
-`wasmConnector({ duckdb, connection })` drives it unchanged, and so does `duckdbRunner`.
+and moves the smaller one. So shape 4 is shape 1 with a different engine factory: aiui-viz's
+`duckdbConnector({ duckdb, connection })` (Part 4's stock connector plus the HUGEINT decode) drives
+it unchanged, and so does `duckdbRunner`.
 
 The engine, the token, and the rules live in two packages: the kit's `cf-creds-motherduck`
 (`motherDuckEngine`, the session-species manager, `staticMotherDuckToken`) and this repo's
@@ -406,7 +423,7 @@ const engine = standardMotherDuckEngine({
             duckDBAssetsURLPrefix: duckdbAssetsLocation().prefix },  // the self-hosted wasm
 });
 const { db, connect, connection } = await engine.ready();
-coordinator.databaseConnector(wasmConnector({ duckdb: db, connection: await connect() })); // Mosaic: raw
+coordinator.databaseConnector(duckdbConnector({ duckdb: db, connection: await connect() })); // Mosaic: raw
 registerSqlTools(kit, { runner: motherDuckRunner(connection) });                          // the agent: the client's
 ```
 
@@ -433,11 +450,14 @@ registerSqlTools(kit, { runner: motherDuckRunner(connection) });                
   (`FROM "db", "main", "t"`). `CREATE OR REPLACE VIEW db__main__t AS SELECT * FROM "db"."main"."t"`
   in the tab's catalog copies nothing, pushes the scan down, and the mark reads the plain name.
   Re-create it after a rebuild (the lab's `view` cell depends on the engine generation).
-- **Pre-aggregation works, leave it on.** Over a 766 k-row cloud table through a view, two linked
-  histograms: the cube (`memory.mosaic.preagg_…`) was created in 59 ms — the group-by ran on the
-  Duckling, the cube came down — and every brush after was a 4–8 ms local query. After a rebuild the
-  next activation simply recreates the cube (`CREATE TABLE IF NOT EXISTS`); no coordinator reset
-  needed.
+- **Pre-aggregation works, leave it on — through `duckdbConnector`.** Over a 766 k-row cloud
+  table through a view, two linked histograms: the cube (`memory.mosaic.preagg_…`) was created in
+  59 ms — the group-by ran on the Duckling, the cube came down — and every brush after was a 4–8 ms
+  local query. After a rebuild the next activation simply recreates the cube (`CREATE TABLE IF NOT
+  EXISTS`); no coordinator reset needed. The one thing the 2026-09-24 measurement missed, found
+  2026-09-28 over a 2.7 M-row table: the brush query sums the cube's BIGINT counts, that sum is
+  HUGEINT, and this DuckDB exports HUGEINT as `arrow.opaque` bytes — over the stock connector the
+  timing was right and the y axis read "NaN". Part 4 has the mechanism; the connector decodes it.
 - **`accessMode: "read_only"` is refused** by the kit: it governs the tab's own in-memory DuckDB
   (which cannot open read-only); the read-scaling token is what makes the cloud side read-only.
 - **Rapid session creation is throttled**: the fourth session in a minute failed at the welcome
