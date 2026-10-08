@@ -43,17 +43,17 @@ export function Permanents() {
                   </tr>
                 </thead>
                 <tbody>
-                  <For each={res().permanents}>
+                  <For each={res().permanents} keyed={(row) => row.n}>
                     {(row) => (
                       <tr>
-                        <td class="mono">{row.n}</td>
+                        <td class="mono">{row().n}</td>
                         <td class="dim mono">
-                          {row.size}×{row.size}
+                          {row().size}×{row().size}
                         </td>
-                        <td class="mono">{row.permanent.toLocaleString()}</td>
-                        <td class="mono">{row.formula.toLocaleString()}</td>
-                        <td class={row.matches ? "aztec-ok" : "aztec-bad"}>
-                          {row.matches ? "✓" : "✗"}
+                        <td class="mono">{row().permanent.toLocaleString()}</td>
+                        <td class="mono">{row().formula.toLocaleString()}</td>
+                        <td class={row().matches ? "aztec-ok" : "aztec-bad"}>
+                          {row().matches ? "✓" : "✗"}
                         </td>
                       </tr>
                     )}

@@ -46,7 +46,8 @@ export interface ControlMeta<T> {
   max?: number;
   /** Snap increment (numbers), anchored at `min` (else 0). */
   step?: number;
-  /** Display unit ("eV", "ms") — presentation only. */
+  /** Display unit ("eV", "ms", "°") — presentation only. The widgets set a
+   * space before a word unit and none before a symbol (see `withUnit`). */
   unit?: string;
   /** Legal values (enums). A write outside the set THROWS. */
   options?: readonly T[];

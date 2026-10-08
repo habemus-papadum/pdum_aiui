@@ -6,7 +6,13 @@
 import { render } from "@solidjs/web";
 import { afterEach, describe, expect, it } from "vitest";
 import { clearControlSurface, control } from "./control";
-import { ControlScrub, ControlSelect, ControlSlider, ControlToggle } from "./control-widgets";
+import {
+  ControlScrub,
+  ControlSelect,
+  ControlSlider,
+  ControlToggle,
+  withUnit,
+} from "./control-widgets";
 import { tick } from "./testing";
 
 let dispose: (() => void) | undefined;
@@ -71,6 +77,25 @@ describe("ControlSlider", () => {
 
     expect(steps.get()).toBe(200); // clamped by the control, not the widget
     expect(host.querySelector("b")?.textContent).toBe("200 steps"); // unit riding along
+  });
+
+  it("spaces a word unit and sets a symbol unit tight; a declared space is kept", () => {
+    const rows = control({ name: "rows", value: 50000, min: 0, max: 100000, unit: "rows" });
+    const angle = control({ name: "angle", value: 45, min: 0, max: 360, unit: "°" });
+    const dwell = control({ name: "dwell", value: 3, min: 0, max: 10, unit: " s" });
+    const rate = control({ name: "rate", value: 0.04, min: 0, max: 1, unit: "/s" });
+    const host = mount(() => (
+      <>
+        <ControlSlider of={rows} />
+        <ControlSlider of={angle} />
+        <ControlSlider of={dwell} />
+        <ControlScrub of={rate} />
+      </>
+    ));
+    const readouts = [...host.querySelectorAll("b")].map((b) => b.textContent);
+    expect(readouts).toEqual(["50000 rows", "45°", "3 s", "0.04/s"]);
+    expect(withUnit(12, "µm")).toBe("12 µm");
+    expect(withUnit(7, undefined)).toBe("7");
   });
 
   it("honors a custom format", () => {

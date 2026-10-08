@@ -124,10 +124,14 @@ export const aztecGraph = hotCellGraph<AztecGraph>(
       (s) => draw(ctx2d, frames.at(s.i), { showCircle: s.circle }),
     );
 
-    const currentFrame = () => {
+    // A memo, not a plain function: the ring's version bumps on every streamed
+    // frame, but the frame UNDER THE PLAYHEAD only changes when the playhead
+    // moves (or follows the newest frame) — the memo's identity check stops
+    // the tiles and reporters re-running for frames they are not looking at.
+    const currentFrame = createMemo(() => {
       frames.version();
       return frames.at(frameIndex.get());
-    };
+    });
 
     const frozenSeries = createMemo<FrozenPoint[]>(() => {
       frames.version();

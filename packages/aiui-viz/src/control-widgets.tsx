@@ -34,6 +34,19 @@ import { createSignal, For, Show } from "solid-js";
 import type { ControlBox } from "./control";
 
 /**
+ * A value and its unit, spaced as a typesetter would: a space before a word
+ * unit ("12 km", "50000 rows", "3 µm"), none before a symbol ("45°", "12%",
+ * "0.04/s"); a unit that brings its own leading space (" steps") is left as
+ * declared. The default readout of every numeric widget.
+ */
+export function withUnit(value: number | string, unit: string | undefined): string {
+  if (unit === undefined || unit === "") return String(value);
+  const first = unit[0] as string;
+  const gap = /\s/.test(first) || !/\p{L}/u.test(first) ? "" : " ";
+  return `${value}${gap}${unit}`;
+}
+
+/**
  * A range input bound to a numeric control. Bounds, step, and unit come from
  * the control's meta (declare them there; sliders without min/max fall back to
  * the browser's 0–100). Writes go through the control's validation.
@@ -49,7 +62,7 @@ export function ControlSlider(props: {
 }): JSX.Element {
   const shown = () => {
     const v = props.of.get();
-    return props.format ? props.format(v) : `${v}${props.of.meta.unit ?? ""}`;
+    return props.format ? props.format(v) : withUnit(v, props.of.meta.unit);
   };
   return (
     <label
@@ -111,7 +124,7 @@ export function ControlToggle(props: {
  * the pill restates nothing. Pointer-only by design: the pill is a drag
  * instrument, and a page's key layer keeps the arrow keys — a control that
  * wants keyboard entry is a slider. `touch-action: none` belongs in the host's
- * CSS so a touch drag never scrolls the page (the FAI design sheet's `.scrub`
+ * CSS so a touch drag never scrolls the page (the design system's `.scrub`
  * recipe: a double dashed ring standing, the accent while touched).
  *
  * Solid 2.0 note: the gesture state is a PLAIN boolean, not a signal — writes
@@ -154,7 +167,7 @@ export function ControlScrub(props: {
   };
   const shown = () => {
     const v = props.of.get();
-    return props.format ? props.format(v) : `${v}${props.of.meta.unit ?? ""}`;
+    return props.format ? props.format(v) : withUnit(v, props.of.meta.unit);
   };
   const end = (): void => {
     scrubbing = false;

@@ -67,7 +67,13 @@ export {
 } from "./control";
 // control-widgets.tsx — the earned control-bound widgets (slider, toggle,
 // scrub pill, select).
-export { ControlScrub, ControlSelect, ControlSlider, ControlToggle } from "./control-widgets";
+export {
+  ControlScrub,
+  ControlSelect,
+  ControlSlider,
+  ControlToggle,
+  withUnit,
+} from "./control-widgets";
 export { Dropdown } from "./dropdown";
 export type { SignalBox } from "./durable";
 // durable.ts — the durable/disposable registry that makes HMR safe.
