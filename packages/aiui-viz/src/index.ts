@@ -102,6 +102,10 @@ export {
 // page-boundary.tsx — the mount-seam error boundary (one page's fault must
 // not halt a multi-app document); pairs with bridgeEffect for durable graphs.
 export { PageBoundary } from "./page-boundary";
+// page-text.ts — the page as text a model can read (the `read-page` standard
+// tool's engine), math as TeX; framework-free, also on `./page-text`.
+export type { PageHeading, PageTextOptions, PageTextResult } from "./page-text";
+export { AGENT_CHROME_ATTR, isAgentChrome, pageText, texOfElement } from "./page-text";
 export type { Scope } from "./scope";
 // scope.ts — instance identity for composable slices (qualified names).
 export { scope } from "./scope";

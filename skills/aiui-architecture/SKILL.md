@@ -202,7 +202,9 @@ durable, HMR-adopted worker instance resolves lazily.
 it derives the whole standard surface from the declarations: `report` (`brief`/`full` —
 controls, cells, actions, bridge failures, and the live control→cell dependency edges), `set`
 (validated write; returns what was actually written, never a re-read), `locate` (element →
-source/cell stamps), and **one real named tool per registered `action()`** (kit-relative
+source/cell stamps), `read-page` (the page as Markdown-shaped text, math as TeX from the
+`TeX` component's `data-tex` stamp; agent chrome excluded), and **one real named tool per
+registered `action()`** (kit-relative
 names: `testapp/reseed` surfaces as `reseed`; a foreign-scoped action keeps its qualified
 name). A kit exposes only its OWN scope subtree plus unscoped declarations — a kit that
 iterated the whole global surface once registered every app's actions on every kit (M×N

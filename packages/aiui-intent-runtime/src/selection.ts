@@ -101,7 +101,10 @@ function startElementOf(range: Range): Element | null {
   return node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
 }
 
-/** Recover the TeX behind a selection: a `data-tex` wrapper, else KaTeX's MathML. */
+/** Recover the TeX behind a selection: a `data-tex` wrapper, else KaTeX's MathML.
+ * The same ten lines as aiui-viz's `texOfElement` (page-text.ts) and the CDP
+ * page script's selection reply — three copies by design, since this runtime
+ * does not depend on viz and the page script imports nothing. */
 function texOf(startEl: Element | null): string | undefined {
   if (startEl === null) {
     return undefined;

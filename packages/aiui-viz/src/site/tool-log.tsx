@@ -150,6 +150,7 @@ export function ToolLog(props: ToolLogProps): JSX.Element {
         class={`aiui-toollog${props.class !== undefined ? ` ${props.class}` : ""}`}
         style={PANEL}
         aria-label="aiui tool log"
+        data-aiui-chrome=""
       >
         <div class="aiui-toollog-bar" style={{ "margin-bottom": "6px" }}>
           {tab("calls", `calls (${calls().length})`)}

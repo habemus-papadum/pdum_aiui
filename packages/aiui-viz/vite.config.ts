@@ -59,6 +59,8 @@ export default defineConfig({
         // Framework-free like `./modal`, so node-side consumers (aiui-live's
         // delegators) render the same Tools: section the browser does.
         "tool-brief": "src/tool-brief.ts",
+        // Framework-free too: the page as text, math as TeX (read-page's engine).
+        "page-text": "src/page-text.ts",
         modal: "src/modal/index.ts",
         testing: "src/testing.ts",
       },

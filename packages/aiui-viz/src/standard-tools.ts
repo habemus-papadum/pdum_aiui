@@ -25,6 +25,8 @@
  *    picked up through the control-surface subscription, so declaration order
  *    never matters.
  *  - `locate` — element → source/cell stamps, unchanged.
+ *  - `read-page` — the page as text (page-text.ts): headings, prose, lists,
+ *    tables, every equation as its TeX; windowed, so a long page is paged.
  *
  * Kept out of agent-tools.ts so that module stays dependency-free; kept
  * explicit (one line, not automatic) so a headless app can opt out and tests
@@ -36,6 +38,7 @@ import { bridgeRegistry } from "./bridge-effect";
 import { cellRegistry } from "./cell";
 import { actionByName, controlByName, controlSurface, subscribeControlSurface } from "./control";
 import { dependencyEdges } from "./graph-trace";
+import { pageText, READ_PAGE_DEFAULT_CHARS, READ_PAGE_MAX_CHARS } from "./page-text";
 import type { Scope } from "./scope";
 
 /** How many elements `locate` will describe in one call. */
@@ -292,6 +295,49 @@ export function registerStandardTools(
         source: el.closest("[data-source-loc]")?.getAttribute("data-source-loc") ?? null,
         cell: el.closest("[data-cell]")?.getAttribute("data-cell") ?? null,
       }));
+    },
+  });
+
+  kit.registerTool({
+    name: "read-page",
+    description:
+      "Read the page the user is looking at as text: headings, prose, lists, tables, the " +
+      "numbers on screen, and every equation as its TeX source ($…$ inline, $$…$$ display). " +
+      "Markdown-shaped. Returns { text, chars, truncated, headings }.",
+    usage:
+      "Call it to answer a question about what the page says or shows, or before referring " +
+      "to something on screen. Start with the whole page (headings come back as an outline), " +
+      "narrow with selector (a CSS selector, as locate uses) for one section, and page with " +
+      "offset when truncated is true. The page's own agent chrome (the tool log, a voice " +
+      "dock) is never included.",
+    kind: "read",
+    params: {
+      selector: "CSS selector of the region to read (default: the whole page)",
+      maxChars: `characters per call (default ${READ_PAGE_DEFAULT_CHARS}, max ${READ_PAGE_MAX_CHARS})`,
+      offset: "characters to skip — paging through a long page",
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        selector: { type: "string" },
+        maxChars: { type: "number", minimum: 1, maximum: READ_PAGE_MAX_CHARS },
+        offset: { type: "number", minimum: 0 },
+      },
+      additionalProperties: false,
+    },
+    run: (args) => {
+      const selector = typeof args?.selector === "string" ? args.selector.trim() : "";
+      const root = selector === "" ? document.body : document.querySelector(selector);
+      if (root === null) throw new Error(`no element matches "${selector}"`);
+      const maxChars = Math.min(
+        READ_PAGE_MAX_CHARS,
+        typeof args?.maxChars === "number" && args.maxChars > 0
+          ? Math.floor(args.maxChars)
+          : READ_PAGE_DEFAULT_CHARS,
+      );
+      const offset =
+        typeof args?.offset === "number" && args.offset > 0 ? Math.floor(args.offset) : 0;
+      return pageText({ root, maxChars, offset });
     },
   });
 

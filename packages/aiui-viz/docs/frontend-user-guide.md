@@ -536,6 +536,11 @@ Those two lines derive the whole standard surface from your declarations:
 - **One real tool per `action()`** — the `re-seed` you declared in Step 2 is now a tool named
   `re-seed`, description included.
 - **`locate`** — screen element → source location, for "make *this* wider."
+- **`read-page`** — the page as text: headings, prose, lists, tables, the numbers on screen,
+  and every equation as its TeX (`$…$`, `$$…$$` — recovered from the `data-tex` stamp the
+  `TeX` component leaves). Windowed (`maxChars`/`offset`), narrowable (`selector`), and blind
+  to the agent's own chrome (`data-aiui-chrome`). The engine is `pageText` on
+  `@habemus-papadum/aiui-viz/page-text`, framework-free.
 
 Rule of thumb: **don't write tools — declare controls and actions.** The hand-written
 set-this/get-that tool this framework once required is gone; `kit.registerTool` remains only for

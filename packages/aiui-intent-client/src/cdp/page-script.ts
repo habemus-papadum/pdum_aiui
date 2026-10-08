@@ -359,11 +359,33 @@ function pageBootstrap(version: string, deps: PageBootstrapDeps): void {
         case "selection": {
           const selection = window.getSelection?.();
           const text = selection?.toString() ?? "";
-          return (
-            text.trim() === ""
+          if (text.trim() === "") {
+            return null satisfies PageCapabilityMap["selection"]["reply"];
+          }
+          // The TeX behind a selection that starts inside rendered math — the
+          // `data-tex` stamp aiui-viz's TeX component leaves, else KaTeX's
+          // MathML annotation. The same recovery as aiui-viz's `texOfElement`
+          // and the runtime's selection watcher, inlined: this script is
+          // stringified into arbitrary pages and imports nothing.
+          const startNode = selection?.rangeCount ? selection.getRangeAt(0).startContainer : null;
+          const startEl =
+            startNode === null
               ? null
-              : { text, url: location.href, title: document.title, tab: tabRecord?.() }
-          ) satisfies PageCapabilityMap["selection"]["reply"];
+              : startNode.nodeType === Node.ELEMENT_NODE
+                ? (startNode as Element)
+                : startNode.parentElement;
+          const tex =
+            startEl?.closest("[data-tex]")?.getAttribute("data-tex") ??
+            startEl?.closest(".katex")?.querySelector('annotation[encoding="application/x-tex"]')
+              ?.textContent ??
+            undefined;
+          return {
+            text,
+            url: location.href,
+            title: document.title,
+            tab: tabRecord?.(),
+            ...(tex !== undefined ? { tex } : {}),
+          } satisfies PageCapabilityMap["selection"]["reply"];
         }
         case "viewport": {
           // Sampling rides CDP screenshots panel-side, so this tier just acks.

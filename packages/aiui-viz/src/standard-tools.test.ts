@@ -16,6 +16,25 @@ describe("registerStandardTools", () => {
     expect(handle.report()).toHaveProperty("cells");
   });
 
+  it("`read-page` renders the page as text, narrowed by selector and windowed", () => {
+    document.body.innerHTML =
+      '<h1>Title</h1><section id="s"><p>A <span data-tex="x^2">x</span> here.</p></section>' +
+      '<aside data-aiui-chrome=""><p>calls (3)</p></aside>';
+    const kit = agentToolkit("stdReadPage");
+    registerStandardTools(kit);
+    const whole = kit.handle().call("read-page") as { text: string; headings: unknown[] };
+    expect(whole.text).toBe("# Title\n\nA $x^2$ here.");
+    expect(whole.headings).toEqual([{ level: 1, text: "Title" }]);
+    const part = kit.handle().call("read-page", { selector: "#s", maxChars: 3 }) as {
+      text: string;
+      truncated: boolean;
+    };
+    expect(part).toMatchObject({ text: "A $", truncated: true });
+    expect(() => kit.handle().call("read-page", { selector: "#nope" })).toThrow(
+      /no element matches/,
+    );
+  });
+
   it("classifies every derived tool (kind) and carries an action's usage", () => {
     const s = scope("stdKinds");
     const kit = agentToolkit("stdKinds");

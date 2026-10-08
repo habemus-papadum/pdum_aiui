@@ -25,6 +25,7 @@
     "./site/lens": "./src/site/lens.tsx",
     "./site/tool-log": "./src/site/tool-log.tsx",
     "./tool-brief": "./src/tool-brief.ts",
+    "./page-text": "./src/page-text.ts",
     "./modal": "./src/modal/index.ts",
     "./testing": "./src/testing.ts"
   },
@@ -110,6 +111,11 @@
         "types": "./dist/tool-brief.d.ts",
         "import": "./dist/tool-brief.js",
         "default": "./dist/tool-brief.js"
+      },
+      "./page-text": {
+        "types": "./dist/page-text.d.ts",
+        "import": "./dist/page-text.js",
+        "default": "./dist/page-text.js"
       },
       "./modal": {
         "types": "./dist/modal/index.d.ts",
