@@ -28,7 +28,7 @@
  * ──────────────────────────────────────────────────────────────────────────────
  */
 
-import "@habemus-papadum/aiui-journal/styles.css";
+import "@habemus-papadum/aiui-design/site.css";
 import { VoiceDock } from "@habemus-papadum/aiui-dock";
 import { PageBoundary } from "@habemus-papadum/aiui-viz";
 import { render } from "@solidjs/web";

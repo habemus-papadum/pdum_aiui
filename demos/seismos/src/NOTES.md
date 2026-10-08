@@ -258,6 +258,10 @@ constant `"dark"`) is the source of truth for the literal chart/Plot colors; CSS
 goes through the `:root` tokens. The epicenter map keeps working on dark — it was
 always a supported mode — it just no longer gets the light surface it preferred.
 
+(2026-10-08: superseded. The site is light-only on `@habemus-papadum/aiui-design` — cotton
+paper, the map on a raised panel with its density ramp starting at the panel surface — and
+the journal package is gone; `docs/proposals/design-system.md` has the decisions.)
+
 ## Filters are selection dimensions now (2026-08-12)
 
 The hand-written `set-filter` tool (twelve prose-documented args, per-kind
@@ -290,8 +294,7 @@ REACTIVE (it delegates to aiui-viz's `colorMode()`), which makes every
 rebuilds each MosaicView against the surviving coordinator and selections —
 the light `palette.ts` block (including the YlOrRd density scheme this page
 always wanted on white) finally runs. Plates stay dark in both modes
-(`--figure-bg` is a cross-mode constant — the plate rule in the journal's
-styles.css header). Verified live across a flip with active filters: a
+(`--plate` is a constant — the plate rule in the design system's DESIGN.md). Verified live across a flip with active filters: a
 selection-dimension clause (`mag >= 6`) and a facet-menu clause
 (`type IN ('earthquake')`) both survive the MosaicView rebuilds — their
 sources (the durable dim source; the Menu client, which lives outside any

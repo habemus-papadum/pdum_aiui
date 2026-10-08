@@ -3,9 +3,15 @@
  * area under the curve painted in the actual colors: the peak IS the color
  * the hologram hands back out of white light.
  */
-import { plot } from "@habemus-papadum/aiui-journal";
+import { TOKENS } from "@habemus-papadum/aiui-design";
 import { waveColorCss } from "@habemus-papadum/aiui-optics";
 import { LAMBDA_BAND } from "../model/bench";
+
+/** Plate cosmetics: this chart is a figure on the dark plate (its series are
+ * the wave colors the maps use), so its rules and marks are plate ink rather
+ * than the paper's plot cosmetics. */
+const RULE = "rgba(232, 232, 234, 0.35)";
+const STRONG = TOKENS.plateInk;
 
 const W = 640;
 const H = 180;
@@ -62,10 +68,10 @@ export function SpectrumChart(props: {
         fill="url(#holo-spectrum)"
         opacity={0.09}
       />
-      <line x1={PAD.l} y1={H - PAD.b} x2={W - PAD.r} y2={H - PAD.b} stroke={plot().rule} />
+      <line x1={PAD.l} y1={H - PAD.b} x2={W - PAD.r} y2={H - PAD.b} stroke={RULE} />
       {[5, 6, 7, 8, 9, 10, 11, 12, 13].map((l) => (
         <g>
-          <line x1={xOf(l)} y1={H - PAD.b} x2={xOf(l)} y2={H - PAD.b + 4} stroke={plot().rule} />
+          <line x1={xOf(l)} y1={H - PAD.b} x2={xOf(l)} y2={H - PAD.b + 4} stroke={RULE} />
           <text x={xOf(l)} y={H - 8} text-anchor="middle" class="chart-tick">
             {l}
           </text>
@@ -76,7 +82,7 @@ export function SpectrumChart(props: {
       </text>
       {[0.5, 1].map((r) => (
         <g>
-          <line x1={PAD.l - 4} y1={yOf(r)} x2={PAD.l} y2={yOf(r)} stroke={plot().rule} />
+          <line x1={PAD.l - 4} y1={yOf(r)} x2={PAD.l} y2={yOf(r)} stroke={RULE} />
           <text x={PAD.l - 7} y={yOf(r) + 3} text-anchor="end" class="chart-tick">
             {r * 100}%
           </text>
@@ -84,7 +90,7 @@ export function SpectrumChart(props: {
       ))}
       {/* what the film reflects, in its own colors */}
       <path d={areaPath()} fill="url(#holo-spectrum)" opacity={0.85} />
-      <path d={areaPath()} fill="none" stroke={plot().strong} stroke-width={1} opacity={0.5} />
+      <path d={areaPath()} fill="none" stroke={STRONG} stroke-width={1} opacity={0.5} />
     </svg>
   );
 }

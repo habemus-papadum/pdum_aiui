@@ -1,27 +1,32 @@
 /* page.css — holograms-owned styles, ALL scoped under `.holograms` (the App
  * root) so nothing leaks onto a sibling notebook in the gallery's document.
  * Shared chrome (tokens, panels, sliders, CellView, TocRail) comes from
- * @habemus-papadum/aiui-journal/styles.css; the optics widget layout from
+ * @habemus-papadum/aiui-design/site.css; the optics widget layout from
  * @habemus-papadum/aiui-optics/widgets.css. What lives here: the bench grid,
- * readout chips, map dots, and chart text. */
+ * readout tiles, map dots, and chart text. These rules are unlayered, so
+ * each one wins over the package's layers — keep only what differs. */
 
+/* the title's accent span: a heading never takes the accent */
+.holograms .app-head h1 .accent {
+  color: inherit;
+}
 .holograms .lead {
-  color: var(--text-heading);
-  font-size: 13.5px;
-  line-height: 1.62;
-  max-width: 840px;
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  color: var(--ink);
+  max-width: var(--measure-wide);
   margin: 8px 0 6px;
 }
 .holograms .lead-note {
-  color: var(--text-secondary);
-  font-size: 12px;
-  max-width: 840px;
+  font-size: var(--text-small);
+  color: var(--ink-muted);
+  max-width: var(--measure-wide);
   margin: 0 0 4px;
 }
 .holograms .foot {
   margin: 40px 0 24px;
-  color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--text-small);
+  color: var(--muted);
 }
 
 /* --- the bench grid ---------------------------------------------------------- */
@@ -40,57 +45,65 @@
   }
 }
 
+/* overflow hidden: a dot label near the map's edge must not widen the
+ * page on a phone — the markers are the map's, so they clip with it */
 .holograms .map-wrap {
   position: relative;
+  overflow: hidden;
 }
 .holograms .map-caption {
-  color: var(--text-muted);
-  font-size: 11.5px;
+  font-family: var(--stack-sans);
+  font-size: var(--text-label);
+  color: var(--muted);
   margin: 6px 2px 0;
   line-height: 1.5;
 }
 
 /* --- controls & readouts ------------------------------------------------------ */
+/* the controls are a panel (an instrument's surface); a readout is a stat
+ * tile — a number over its label with a hairline above, no box of its own */
 .holograms .controls {
   display: grid;
   gap: 8px;
-  background: var(--panel);
-  border: 1px solid var(--panel-border);
-  border-radius: 10px;
+  background: var(--surface-raised);
+  border: var(--hairline-width) solid var(--ghost);
+  border-radius: var(--radius);
   padding: 12px;
 }
 .holograms .readouts {
   margin-top: 10px;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: 8px 14px;
 }
 .holograms .readouts > div {
-  background: var(--panel);
-  border: 1px solid var(--panel-border);
-  border-radius: 8px;
-  padding: 8px 10px;
+  padding: 6px 0 0;
+  border-top: var(--hairline-width) solid var(--hairline);
   display: flex;
   flex-direction: column;
   gap: 1px;
 }
 .holograms .rd-num {
-  font-size: 15px;
-  font-weight: 650;
-  color: var(--text);
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
 .holograms .rd-lbl {
-  font-size: 10.5px;
-  color: var(--text-muted);
+  font-family: var(--stack-sans);
+  font-size: 0.72rem;
+  color: var(--muted);
   line-height: 1.35;
 }
+/* a warning readout: the hairline and the number carry the state */
 .holograms .readouts .warn {
   grid-column: 1 / -1;
-  border-color: rgba(240, 163, 94, 0.55);
+  border-top-color: var(--warn);
+  color: inherit;
 }
 .holograms .readouts .warn .rd-num {
-  color: #f0a35e;
+  color: var(--warn);
 }
 
 .holograms .dial-box {
@@ -98,20 +111,21 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  background: var(--panel);
-  border: 1px solid var(--panel-border);
-  border-radius: 10px;
+  background: var(--surface-raised);
+  border: var(--hairline-width) solid var(--ghost);
+  border-radius: var(--radius);
   padding: 12px 10px 8px;
 }
 .holograms .dial-caption {
-  color: var(--text-muted);
-  font-size: 11px;
+  font-family: var(--stack-sans);
+  font-size: var(--text-label);
+  color: var(--muted);
   line-height: 1.45;
   margin: 8px 4px 0;
   max-width: 300px;
 }
 
-/* --- dots over maps (screen-true HTML markers) -------------------------------- */
+/* --- dots over maps (screen-true HTML markers on the plate) -------------------- */
 .holograms .map-dot {
   position: absolute;
   width: 12px;
@@ -141,26 +155,35 @@
   left: 14px;
   top: -4px;
   white-space: nowrap;
+  font-family: var(--stack-sans);
   font-size: 10px;
   color: rgba(255, 255, 255, 0.85);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
 }
 
-/* --- the angle chart ---------------------------------------------------------- */
-.holograms .angle-chart {
+/* --- the charts: figures on the plate ------------------------------------------ */
+/* Their series are the wave colors the maps use, validated for the dark
+ * ground, so the charts stay plates; ticks and marks are plate ink. */
+.holograms .angle-chart,
+.holograms .retina-chart,
+.holograms .spectrum-chart {
   width: 100%;
   height: auto;
   display: block;
-  background: var(--figure-bg, #0b0d13);
-  border: 1px solid var(--panel-border);
-  border-radius: 10px;
+  background: var(--plate);
+  border: var(--hairline-width) solid var(--hairline);
+  border-radius: var(--radius);
 }
 .holograms .chart-tick {
-  fill: var(--text-muted);
+  fill: var(--plate-ink);
+  fill-opacity: 0.7;
+  font-family: var(--stack-sans);
   font-size: 10px;
 }
 .holograms .chart-mark-label {
-  fill: var(--text-secondary);
+  fill: var(--plate-ink);
+  fill-opacity: 0.85;
+  font-family: var(--stack-sans);
   font-size: 9px;
 }
 
@@ -172,15 +195,15 @@
   max-width: 900px;
 }
 .holograms .rule {
-  background: var(--panel);
-  border: 1px solid var(--panel-border);
-  border-radius: 10px;
+  background: var(--surface-raised);
+  border: var(--hairline-width) solid var(--ghost);
+  border-radius: var(--radius);
   padding: 10px 14px;
 }
 .holograms .rule p {
-  color: var(--text-secondary);
-  font-size: 12px;
-  line-height: 1.55;
+  font-size: var(--text-small);
+  line-height: 1.5;
+  color: var(--ink-muted);
   margin: 6px 0 2px;
 }
 .holograms .rule-note {
@@ -208,40 +231,24 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
-.holograms .retina-chart {
-  width: 100%;
-  height: auto;
-  display: block;
-  background: var(--figure-bg, #0b0d13);
-  border: 1px solid var(--panel-border);
-  border-radius: 10px;
-}
 
 /* --- the volume section -------------------------------------------------------- */
-.holograms .spectrum-chart {
-  width: 100%;
-  height: auto;
-  display: block;
-  background: var(--figure-bg, #0b0d13);
-  border: 1px solid var(--panel-border);
-  border-radius: 10px;
-}
 .holograms .color-chip {
   display: inline-block;
   width: 12px;
   height: 12px;
-  border-radius: 3px;
   margin-right: 6px;
   vertical-align: -1px;
 }
 
-/* --- the finale ----------------------------------------------------------------- */
+/* --- the finale: two plates ----------------------------------------------------- */
 .holograms .film2d-wrap {
   position: relative;
   width: 100%;
   aspect-ratio: 1;
-  background: #05070c;
-  border-radius: 8px;
+  background: var(--plate);
+  border: var(--hairline-width) solid var(--hairline);
+  border-radius: var(--radius);
   overflow: hidden;
 }
 .holograms .film2d-canvas {
@@ -256,6 +263,7 @@
 .holograms .film2d-canvas:active {
   cursor: grabbing;
 }
+/* the pupil: a figure mask on the plate (the huge shadow IS the dimming) */
 .holograms .film2d-pupil {
   position: absolute;
   left: 50%;
@@ -269,8 +277,9 @@
 .holograms .view2d-wrap {
   width: 100%;
   aspect-ratio: 1;
-  background: #05070c;
-  border-radius: 8px;
+  background: var(--plate);
+  border: var(--hairline-width) solid var(--hairline);
+  border-radius: var(--radius);
   overflow: hidden;
 }
 .holograms .view2d-canvas {

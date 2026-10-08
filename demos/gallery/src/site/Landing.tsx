@@ -69,12 +69,11 @@ export function Landing() {
   return (
     <div class="landing">
       <header class="landing-head">
-        <h1>
-          aiui <span class="accent">notebooks</span>
-        </h1>
+        <p class="eyebrow">a gallery of interactive scientific notebooks</p>
+        <h1 class="wordmark">aiui</h1>
         <p class="landing-lead">
-          A gallery of interactive scientific notebooks, each built with aiui — SolidJS 2.0,
-          Observable-style dataflow, and an agent tool surface.
+          Each notebook is built with aiui — SolidJS 2.0, Observable-style dataflow, and an agent
+          tool surface — and reads like a short paper you can play with.
         </p>
       </header>
       <div class="demo-card-grid">

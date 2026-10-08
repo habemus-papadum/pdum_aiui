@@ -35,7 +35,7 @@ function histogramOptions(a: AnalysisResult): Plot.PlotOptions {
 }
 
 function correlogramOptions(a: AnalysisResult): Plot.PlotOptions {
-  const purple = SERIES().purple;
+  const amber = SERIES().amber;
   return {
     height: 150,
     style: plotStyle(),
@@ -46,13 +46,13 @@ function correlogramOptions(a: AnalysisResult): Plot.PlotOptions {
       Plot.lineY(a.correlogram, {
         x: "lag",
         y: "correlation",
-        stroke: purple,
+        stroke: amber,
         strokeWidth: 2,
         tip: true,
       }),
       ...(a.wavelength !== undefined
         ? [
-            Plot.ruleX([a.wavelength], { stroke: purple, strokeDasharray: "3,3" }),
+            Plot.ruleX([a.wavelength], { stroke: amber, strokeDasharray: "3,3" }),
             Plot.text([{ x: a.wavelength, label: `λ ≈ ${a.wavelength}px` }], {
               x: "x",
               text: "label",

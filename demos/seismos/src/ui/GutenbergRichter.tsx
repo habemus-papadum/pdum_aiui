@@ -12,7 +12,7 @@
  * starts at Mc.
  */
 
-import { plotStyle } from "@habemus-papadum/aiui-journal";
+import { plotStyle } from "@habemus-papadum/aiui-design";
 import { PlotFigure } from "@habemus-papadum/aiui-viz/plot";
 import * as Plot from "@observablehq/plot";
 import { seismosGraph } from "../graph";

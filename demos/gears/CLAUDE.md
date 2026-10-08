@@ -14,11 +14,11 @@ pnpm dev      # terminal 2 — this app (Vite + the intent tool)
 
 ## The dual shape (app + library)
 
-- `src/main.tsx` — the standalone entry: journal chrome + `./page`.
+- `src/main.tsx` — the standalone entry: the design system's stylesheet + `./page`.
 - `src/page.tsx` — the `SitePage` the gallery shell mounts (the `aiui.sitePage`
   marker in package.json is how it's discovered). Page-owned styles in
   `src/page.css` (all scoped under `.gears`); shared chrome from
-  `@habemus-papadum/aiui-journal`.
+  `@habemus-papadum/aiui-design`.
 - `src/card.tsx` — the landing-card `DemoCard`: a blurb + a live meshing-gears
   preview, built from the pure geometry only (no store/graph).
 - `src/index.ts` — the library barrel: control surface, graph accessor,
@@ -41,7 +41,7 @@ pnpm dev      # terminal 2 — this app (Vite + the intent tool)
 - **Page CSS is scoped under `.gears`.** The App root is `<div class="gears">`;
   every rule in page.css is prefixed `.gears …` so nothing leaks onto a sibling
   notebook sharing the gallery's document. Shared chrome (panels, sliders,
-  buttons, CellView) comes from the journal — don't redefine it here.
+  buttons, CellView) comes from the design package — don't redefine it here.
 - **Don't remove the integration.** The `aiui()` plugin in vite.config.ts
   stamps source locations; the locator also runs under Vitest.
 

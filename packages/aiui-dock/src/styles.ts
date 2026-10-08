@@ -46,4 +46,9 @@ export const DOCK_STYLES = `
   font: 11px/1.4 var(--aiui-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   max-height: 260px; overflow: auto; margin: 6px 0 0; }
 .aiui-dock .aiui-toollog { bottom: 44px !important; }
+@media (max-width: 480px) {
+  .aiui-dock { right: 6px; bottom: 6px; max-width: calc(100vw - 12px); }
+  .aiui-dock-row { flex-wrap: wrap; }
+  .aiui-dock-pill { padding: 2px 7px; font-size: 10px; letter-spacing: 0.04em; }
+}
 `;

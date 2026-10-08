@@ -633,6 +633,15 @@
     font-size: var(--text-heading);
     margin-bottom: var(--space-2xs);
   }
+  /* The notebooks title themselves `<h1><span class="accent">name</span> · thesis</h1>`:
+   * the name is the page's wordmark — the display face in ink — not an accent
+   * (the accent is for interaction, never a heading). */
+  .app-head h1 .accent {
+    color: inherit;
+    font-family: var(--stack-display);
+    font-variation-settings: var(--display-axes);
+    font-variant-ligatures: common-ligatures discretionary-ligatures;
+  }
   .app-sub {
     font-size: var(--text-lede);
     font-weight: 400;
@@ -720,6 +729,8 @@
     --aiui-lens-bg: var(--surface);
     --aiui-lens-fg: var(--ink);
     --aiui-lens-affordance: var(--muted);
+    --aiui-deck-radius: var(--radius);
+    --aiui-lens-radius: var(--radius);
   }
 }
 
@@ -1194,6 +1205,7 @@
     font-weight: 700;
     font-variation-settings: normal;
     margin: 0;
+    white-space: nowrap; /* a long .panel-sub caption must not fold the title */
   }
   .panel-head h2::after {
     content: none;

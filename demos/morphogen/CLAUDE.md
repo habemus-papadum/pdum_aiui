@@ -18,11 +18,11 @@ pnpm dev      # terminal 2 — this app (Vite + the intent tool)
 This package is both a standalone app and a library — the demo-package
 convention (root CLAUDE.md, "In-repo demo apps"):
 
-- `src/main.tsx` — the standalone entry: journal chrome + `./page`.
+- `src/main.tsx` — the standalone entry: the design system's stylesheet + `./page`.
 - `src/page.tsx` — the `SitePage` (from `@habemus-papadum/aiui-viz`) the
   gallery shell mounts; discovered via this package.json's `aiui.sitePage`
-  marker. Page-owned styles live in `src/page.css`; the shared dark-journal
-  chrome comes from `@habemus-papadum/aiui-journal`.
+  marker. Page-owned styles live in `src/page.css`; the shared chrome comes from
+  `@habemus-papadum/aiui-design`.
 - `src/index.ts` — the library barrel: store surface, graph accessor, widgets,
   pure model.
 

@@ -1,10 +1,11 @@
-/* wine — page-specific styles layered on the shared notebook theme
- * (@habemus-papadum/aiui-journal/styles.css, imported by main.tsx standalone
- * and by the gallery shell). Design tokens (--panel, --text, …) are
- * inherited; this file adds the atlas grid, the embedding island host, the
- * loading panel, the vgplot input widgets, and the shared class contracts
- * (inspector, views bar) — all scoped under the page root class `.wine` so
- * nothing leaks onto a sibling mounted in the same document. */
+/* wine — page-specific styles layered on the design system
+ * (@habemus-papadum/aiui-design/site.css, imported by main.tsx standalone
+ * and by the gallery shell). Tokens (--surface-raised, --ink, …) are
+ * inherited, and the package's notebook layer already dresses the panels,
+ * controls, the inspector and the views bar; this file adds the atlas grid,
+ * the embedding island host, the loading panel, the vgplot input widgets,
+ * and the inspector's origin chips — all scoped under the page root class
+ * `.wine` so nothing leaks onto a sibling mounted in the same document. */
 
 /* --- the atlas grid ---------------------------------------------------------- */
 .wine .atlas {
@@ -45,21 +46,26 @@
   }
 }
 
+/* A panel's title stays on one line; its long caption wraps instead. */
+.wine .panel-head h2 {
+  white-space: nowrap;
+}
+
 /* --- the embedding island host ----------------------------------------------- */
 /* The bridge measures this box and hands the component literal width/height;
- * give it a real extent (fluid width from the grid, clamped height). */
+ * give it a real extent (fluid width from the grid, clamped height). The
+ * atlas draws its own light ground; a hairline frames it on the panel. */
 .wine .atlas-embedding {
   width: 100%;
   height: clamp(380px, 62vh, 640px);
-  border-radius: 8px;
+  border: var(--hairline-width) solid var(--ghost);
   overflow: hidden;
 }
 
 /* --- loading panel (the dataset cell's fallback) ------------------------------ */
 .wine .loading-panel {
-  background: var(--panel);
-  border: 1px solid var(--panel-border);
-  border-radius: 12px;
+  background: var(--surface-raised);
+  border: var(--hairline-width) solid var(--ghost);
   padding: 28px 22px;
   display: flex;
   flex-direction: column;
@@ -68,26 +74,26 @@
   text-align: center;
 }
 .wine .loading-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-heading);
+  font-size: var(--text-title);
+  font-weight: 700;
+  color: var(--ink);
 }
 .wine .loading-bar {
   width: min(420px, 80%);
-  height: 8px;
-  background: var(--progress-track);
-  border-radius: 5px;
+  height: 4px;
+  background: var(--ghost);
   overflow: hidden;
 }
 .wine .loading-bar-fill {
   height: 100%;
-  background: var(--accent-strong);
-  border-radius: 5px;
+  background: var(--accent);
   transition: width 180ms ease;
 }
 .wine .loading-sub {
-  font-size: 11.5px;
-  color: var(--text-muted);
+  font-family: var(--stack-sans);
+  font-size: var(--text-label);
+  letter-spacing: 0.06em;
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 
@@ -123,80 +129,39 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
-  color: var(--text-secondary);
+  font-family: var(--stack-sans);
+  font-size: var(--text-label);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 .wine .vg-input select {
   font: inherit;
-  font-size: 12px;
-  color: var(--text);
-  background: var(--btn-bg);
-  border: 1px solid var(--btn-border);
-  border-radius: 7px;
-  padding: 3px 7px;
+  font-family: var(--stack-serif);
+  font-size: var(--text-small);
+  letter-spacing: normal;
+  text-transform: none;
+  color: var(--ink);
+  background: var(--surface);
+  border: var(--hairline-width) solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 2px 7px;
   cursor: pointer;
   max-width: 190px;
 }
 .wine .vg-input select:hover {
-  background: var(--btn-hover);
+  background: var(--ghost);
 }
 
-/* the named-views bar (aiui-viz SelectionViewsBar — class contract only) */
-.wine .selection-views {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-}
-.wine .selection-views select,
-.wine .selection-views input,
-.wine .selection-views button {
-  font: inherit;
-  font-size: 12px;
-  color: var(--text);
-  background: var(--btn-bg);
-  border: 1px solid var(--btn-border);
-  border-radius: 7px;
-  padding: 3px 7px;
-}
-.wine .selection-views select,
-.wine .selection-views button {
-  cursor: pointer;
-}
-.wine .selection-views select:hover,
-.wine .selection-views button:not(:disabled):hover {
-  background: var(--btn-hover);
-}
-.wine .selection-views button:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-.wine .selection-views input {
-  width: 130px;
-}
-
-/* --- selection inspector (aiui-viz/selection-inspector class contract) -------- */
-.wine .selection-inspector {
-  display: grid;
-  gap: 10px;
-  font-size: 12px;
-}
-.wine .inspector-clause {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px;
-  padding: 3px 0;
-  border-bottom: 1px solid var(--row-border);
-}
+/* --- selection inspector: the origin chips (over the package's inspector) ----- */
 .wine .inspector-clause::before {
-  font-size: 10px;
+  font-family: var(--stack-sans);
+  font-size: 0.65rem;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  border: 1px solid var(--btn-border);
-  border-radius: 4px;
+  letter-spacing: 0.08em;
+  border: var(--hairline-width) solid var(--hairline);
   padding: 0 5px;
-  color: var(--text-secondary);
+  color: var(--muted);
 }
 .wine .inspector-clause[data-origin="dim"]::before {
   content: "dim";
@@ -208,84 +173,22 @@
 }
 .wine .inspector-clause[data-origin="unknown"]::before {
   content: "?";
-  color: var(--error-text);
-  border-color: var(--error-border);
-}
-.wine .inspector-producer {
-  color: var(--text);
-  font-weight: 600;
-}
-.wine .inspector-fields {
-  color: var(--text-secondary);
-}
-.wine .inspector-value {
-  color: var(--text);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-.wine .inspector-sql {
-  color: var(--text-muted);
-  font-size: 11px;
-  overflow-wrap: anywhere;
+  color: var(--alarm);
+  border-color: var(--alarm);
 }
 .wine .inspector-clear {
   margin-left: auto;
   align-self: center;
-  width: 18px;
-  height: 18px;
-  line-height: 1;
-  padding: 0;
-  border: 1px solid var(--btn-border);
-  border-radius: 4px;
-  background: none;
-  color: var(--text-secondary);
-  font-size: 12px;
-  cursor: pointer;
-}
-.wine .inspector-clear:hover {
-  color: var(--text);
-  border-color: var(--accent);
-}
-.wine .inspector-empty {
-  color: var(--text-muted);
-  font-style: italic;
-}
-.wine .inspector-where {
-  display: block;
-  color: var(--text-dim);
-  font-size: 11px;
-  overflow-wrap: anywhere;
 }
 .wine .inspector-capabilities {
-  display: flex;
-  flex-wrap: wrap;
   gap: 6px 18px;
-  border-top: 1px solid var(--row-border);
+  border-top: var(--hairline-width) solid var(--ghost);
   padding-top: 8px;
-}
-.wine .inspector-capability {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.wine .capability-fields {
-  color: var(--text-secondary);
-}
-.wine .capability-member {
-  border: 1px solid var(--btn-border);
-  border-radius: 999px;
-  padding: 1px 8px;
-  color: var(--text-dim);
 }
 .wine .capability-member[data-kind="dim"] {
   border-style: dashed;
 }
 .wine .capability-member[data-active] {
-  color: var(--text);
+  color: var(--ink);
   border-color: var(--accent);
-}
-
-/* --- misc ---------------------------------------------------------------------- */
-.wine .mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.92em;
 }

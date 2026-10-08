@@ -1,15 +1,14 @@
-/* morphogen's page styles. The shared dark-journal chrome (tokens, panels,
- * sliders, tiles, cell/plot chrome, site header, TOC rail) comes from
- * @habemus-papadum/aiui-journal/styles.css, imported by the host page BEFORE this
- * file; what remains here is morphogen-owned: the simulation figure, the
+/* morphogen's page styles. The shared chrome (tokens, panels, sliders, tiles,
+ * cell/plot chrome, site nav, TOC rail) comes from
+ * @habemus-papadum/aiui-design/site.css, imported by the host page BEFORE this
+ * file; what remains here is morphogen-owned: the simulation plate, the
  * paired history charts, the analysis controls, and the regime atlas. */
 
 /* --- simulation ---------------------------------------------------------- */
 .sim-host {
-  border-radius: 12px;
   overflow: hidden;
-  border: 1px solid var(--panel-border);
-  background: var(--figure-bg);
+  border: var(--hairline-width) solid var(--hairline);
+  background: var(--plate);
   line-height: 0;
   cursor: crosshair;
 }
@@ -27,8 +26,10 @@
   gap: 12px;
 }
 .chart-waiting {
-  color: var(--text-faint);
-  font-size: 12px;
+  color: var(--muted);
+  font-family: var(--stack-sans);
+  font-size: var(--text-label);
+  letter-spacing: 0.06em;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -41,8 +42,8 @@
   margin-bottom: 10px;
 }
 .analysis-summary {
-  color: var(--text-secondary);
-  font-size: 12px;
+  color: var(--ink-muted);
+  font-size: var(--text-small);
   margin: 2px 0 8px;
 }
 
@@ -53,16 +54,19 @@
   cursor: crosshair;
 }
 .atlas-grid {
-  stroke: var(--grid-line);
+  stroke: var(--ghost);
   stroke-width: 1;
 }
 .atlas-tick {
-  fill: var(--text-muted);
-  font-size: 9.5px;
+  fill: var(--muted);
+  font-family: var(--stack-sans);
+  font-size: 10px;
 }
 .atlas-axis {
-  fill: var(--text-secondary);
-  font-size: 10px;
+  fill: var(--ink-muted);
+  font-family: var(--stack-sans);
+  font-size: 11px;
+  letter-spacing: 0.06em;
 }
 .atlas-cursor line {
   stroke: var(--accent);
@@ -79,18 +83,19 @@
   cursor: pointer;
 }
 .atlas-point:hover circle {
-  stroke: var(--text);
+  stroke: var(--ink);
   stroke-width: 1.5;
 }
 .atlas-label {
-  fill: var(--text-dim);
-  font-size: 9.5px;
+  fill: var(--ink-muted);
+  font-family: var(--stack-sans);
+  font-size: 10px;
   pointer-events: none;
 }
 
 /* Phone polish: side-by-side chart pairs are ~160px each on a phone — stack
  * them so axis ticks and labels stop colliding (the shared ≤680px overrides
- * live in the journal stylesheet). */
+ * live in the design package's notebook layer). */
 @media (max-width: 680px) {
   .chart-pair {
     grid-template-columns: minmax(0, 1fr);

@@ -21,7 +21,7 @@
  * (site/router.ts), so no anchor can hard-navigate and kill an open turn.
  */
 import { render } from "@solidjs/web";
-import "@habemus-papadum/aiui-journal/styles.css";
+import "@habemus-papadum/aiui-design/site.css";
 import { VoiceDock } from "@habemus-papadum/aiui-dock";
 import { PageBoundary, setSitePageActive } from "@habemus-papadum/aiui-viz";
 import { SiteNav } from "@habemus-papadum/aiui-viz/site";

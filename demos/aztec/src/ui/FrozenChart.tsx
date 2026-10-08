@@ -6,7 +6,7 @@
  * edits. Observable Plot stays behind the shared PlotFigure seam.
  */
 
-import { chart, plot, plotStyle } from "@habemus-papadum/aiui-journal";
+import { chart, plot, plotStyle } from "@habemus-papadum/aiui-design";
 import { PlotFigure } from "@habemus-papadum/aiui-viz/plot";
 import * as Plot from "@observablehq/plot";
 import { createMemo } from "solid-js";

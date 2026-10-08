@@ -1,21 +1,18 @@
 /* page.css — gears-owned styles, ALL scoped under `.gears` (the App root) so
  * nothing leaks onto a sibling notebook when both are mounted in the gallery's
- * one document. The shared dark-journal chrome (tokens, `.panel`, `.slider`,
- * `.check`, `.btn`, CellView chrome) comes from
- * `@habemus-papadum/aiui-journal/styles.css`, imported by the host before this;
- * what remains here is the gear studio's own figures.
+ * one document. The shared chrome (tokens, `.panel`, `.slider`, `.check`,
+ * `.btn`, CellView chrome) comes from `@habemus-papadum/aiui-design/site.css`,
+ * imported by the host before this; what remains here is the gear studio's
+ * own figures.
  *
- * The gear figure palette + a couple of journal-token aliases live on `.gears`
- * as scoped custom properties (they cascade to descendants). */
+ * The gear figure palette lives on `.gears` as scoped custom properties (they
+ * cascade to descendants): figure constants on the dark plates (the stage,
+ * hubs, and tooth canvas), never page chrome. */
 .gears {
-  --line: var(--panel-border);
-  --muted: var(--text-secondary);
-  /* inset "well" chrome (readout boxes, empty swatches) — per-mode, unlike the
-   * --gear-* figure constants below (the stage, hubs, and tooth canvas are
-   * journal plates: dark in both modes) */
-  --well: #0b0d13;
+  /* the inset "well" chrome (readout boxes, empty swatches) */
+  --well: var(--surface-sunken);
 
-  /* gear figure palette (figure constants — dark plate in both modes) */
+  /* gear figure palette (figure constants — the plates are dark) */
   --gear-a: #7aa2f7;
   --gear-a-fill: rgba(122, 162, 247, 0.14);
   --gear-b: #f0a35e;
@@ -29,33 +26,22 @@
   padding: 28px 20px 60px;
 }
 
-@media (prefers-color-scheme: light) {
-  .gears {
-    --well: #eef1f7;
-  }
-}
-
-.gears .muted {
-  color: var(--muted);
-}
 .gears .panel {
   margin-top: 16px;
 }
 
 .gears .masthead h1 {
   margin: 0 0 6px;
-  font-size: 26px;
-  letter-spacing: -0.01em;
 }
 .gears .masthead p {
   margin: 0;
   max-width: 68ch;
+  color: var(--ink-muted);
 }
 
 .gears .stage {
-  background: radial-gradient(120% 120% at 50% 0%, #141a28 0%, transparent 60%), #0b0d13;
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  background: radial-gradient(120% 120% at 50% 0%, #141a28 0%, transparent 60%), var(--plate);
+  border: var(--hairline-width) solid var(--hairline);
   padding: 8px;
 }
 
@@ -110,7 +96,7 @@
   stroke: var(--gear-b);
 }
 .gears .gear-hub {
-  fill: #0b0d13;
+  fill: var(--plate);
 }
 .gears .gear-hub.gear-a {
   stroke: var(--gear-a);
@@ -142,27 +128,28 @@
 }
 .gears .readouts > div {
   background: var(--well);
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  border: var(--hairline-width) solid var(--ghost);
   padding: 10px 12px;
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 .gears .rd-num {
-  font:
-    18px ui-monospace,
-    monospace;
-  color: var(--text);
+  font-size: 1.25rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  color: var(--ink);
 }
 .gears .rd-lbl {
-  font-size: 11px;
+  font-family: var(--stack-sans);
+  font-size: var(--text-label);
   color: var(--muted);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.12em;
 }
 
-/* controls layout (the widgets themselves are journal-styled) */
+/* controls layout (the widgets themselves are styled by the package) */
 .gears .controls {
   margin-top: 16px;
   display: flex;
@@ -193,23 +180,25 @@
 }
 .gears .chip {
   padding: 4px 12px;
-  border: 1px solid var(--line);
+  border: var(--hairline-width) solid var(--hairline);
   border-radius: 999px;
   background: transparent;
-  color: var(--muted);
+  color: var(--ink-muted);
   cursor: pointer;
-  font-size: 13px;
+  font-family: var(--stack-sans);
+  font-size: var(--text-label);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 .gears .chip[data-active] {
-  color: var(--text);
+  color: var(--ink);
   border-color: var(--accent);
-  background: rgba(138, 180, 248, 0.12);
+  background: var(--accent-wash);
 }
 
 .gears .tooth-svg {
-  background: #0b0d13;
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  background: var(--plate);
+  border: var(--hairline-width) solid var(--hairline);
   max-height: 340px;
 }
 .gears .tooth-body {
@@ -224,7 +213,7 @@
   stroke: #4a5268;
 }
 .gears .ref-circle.pitch {
-  stroke: var(--accent);
+  stroke: #8ab4f8;
   opacity: 0.7;
 }
 .gears .ref-circle.base {
@@ -238,15 +227,16 @@
   display: flex;
   gap: 16px;
   flex-wrap: wrap;
-  font-size: 12px;
-  color: var(--muted);
+  font-family: var(--stack-sans);
+  font-size: var(--text-label);
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
   align-items: center;
 }
 .gears .studio-legend .sw {
   display: inline-block;
   width: 11px;
   height: 11px;
-  border-radius: 3px;
   vertical-align: -1px;
   margin-right: 5px;
 }
@@ -256,12 +246,13 @@
 }
 .gears .sw.space {
   background: var(--well);
-  border: 1px solid var(--line);
+  border: var(--hairline-width) solid var(--hairline);
 }
 
 .gears .foot {
   margin-top: 26px;
-  font-size: 12px;
+  font-size: var(--text-small);
+  color: var(--muted);
   text-align: center;
 }
 

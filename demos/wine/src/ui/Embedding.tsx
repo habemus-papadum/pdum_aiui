@@ -11,11 +11,11 @@
  *    adopts (store.ts), which is what makes `set-projx`/`set-projy` draw the
  *    on-map box and a mouse lasso mirror back into the dims.
  *
- * viewOptions is the reactive skin: per-mode color scheme and the SAME
- * categorical palette the variety bar wears, so a cluster and its bar match.
+ * viewOptions is the reactive skin: the light color scheme (the design system
+ * is light only) and the SAME categorical palette the variety bar wears, so a
+ * cluster and its bar match.
  */
 
-import { mode } from "@habemus-papadum/aiui-journal";
 import { EmbeddingView } from "@habemus-papadum/aiui-viz/embedding";
 import { appScope, store } from "../model/store";
 import { wine } from "../palette";
@@ -35,7 +35,7 @@ export function Embedding(props: { class?: string }) {
       scope={appScope}
       name="embedding"
       viewOptions={() => ({
-        config: { colorScheme: mode() },
+        config: { colorScheme: "light" },
         categoryColors: wine().categories,
       })}
       {...(props.class !== undefined ? { class: props.class } : {})}

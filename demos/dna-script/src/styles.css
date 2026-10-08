@@ -2,61 +2,34 @@
  * so nothing leaks onto a sibling notebook when both are mounted in the
  * gallery's one document. This file once carried its own global `:root` token
  * block and bare element selectors (a scaffold inheritance) — the `:root`
- * redefined the journal's --bg/--panel/--text and, arriving in a lazy route
- * chunk, silently won the cascade for the whole session. The shared chrome
- * (tokens, body, `.panel` base, CellView chrome, buttons) now comes from
- * `@habemus-papadum/aiui-journal/styles.css`, imported by the host before this;
- * what remains here is the notation's own look, plus journal-token aliases and
- * the demo's own colors as scoped custom properties on `.dna`. */
+ * redefined the shared tokens and, arriving in a lazy route chunk, silently
+ * won the cascade for the whole session. The shared chrome (tokens, body,
+ * `.panel` base, CellView chrome, buttons, kbd, headings, the lede) comes
+ * from `@habemus-papadum/aiui-design/site.css`, imported by the host before
+ * this; what remains here is the notation's own look and the demo's own
+ * colors as scoped custom properties on `.dna`. Unlayered: every rule here
+ * wins over the package's layers, so keep only what differs. */
 
 .dna {
-  --line: var(--panel-border);
-  --muted: var(--text-secondary);
-
   /* The notation's two pair colours. One hue per Watson–Crick pair, so
-   * complements match and a mispairing would show as a colour clash.
-   * Per-mode: glyph fills are large marks on the PANEL surface (not a dark
-   * plate), so light mode gets its own deeper steps below. */
-  --at: #8ab4f8;
-  --gc: #f6a5bd;
-  --glyph-line: #4b5468;
+   * complements match and a mispairing would show as a colour clash. Glyph
+   * fills are large marks on the paper (not a dark plate), so these are the
+   * deeper steps validated for a light ground; the landing card, which draws
+   * on the plate, keeps its own dark-ground values. */
+  --at: #3f74cf;
+  --gc: #d05577;
+  --glyph-line: #9aa3b6;
 
   max-width: 760px;
   margin: 0 auto;
   padding: 28px 20px 60px;
 }
 
-@media (prefers-color-scheme: light) {
-  .dna {
-    --at: #3f74cf;
-    --gc: #d05577;
-    --glyph-line: #9aa3b6;
-  }
-}
-
-.dna kbd {
-  padding: 1px 6px;
-  border: 1px solid var(--line);
-  border-bottom-width: 2px;
-  border-radius: 5px;
-  background: var(--panel);
-  font:
-    12px ui-monospace,
-    monospace;
-}
-
 .dna .app-title {
   margin: 0;
-  font-size: 22px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
 }
 
-.dna .muted {
-  color: var(--muted);
-}
-
-/* --- panels (journal's .panel base; this page's roomier spacing) ------------- */
+/* --- panels (the package's .panel base; this page's roomier spacing) -------- */
 
 .dna .panel {
   padding: 16px 18px;
@@ -135,19 +108,17 @@
   margin-left: 2.6em;
   width: var(--strand-w);
   text-align: center;
-  font:
-    12px ui-monospace,
-    monospace;
-  color: var(--muted);
+  font-family: var(--stack-mono);
+  font-size: var(--text-mono);
+  color: var(--ink-muted);
   letter-spacing: 0;
 }
 
 .dna .duplex-end {
   position: absolute;
-  font:
-    11px ui-monospace,
-    monospace;
-  color: var(--muted);
+  font-family: var(--stack-mono);
+  font-size: 0.72rem;
+  color: var(--ink-muted);
 }
 
 .dna .duplex-end-tl,
@@ -192,15 +163,14 @@
 }
 
 .dna .fold-end {
-  fill: var(--muted);
-  font-family: ui-monospace, monospace;
+  fill: var(--ink-muted);
+  font-family: var(--stack-mono);
 }
 
 .dna .structure {
-  font:
-    12.5px ui-monospace,
-    monospace;
-  color: var(--muted);
+  font-family: var(--stack-mono);
+  font-size: var(--text-mono);
+  color: var(--ink-muted);
   word-break: break-all;
   letter-spacing: 0.06em;
 }
@@ -211,25 +181,8 @@
   margin-bottom: 30px;
 }
 
-.dna .lede {
-  color: var(--muted);
-  max-width: 60ch;
-}
-
-.dna section {
-  margin-top: 38px;
-}
-
-.dna h2 {
-  font-size: 17px;
-  margin: 0 0 10px;
-}
-
 .dna h3 {
-  font-size: 14px;
   margin: 26px 0 8px;
-  color: var(--muted);
-  font-weight: 600;
 }
 
 .dna p {
@@ -237,8 +190,8 @@
 }
 
 .dna .note {
-  color: var(--muted);
-  font-size: 13.5px;
+  color: var(--ink-muted);
+  font-size: var(--text-small);
 }
 
 .dna .seq-field {
@@ -249,8 +202,11 @@
 }
 
 .dna .seq-label {
+  font-family: var(--stack-sans);
+  font-size: var(--text-label);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   color: var(--muted);
-  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -258,13 +214,12 @@
   flex: 1;
   min-width: 0;
   padding: 7px 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel);
-  color: var(--text);
-  font:
-    14px ui-monospace,
-    monospace;
+  border: var(--hairline-width) solid var(--hairline);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--stack-mono);
+  font-size: 0.95rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
@@ -291,20 +246,23 @@
   flex-wrap: wrap;
   gap: 6px 16px;
   align-items: baseline;
-  font-size: 13px;
+  font-size: var(--text-small);
 }
 
 .dna .readout code {
-  color: var(--text);
+  color: var(--ink);
   letter-spacing: 0.1em;
 }
 
+/* a flag is a status pill: hairline at rest, the pair colour when on */
 .dna .flag {
   padding: 2px 9px;
-  border: 1px solid var(--line);
+  border: var(--hairline-width) solid var(--hairline);
   border-radius: 999px;
+  font-family: var(--stack-sans);
+  font-size: var(--text-label);
+  letter-spacing: 0.06em;
   color: var(--muted);
-  font-size: 12px;
 }
 
 .dna .flag-on {
@@ -312,9 +270,10 @@
   color: var(--gc);
 }
 
+/* the folder's "ignored …" notice is a fault, not a caution */
 .dna .warn {
-  color: var(--error-text);
-  font-size: 12px;
+  color: var(--alarm);
+  font-size: var(--text-small);
 }
 
 /* --- the key -------------------------------------------------------------------- */
@@ -328,9 +287,9 @@
 .dna .key-card {
   margin: 0;
   padding: 14px 12px 12px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--panel);
+  border: var(--hairline-width) solid var(--ghost);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
   text-align: center;
 }
 
@@ -339,13 +298,12 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  font-size: 12px;
 }
 
 .dna .key-card b {
-  font:
-    15px ui-monospace,
-    monospace;
+  font-family: var(--stack-mono);
+  font-size: 1rem;
+  color: var(--ink);
 }
 
 .dna .pair-row {
@@ -360,14 +318,13 @@
 
 .dna .pair-demo figcaption {
   margin-top: 8px;
-  font-size: 12px;
   max-width: 30ch;
 }
 
 .dna .pair-demo b {
-  font:
-    13px ui-monospace,
-    monospace;
+  font-family: var(--stack-mono);
+  font-size: 0.9rem;
+  color: var(--ink);
 }
 
 @media (max-width: 620px) {
@@ -385,7 +342,7 @@
   }
 }
 
-/* CellView chrome, buttons, and error styling come from the journal; the one
+/* CellView chrome, buttons, and error styling come from the package; the one
  * page-specific tweak is the progress stripe hugging the input's underside. */
 .dna .progress-stripe {
   top: auto;

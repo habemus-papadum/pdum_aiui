@@ -2,7 +2,8 @@
  * styles.css — the slides framework's DEFAULT look: functional, quiet, and
  * built to be replaced. Every color/size routes through a custom property
  * with a fallback, so a design system rethemes by setting `--aiui-deck-*` /
- * `--aiui-lens-*` tokens (or ships its own sheet against the same class
+ * `--aiui-lens-*` tokens (colors, and `--aiui-deck-radius` / `--aiui-lens-radius`
+ * for the corners) (or ships its own sheet against the same class
  * names). Geometry (snap, positioning, layering) is the part worth keeping;
  * the cosmetics are placeholders with taste.
  *
@@ -256,7 +257,7 @@
   gap: 0.5rem;
   padding: 0.6rem;
   border: 1px solid var(--aiui-deck-line, rgba(128, 128, 128, 0.45));
-  border-radius: 0.6rem;
+  border-radius: var(--aiui-deck-radius, 0.6rem);
   background: var(--aiui-deck-hud-tile-bg, var(--_aiui-surface));
   color: var(--aiui-deck-hud-fg, var(--_aiui-surface-fg));
   cursor: pointer;
@@ -276,7 +277,7 @@
 }
 .aiui-deck-hud-thumb {
   aspect-ratio: 16 / 9;
-  border-radius: 0.35rem;
+  border-radius: var(--aiui-deck-radius, 0.35rem);
   overflow: hidden;
   background: var(--aiui-deck-hud-thumb-bg, rgba(128, 128, 128, 0.12));
   display: grid;
@@ -333,7 +334,7 @@
   max-width: min(24rem, calc(100vw - 1rem));
   padding: 0.6rem 0.75rem;
   border: 1px solid var(--aiui-deck-line, rgba(128, 128, 128, 0.45));
-  border-radius: 0.5rem;
+  border-radius: var(--aiui-lens-radius, 0.5rem);
   background: var(--aiui-lens-bg, var(--_aiui-surface));
   color: var(--aiui-lens-fg, var(--_aiui-surface-fg));
   font-size: 0.85rem;
@@ -360,7 +361,7 @@
   display: flex;
   flex-direction: column;
   border: 1px solid var(--aiui-deck-line, rgba(128, 128, 128, 0.45));
-  border-radius: 0.75rem;
+  border-radius: var(--aiui-lens-radius, 0.75rem);
   background: var(--aiui-lens-bg, var(--_aiui-surface));
   color: var(--aiui-lens-fg, var(--_aiui-surface-fg));
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);

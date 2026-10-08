@@ -6,7 +6,13 @@
  * grating-equation predictions — the chart shows the wave engine and the
  * one-line design rule agreeing.
  */
-import { plot } from "@habemus-papadum/aiui-journal";
+import { TOKENS } from "@habemus-papadum/aiui-design";
+
+/** Plate cosmetics: this chart is a figure on the dark plate (its series are
+ * the wave colors the maps use), so its rules and marks are plate ink rather
+ * than the paper's plot cosmetics. */
+const RULE = "rgba(232, 232, 234, 0.35)";
+const STRONG = TOKENS.plateInk;
 
 export interface AngleSeries {
   sin: Float64Array;
@@ -68,10 +74,10 @@ export function AngleChart(props: {
     >
       <title>far-field power vs exit angle</title>
       {/* axis */}
-      <line x1={PAD.l} y1={H - PAD.b} x2={W - PAD.r} y2={H - PAD.b} stroke={plot().rule} />
+      <line x1={PAD.l} y1={H - PAD.b} x2={W - PAD.r} y2={H - PAD.b} stroke={RULE} />
       {ticks().map((d) => (
         <g>
-          <line x1={xOf(d)} y1={H - PAD.b} x2={xOf(d)} y2={H - PAD.b + 4} stroke={plot().rule} />
+          <line x1={xOf(d)} y1={H - PAD.b} x2={xOf(d)} y2={H - PAD.b + 4} stroke={RULE} />
           <text x={xOf(d)} y={H - 8} text-anchor="middle" class="chart-tick">
             {d}°
           </text>
@@ -95,7 +101,7 @@ export function AngleChart(props: {
               y1={PAD.t}
               x2={xOf((Math.asin(m.sin) * 180) / Math.PI)}
               y2={H - PAD.b}
-              stroke={m.color ?? plot().strong}
+              stroke={m.color ?? STRONG}
               stroke-dasharray="3 4"
               opacity={0.55}
             />

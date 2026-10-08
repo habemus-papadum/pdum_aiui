@@ -1,10 +1,9 @@
 /**
- * palette.ts — the wine page's literal chart colors, one set per mode
- * (design-choices §8: figure colors that can't be a CSS var live here, keyed
- * off the reactive `mode()` so charts AND the embedding view re-tint on a
- * system theme flip). Chart-on-panel colors, tuned per mode, not flipped:
- * each mode's ten swatches sit in that mode's lightness band against its
- * panel surface (dark #171b25, light #ffffff) per the dataviz procedure.
+ * palette.ts — the wine page's literal chart colors (design-choices §8: figure
+ * colors that can't be a CSS var live here). Chart-on-panel colors, validated
+ * against the design system's raised panel (`#e8e7e3` on cotton paper) per
+ * the dataviz procedure: the ten swatches sit in the light lightness band and
+ * clear 3:1 against it.
  *
  * `categories` is the FIXED categorical assignment shared by the two places
  * variety is colored — the embedding view's `categoryColors` and the variety
@@ -14,63 +13,46 @@
  * neutral — hues walk the wheel so adjacent categories stay separable, and
  * identity is never color-alone (the bar's y-axis names each variety).
  */
-import { type Mode, mode } from "@habemus-papadum/aiui-journal";
+import { TOKENS } from "@habemus-papadum/aiui-design";
 
 export interface WinePalette {
   /** Single-series fill for the points / price histograms. */
   hist: string;
   /** Ten category colors: top-9 varieties in rank order, then "other". */
   categories: string[];
-  /** d3 sequential scheme for the world map's density raster (per mode). */
+  /** d3 sequential scheme for the world map's density raster — the fallback
+   * when no explicit ramp is given. */
   densityScheme: string;
-  /** Explicit low→high ramp overriding `densityScheme`. A consuming app
-   * whose panel surface no stock scheme floor matches (the pitch deck's
-   * cotton paper) starts the ramp AT that surface color, so zero density
-   * dissolves into the page instead of printing a tinted plate. */
+  /** Explicit low→high ramp overriding `densityScheme`. It starts AT the
+   * panel surface, so zero density dissolves into the panel instead of
+   * printing a tinted plate (a stock scheme's pale floor does exactly that
+   * on paper); a consuming app under another design system passes its own. */
   densityRange?: string[];
-  /** Border/graticule overlay ink — cosmetic underlay, tuned per mode
-   * against that mode's density-scheme floor (the seismos rationale). */
+  /** Border/graticule overlay ink — cosmetic underlay, tuned against the
+   * ramp's floor (the seismos rationale). */
   coast: string;
   coastOpacity: number;
 }
 
-const PALETTE: Record<Mode, WinePalette> = {
-  dark: {
-    hist: "#4a86dd",
-    categories: [
-      "#e0576a", // 1 rose red
-      "#e28a3a", // 2 orange
-      "#cdb04a", // 3 gold
-      "#7cb84e", // 4 green
-      "#36b39e", // 5 teal
-      "#4a86dd", // 6 blue
-      "#8f7ce8", // 7 violet
-      "#c96bd0", // 8 magenta
-      "#b58a66", // 9 tan
-      "#7c8494", // other — neutral, deliberately recessive
-    ],
-    densityScheme: "inferno",
-    coast: "#c6cdd8",
-    coastOpacity: 0.28,
-  },
-  light: {
-    hist: "#2f6bcb",
-    categories: [
-      "#c22f45", // 1
-      "#bf6410", // 2
-      "#9a7f10", // 3
-      "#4e8c25", // 4
-      "#0f8a76", // 5
-      "#2f6bcb", // 6
-      "#6a55c9", // 7
-      "#a23fae", // 8
-      "#8a6440", // 9
-      "#6d7480", // other
-    ],
-    densityScheme: "YlOrRd",
-    coast: "#5f6b78",
-    coastOpacity: 0.42,
-  },
+const PALETTE: WinePalette = {
+  hist: "#2f6bcb",
+  categories: [
+    "#c22f45", // 1
+    "#bf6410", // 2
+    "#9a7f10", // 3
+    "#4e8c25", // 4
+    "#0f8a76", // 5
+    "#2f6bcb", // 6
+    "#6a55c9", // 7
+    "#a23fae", // 8
+    "#8a6440", // 9
+    "#6d7480", // other
+  ],
+  densityScheme: "YlOrRd",
+  densityRange: [TOKENS.surfaceRaised, "#f3c46a", "#e8842f", "#c4301f", "#6b0a1f"],
+  coast: "#5f6b78",
+  coastOpacity: 0.42,
 };
 
-export const wine = (): WinePalette => PALETTE[mode()];
+/** Accessor-shaped (the specs and the embedding view read it live), one light set. */
+export const wine = (): WinePalette => PALETTE;

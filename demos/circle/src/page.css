@@ -1,9 +1,9 @@
 /* page.css — the circle notebook. The interactive DRAWING BOARD is a
- * self-contained dark figure (the "journal plate" convention the sim canvases
- * use), so its own dark palette is scoped to `.circle-board` and never leaks to
- * the light notebook surface around it. Every panel that was `fixed` in the
+ * self-contained dark figure (the plate convention the sim canvases use), so
+ * its own dark palette is scoped to `.circle-board` and never leaks to the
+ * paper around it. Every panel that was `fixed` in the
  * standalone demo is `absolute` within the board here. The scoring maths below
- * the board is a normal notebook section and uses the gallery's own tokens. */
+ * the board is a normal notebook section and uses the design tokens. */
 
 /* --- the drawing board: a constant dark plate ------------------------------- */
 
@@ -14,15 +14,14 @@
   --muted: #8b93a4;
   --faint: #5a6274;
   --accent: #8ab4f8;
-  --ink: #ff6b6b;
+  --pen: #ff6b6b;
   --panel: rgba(22, 27, 40, 0.72);
 
   position: relative;
   height: min(74vh, 720px);
   min-height: 460px;
   margin-top: 10px;
-  border: 1px solid var(--panel-border);
-  border-radius: 14px;
+  border: var(--hairline-width) solid var(--hairline);
   overflow: hidden;
   color: var(--text);
   background: radial-gradient(900px 600px at 32% 0%, #141826 0%, #0d0f16 62%), #0d0f16;
@@ -99,7 +98,6 @@
   display: flex;
   padding: 3px;
   border: 1px solid var(--line);
-  border-radius: 11px;
   background: var(--panel);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
@@ -108,7 +106,6 @@
 .circle-board .gt-btn {
   padding: 5px 16px;
   border: none;
-  border-radius: 8px;
   background: transparent;
   color: var(--muted);
   font-size: 13px;
@@ -146,11 +143,9 @@
   width: 262px;
   padding: 16px 16px 12px;
   border: 1px solid var(--line);
-  border-radius: 16px;
   background: var(--panel);
   backdrop-filter: blur(14px) saturate(1.2);
   -webkit-backdrop-filter: blur(14px) saturate(1.2);
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
 }
 
 .circle-board .readout-head {
@@ -175,8 +170,8 @@
 }
 
 .circle-board .turn-pill.live {
-  border-color: var(--ink);
-  color: var(--ink);
+  border-color: var(--pen);
+  color: var(--pen);
 }
 
 .circle-board .gauge {
@@ -290,7 +285,6 @@
   gap: 14px;
   padding: 10px 14px;
   border: 1px solid var(--line);
-  border-radius: 14px;
   background: var(--panel);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
@@ -316,13 +310,12 @@
 
 .circle-board .dock input[type="range"] {
   width: 100%;
-  accent-color: var(--ink);
+  accent-color: var(--pen);
 }
 
 .circle-board .btn {
   padding: 7px 14px;
   border: 1px solid var(--line);
-  border-radius: 9px;
   background: rgba(255, 255, 255, 0.03);
   color: var(--text);
   font-size: 13px;
@@ -330,8 +323,8 @@
 }
 
 .circle-board .btn:hover {
-  border-color: var(--ink);
-  color: var(--ink);
+  border-color: var(--pen);
+  color: var(--pen);
 }
 
 /* CellView chrome inside the dark board (the cell resolves synchronously; this
@@ -346,7 +339,7 @@
   padding: 8px 0;
 }
 
-/* --- the scoring maths (a normal notebook section, gallery tokens) ---------- */
+/* --- the scoring maths (a normal notebook section, design tokens) ----------- */
 
 .circle-math {
   display: grid;
@@ -371,8 +364,11 @@
 }
 
 .circle-math-label {
-  font-size: 11px;
-  color: var(--text-muted);
+  font-family: var(--stack-sans);
+  font-size: var(--text-label);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
   margin-bottom: 3px;
 }
 
@@ -380,7 +376,7 @@
   margin: 0;
   overflow-x: auto;
   overflow-y: hidden;
-  color: var(--text);
+  color: var(--ink);
   font-size: 0.9em;
   text-align: left;
 }
@@ -431,7 +427,6 @@
     width: 100%;
     height: min(80vw, 360px);
     border: 1px solid var(--line);
-    border-radius: 12px;
     overflow: hidden;
   }
 

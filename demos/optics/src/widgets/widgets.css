@@ -1,15 +1,15 @@
 /* @habemus-papadum/aiui-optics/widgets.css — layout chrome for the shared
- * optics widgets. Colors mostly ride on the consumer's theme; the map stage is
- * a self-contained dark figure in any color mode (the journal convention for
- * sim canvases). */
+ * optics widgets. Colors ride on the consumer's design tokens, each with a
+ * literal fallback for a consumer without them; the map stage is a dark
+ * PLATE (the plate rule: a self-contained dark figure, framed by a hairline),
+ * and the phasor dial, which sits on the paper, takes the paper's inks. */
 
 .optix-map {
   position: relative;
   width: 100%;
-  /* the journal's cross-mode plate token, with the literal as the fallback
-   * for a consumer without the journal loaded */
-  background: var(--figure-bg, #05070c);
-  border-radius: 8px;
+  background: var(--plate, #05070c);
+  border: var(--hairline-width, 1px) solid var(--hairline, #babbba);
+  border-radius: var(--radius, 0);
   overflow: hidden;
 }
 .optix-map-canvas {
@@ -28,27 +28,21 @@
   pointer-events: none;
 }
 
-/* The phasor dial sits on the PANEL (no plate behind it), so its inks carry
- * per-mode values — scoped tokens here, read by the CSS below and (via var()
- * style properties) by PhasorDial's arrow/resultant defaults. */
+/* The phasor dial sits on the PAPER (no plate behind it), so its inks are
+ * the paper's — scoped tokens here, read by the CSS below and (via var()
+ * style properties) by PhasorDial's arrow/resultant defaults. The resultant
+ * is a data color: the gold the maps' probe markers use, darkened for a
+ * light ground. */
 .optix-phasor {
-  --optix-phasor-line: rgba(140, 150, 170, 0.25);
-  --optix-phasor-axis: rgba(140, 150, 170, 0.18);
-  --optix-phasor-arrow: #8f97a6;
-  --optix-phasor-resultant: #e6d24a;
+  --optix-phasor-line: var(--hairline, #babbba);
+  --optix-phasor-axis: var(--ghost, #d6d6d3);
+  --optix-phasor-arrow: var(--ink-muted, #84878b);
+  --optix-phasor-resultant: #8a7500;
 
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
-}
-@media (prefers-color-scheme: light) {
-  .optix-phasor {
-    --optix-phasor-line: rgba(70, 80, 100, 0.35);
-    --optix-phasor-axis: rgba(70, 80, 100, 0.22);
-    --optix-phasor-arrow: #5a6472;
-    --optix-phasor-resultant: #8a7500;
-  }
 }
 .optix-phasor svg {
   display: block;
@@ -63,8 +57,9 @@
   stroke-width: 0.004;
 }
 .optix-phasor-readout {
-  font-size: 0.72rem;
-  opacity: 0.75;
+  font-family: var(--stack-sans, system-ui, sans-serif);
+  font-size: var(--text-label, 0.72rem);
+  color: var(--muted, #96999b);
   text-align: center;
 }
 
@@ -74,5 +69,5 @@
 .optix-strip-canvas {
   display: block;
   width: 100%;
-  border-radius: 4px;
+  border-radius: var(--radius, 0);
 }

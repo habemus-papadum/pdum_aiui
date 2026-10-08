@@ -15,7 +15,7 @@ pnpm dev      # terminal 2 — this app (Vite + the intent tool)
 
 ## The dual shape (app + library)
 
-- `src/main.tsx` — the standalone entry: journal chrome + `./page`.
+- `src/main.tsx` — the standalone entry: the design system's stylesheet + `./page`.
 - `src/page.tsx` — the `SitePage` the gallery shell mounts (discovered via the
   `aiui.sitePage` marker in package.json). Page-owned styles in `src/page.css`.
 - `src/index.ts` — the library barrel: store surface, graph accessor, widgets,

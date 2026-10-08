@@ -4,7 +4,13 @@
  * ticks. When the wave peaks land on the ticks, the paraxial predictions and
  * the honest reconstruction agree — the page's recurring move.
  */
-import { plot } from "@habemus-papadum/aiui-journal";
+import { TOKENS } from "@habemus-papadum/aiui-design";
+
+/** Plate cosmetics: this chart is a figure on the dark plate (its series are
+ * the wave colors the maps use), so its rules and marks are plate ink rather
+ * than the paper's plot cosmetics. */
+const RULE = "rgba(232, 232, 234, 0.35)";
+const STRONG = TOKENS.plateInk;
 
 const W = 640;
 const H = 150;
@@ -50,10 +56,10 @@ export function RetinaChart(props: {
       aria-label="what the eye sees: retina intensity vs apparent position"
     >
       <title>retina intensity vs apparent position</title>
-      <line x1={PAD.l} y1={H - PAD.b} x2={W - PAD.r} y2={H - PAD.b} stroke={plot().rule} />
+      <line x1={PAD.l} y1={H - PAD.b} x2={W - PAD.r} y2={H - PAD.b} stroke={RULE} />
       {ticks().map((x) => (
         <g>
-          <line x1={xOf(x)} y1={H - PAD.b} x2={xOf(x)} y2={H - PAD.b + 4} stroke={plot().rule} />
+          <line x1={xOf(x)} y1={H - PAD.b} x2={xOf(x)} y2={H - PAD.b + 4} stroke={RULE} />
           <text x={xOf(x)} y={H - 7} text-anchor="middle" class="chart-tick">
             {x}
           </text>
@@ -67,7 +73,7 @@ export function RetinaChart(props: {
               y1={PAD.t}
               x2={xOf(g.x)}
               y2={H - PAD.b}
-              stroke={plot().strong}
+              stroke={STRONG}
               stroke-dasharray="3 4"
               opacity={0.6}
             />

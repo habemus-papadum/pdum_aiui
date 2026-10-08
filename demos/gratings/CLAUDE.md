@@ -21,10 +21,10 @@ pnpm dev      # terminal 2 — this app (Vite + the intent tool)
 
 ## The dual shape (app + library)
 
-- `src/main.tsx` — standalone entry: journal chrome + `./page`.
+- `src/main.tsx` — standalone entry: design-system chrome + `./page`.
 - `src/page.tsx` — the `SitePage` the gallery shell mounts (discovered via the
   `aiui.sitePage` marker). Page-owned styles in `src/page.css`, all scoped
-  under `.gratings`; shared chrome from `@habemus-papadum/aiui-journal`;
+  under `.gratings`; shared chrome from `@habemus-papadum/aiui-design`;
   widget layout from `@habemus-papadum/aiui-optics/widgets.css`.
 - `src/card.tsx` — the landing `DemoCard`: a live two-source interference
   miniature built from the pure engine only (no store/graph).

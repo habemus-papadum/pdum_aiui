@@ -4,11 +4,11 @@
  *
  * Deliberately thin: everything real lives behind ./page (the SitePage the
  * gallery shell also mounts — one page contract, both hosts). The only
- * standalone-specific work is the shared journal chrome the shell would
- * otherwise provide: the stylesheet and the dark-theme stamp.
+ * standalone-specific work is the shared design-system stylesheet the shell
+ * would otherwise provide.
  */
 import { VoiceDock } from "@habemus-papadum/aiui-dock";
-import "@habemus-papadum/aiui-journal/styles.css";
+import "@habemus-papadum/aiui-design/site.css";
 import { render } from "@solidjs/web";
 import { page } from "./page";
 

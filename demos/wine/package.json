@@ -37,8 +37,8 @@
   },
   "dependencies": {
     "@duckdb/duckdb-wasm": "catalog:",
+    "@habemus-papadum/aiui-design": "workspace:^",
     "@habemus-papadum/aiui-dock": "workspace:^",
-    "@habemus-papadum/aiui-journal": "workspace:^",
     "@habemus-papadum/aiui-source-processor": "workspace:^",
     "@habemus-papadum/aiui-viz": "workspace:^",
     "@solidjs/web": "catalog:solid",

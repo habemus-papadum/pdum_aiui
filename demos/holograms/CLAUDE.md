@@ -24,7 +24,7 @@ pnpm dev      # terminal 2 — this app (Vite + the intent tool)
 
 ## The dual shape (app + library)
 
-- `src/main.tsx` — standalone entry: journal chrome + `./page`.
+- `src/main.tsx` — standalone entry: design-system chrome + `./page`.
 - `src/page.tsx` — the `SitePage` the gallery mounts (via the `aiui.sitePage`
   marker). Page styles in `src/page.css`, scoped under `.holograms`.
 - `src/card.tsx` — the landing `DemoCard`: a live record-bench miniature

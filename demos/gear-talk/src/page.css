@@ -1,41 +1,22 @@
 /**
- * page.css — the talk's look: journal-dark slide typography plus the token
- * bridge that rethemes the framework's default chrome (the point of the
- * `--aiui-deck-*` custom properties: one block, no specificity fights).
- * Everything is scoped under `.gear-talk` so nothing leaks onto a sibling
- * page in the shared gallery document.
+ * page.css — the talk's look: slide typography on the design system's tokens.
+ * The deck chrome (`--aiui-deck-*`, `--aiui-lens-*`) is rethemed by the
+ * package itself (site.css's chrome layer sets the hooks on `.aiui-deck`), so
+ * nothing here bridges tokens; what remains is the slides' own layout, the
+ * figure vocabulary, and the HUD minis. Everything is scoped under
+ * `.gear-talk` so nothing leaks onto a sibling page in the shared gallery
+ * document.
  */
 
 .gear-talk {
-  /* retheme the deck chrome onto journal tokens — every one of these flips
-   * with the system mode, so the talk follows the OS like the notebooks do.
-   * (NOT --figure-bg: that is the journal's cross-mode-dark simulation-plate
-   * token, and a talk PAGE is prose, not a plate — using it here rendered
-   * light-mode text on a dark ground.) */
-  --aiui-deck-accent: var(--accent, #8ab4f8);
-  --aiui-deck-line: var(--panel-border, #262c3a);
-  --aiui-deck-chrome-bg: color-mix(in srgb, var(--panel, #171b25) 72%, transparent);
-  --aiui-deck-chrome-hover: var(--btn-hover, #2f3c58);
-  --aiui-deck-fg: var(--text, #e8e8ea);
-  --aiui-deck-hud-tile-bg: var(--panel, #171b25);
-  --aiui-deck-hud-fg: var(--text, #e8e8ea);
-  --aiui-lens-bg: var(--panel, #171b25);
-  --aiui-lens-fg: var(--text, #e8e8ea);
+  /* figure literals with no design token: the three highlight inks the gear
+   * drawings use ON the paper (not on a plate), tuned against cotton */
+  --gt-pitch: #a97b12;
+  --gt-base: #177889;
+  --gt-hot: #bd4450;
 
-  /* figure literals with no journal token: dark values here, light below */
-  --gt-pitch: #e3b341;
-  --gt-base: #56b6c2;
-  --gt-hot: #e06c75;
-
-  background: var(--bg, #0e1119);
-  color: var(--text, #e8e8ea);
-}
-@media (prefers-color-scheme: light) {
-  .gear-talk {
-    --gt-pitch: #a97b12;
-    --gt-base: #177889;
-    --gt-hot: #bd4450;
-  }
+  background: var(--surface);
+  color: var(--ink);
 }
 
 /* ── slide layout ─────────────────────────────────────────────────────── */
@@ -54,24 +35,25 @@
   font-size: clamp(2.6rem, 7vw, 5rem);
   line-height: 1.05;
   margin: 0;
-  color: var(--text-heading, #c3c9d4);
 }
 .gear-talk h2 {
   font-size: clamp(1.6rem, 3.6vw, 2.6rem);
   margin: 0;
-  color: var(--text-heading, #c3c9d4);
 }
 .gear-talk .talk-kicker {
   margin: 0;
+  font-family: var(--stack-sans);
   text-transform: uppercase;
   letter-spacing: 0.22em;
   font-size: 0.8rem;
-  color: var(--accent, #8ab4f8);
+  color: var(--muted);
 }
 .gear-talk .talk-sub {
   margin: 0;
   max-width: 34rem;
-  color: var(--text-secondary, #9aa0aa);
+  font-size: var(--text-lede);
+  font-weight: 400;
+  color: var(--ink-muted);
 }
 .gear-talk .talk-points {
   margin: 0;
@@ -79,26 +61,14 @@
   display: grid;
   gap: 0.9rem;
   max-width: 44rem;
-  font-size: clamp(1rem, 1.9vw, 1.25rem);
-  line-height: 1.55;
-  color: var(--text, #e8e8ea);
+  font-size: clamp(1.1rem, 1.9vw, 1.35rem);
+  line-height: 1.5;
 }
 .gear-talk .talk-fine {
   margin: 0;
-  font-size: 0.85rem;
-  color: var(--text-dim, #8f97a5);
+  font-size: var(--text-small);
+  color: var(--muted);
   max-width: 40rem;
-}
-.gear-talk kbd {
-  padding: 0.1em 0.45em;
-  border: 1px solid var(--panel-border, #262c3a);
-  border-bottom-width: 2px;
-  border-radius: 0.3em;
-  background: var(--panel, #171b25);
-  font-size: 0.85em;
-}
-.gear-talk a {
-  color: var(--accent, #8ab4f8);
 }
 
 /* title slide */
@@ -180,24 +150,27 @@
 }
 .gear-talk .talk-rd-num {
   font-size: 1.5rem;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: var(--text-heading, #c3c9d4);
+  color: var(--ink);
 }
 .gear-talk .talk-rd-lbl {
-  font-size: 0.75rem;
-  letter-spacing: 0.08em;
+  font-family: var(--stack-sans);
+  font-size: var(--text-label);
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--text-muted, #6b7280);
+  color: var(--muted);
 }
 .gear-talk .talk-big-number {
   font-size: 2.4rem;
   margin: 0;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: var(--accent, #8ab4f8);
+  color: var(--ink);
 }
 
 /* lens bodies + peeks — the Lens renders IN PLACE (no portal), so all of
- * this sits inside .gear-talk and inherits the token bridge above. */
+ * this sits inside .gear-talk. */
 .gear-talk .talk-lens-detail {
   display: grid;
   gap: 0.9rem;
@@ -220,14 +193,16 @@
 }
 
 /* ── figure strokes (shared vocabulary; SVG scales the stroke) ─────────── */
+/* The drawings sit on the paper, so their outlines are ink and the three
+ * highlights carry the meaning; the accent stays out of figures. */
 
 .gear-talk .fig-gear {
   fill: none;
-  stroke: var(--accent, #8ab4f8);
+  stroke: var(--ink);
   stroke-width: 1.4;
 }
 .gear-talk .fig-gear-b {
-  stroke: var(--text-faint, #5b6270);
+  stroke: var(--muted);
 }
 .gear-talk .fig-circle {
   fill: none;
@@ -242,7 +217,7 @@
 }
 .gear-talk .fig-tip,
 .gear-talk .fig-root {
-  stroke: var(--text-faint, #5b6270);
+  stroke: var(--hairline);
 }
 .gear-talk .fig-loa {
   stroke: var(--gt-hot);
@@ -255,7 +230,7 @@
   fill: var(--gt-hot);
 }
 .gear-talk .fig-involute {
-  stroke: var(--accent, #8ab4f8);
+  stroke: var(--ink);
   stroke-width: 2;
 }
 .gear-talk .fig-string {
@@ -287,13 +262,14 @@
   height: 100%;
 }
 .gear-talk .talk-mini-word {
+  font-family: var(--stack-sans);
   font-size: 0.7rem;
   letter-spacing: 0.06em;
-  color: var(--text-secondary, #9aa0aa);
+  color: var(--ink-muted);
   text-align: center;
 }
 .gear-talk .talk-mini-stat {
   font-size: 1.6rem;
   font-variant-numeric: tabular-nums;
-  color: var(--accent, #8ab4f8);
+  color: var(--ink);
 }

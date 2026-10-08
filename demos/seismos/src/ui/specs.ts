@@ -10,11 +10,11 @@
  * (each excluding its own clause), and they update in lockstep. The derived
  * numbers (b-value, counts) ride the same selection through the stats-client.
  *
- * Specs read the per-mode palette live, so the MosaicView effect rebuilds the
- * island on a system theme flip (chart text/marks re-tint correctly).
+ * Specs read the palette through its accessor, so the MosaicView effect would
+ * rebuild the island if a second palette ever slotted in behind it.
  */
 
-import { plotStyle } from "@habemus-papadum/aiui-journal";
+import { plotStyle } from "@habemus-papadum/aiui-design";
 import {
   bin,
   colorDomain,
@@ -50,7 +50,7 @@ import type { Directive } from "./MosaicView";
 const TABLE = () => store.table;
 const BRUSH = () => store.brush;
 
-/** Shared per-mode cosmetics for every panel chart. */
+/** Shared cosmetics for every panel chart (the design system's plot style). */
 function cosmetics(): Directive[] {
   return [style(plotStyle())];
 }
@@ -58,8 +58,9 @@ function cosmetics(): Directive[] {
 /**
  * The epicenter density map — the Ring of Fire drawn by the data. A raster
  * aggregates the ~270k points server-side in DuckDB (fast, unlike 270k SVG
- * dots), colored by a per-mode sequential density scheme on a sqrt scale
- * (epicenter density is extremely skewed). A 2-D interval brush publishes a
+ * dots), colored by a sequential density ramp on a sqrt scale (epicenter
+ * density is extremely skewed) that starts AT the panel surface, so zero
+ * density dissolves into the panel instead of printing a tinted plate. A 2-D interval brush publishes a
  * lon/lat box into the crossfilter.
  *
  * Two legibility choices: `pixelSize` 1.5 makes each density cell ~50% larger,
@@ -172,7 +173,9 @@ export function mapSpec(w = 640, h = 350): Directive[] {
     xTicks([]),
     yTicks([]),
     colorScale("sqrt"),
-    colorScheme(p.densityScheme),
+    ...(p.densityRange !== undefined
+      ? [colorRange(p.densityRange)]
+      : [colorScheme(p.densityScheme)]),
     marginLeft(34),
     marginBottom(24),
     xLabel(null),

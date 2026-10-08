@@ -4,15 +4,15 @@
  * `from(TABLE, { filterBy: brush })` and every view carries an interactor
  * publishing INTO that brush (or, for the variety bar, into its own origin
  * relayed into the brush) — brush one view and the coordinator re-queries the
- * rest, the embedding map included. Specs read the per-mode palette live, so
- * a system theme flip rebuilds each island correctly tinted.
+ * rest, the embedding map included. Specs read the palette through its
+ * accessor, so a second palette could slot in behind it without a rebuild.
  *
  * Every spec takes an optional {@link SpecTheme}: a consuming app mounting
- * this dashboard under its own design system (the FAI pitch deck does)
- * passes its chart palette and plot-root CSS; omitted, both default to this
- * page's per-mode look — the wine app's call sites are unchanged.
+ * this dashboard under its own design system (a slide deck has) passes its
+ * chart palette and plot-root CSS; omitted, both default to this page's own
+ * look — the wine app's call sites are unchanged.
  */
-import { plotStyle } from "@habemus-papadum/aiui-journal";
+import { plotStyle } from "@habemus-papadum/aiui-design";
 import type { Directive } from "@habemus-papadum/aiui-viz/mosaic";
 import {
   bin,
@@ -50,19 +50,19 @@ export type { WinePalette } from "../palette";
 
 /** A consuming app's skin for these specs (see the module header). */
 export interface SpecTheme {
-  /** Chart palette; default: this page's per-mode `wine()`. */
+  /** Chart palette; default: this page's `wine()`. */
   palette?: WinePalette;
-  /** CSS for the plot root (vgplot `style(...)`); default: journal `plotStyle()`. */
+  /** CSS for the plot root (vgplot `style(...)`); default: the design system's `plotStyle()`. */
   plotCss?: Record<string, string>;
 }
 
 const TABLE = () => store.table;
 const BRUSH = () => store.brush;
 
-/** The theme's palette, or this page's per-mode default. */
+/** The theme's palette, or this page's default. */
 const pal = (theme: SpecTheme): WinePalette => theme.palette ?? wine();
 
-/** Shared cosmetics for every panel chart (themed, else per-mode). */
+/** Shared cosmetics for every panel chart (themed, else the design system's). */
 function cosmetics(theme: SpecTheme): Directive[] {
   return [style(theme.plotCss ?? plotStyle())];
 }

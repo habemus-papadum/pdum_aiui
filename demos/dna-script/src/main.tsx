@@ -30,9 +30,9 @@
 
 import { VoiceDock } from "@habemus-papadum/aiui-dock";
 import { render } from "@solidjs/web";
-// The shared journal chrome (tokens, body, panels, CellView) — imported by the
-// HOST, before the page's own styles.css (which is scoped under `.dna`).
-import "@habemus-papadum/aiui-journal/styles.css";
+// The shared design-system chrome (tokens, body, panels, CellView) — imported
+// by the HOST, before the page's own styles.css (which is scoped under `.dna`).
+import "@habemus-papadum/aiui-design/site.css";
 import { page } from "./page";
 
 document.title = page.title;
