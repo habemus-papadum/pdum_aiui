@@ -4,7 +4,15 @@ The voice model's capability list, two page tools (the page as text, the source 
 the voice dock on every page, and the Solid 2.0 release-candidate upgrade.
 
 Status: **PLANNED 2026-10-08**, after milestone 5 of [tool-docs](./tool-docs.md) closed
-with both voice checks passing. The owner asked for one plan covering five observations
+with both voice checks passing. **Tranches 0–2 SHIPPED the same day** on main — tranche 0 as
+`122c8940`; tranche 1 as `e3a3c420` (`read-page`), `c554e205` (`stampRoots`: the gallery's dev
+loop went from 2 stamps to 180), `49fe7f2a` (`source` + `sources: "ship"`, verified on a
+`vite preview` of the gallery); tranche 2 as `d14ff5bc` (`@habemus-papadum/aiui-dock`) and
+`37d5ac40` (mounted on the template, the gallery shell and every demo; the hosted and
+browser-key live backends and the oracle verified connecting on seismos with the dev key; the
+static build's key pane verified on a preview). One finding on the way: Solid 2 stages signal
+writes, so a handler must not read a signal it just wrote — the dock holds its sessions in
+plain variables. **Tranche 3 (Solid 2.0 RC) is next**, on a branch. The owner asked for one plan covering five observations
 from that run (a session-config oddity, page text with TeX, source access that survives a
 production build, every demo driveable by voice without the intent panel, and Solid 2.0),
 to be worked **sequentially, Solid last**. Every "what exists" claim below was read from the
