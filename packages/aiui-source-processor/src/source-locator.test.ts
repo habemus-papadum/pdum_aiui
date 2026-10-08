@@ -360,6 +360,17 @@ describe("sourceLocatorVite — plugin surface", () => {
     expect(out?.code).toContain('loc: "../../packages/spectra/src/store.ts:2"');
   });
 
+  it("stamps JSX in a declared stampRoot (sibling app code) with dotdot-relative locs", async () => {
+    const p = sourceLocatorVite({ stampRoots: ["/repo/demos/"] });
+    (p.configResolved as (c: object) => void)({ root: "/repo/demos/gallery", command: "serve" });
+    const out = await transformOf(p)("const x = <div/>;", "/repo/demos/seismos/src/ui/App.tsx");
+    expect(out?.code).toContain('data-source-loc="../seismos/src/ui/App.tsx:1:11"');
+    // A library package elsewhere in the workspace is still identity-only.
+    expect(await transformOf(p)("const x = <div/>;", "/repo/packages/viz/src/a.tsx")).toBeNull();
+    // The prefix is a directory, not a string prefix.
+    expect(await transformOf(p)("const x = <div/>;", "/repo/demos-archive/x/a.tsx")).toBeNull();
+  });
+
   it("never JSX-stamps out-of-root files, even under serve", async () => {
     const p = sourceLocatorVite();
     (p.configResolved as (c: object) => void)({ root: "/repo/demos/twins", command: "serve" });

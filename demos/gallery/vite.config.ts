@@ -37,7 +37,13 @@ export default defineConfig(({ command, isPreview }) => ({
     // the multimodal (intent-v1) tab active, with the text tab as the escape
     // hatch. (Sends fail against an old channel that doesn't know intent-v1;
     // that degrades to a widget error, not a crash.)
-    aiui(),
+    // stampRoots: the demos live in SIBLING packages, outside this root, and
+    // the locator stamps JSX only for app code under the root — so in the
+    // gallery's dev loop the demo pages carried no data-source-loc at all
+    // (found live 2026-10-08). Declaring demos/ as app code stamps them with
+    // root-relative locs ("../seismos/src/ui/App.tsx:42:7"), which /@fs/ and
+    // the attribution consumers resolve against sourceRoot as before.
+    aiui({ locator: { stampRoots: [fileURLToPath(new URL("..", import.meta.url))] } }),
     solid(),
     // Marker-driven discovery of the sibling demo packages (aiui.sitePage in
     // their package.json) — serves virtual:demo-pages; see demo-discovery.ts.

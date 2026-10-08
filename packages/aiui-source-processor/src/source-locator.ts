@@ -474,6 +474,17 @@ function injectIdentity(
 /** Options for the standalone Vite plugin. */
 export interface SourceLocatorViteOptions extends SourceLocatorOptions {
   /**
+   * Directories besides `root` whose files are APP code, not library
+   * internals: they get JSX stamps like in-root files (locs stay relative to
+   * `root`, with dotdots — "../seismos/src/ui/App.tsx:42:7"). For a multi-app
+   * shell whose apps live beside it — the gallery, whose demos sit in sibling
+   * packages and were attribution-blind in its dev loop (found live
+   * 2026-10-08). Workspace LIBRARY sources must stay out of it: their stamps
+   * would win the shot locator's innermost-containing resolution away from the
+   * app's own components.
+   */
+  stampRoots?: string[];
+  /**
    * @internal Test seam — override how `@babel/core` is loaded. Defaults to a
    * dynamic `import("@babel/core")`.
    */
@@ -550,6 +561,9 @@ export function sourceLocatorVite(options: SourceLocatorViteOptions = {}): Plugi
     return pending;
   };
 
+  // Normalised with a trailing slash so "/repo/demos" cannot claim "/repo/demos-x".
+  const stampRoots = (options.stampRoots ?? []).map((dir) => `${dir.replace(/\/+$/, "")}/`);
+
   return {
     name: "aiui:source-locator",
     enforce: "pre",
@@ -573,7 +587,8 @@ export function sourceLocatorVite(options: SourceLocatorViteOptions = {}): Plugi
       // controls need their names wherever the code lives), never JSX stamps:
       // `data-source-loc` on library internals would win the shot locator's
       // innermost-containing resolution away from the app's own components.
-      const inRoot = root === "" || file.startsWith(root);
+      const inRoot =
+        root === "" || file.startsWith(root) || stampRoots.some((dir) => file.startsWith(dir));
       const effectiveSniff = inRoot ? sniff : factorySniff;
       if (!effectiveSniff?.test(code)) return null; // nothing to inject
       const { transformAsync } = await ensureBabel();
