@@ -286,14 +286,16 @@ viewports), and a slim shared **site header** whose notebook tabs carry one-line
 the discoverability answer for "there is more than one experiment here." Prose is part of the
 notebook, not decoration; the agent writes it alongside the panels it explains.
 
-**Theming: respect the system, tokenize everything.** Pages follow `prefers-color-scheme` with
-no toggle: design tokens on `:root` (dark as the base, light under the media query), every
-component color a `var()`, and a small reactive theme module (a signal on the `matchMedia`
-listener) feeding the colors that must be literal — chart palettes, SVG strokes, Plot text.
-Palettes are validated **per mode** against each mode's actual panel surface (the dataviz
-procedure; the two modes get separately tuned steps, not an automatic flip). Simulation
-canvases are the exception by design: they render as self-contained dark *figures* — like a
-journal plate — identical in both modes, framed by the panel border.
+**Theming: one system, tokenize everything.** The in-repo pages share one light-only design
+system (`@habemus-papadum/aiui-design`, 2026-10-08): design tokens on `:root`, every component
+color a `var()`, a stylesheet on cascade layers so a page's own CSS wins without specificity
+games, and a small theme module carrying the same palette as literals for the colors that
+must be literal — chart palettes, SVG strokes, Plot text. Palettes are validated against the
+surface they sit on (the dataviz procedure). Simulation canvases are the exception by design:
+they render as self-contained dark *plates* on the paper, framed by a hairline, and never
+repaint for the chrome. (The system-following design that preceded it — dark as the base,
+light under a `prefers-color-scheme` query, palettes tuned per mode — was retired with it;
+aiui-viz's reactive `colorMode()` remains for consumers who theme per system.)
 
 ## 9 · What the agent's diligence buys (design inputs, not features)
 

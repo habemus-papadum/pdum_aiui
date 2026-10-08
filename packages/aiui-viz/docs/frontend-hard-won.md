@@ -104,6 +104,10 @@ Versions these were established against: `solid-js@2.0.0-beta.15`, `@solidjs/web
 
 ## Theming under prefers-color-scheme
 
+The entries below were learned while the in-repo pages followed the system scheme (2026-08 to
+2026-10). They went light-only on 2026-10-08 (`@habemus-papadum/aiui-design`); the lessons
+still hold for any consumer theming per system through aiui-viz's `colorMode()`.
+
 - **Figure colors and panel-chart colors are different species.** A color painting a
   self-contained dark canvas (and the legend chips that key it) must be a *constant* across
   modes; the "same" color used as a chart mark on a panel surface must be *per-mode*. Identical
@@ -115,6 +119,27 @@ Versions these were established against: `solid-js@2.0.0-beta.15`, `@solidjs/web
 - **`as const` palette objects over-narrow.** Literal-union types from `as const` fail
   `Record<Mode, Palette>` indexed access ("'#2f6fce' not assignable to '#4a86dd'"); type
   palettes with an explicit interface instead.
+
+## The design system (2026-10-08)
+
+- **A CSS ladder's literal twins must round like the browser.** `color-mix(in srgb, …)`
+  interpolates in gamma sRGB and rounds half up; a Python `round()` (banker's) produced
+  `#96989a` where Chrome resolves `#96999b`. The package test computes the mixes in JavaScript
+  and pins the hex literals to them — compute, never transcribe.
+- **Cascade layers are what let page CSS win.** The package's sheet is entirely inside
+  `@layer reset, base, chrome, components, notebook`; a demo's unlayered `page.css` beats all
+  of it at any specificity, so migrations never needed `!important` or selector games.
+- **Cormorant sets small.** At the reference's sans-derived sizes the reading face was too
+  small and too light on screen; body runs one step up (`1.15 → 1.3rem`) at weight 500.
+- **A `cell()` compute that takes `ctx` needs an explicit return type.** With the second
+  parameter in the signature, inference for `T` goes circular and the cell becomes
+  `Cell<unknown>` — every `CellView`/`CellText` child then sees `unknown`. Annotate the
+  compute's return (`async (deps, ctx): Promise<number> => …`), as the circle demo does.
+- **Shipped chrome reads hooks, not a palette.** Widgets that land on any page (the dock, the
+  tool log, the trace debugger, the oracle and live strips) read prefixed `--aiui-*` tokens
+  with neutral fallbacks; the design package sets the hooks from its own tokens. Bare token
+  names would collide with a host's; hard-coding the palette would be wrong on every host but
+  ours.
 
 ## Mosaic / DuckDB-WASM (@uwdata/vgplot 0.28.1; the exact @duckdb/duckdb-wasm pin lives in pnpm-workspace.yaml — 1.33.1-dev61.0 today; live compatibility table: duckdb-mosaic.md)
 

@@ -171,23 +171,27 @@ render on a phone from the same markup the desktop uses.
 
 Covered in depth in [design choices §8](./frontend-design-choices); the style-guide rules:
 
-- The in-repo notebooks are **system-following** (owner, 2026-08-12 — restoring design-choices
-  §8 after a dark-only period from 2026-07-19): the shared journal theme (`demos/journal`)
-  carries dark tokens as the base plus one `prefers-color-scheme: light` block, `mode()`
-  delegates to the reactive `colorMode()` from `aiui-viz/site/color-mode`, and there is **no
-  head stamp and no `data-theme`** — the media query is the single source of truth, resolved
-  by the UA before first paint. There is no user-facing toggle, and a deviation is documented
-  where it was decided.
-- **The plate rule is absolute**: simulation canvases and boards render on `--figure-bg`, a
-  cross-mode dark constant deliberately absent from the light block — a WebGL shader, canvas
-  island, or worker raster never repaints on a theme flip. Do not give one demo's plate a
-  light variant; the convention is only cheap while it has no exceptions.
-- All stylesheet color goes through `:root` tokens (dark default, light under the media query).
-  Literal colors (charts, SVG strokes) read the app's theme module, keyed on `colorMode()` from
-  `aiui-viz/site`.
-- Palettes are **validated per mode** against that mode's actual surface — never an automatic
-  flip. Figure colors (canvas + its legend chips) are cross-mode constants; panel-chart colors
-  are per-mode.
+- The in-repo pages — the notebooks, the gallery, the console, the intent panel — share **one
+  design system**, `@habemus-papadum/aiui-design` (owner, 2026-10-08, superseding the
+  system-following journal of 2026-08-12 and the dark-only period before it): cotton paper,
+  slate ink, a ladder mixed from the two, one indigo accent, editorial type. Its language is
+  the package's `DESIGN.md`; its visual acceptance test is `demos/styleguide`. A page imports
+  `site.css` once and writes its own rules unlayered — the sheet runs on cascade layers, so page
+  CSS wins without specificity games.
+- **Light only.** No dark palette, no toggle, no head stamp, no `prefers-color-scheme` block.
+  aiui-viz's reactive `colorMode()` still exists for consumers who theme per system; these
+  pages do not read it.
+- **The plate rule is absolute**: simulation canvases and boards render on `--plate`, a dark
+  constant the page palette never touches, framed by a hairline — a WebGL shader, canvas
+  island, or worker raster never repaints for the chrome. Do not give one demo's plate a light
+  variant; the convention is only cheap while it has no exceptions.
+- **Chrome is monochrome; data carries the color.** All stylesheet color goes through the
+  `:root` tokens. Literal colors (charts, SVG strokes, canvases) read the design package's
+  theme module — `chart()`, `plot()`, `plotStyle()`, `TOKENS` — or the demo's own figure
+  palette. The accent is never a data series (the shared chart trio is blue, green, amber).
+- Palettes are **validated against the surface they sit on** — the raised panel for chart
+  marks, the plate for figure marks and the legend chips that key them. The package's test
+  checks the shared values; a demo's own palette documents its check in its `palette.ts`.
 
 ## Voice
 

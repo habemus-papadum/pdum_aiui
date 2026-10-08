@@ -1,6 +1,6 @@
 # The design system: one look for the notebooks and the tool
 
-Status: **DECIDED and IN PROGRESS, 2026-10-08.** The owner asked for the repo's demos, the
+Status: **SHIPPED on main, 2026-10-08** (every tranche landed the same day; unpushed). The owner asked for the repo's demos, the
 gallery, and the web tool to move from the dark journal to an editorial, light-only system
 — cotton paper, slate ink, type carrying the hierarchy, one accent — and approved the
 proposal below after a specimen sheet. The language itself is
@@ -49,11 +49,11 @@ the decisions, what moves, and in what order.
 | # | Tranche | Lands as |
 | --- | --- | --- |
 | 1 | retire `apps/` | `d3ed634d` |
-| 2 | `packages/aiui-design` + `demos/styleguide` | one commit |
-| 3 | the gallery shell and every journal demo; `demos/journal` deleted | one commit |
-| 4 | the standalone-surface demos (live, twins, walkthrough, dna-script, motherduck-lab) and the starter template | one commit |
-| 5 | the web tool: console, trace debugger, intent panel, dock, tool log, widget hooks, pencil chrome | one or two commits |
-| 6 | docs, skills, memory | one commit |
+| 2 | `packages/aiui-design` + `demos/styleguide` | `8b393b99` |
+| 3 | the gallery shell and every journal demo; `demos/journal` deleted | `b50def45` |
+| 4 | the standalone-surface demos (live, twins, walkthrough, motherduck-lab) and the starter template | `b6765989` |
+| 5 | the web tool: dock, tool log, widget hooks (`64e696d2`); console, trace debugger, intent panel, pencil chrome, test app (`48a72f1a`) | two commits |
+| 6 | docs, skills, memory | the commit that carries this line |
 
 Each tranche is checked in the session browser at desktop and phone widths before it lands.
 

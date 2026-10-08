@@ -379,20 +379,24 @@ actually demonstrates, via `TeX` from `aiui-viz/site` — never raw katex, you'd
 `data-tex` stamp), then experiments naming exact controls. `TocRail` + `SiteNav` from
 `aiui-viz/site`.
 
-Theming, current truth: the in-repo demos are **system-following** (owner, 2026-08-12 —
-dark-only from 2026-07-19 until then; no toggle either way). The shared look lives in
-`demos/journal` (`@habemus-papadum/aiui-journal`: the per-mode theme literals — `chart()`,
-`plot()`, `mode()`, `isDark()` — plus `styles.css`, the `:root` tokens with dark as the base
-and one `prefers-color-scheme: light` block). `mode()` delegates to the reactive `colorMode()`
-(`aiui-viz/site/color-mode`), so a `chart()`/`plot()` read inside a Plot/Mosaic spec thunk
-re-renders that chart on a live system theme change. There is **no head stamp and no
-`data-theme`** — the media query is the single source of truth, resolved pre-paint by the UA.
-**The plate rule is absolute**: figure colors (a sim canvas + its legend chips) are cross-mode
-*constants* on `--figure-bg`, which deliberately has no light value — never give one demo's
-plate a light variant — while panel-chart colors are *per-mode*, each palette validated
-against its own surface (the dataviz procedure). A demo's page CSS uses demo-prefixed class
-names (or is scoped under a root class, like `demos/gears`' `.gears`) so nothing leaks onto a
-sibling mounted in the same document.
+Theming, current truth: the in-repo pages — notebooks, gallery, console, intent panel — share
+**one light-only design system**, `@habemus-papadum/aiui-design` (`packages/aiui-design`;
+owner, 2026-10-08, superseding the system-following journal of 2026-08-12): cotton paper,
+slate ink, a mixed ladder, one indigo accent, three status colors, Cormorant/Fraunces/Libre
+Franklin with Georgia digits. Read its `DESIGN.md` before styling anything; `demos/styleguide`
+renders every role and component as the acceptance test. A page imports `site.css` once
+(tokens + fonts + element defaults + a skin for every stable aiui-viz class + the notebook
+chrome) and writes its own rules unlayered — the sheet runs on cascade layers, so page CSS wins.
+Literal colors come from the package's theme module (`chart()` — blue/green/amber, never the
+accent — `plot()`, `plotStyle()`, `TOKENS`, `FONTS`). There is no dark palette, no toggle, no
+head stamp; aiui-viz's `colorMode()` remains for consumers who theme per system. **The plate
+rule is absolute**: a sim canvas and the legend chips that key it are constants on `--plate`
+(dark, framed by a hairline) — never give one demo's plate a light variant — while chart marks
+on a panel are validated against the raised surface. Shipped chrome (the dock, the tool log,
+the trace debugger, the oracle/live strips, the slides deck) reads prefixed `--aiui-*` hooks
+with neutral fallbacks; never hard-code the palette in a package. A demo's page CSS uses
+demo-prefixed class names (or is scoped under a root class, like `demos/gears`' `.gears`) so
+nothing leaks onto a sibling mounted in the same document.
 
 **Phones and desktops** (full section in the style-guide doc): one component tree reflowed with
 CSS — never a mobile fork or a JS `isMobile` branch (a media query IS the device-conditional

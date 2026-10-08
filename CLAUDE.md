@@ -213,12 +213,17 @@ the gallery router's head/tail routes and demo-gears' pure `./gear` subpath both
 deck). Each
 is deliberately far richer than the starter, runs standalone (`pnpm -C demos/<slug> claude` +
 `dev`), exports its widgets/store/pure model from `src/index.ts`, ships a live landing card
-(`src/card.tsx`), and is scoped under `scope("<slug>")` throughout. Their shared dark-journal look
-lives in `demos/journal` (`@habemus-papadum/aiui-journal`, internal like `demos/oscillator`,
-`demos/optics`, and `packages/aiui-slides`): the
-theme literals plus the tokens/notebook-chrome stylesheet (the sidebar + landing-card chrome too).
-A demo's page CSS uses demo-prefixed class names (or is scoped under a root class, like
-`demos/gears`' `.gears`) so nothing leaks onto a sibling mounted in the same document.
+(`src/card.tsx`), and is scoped under `scope("<slug>")` throughout. Their shared look is the
+**design system**, `packages/aiui-design` (`@habemus-papadum/aiui-design`, public; its
+`DESIGN.md` is the language — cotton paper, slate ink, one accent, editorial type, light only,
+since 2026-10-08): one `site.css` import per host carries the tokens, the fonts, the skin for
+every stable aiui-viz class, and the notebook chrome (panels, tiles, the figure layout, the
+sidebar and landing-card chrome); its theme module carries the palette as literals for
+canvases and Plot. `demos/styleguide` renders every role and component as the visual
+acceptance test. (`demos/journal`, the dark system-following predecessor, is gone — git
+history.) A demo's page CSS is unlayered and wins over the package sheet; it uses
+demo-prefixed class names (or is scoped under a root class, like `demos/gears`' `.gears`) so
+nothing leaks onto a sibling mounted in the same document.
 
 **`demos/gallery` is the thin composer** — the notebook site's SPA shell, and the published
 static site (`pnpm demo` serves it; `pnpm run publish` / `pnpm publish:gallery` deploys). It does
