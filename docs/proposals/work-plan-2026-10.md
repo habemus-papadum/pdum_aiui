@@ -12,7 +12,7 @@ loop went from 2 stamps to 180), `49fe7f2a` (`source` + `sources: "ship"`, verif
 browser-key live backends and the oracle verified connecting on seismos with the dev key; the
 static build's key pane verified on a preview). One finding on the way: Solid 2 stages signal
 writes, so a handler must not read a signal it just wrote — the dock holds its sessions in
-plain variables. **Tranche 3 (Solid 2.0 RC) is next**, on a branch. The owner asked for one plan covering five observations
+plain variables. **Tranche 3 (Solid 2.0 RC) was spiked and parked** on branch `solid-rc14`: it needs Vite 8 first (see its section). The owner asked for one plan covering five observations
 from that run (a session-config oddity, page text with TeX, source access that survives a
 production build, every demo driveable by voice without the intent panel, and Solid 2.0),
 to be worked **sequentially, Solid last**. Every "what exists" claim below was read from the
@@ -295,6 +295,29 @@ panel. No Claude backend on the static site (there is no relay to reach). No sha
 5. Docs: `frontend-hard-won.md`'s ecosystem section, the skill's trap list, the catalog
    comments (the lockstep story is now signals + the plugin, not the preset), a memory note.
 6. Release `0.21.0`.
+
+**What the spike found (2026-10-08, branch `solid-rc14`, commit `38581891`).** The bump
+itself is small and is committed there (catalog, the signals override, the peer ranges, the
+template; `babel-preset-solid` gone). It does not run, for two reasons, one of them a
+prerequisite:
+
+1. **The RC line's compiler ships only through a Vite 8 plugin.** `vite-plugin-solid@3.0.0-next.27`
+   is a wrapper over `@solidjs/vite-plugin@^3.0.0-next.27`, which resolves to `next.47`; every
+   `@solidjs/vite-plugin` from `next.33` on declares `vite: ^8.0.0 || ^9.0.0`, and `next.47`
+   fails to load on our Vite 6.4.3 (`defaultExternalConditions`, `transformWithOxc` are Vite 8
+   exports). The versions that still accept Vite 6 (`next.27`–`next.30`) predate rc.3 and compile
+   for the beta runtime. So **Vite 8 comes first**: a tranche of its own (`vite` ^6.4 → ^8.3 in
+   the catalog, `vitest` ^3.2 → ^5 — vitest 5 accepts both Vite lines, so it can go first; 32
+   manifests declare vite; the plugins that hook Vite's API — the source processor, aiui-live's
+   and trace-ui's vite plugins, duckdb-assets, the channel's embedded server for its sidecars —
+   each need a pass; Vite 8 builds on Rolldown). Vite 8.0.0 has been out since March.
+2. **`createErrorBoundary` moved to `solid-js/internal`** ("the primitive behind `<Errored>`");
+   `cell.ts` and `page-boundary.tsx` import it from `solid-js`. Two imports, or `<Errored>`.
+   The RC also ships `solid-js/CHEATSHEET.md` and a `skills/reactivity-diagnostics` skill the
+   dev diagnostics footer points at — worth a pointer from the `aiui-architecture` skill.
+
+**Sequencing, revised.** 3a: Vite 8 (+ vitest 5), green on main. 3b: Solid rc on the parked
+branch, rebased. The procedure below is 3b's.
 
 **Risks, named.** The native compiler in CI (binary install under `allowBuilds`); the
 `@solidjs/web` `latest` tag pointing at `rc.0` (pin exact, never `latest`); the template's
