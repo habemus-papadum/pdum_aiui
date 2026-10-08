@@ -10,6 +10,7 @@
 import { PageBoundary } from "@habemus-papadum/aiui-viz";
 import { render } from "@solidjs/web";
 import { For } from "solid-js";
+import "@habemus-papadum/aiui-design/site.css";
 import "./styles.css";
 import { AppendLab } from "./tour/AppendLab";
 import { ClaudeSection, SessionsSection } from "./tour/Claude";

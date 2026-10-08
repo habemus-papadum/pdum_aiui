@@ -1,104 +1,42 @@
-/* styles.css — the walkthrough's small dark surface. The CellView class set
- * (cell-*, progress-stripe, btn) and the widget classes (slider, check) are
- * the aiui-viz styling contract. */
+/* styles.css — the walkthrough's own rules, shared by every step page. The
+ * look is the design system (@habemus-papadum/aiui-design/site.css, imported
+ * by each entry before this): paper, ink, the CellView contract, the widget
+ * classes (slider, select, check), the section chrome. This sheet holds the
+ * page width, the banner, the figures, and the hint bar — nothing a step
+ * demonstrates lives in CSS, so one sheet serves all four layers. */
 
-:root {
-  --bg: #0f1117;
-  --panel: #171b25;
-  --line: #262c3a;
-  --text: #e8e8ea;
-  --muted: #9aa0aa;
-  --accent: #8ab4f8;
-  --hot: #f8a86a;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font:
-    15px / 1.55 ui-sans-serif,
-    system-ui,
-    sans-serif;
+.walkthrough-figure {
+  /* the numeric solution's line — the one figure color this page owns */
+  --hot: #c2551a;
 }
 
 .app {
   max-width: 860px;
   margin: 0 auto;
-  padding: 28px 20px 60px;
-}
-
-kbd {
-  padding: 1px 6px;
-  border: 1px solid var(--line);
-  border-bottom-width: 2px;
-  border-radius: 5px;
-  background: var(--panel);
-  font:
-    12px ui-monospace,
-    monospace;
-}
-
-code {
-  color: var(--accent);
-  font:
-    13px ui-monospace,
-    monospace;
-}
-.accent {
-  color: var(--accent);
-}
-.muted {
-  color: var(--muted);
-}
-a {
-  color: var(--accent);
+  padding: var(--space-md) var(--space-sm) var(--space-xl);
 }
 
 .banner h1 {
-  font-size: 22px;
-  margin: 0 0 10px;
+  margin: 0 0 var(--space-2xs);
 }
 .banner p {
-  margin: 0 0 10px;
-  color: var(--muted);
+  margin: 0 0 var(--space-2xs);
+  color: var(--ink-muted);
 }
 .banner b,
 .banner i {
-  color: var(--text);
+  color: var(--ink);
 }
 
-.page-section {
-  margin-top: 28px;
-}
-.page-section h2 {
-  font-size: 17px;
-  margin: 0 0 8px;
-}
-.section-lead {
-  color: var(--muted);
-}
 .page-section ul {
-  color: var(--muted);
+  color: var(--ink-muted);
 }
 .page-section li {
   margin: 6px 0;
 }
 .page-section b,
 .page-section i {
-  color: var(--text);
-}
-
-.panel {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 16px 18px;
-  margin-top: 16px;
+  color: var(--ink);
 }
 
 /* --- controls (the aiui-viz widget class contract) -------------------------- */
@@ -106,43 +44,7 @@ a {
 .controls {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 14px 22px;
-}
-
-.slider {
-  display: block;
-}
-.slider-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--muted);
-  margin-bottom: 6px;
-}
-.slider-label b {
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
-}
-.slider input {
-  width: 100%;
-  accent-color: var(--accent);
-}
-
-.select select {
-  width: 100%;
-  background: var(--bg);
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 4px 8px;
-}
-
-.check {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--muted);
+  gap: var(--space-sm) var(--space-md);
 }
 
 /* --- figures ----------------------------------------------------------------- */
@@ -150,11 +52,18 @@ a {
 .profile-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 14px;
-  margin-top: 16px;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
 }
 .profile-chart {
+  --hot: #c2551a;
   margin: 0;
+}
+/* stacked panels keep a breath between them (the starter's old margin) */
+.panel + .panel,
+.panel + .profile-grid,
+.profile-grid + .panel {
+  margin-top: var(--space-sm);
 }
 .profile-chart svg {
   width: 100%;
@@ -168,19 +77,16 @@ a {
 }
 .profile-chart .reference {
   fill: none;
-  stroke: var(--accent);
+  stroke: var(--ink-muted);
   stroke-width: 1.5;
   stroke-dasharray: 5 4;
   opacity: 0.8;
 }
 .profile-chart .axis {
-  stroke: var(--line);
-}
-figcaption {
-  font-size: 12px;
-  margin-top: 6px;
+  stroke: var(--hairline);
 }
 
+/* the space–time map is a plate: an inferno raster on a dark ground */
 .spacetime {
   margin: 0;
 }
@@ -188,13 +94,15 @@ figcaption {
   width: 100%;
   height: 240px;
   image-rendering: pixelated;
-  border-radius: 6px;
+  background: var(--plate);
+  border: var(--hairline-width) solid var(--hairline);
+  border-radius: var(--radius);
   display: block;
 }
 
 .error-readout {
-  margin-top: 10px;
-  font-size: 13px;
+  margin-top: var(--space-2xs);
+  font-size: var(--text-small);
 }
 .error-readout b {
   font-variant-numeric: tabular-nums;
@@ -204,76 +112,28 @@ figcaption {
 
 .hints {
   display: flex;
-  gap: 8px;
-  margin-top: 28px;
+  gap: var(--space-2xs);
+  margin-top: var(--space-lg);
 }
 .hint {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 4px 10px;
-  border: 1px solid var(--line);
+  border: var(--hairline-width) solid var(--hairline);
   border-radius: 999px;
   background: transparent;
   color: var(--muted);
-  font:
-    12px / 1.4 ui-sans-serif,
-    system-ui,
-    sans-serif;
+  font-family: var(--stack-sans);
+  font-size: var(--text-label);
+  letter-spacing: 0.06em;
+  line-height: 1.4;
   cursor: pointer;
 }
 .hint:not(:disabled):hover {
-  border-color: var(--accent);
-  color: var(--text);
+  border-color: var(--ink);
+  color: var(--ink);
 }
 .hint:disabled {
   cursor: default;
-}
-
-/* --- the CellView contract (spinner, error, keep-latest, progress) ----------- */
-
-.cell-body-loading {
-  opacity: 0.55;
-  transition: opacity 120ms;
-}
-.cell-pending {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--muted);
-  padding: 12px 0;
-}
-.cell-error {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: #f2b8b5;
-  background: rgba(242, 184, 181, 0.08);
-  border: 1px solid rgba(242, 184, 181, 0.35);
-  border-radius: 8px;
-  padding: 10px 12px;
-}
-.progress-stripe {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -6px;
-}
-.progress-stripe-fill {
-  height: 3px;
-  background: var(--accent);
-  transition: width 120ms;
-}
-.btn {
-  padding: 5px 12px;
-  border-radius: 7px;
-  border: 1px solid var(--accent);
-  background: var(--accent);
-  color: var(--bg);
-  font-weight: 600;
-  cursor: pointer;
-}
-.btn-outline {
-  background: transparent;
-  color: var(--accent);
 }

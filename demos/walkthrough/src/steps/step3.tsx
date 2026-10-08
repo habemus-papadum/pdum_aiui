@@ -15,6 +15,7 @@ import { Controls } from "../ui/Controls";
 import { ErrorReadout } from "../ui/ErrorReadout";
 import { ProfileChart } from "../ui/ProfileChart";
 import { SpaceTimeMap } from "../ui/SpaceTimeMap";
+import "@habemus-papadum/aiui-design/site.css";
 import "../styles.css";
 
 function Step3() {

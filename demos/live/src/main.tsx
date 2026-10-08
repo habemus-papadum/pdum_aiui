@@ -9,6 +9,7 @@
 
 import { PageBoundary } from "@habemus-papadum/aiui-viz";
 import { render } from "@solidjs/web";
+import "@habemus-papadum/aiui-design/site.css";
 import "./styles.css";
 import "./model/graph"; // builds the cell graph + registers the agent tools
 import { App } from "./ui/App";

@@ -28,6 +28,7 @@
   "dependencies": {
     "@duckdb/duckdb-wasm": "catalog:",
     "@habemus-papadum/aiui-cf-creds": "workspace:^",
+    "@habemus-papadum/aiui-design": "workspace:^",
     "@habemus-papadum/aiui-dock": "workspace:^",
     "@habemus-papadum/aiui-source-processor": "workspace:^",
     "@habemus-papadum/aiui-viz": "workspace:^",

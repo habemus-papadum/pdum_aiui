@@ -7,9 +7,7 @@
 export function Banner() {
   return (
     <header class="banner">
-      <h1>
-        <span class="accent">this page is alive</span> — talk to it
-      </h1>
+      <h1>this page is alive — talk to it</h1>
       <p>
         You're looking at a running web app wired to a Claude Code session. Press <kbd>⌘B</kbd> to
         activate the intent client, then <em>say or type</em> what you want. Hold <kbd>space</kbd>{" "}

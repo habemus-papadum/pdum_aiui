@@ -9,6 +9,7 @@ import { render } from "@solidjs/web";
 import { For } from "solid-js";
 import { INITIAL_CONDITIONS, initialProfile } from "../lib/diffusion";
 import { profilePoints } from "../ui/ProfileChart";
+import "@habemus-papadum/aiui-design/site.css";
 import "../styles.css";
 
 function Step1() {

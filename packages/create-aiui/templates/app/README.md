@@ -47,8 +47,14 @@ src/
   model/scenery.ts    the starter's demo cells + tools (layer 2, with scenery.test.ts)
   model/graph.ts      the disposable cell graph + the agent tool surface
   ui/                 components — freely hot-swappable
+  styles.css          this app's own rules; the look is the design system (one import)
   main.tsx            entry: almost nothing (start reading there)
 ```
+
+The page's look is `@habemus-papadum/aiui-design` — cotton paper, slate ink, editorial type,
+and a skin for every component aiui-viz renders — imported once in `main.tsx`. Write your own
+rules in `src/styles.css` (they win without specificity games), or delete that import and bring
+your own sheet: the class names aiui-viz emits are the only contract.
 
 Try the starter's interactions before replacing them: drag the sliders and watch the picture
 recompute through its cell. `npm test` runs the starter's example tests — pure math and a headless

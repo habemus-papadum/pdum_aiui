@@ -35,7 +35,7 @@ export function Lissajous(props: { figure: Cell<Float64Array> }) {
             <polyline
               points={lissajousPoints(pairs(), 240)}
               fill="none"
-              stroke="var(--accent, #b48ead)"
+              stroke="var(--lissajous-accent)"
               stroke-width="1.5"
             />
           </svg>

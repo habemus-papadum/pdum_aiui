@@ -18,6 +18,7 @@ import { Controls } from "./ui/Controls";
 import { ErrorReadout } from "./ui/ErrorReadout";
 import { ProfileChart } from "./ui/ProfileChart";
 import { SpaceTimeMap } from "./ui/SpaceTimeMap";
+import "@habemus-papadum/aiui-design/site.css";
 import "./styles.css";
 
 function App() {
@@ -29,7 +30,7 @@ function App() {
     <div class="app">
       <header class="banner">
         <h1>
-          heat in a rod — <span class="accent">the playbook, worked</span>
+          heat in a rod — <span class="muted">the playbook, worked</span>
         </h1>
         <p>
           A 1-D diffusion laboratory built in the playbook's order; steps{" "}

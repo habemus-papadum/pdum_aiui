@@ -9,13 +9,13 @@ export function Nav(props: { current: "tour" | "wire" | "backends" | "app" }) {
     { id: "app", href: "/", label: "3 · the app" },
   ] as const;
   return (
-    <nav class="site-nav">
+    <nav class="live-nav">
       {pages.map((page) => (
         <a href={page.href} data-on={String(page.id === props.current)}>
           {page.label}
         </a>
       ))}
-      <span class="site-nav-tag">aiui · live</span>
+      <span class="live-nav-tag">aiui · live</span>
     </nav>
   );
 }

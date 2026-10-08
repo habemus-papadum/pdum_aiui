@@ -10,6 +10,7 @@
 
 import { PageBoundary } from "@habemus-papadum/aiui-viz";
 import { render } from "@solidjs/web";
+import "@habemus-papadum/aiui-design/site.css";
 import "./styles.css";
 import { Bench } from "./live/Bench";
 import { BACKENDS_SLOTS } from "./live/prompt";

@@ -95,6 +95,12 @@ Ground rules:
 - **Test the surface with the cells.** `resetControlSurface()` in afterEach (controls are
   module-and-window state), build cells inside `cellHarness`, probe each input — see
   `scenery.test.ts`.
+- **The look is the design system, not this app's CSS.** `main.tsx` imports
+  `@habemus-papadum/aiui-design/site.css` (tokens, fonts, element defaults, and the skin for
+  every class aiui-viz emits — `cell-*`, `btn`, `slider`, `scrub`, `select`, `check`); its sheet
+  runs on cascade layers, so `src/styles.css` wins without specificity games. Style with the
+  tokens (`var(--ink)`, `var(--surface-raised)`, `var(--space-sm)`, `var(--text-label)`…) rather
+  than restating colors; a user who wants a different look deletes that one import.
 - The dev server runs via `npm run dev` (plain `vite`). Put the app in the shared session
   browser with `aiui open http://localhost:5173` (it starts the browser if needed). The intent
   client reaches the channel on its own (it is served by the channel at `/intent/`), so the app

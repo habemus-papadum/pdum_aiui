@@ -16,6 +16,7 @@ import type { InitialCondition } from "../lib/diffusion";
 import { graph } from "../model/graph";
 import { ic, kappa, points, simTime } from "../model/store";
 import { profilePoints } from "../ui/ProfileChart";
+import "@habemus-papadum/aiui-design/site.css";
 import "../styles.css";
 
 function Step2() {

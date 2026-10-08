@@ -18,6 +18,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@habemus-papadum/aiui-design": "workspace:^",
     "@habemus-papadum/aiui-dock": "workspace:^",
     "@habemus-papadum/aiui-oscillator": "workspace:^",
     "@habemus-papadum/aiui-source-processor": "workspace:^",

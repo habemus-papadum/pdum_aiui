@@ -1,158 +1,42 @@
-/* styles.css — a small dark surface for the starter. Restyle freely; the only
- * contract worth keeping is the CellView class set at the bottom (cell-body,
- * cell-pending, cell-error, progress-stripe, btn), which every cell rendered
- * through @habemus-papadum/aiui-viz expects its host to style. */
+/* styles.css — twins' own rules. The look is the design system
+ * (@habemus-papadum/aiui-design/site.css, imported by main.tsx before this):
+ * paper, ink, the CellView and control-widget classes, the page chrome. This
+ * sheet holds only what twins adds — the two scope panels, the Lissajous
+ * figure, and the three figure colors that key the traces. Standalone only
+ * (no sitePage marker), so the figure tokens can sit on :root. */
 
 :root {
-  --bg: #0f1117;
-  --panel: #171b25;
-  --line: #262c3a;
-  --text: #e8e8ea;
-  --muted: #9aa0aa;
-  --accent: #8ab4f8;
-  --bloom: #f8a8c0;
+  /* the two oscillators and their composition — figure colors, validated on
+   * the raised panel they draw on, not the chrome accent */
+  --left-accent: #2f7f8a;
+  --right-accent: #b8622f;
+  --lissajous-accent: #8a4b7a;
 }
 
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font:
-    15px / 1.55 ui-sans-serif,
-    system-ui,
-    sans-serif;
-}
-
-.app {
-  max-width: 760px;
-  margin: 0 auto;
-  padding: 28px 20px 60px;
-}
-
-kbd {
-  padding: 1px 6px;
-  border: 1px solid var(--line);
-  border-bottom-width: 2px;
-  border-radius: 5px;
-  background: var(--panel);
-  font:
-    12px ui-monospace,
-    monospace;
-}
-
-.accent {
-  color: var(--accent);
-}
-
-.muted {
-  color: var(--muted);
-}
-
-/* --- panels ------------------------------------------------------------------ */
-
-.panel {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 16px 18px;
-  margin-top: 16px;
-}
-
-/* --- the CellView contract (spinner, error, keep-latest, progress) ------------- */
-
-.cell-body-loading {
-  opacity: 0.55;
-  transition: opacity 120ms;
-}
-
-.cell-pending {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--muted);
-  padding: 18px 0;
-}
-
-.cell-error {
-  border: 1px solid #b3564d;
-  border-radius: 8px;
-  padding: 12px 14px;
-  color: #f0b0a8;
-}
-
-.progress-stripe {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -4px;
-  height: 3px;
-  border-radius: 2px;
-  background: var(--line);
-  overflow: hidden;
-}
-
-.progress-stripe-fill {
-  height: 100%;
-  background: var(--accent);
-}
-
-.btn {
-  padding: 5px 12px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: var(--panel);
-  color: var(--text);
-  cursor: pointer;
-}
-
-.btn:hover {
-  border-color: var(--accent);
-}
-
-.btn-outline {
-  background: transparent;
-}
-
-/* ── twins ─────────────────────────────────────────────────────────────────── */
-:root {
-  --left-accent: #88c0d0;
-  --right-accent: #d08770;
-  --accent: #b48ead;
-}
 .app {
   max-width: 1040px;
   margin: 0 auto;
-  padding: 24px 16px 64px;
-}
-.app-head h1 {
-  margin: 0 0 6px;
-  font-size: 22px;
+  padding: var(--space-md) var(--space-sm) var(--space-xl);
 }
 .app-sub {
-  color: var(--muted, #9aa0aa);
-  max-width: 68ch;
-  line-height: 1.55;
-  margin: 0 0 20px;
+  margin-bottom: var(--space-md);
 }
 .app-sub code {
   font-size: 0.9em;
 }
+
 .panels {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: var(--space-sm);
   align-items: flex-start;
 }
 .scope-panel {
   flex: 1 1 300px;
-  border: 1px solid var(--border, #2a2f3a);
-  border-radius: 10px;
-  padding: 12px 14px 14px;
-  background: var(--panel, rgba(255, 255, 255, 0.02));
+  border: var(--hairline-width) solid var(--ghost);
+  border-radius: var(--radius);
+  padding: var(--space-xs) var(--space-sm) var(--space-sm);
+  background: var(--surface-raised);
 }
 .scope-head {
   display: flex;
@@ -160,22 +44,27 @@ kbd {
   justify-content: space-between;
 }
 .scope-head h2 {
-  margin: 0 0 8px;
-  font-size: 15px;
-  letter-spacing: 0.04em;
+  margin: 0 0 var(--space-2xs);
+  font-family: var(--stack-serif);
+  font-size: var(--text-title);
+  font-weight: 700;
+  font-variation-settings: normal;
 }
 .kick {
-  font: inherit;
-  font-size: 12px;
+  font-family: var(--stack-sans);
+  font-size: var(--text-label);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   padding: 2px 12px;
   border-radius: 999px;
-  border: 1px solid var(--border, #2a2f3a);
+  border: var(--hairline-width) solid var(--hairline);
   background: transparent;
-  color: inherit;
+  color: var(--ink-muted);
   cursor: pointer;
 }
 .kick:hover {
-  border-color: var(--accent);
+  border-color: var(--ink);
+  color: var(--ink);
 }
 .scope-svg {
   width: 100%;
@@ -183,23 +72,24 @@ kbd {
   display: block;
 }
 .scope-svg .axis {
-  stroke: var(--border, #2a2f3a);
+  stroke: var(--hairline);
   stroke-width: 1;
 }
 .scope-svg .axis-label {
-  fill: var(--muted, #9aa0aa);
+  fill: var(--muted);
+  font-family: var(--stack-sans);
   font-size: 9px;
 }
 .scope-controls {
-  margin-top: 10px;
+  margin-top: var(--space-2xs);
   display: grid;
-  gap: 6px;
+  gap: var(--space-2xs);
 }
 .lissajous .hint {
-  color: var(--muted, #9aa0aa);
-  font-size: 12.5px;
+  color: var(--ink-muted);
+  font-size: var(--text-small);
   line-height: 1.5;
-  margin: 8px 0 0;
+  margin: var(--space-2xs) 0 0;
 }
 .left-accent {
   color: var(--left-accent);
