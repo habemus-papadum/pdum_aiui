@@ -271,15 +271,26 @@ Found building the wine demo (embedding-atlas integration; full detail:
   optimizer; `solid-devtools` pins solid-js `^1.9`. Hence the in-repo source locator
   (`data-source-loc` with real line:col, dependency-free bar `@babel/core`), now owned by the dev
   source processor (`packages/aiui-source-processor`, the `aiui()` plugin).
-- **The 2.0 toolchain that works together (beta.32 line, upgraded 2026-08-10):** `solid-js@next` +
-  `@solidjs/web@next` + `vite-plugin-solid@next`. TypeScript ≥ 5.x with `jsx: "preserve"`,
-  `jsxImportSource: "@solidjs/web"`. Since `vite-plugin-solid@3.0.0-next.13` the default JSX
-  compiler is the **native `@dom-expressions/compiler`** (exact-pinned by the plugin;
-  `compiler: 'babel'` remains as an escape hatch), and **`solid-refresh` is dead** — the HMR
-  runtime moved into core as the dev-only `solid-js/refresh` entry, with granular per-component
-  refresh on by default. The in-repo source locator is unaffected by the native default *by
-  design* (its own `enforce: "pre"` Babel pass, not the plugin's `babel` option) — verified:
-  `data-source-loc` stamps and HMR hot-swap both work under the native compiler.
+- **The 2.0 toolchain that works together (rc.13 line, upgraded 2026-10-08; the beta.32 line
+  before it, 2026-08-10):** `solid-js` + `@solidjs/web` + `@solidjs/signals` at ONE rc (the
+  signals override), and `vite-plugin-solid@3.0.0-next.27` — since rc.3 a thin wrapper over
+  `@solidjs/vite-plugin` (Vite 8 only), which pins the compilers at its own rc: the native
+  `@solidjs/compiler` (platform binaries as optional deps) and `@solidjs/babel-plugin`;
+  `babel-preset-solid` no longer exists. rc.13 rather than rc.14 because the plugin's compiler
+  IS rc.13 and pnpm's one-day release-age policy refused the day-old runtime. TypeScript ≥ 5.x
+  with `jsx: "preserve"`, `jsxImportSource: "@solidjs/web"`. **`solid-refresh` is dead** — the
+  HMR runtime lives in core as the dev-only `solid-js/refresh` entry, granular per-component
+  refresh on by default. The in-repo source locator is unaffected by the native compiler *by
+  design* (its own `enforce: "pre"` Babel pass, not the plugin's `babel` option) — verified on
+  both lines: `data-source-loc` stamps and HMR hot-swap work. Moved in the RC:
+  `createErrorBoundary` → `solid-js/internal` (the primitive behind `<Errored>`). The native
+  compiler **validates markup** — a `<pre>` inside a `<p>` fails the build (cc-miner's replay
+  note, fixed to a `<div>`). The dev diagnostics now ship with repair skills under
+  `node_modules/solid-js/skills/` and print a footer naming them; the gallery's aztec page
+  shows `UNSTABLE_LIST_IDENTITY` (a `<For>` re-creating rows on equivalent objects),
+  `HOT_SCOPE_TIME` and `WASTED_RECOMPUTE` (tiles re-running on a `version` write) — real hints,
+  queued, not regressions. The beta.32 probes below (effect-hold, `STRICT_READ_UNTRACKED`)
+  still hold on rc.13: every suite passed unchanged.
 - **Vite 8 + Vitest 5 (upgraded 2026-10-08, the step before the Solid 2.0 RC):** four things
   moved under the toolchain, each with one home. (1) Vite 8 compiles TS/JSX with **oxc and
   honours the tsconfig's `jsx: "preserve"`** — Vite 6's esbuild compiled JSX with the automatic
@@ -317,11 +328,12 @@ Found building the wine demo (embedding-atlas integration; full detail:
   compiler emits helpers the older runtime doesn't ship, and the plugin's `babel-preset-solid`
   range floats to the newest beta on any *fresh* lockfile (first paid for in fai-design's
   styleguide). Same trap one layer down: `solid-js` depends on `@solidjs/signals` via a
-  beta-crossing caret. Rule: pin `babel-preset-solid` AND `@solidjs/signals` to the same beta as
-  the `solid` catalog via pnpm overrides (root `pnpm-workspace.yaml` and the create-aiui app
-  template), and bump the catalog + overrides + template together. Newer plugin versions also
-  ratchet their own peer floors (`next.24` requires runtime ≥ beta.32), so pnpm now refuses the
-  worst mixed states outright.
+  beta-crossing caret. Rule, rc line: pin `@solidjs/signals` to the same rc as the `solid`
+  catalog via pnpm overrides (root `pnpm-workspace.yaml` and the create-aiui app template), and
+  bump the catalog + override + template together; the compilers ride `@solidjs/vite-plugin`,
+  pinned by `vite-plugin-solid`'s exact next-tag (`babel-preset-solid` is gone). Newer plugin
+  versions also ratchet their own peer floors (`next.47` requires runtime ≥ rc.13 and Vite 8),
+  so pnpm refuses the worst mixed states outright.
 - **beta.32 scheduler semantics — async pendingness holds effects.** While a question is pending
   without a containing boundary (e.g. a downstream memo threw `NotReadyError` and awaits a
   commit), the scheduler defers effect propagation — user AND render tiers — until the graph

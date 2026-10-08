@@ -227,13 +227,16 @@ export function SessionReplay() {
               <Show
                 when={d().available}
                 fallback={
-                  <p class="cco-note">
+                  // A div, not a <p>: a <pre> cannot sit inside a paragraph (the
+                  // browser would close the <p> first), and Solid's native
+                  // compiler now refuses the markup outright.
+                  <div class="cco-note">
                     This dataset was built without the replay grain. Regenerate with{" "}
                     <code>--replay</code> to read sessions back block by block:
                     <pre class="cco-cmd">
                       pnpm -C apps/cc-assay normalize -- --out ../cc-miner/src/data --replay
                     </pre>
-                  </p>
+                  </div>
                 }
               >
                 <Replay data={d()} />

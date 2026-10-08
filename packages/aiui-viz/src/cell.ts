@@ -23,7 +23,6 @@
  */
 import {
   type Accessor,
-  createErrorBoundary,
   createMemo,
   createRoot,
   createSignal,
@@ -33,6 +32,9 @@ import {
   refresh,
   untrack,
 } from "solid-js";
+// The primitive behind `<Errored>`, on `solid-js/internal` since the 2.0
+// release candidates (cells wrap state derivation in it — see the module doc).
+import { createErrorBoundary } from "solid-js/internal";
 import { dropConsumer, recordRead, runAsConsumer } from "./graph-trace";
 import type { Scope } from "./scope";
 

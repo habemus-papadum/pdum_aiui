@@ -55,13 +55,17 @@ catalog:
 # pins; bump it in step with the catalog (new-demo rewrites scaffolded demos to
 # catalog references, so only the template itself carries literals).
 catalogs:
-  # The Solid 2.0 beta line. During the beta the JSX compiler and runtime move
-  # in lockstep (see the babel-preset-solid override below); bumping Solid is
-  # editing these three lines plus the two overrides below and the template.
+  # The Solid 2.0 release-candidate line. Since rc.3 the compilers live in
+  # the solid repo (`@solidjs/babel-plugin`, the native `@solidjs/compiler`)
+  # and ride vite-plugin-solid@next (a wrapper over `@solidjs/vite-plugin`,
+  # which needs Vite 8); the runtime and signals core still move together
+  # (the override below). Bumping Solid is editing these three lines, the
+  # signals override, the peer ranges (aiui-viz, demos/oscillator,
+  # demos/optics) and the template.
   solid:
-    solid-js: 2.0.0-beta.32
-    "@solidjs/web": 2.0.0-beta.32
-    vite-plugin-solid: 3.0.0-next.24
+    solid-js: 2.0.0-rc.13
+    "@solidjs/web": 2.0.0-rc.13
+    vite-plugin-solid: 3.0.0-next.27
 
 # Mosaic pins an exact, older duckdb-wasm (`@uwdata/mosaic-core@0.28.1` wants
 # 1.33.1-dev45.0). Without this override two copies install, and passing our
@@ -72,18 +76,13 @@ catalogs:
 # aiui-viz, demos/seismos, apps/cc-miner — declare via `catalog:`).
 overrides:
   "@duckdb/duckdb-wasm": 1.33.1-dev64.0
-  # vite-plugin-solid@next floats babel-preset-solid across every 2.0 beta, but
-  # the JSX compiler must match the @solidjs/web runtime beta — newer presets
-  # emit helpers (claimElement, scope) that older runtimes don't export,
-  # breaking consumers at dev/build time. This makes the invariant explicit and
-  # keeps `pnpm update` honest. Bump in step with the `solid` catalog above
-  # (see frontend-hard-won.md, "Ecosystem status").
-  babel-preset-solid: 2.0.0-beta.32
-  # Same trap, one layer down: solid-js depends on @solidjs/signals via a caret
-  # that floats across betas (`^2.0.0-beta.N` matches every later beta), so a
-  # fresh lockfile can pair an old solid-js with a newer signals core. Pin it to
-  # the same beta as the `solid` catalog and bump them together.
-  "@solidjs/signals": 2.0.0-beta.32
+  # solid-js depends on @solidjs/signals via a caret that floats across
+  # prereleases (`^2.0.0-rc.N` matches every later rc), so a fresh lockfile can
+  # pair an old solid-js with a newer signals core. Pin it to the same rc as
+  # the `solid` catalog and bump them together. (The babel-preset-solid
+  # override that used to sit beside this is gone with the package: rc.3
+  # deleted it — the compilers now ride the Vite plugin.)
+  "@solidjs/signals": 2.0.0-rc.13
 
 # pnpm blocks dependency build scripts by default; allow the ones we trust.
 # (esbuild ships a prebuilt binary but runs a postinstall to link it.)
@@ -125,6 +124,6 @@ minimumReleaseAgeExclude:
   - '@habemus-papadum/aiui-registry-host-linux-arm64@0.1.0'
   - '@habemus-papadum/aiui-registry-host-linux-x64@0.1.0'
   - '@habemus-papadum/aiui-registry@0.1.0'
-  - vite-plugin-solid@3.0.0-next.24
+  - vite-plugin-solid@3.0.0-next.27
   - '@anthropic-ai/claude-agent-sdk@0.3.272'
   - '@habemus-papadum/cf-creds-motherduck@0.5.0'

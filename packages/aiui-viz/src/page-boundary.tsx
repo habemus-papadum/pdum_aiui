@@ -20,7 +20,9 @@
  * styles keep the card legible with no stylesheet at all.
  */
 import type { JSX } from "@solidjs/web";
-import { createErrorBoundary } from "solid-js";
+// `solid-js/internal` since the 2.0 release candidates: the primitive behind
+// `<Errored>`, which this fault card is a hand-rolled instance of.
+import { createErrorBoundary } from "solid-js/internal";
 
 export function PageBoundary(props: { name?: string; children: JSX.Element }): JSX.Element {
   const view = createErrorBoundary(

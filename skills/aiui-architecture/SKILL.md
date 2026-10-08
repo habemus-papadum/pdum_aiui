@@ -84,10 +84,12 @@ source of truth.
 - **deps**: `aiui-viz` + `aiui-source-processor` at one matching version (they release in
   lockstep; the template's `__AIUI_VERSION_RANGE__` placeholder means "current release" —
   plain `pnpm add` gets it), plus `solid-js` and `@solidjs/web` at the template's EXACT
-  pins. During the Solid 2.0 beta the runtime and JSX compiler move in lockstep — never
-  loosen those pins to a `^`/`>=` range in an app.
+  pins. Through the Solid 2.0 release candidates the runtime and its signals core move in
+  lockstep (the template's `@solidjs/signals` override) and the JSX compiler rides the Vite
+  plugin — never loosen those pins to a `^`/`>=` range in an app.
 - **devDeps**: `vite-plugin-solid` at the template's exact pin (its next-tags track the
-  Solid beta), and `@babel/core` (aiui-source-processor's peer). Take the template's
+  Solid release candidates; `3.0.0-next.27` is a wrapper over `@solidjs/vite-plugin`, which
+  needs Vite 8), and `@babel/core` (aiui-source-processor's peer). Take the template's
   vite/vitest/typescript lines too unless the app already carries its own — the processor
   and plugin declare wide vite peer ranges, so an app's existing vite usually stands.
 - **Optional peers** arrive only with the porcelain subpath that needs them: `…/plot` →
@@ -292,8 +294,14 @@ core in `aiui-viz/modal`, regions built with `ladder`/`toggle`/`choice`):
   `packages/aiui-intent-client/src/spec.ts` (its `BEHAVIOR.md` is the decided interaction
   contract); rationale: the mode-engine design note (git history).
 
-## Solid 2.0 (beta) instant-bite gotchas
+## Solid 2.0 (release candidate) instant-bite gotchas
 
+- The RC ships its own repair skill — `node_modules/solid-js/skills/reactivity-diagnostics/SKILL.md`
+  — and every dev diagnostic (`UNSTABLE_LIST_IDENTITY`, `HOT_SCOPE_TIME`, `WASTED_RECOMPUTE`,
+  `STRICT_READ_UNTRACKED`, …) prints a footer naming the entry to read. Read it before fixing
+  a diagnostic; `import { attribution } from "solid-js/attribution"` explains any re-run.
+- `createErrorBoundary` lives on `solid-js/internal` (the primitive behind `<Errored>`). The
+  native compiler validates markup: a `<pre>` inside a `<p>` is a build error, not a warning.
 - No `onMount` (ref callbacks), no `classList` (compute class strings); `render`/`JSX` come from
   `@solidjs/web`; `<Show>` non-keyed callback children receive an *accessor*.
 - No `<Index>` either — `<Repeat count={n}>{(i) => …}` is the position-keyed list. Reference-keyed

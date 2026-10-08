@@ -137,13 +137,13 @@
   "peerDependencies": {
     "@duckdb/duckdb-wasm": ">=1.29",
     "@observablehq/plot": "^0.6",
-    "@solidjs/web": ">=2.0.0-beta.32 <2.0.0-experimental.0",
+    "@solidjs/web": ">=2.0.0-rc.13 <3",
     "@uwdata/mosaic-core": ">=0.28",
     "@uwdata/mosaic-plot": ">=0.28",
     "@uwdata/mosaic-sql": ">=0.28",
     "@uwdata/flechette": ">=2.5",
     "embedding-atlas": ">=0.24",
-    "solid-js": ">=2.0.0-beta.32 <2.0.0-experimental.0",
+    "solid-js": ">=2.0.0-rc.13 <3",
     "katex": "^0.16 || ^0.17"
   },
   "peerDependenciesMeta": {
