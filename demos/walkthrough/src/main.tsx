@@ -5,6 +5,8 @@
  * derived from the working keymap. Steps 1-3 remain standing at
  * /step1.html … /step3.html — the same app, one layer at a time.
  */
+
+import { VoiceDock } from "@habemus-papadum/aiui-dock";
 import { CellView } from "@habemus-papadum/aiui-viz";
 import { render } from "@solidjs/web";
 import { For, Show } from "solid-js";
@@ -119,4 +121,12 @@ function App() {
   );
 }
 
-render(() => <App />, document.getElementById("root") as HTMLElement);
+render(
+  () => (
+    <>
+      <App />
+      <VoiceDock />
+    </>
+  ),
+  document.getElementById("root") as HTMLElement,
+);

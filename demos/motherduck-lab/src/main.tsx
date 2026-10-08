@@ -28,6 +28,7 @@
  * ──────────────────────────────────────────────────────────────────────────────
  */
 
+import { VoiceDock } from "@habemus-papadum/aiui-dock";
 import { PageBoundary } from "@habemus-papadum/aiui-viz";
 import { render } from "@solidjs/web";
 import { page } from "./page";
@@ -41,6 +42,7 @@ render(
   () => (
     <PageBoundary name={page.title}>
       <page.App />
+      <VoiceDock />
     </PageBoundary>
   ),
   document.getElementById("root") as HTMLElement,

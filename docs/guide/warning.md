@@ -83,6 +83,18 @@ understand about how it's wired:
 
 Details: [The Agent's Browser](/packages/aiui/chrome).
 
+## The voice dock's key
+
+Every demo and every scaffolded app mounts a **voice dock** (`@habemus-papadum/aiui-dock`): an
+oracle and a live session on the page itself, over the page's own tools. In dev the Vite plugin
+injects your OpenAI key into the served page (`aiui({ devKeys: ["openai"] })` — serve only, a
+production bundle cannot contain it, but every dev-served page carries it, LAN-readable under
+`server.host: true`). On a published site the dock's key pane takes a **pasted** key: it stays
+in that browser's localStorage for the origin and is sent only to `api.openai.com`, by the page
+— the oracle mints its single-use ephemeral secret in the browser, the live session's broker
+posts the SDP straight to the vendor. Never to a server of ours. A pasted key is exactly as safe
+as the browser profile holding it, and the pane's clear-the-field forgets it.
+
 ## The actual recommendation
 
 **Read this code rather than use it.** It's a working reference for a real workflow — channel

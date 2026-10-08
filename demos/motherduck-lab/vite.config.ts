@@ -19,5 +19,5 @@ export default defineConfig({
   // devKeys: the OS-vault/env MOTHERDUCK_BROWSER_TOKEN reaches the page under
   // `vite serve` only; duckdbAssets: the wasm is served from this origin at the
   // MotherDuck layout, no CDN — both are the lab's whole point.
-  plugins: [aiui({ devKeys: ["motherduck"], duckdbAssets: true }), solid()],
+  plugins: [aiui({ devKeys: ["motherduck", "openai"], duckdbAssets: true }), solid()],
 });

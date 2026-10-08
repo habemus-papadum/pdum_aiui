@@ -51,6 +51,9 @@ export default defineConfig(({ command, isPreview }) => ({
     // links need. The `source` and `locate` tools then answer on the site as
     // they do here.
     aiui({
+      // devKeys: the dev server injects the OpenAI key for the voice dock
+      // (dev serve only; a production bundle cannot contain it).
+      devKeys: ["openai"],
       locator: {
         stampRoots: [fileURLToPath(new URL("..", import.meta.url))],
         ...(command === "build" ? { stampJsx: true } : {}),

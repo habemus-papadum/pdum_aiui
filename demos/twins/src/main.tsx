@@ -25,9 +25,18 @@
  * ──────────────────────────────────────────────────────────────────────────────
  */
 
+import { VoiceDock } from "@habemus-papadum/aiui-dock";
 import { render } from "@solidjs/web";
 import "./styles.css";
 import "./model/graph"; // builds the cell graph + registers agent tools
 import { App } from "./ui/App";
 
-render(() => <App />, document.getElementById("root") as HTMLElement);
+render(
+  () => (
+    <>
+      <App />
+      <VoiceDock />
+    </>
+  ),
+  document.getElementById("root") as HTMLElement,
+);

@@ -238,7 +238,10 @@ exist, not when the connection opens. To see what a model sees, open the page wi
 `#aiui-tools`: `ToolLog` (`@habemus-papadum/aiui-viz/site/tool-log`; the app template's
 `main.tsx` and the gallery shell mount it, hidden by default) shows the document *as
 rendered* and the page's call log (who called what — `channel`, `oracle`, `live:…`, `page`
-— and the result). User guide: "Documenting a tool".
+— and the result). The app template and the gallery shell also mount **`VoiceDock`**
+(`@habemus-papadum/aiui-dock`): the oracle and a live session on the page over the same
+projection (active kits only), the tool log behind its tools pill, one OpenAI key for both
+(the dev server's, else pasted into localStorage). User guide: "Documenting a tool".
 
 Forwarding is unconditional: the toolkit publishes every namespace into
 `window.__AIUI__.tools` (installed by the runtime, production included — the page dials

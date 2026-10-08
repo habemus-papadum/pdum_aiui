@@ -16,7 +16,7 @@ import solid from "vite-plugin-solid";
 // stamps JSX before vite-plugin-solid (also `pre`) compiles each element into
 // an opaque template. Same-enforce plugins run in array order.
 export default defineConfig({
-  plugins: [aiui(), solid()],
+  plugins: [aiui({ devKeys: ["openai"] }), solid()],
   optimizeDeps: {
     // embedding-atlas spawns its workers with
     // `new Worker(new URL("./clustering.worker.js", import.meta.url))`;

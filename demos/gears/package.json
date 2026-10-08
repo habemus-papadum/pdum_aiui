@@ -1,7 +1,7 @@
 {
   "name": "@habemus-papadum/demo-gears",
   "version": "0.20.0+dev",
-  "description": "A live involute-gear studio: two spur gears in kinematic mesh, the line of action and contact point, and a single-tooth studio — all pure geometry.",
+  "description": "A live involute-gear studio: two spur gears in kinematic mesh, the line of action and contact point, and a single-tooth studio \u2014 all pure geometry.",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -35,6 +35,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@habemus-papadum/aiui-dock": "workspace:^",
     "@habemus-papadum/aiui-journal": "workspace:^",
     "@habemus-papadum/aiui-source-processor": "workspace:^",
     "@habemus-papadum/aiui-viz": "workspace:^",

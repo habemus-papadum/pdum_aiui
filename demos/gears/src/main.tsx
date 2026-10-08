@@ -8,9 +8,18 @@
  * otherwise provide: the stylesheet and the dark-theme stamp.
  */
 import "@habemus-papadum/aiui-journal/styles.css";
+import { VoiceDock } from "@habemus-papadum/aiui-dock";
 import { render } from "@solidjs/web";
 import { page } from "./page";
 
 document.title = page.title;
 page.activate?.();
-render(() => <page.App />, document.getElementById("root") as HTMLElement);
+render(
+  () => (
+    <>
+      <page.App />
+      <VoiceDock />
+    </>
+  ),
+  document.getElementById("root") as HTMLElement,
+);

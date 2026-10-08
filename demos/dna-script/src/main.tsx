@@ -28,6 +28,7 @@
  * ──────────────────────────────────────────────────────────────────────────────
  */
 
+import { VoiceDock } from "@habemus-papadum/aiui-dock";
 import { render } from "@solidjs/web";
 // The shared journal chrome (tokens, body, panels, CellView) — imported by the
 // HOST, before the page's own styles.css (which is scoped under `.dna`).
@@ -36,4 +37,12 @@ import { page } from "./page";
 
 document.title = page.title;
 page.activate?.();
-render(() => <page.App />, document.getElementById("root") as HTMLElement);
+render(
+  () => (
+    <>
+      <page.App />
+      <VoiceDock />
+    </>
+  ),
+  document.getElementById("root") as HTMLElement,
+);

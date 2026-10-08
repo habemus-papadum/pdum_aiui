@@ -213,13 +213,17 @@ export function VoiceDock(props: VoiceDockProps): JSX.Element {
   });
   onCleanup(() => offChange?.());
 
+  // Solid 2 STAGES signal writes: a read in the same handler still sees the
+  // old value. The sessions are therefore held in plain variables for the
+  // handlers' own bookkeeping, mirrored into signals for the view.
+
   // ── oracle ────────────────────────────────────────────────────────────────
+  let oracleNow: OracleSession | undefined;
   const [oracle, setOracle] = createSignal<OracleSession | undefined>(undefined);
   const [oracleStatus, setOracleStatus] = createSignal("idle");
   const [oraclePrompt, setOraclePrompt] = createSignal("");
   const ensureOracle = (): OracleSession => {
-    const existing = untrack(oracle);
-    if (existing !== undefined) return existing;
+    if (oracleNow !== undefined) return oracleNow;
     const session = createOracle(untrack(surface), props.mintUrl);
     session.onState((s) => setOracleStatus(s.status));
     session.onLedger((entry) => {
@@ -227,6 +231,7 @@ export function VoiceDock(props: VoiceDockProps): JSX.Element {
         setOraclePrompt(entry.sent.instructions);
       }
     });
+    oracleNow = session;
     setOracle(session);
     return session;
   };
@@ -235,43 +240,45 @@ export function VoiceDock(props: VoiceDockProps): JSX.Element {
   const [backend, setBackend] = createSignal<DockBackendId>(
     (stored(BACKEND_KEY) as DockBackendId | undefined) ?? "responses-browser",
   );
+  let liveNow: LiveSession | undefined;
   const [live, setLive] = createSignal<LiveSession | undefined>(undefined);
   const [liveStatus, setLiveStatus] = createSignal("idle");
   const dropLive = (): void => {
-    const prev = untrack(live);
+    const prev = liveNow;
     if (prev === undefined) return;
+    liveNow = undefined;
     void prev.close();
     prev.currentDelegator()?.dispose?.();
     setLive(undefined);
     setLiveStatus("idle");
   };
-  const ensureLive = (): LiveSession => {
-    const existing = untrack(live);
-    if (existing !== undefined) return existing;
-    const session = createLive(untrack(backend), untrack(surface), serverUrl());
+  const ensureLive = (id: DockBackendId): LiveSession => {
+    if (liveNow !== undefined) return liveNow;
+    const session = createLive(id, untrack(surface), serverUrl());
     session.onState((s) => setLiveStatus(s.status));
+    liveNow = session;
     setLive(session);
     return session;
   };
   const chooseBackend = (id: DockBackendId): void => {
-    if (id === untrack(backend) && untrack(live) !== undefined) return;
+    if (id === untrack(backend) && liveNow !== undefined) return;
     setBackend(id);
     store(BACKEND_KEY, id);
     dropLive(); // the delegation TYPE is frozen per session: rebuild, always
-    ensureLive();
+    ensureLive(id);
   };
 
   // Both sessions follow the surface (the compute is tracked, the effect is not).
   createEffect(
     () => surface(),
     (s) => {
-      untrack(oracle)?.setTools(s.tools, { brief: s.brief });
-      untrack(live)?.setTools(s.tools as unknown as LiveTool[], { brief: s.brief });
+      oracleNow?.setTools(s.tools, { brief: s.brief });
+      liveNow?.setTools(s.tools as unknown as LiveTool[], { brief: s.brief });
     },
   );
 
   onCleanup(() => {
-    untrack(oracle)?.close();
+    oracleNow?.close();
     dropLive();
   });
 
@@ -281,7 +288,7 @@ export function VoiceDock(props: VoiceDockProps): JSX.Element {
     setPane(target);
     store(PANE_KEY, target);
     if (target === "oracle") ensureOracle();
-    if (target === "live") ensureLive();
+    if (target === "live") ensureLive(untrack(backend));
   };
 
   const injectStyles = !stylesInjected;

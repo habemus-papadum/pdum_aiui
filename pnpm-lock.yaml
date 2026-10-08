@@ -205,6 +205,9 @@ importers:
 
   demos/aztec:
     dependencies:
+      '@habemus-papadum/aiui-dock':
+        specifier: workspace:^
+        version: link:../../packages/aiui-dock
       '@habemus-papadum/aiui-journal':
         specifier: workspace:^
         version: link:../journal
@@ -251,6 +254,9 @@ importers:
 
   demos/circle:
     dependencies:
+      '@habemus-papadum/aiui-dock':
+        specifier: workspace:^
+        version: link:../../packages/aiui-dock
       '@habemus-papadum/aiui-journal':
         specifier: workspace:^
         version: link:../journal
@@ -300,6 +306,9 @@ importers:
 
   demos/dna-script:
     dependencies:
+      '@habemus-papadum/aiui-dock':
+        specifier: workspace:^
+        version: link:../../packages/aiui-dock
       '@habemus-papadum/aiui-journal':
         specifier: workspace:^
         version: link:../journal
@@ -343,6 +352,9 @@ importers:
 
   demos/gallery:
     dependencies:
+      '@habemus-papadum/aiui-dock':
+        specifier: workspace:^
+        version: link:../../packages/aiui-dock
       '@habemus-papadum/aiui-journal':
         specifier: workspace:^
         version: link:../journal
@@ -380,6 +392,9 @@ importers:
 
   demos/gear-talk:
     dependencies:
+      '@habemus-papadum/aiui-dock':
+        specifier: workspace:^
+        version: link:../../packages/aiui-dock
       '@habemus-papadum/aiui-journal':
         specifier: workspace:^
         version: link:../journal
@@ -429,6 +444,9 @@ importers:
 
   demos/gears:
     dependencies:
+      '@habemus-papadum/aiui-dock':
+        specifier: workspace:^
+        version: link:../../packages/aiui-dock
       '@habemus-papadum/aiui-journal':
         specifier: workspace:^
         version: link:../journal
@@ -472,6 +490,9 @@ importers:
 
   demos/gratings:
     dependencies:
+      '@habemus-papadum/aiui-dock':
+        specifier: workspace:^
+        version: link:../../packages/aiui-dock
       '@habemus-papadum/aiui-journal':
         specifier: workspace:^
         version: link:../journal
@@ -518,6 +539,9 @@ importers:
 
   demos/holograms:
     dependencies:
+      '@habemus-papadum/aiui-dock':
+        specifier: workspace:^
+        version: link:../../packages/aiui-dock
       '@habemus-papadum/aiui-journal':
         specifier: workspace:^
         version: link:../journal
@@ -635,6 +659,9 @@ importers:
 
   demos/morphogen:
     dependencies:
+      '@habemus-papadum/aiui-dock':
+        specifier: workspace:^
+        version: link:../../packages/aiui-dock
       '@habemus-papadum/aiui-journal':
         specifier: workspace:^
         version: link:../journal
@@ -693,6 +720,9 @@ importers:
       '@habemus-papadum/aiui-cf-creds':
         specifier: workspace:^
         version: link:../../packages/aiui-cf-creds
+      '@habemus-papadum/aiui-dock':
+        specifier: workspace:^
+        version: link:../../packages/aiui-dock
       '@habemus-papadum/aiui-source-processor':
         specifier: workspace:^
         version: link:../../packages/aiui-source-processor
@@ -855,6 +885,9 @@ importers:
 
   demos/twins:
     dependencies:
+      '@habemus-papadum/aiui-dock':
+        specifier: workspace:^
+        version: link:../../packages/aiui-dock
       '@habemus-papadum/aiui-oscillator':
         specifier: workspace:^
         version: link:../oscillator
@@ -898,6 +931,9 @@ importers:
 
   demos/walkthrough:
     dependencies:
+      '@habemus-papadum/aiui-dock':
+        specifier: workspace:^
+        version: link:../../packages/aiui-dock
       '@habemus-papadum/aiui-source-processor':
         specifier: workspace:^
         version: link:../../packages/aiui-source-processor
@@ -941,6 +977,9 @@ importers:
       '@duckdb/duckdb-wasm':
         specifier: 1.33.1-dev64.0
         version: 1.33.1-dev64.0
+      '@habemus-papadum/aiui-dock':
+        specifier: workspace:^
+        version: link:../../packages/aiui-dock
       '@habemus-papadum/aiui-journal':
         specifier: workspace:^
         version: link:../journal
@@ -1717,6 +1756,9 @@ importers:
       '@habemus-papadum/aiui-build-config':
         specifier: workspace:^
         version: link:../aiui-build-config
+      '@habemus-papadum/aiui-dock':
+        specifier: workspace:^
+        version: link:../aiui-dock
       '@habemus-papadum/aiui-source-processor':
         specifier: workspace:^
         version: link:../aiui-source-processor

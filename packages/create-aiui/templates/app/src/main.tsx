@@ -32,8 +32,8 @@
  * ──────────────────────────────────────────────────────────────────────────────
  */
 
+import { VoiceDock } from "@habemus-papadum/aiui-dock";
 import { PageBoundary } from "@habemus-papadum/aiui-viz";
-import { ToolLog } from "@habemus-papadum/aiui-viz/site/tool-log";
 import { render } from "@solidjs/web";
 import { page } from "./page";
 
@@ -42,13 +42,14 @@ page.activate?.();
 // PageBoundary: an uncaught effect throw would otherwise halt the page's
 // whole reactive system (Solid 2.0 semantics) — contained, it renders a
 // fault card with a reset instead. Same seam a multi-app shell uses.
-// ToolLog: the agent's tool calls, hidden until the URL ends in #aiui-tools —
-// "was my agent actually calling the tools?" answered on the page itself.
+// VoiceDock: the pill row in the corner — talk to this app through the oracle
+// or a live session (the dev server's OpenAI key, else one you paste), open
+// its tool log ("was my agent actually calling the tools?"), all on the page.
 render(
   () => (
     <PageBoundary name={page.title}>
       <page.App />
-      <ToolLog />
+      <VoiceDock />
     </PageBoundary>
   ),
   document.getElementById("root") as HTMLElement,

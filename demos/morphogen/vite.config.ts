@@ -8,5 +8,5 @@ import solid from "vite-plugin-solid";
 // demo's source through its own identical plugin set; this file serves the
 // standalone `pnpm dev` loop.
 export default defineConfig({
-  plugins: [aiui(), solid()],
+  plugins: [aiui({ devKeys: ["openai"] }), solid()],
 });

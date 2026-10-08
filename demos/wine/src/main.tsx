@@ -29,8 +29,8 @@
  */
 
 import "@habemus-papadum/aiui-journal/styles.css";
+import { VoiceDock } from "@habemus-papadum/aiui-dock";
 import { PageBoundary } from "@habemus-papadum/aiui-viz";
-import { ToolLog } from "@habemus-papadum/aiui-viz/site/tool-log";
 import { render } from "@solidjs/web";
 import { page } from "./page";
 
@@ -43,7 +43,7 @@ render(
   () => (
     <PageBoundary name={page.title}>
       <page.App />
-      <ToolLog />
+      <VoiceDock />
     </PageBoundary>
   ),
   document.getElementById("root") as HTMLElement,

@@ -48,6 +48,10 @@ most useful call.
 Flow: **list (by tab), then call (by tab).** After a call that mutates state, **read back in a
 separate call, not the same tick** — Solid batches writes; a same-tick read lies.
 
+A page can also be driven by voice WITHOUT the panel: every demo and scaffolded app mounts the
+voice dock (`@habemus-papadum/aiui-dock` — the pill row in the corner: oracle, live, tools, key).
+Its calls land in the page's log as `oracle` / `live:…`; `page_tools_*` see the same tools.
+
 ## Channel server endpoints
 
 Find the port with the **`channel_info` MCP tool**. (There is no `window.__AIUI__.port` — the

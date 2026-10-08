@@ -1,7 +1,7 @@
 {
   "name": "@habemus-papadum/demo-motherduck-lab",
   "version": "0.20.0+dev",
-  "description": "In-repo lab (not in the gallery): the in-tab MotherDuck engine — dev key, self-hosted wasm, Mosaic over the stock connector, local tables beside cloud ones, rebuild.",
+  "description": "In-repo lab (not in the gallery): the in-tab MotherDuck engine \u2014 dev key, self-hosted wasm, Mosaic over the stock connector, local tables beside cloud ones, rebuild.",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -28,6 +28,7 @@
   "dependencies": {
     "@duckdb/duckdb-wasm": "catalog:",
     "@habemus-papadum/aiui-cf-creds": "workspace:^",
+    "@habemus-papadum/aiui-dock": "workspace:^",
     "@habemus-papadum/aiui-source-processor": "workspace:^",
     "@habemus-papadum/aiui-viz": "workspace:^",
     "@motherduck/wasm-client": "^1.5.5-r.1",

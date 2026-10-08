@@ -1,7 +1,7 @@
 {
   "name": "@habemus-papadum/demo-circle",
   "version": "0.20.0+dev",
-  "description": "How round can you draw a circle? A vanishing-ink pencil surface, a live least-squares fit, and a Zen centre-ghost — the pencil-package demo.",
+  "description": "How round can you draw a circle? A vanishing-ink pencil surface, a live least-squares fit, and a Zen centre-ghost \u2014 the pencil-package demo.",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -34,6 +34,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@habemus-papadum/aiui-dock": "workspace:^",
     "@habemus-papadum/aiui-journal": "workspace:^",
     "@habemus-papadum/aiui-pencil": "workspace:^",
     "@habemus-papadum/aiui-source-processor": "workspace:^",
