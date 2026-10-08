@@ -1,7 +1,7 @@
 {
   "name": "@habemus-papadum/aiui-design",
-  "version": "0.20.0+dev",
-  "description": "The aiui design system: cotton paper, slate ink, editorial type, and a skin for every stable aiui-viz class \u2014 one import for a notebook page or a tool surface.",
+  "version": "0.21.0",
+  "description": "The aiui design system: cotton paper, slate ink, editorial type, and a skin for every stable aiui-viz class — one import for a notebook page or a tool surface.",
   "type": "module",
   "license": "MIT",
   "repository": {

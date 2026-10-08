@@ -1,7 +1,7 @@
 {
   "name": "@habemus-papadum/demo-styleguide",
-  "version": "0.20.0+dev",
-  "description": "In-repo aiui demo: the design system's styleguide \u2014 every role, token, and component on one page.",
+  "version": "0.21.0",
+  "description": "In-repo aiui demo: the design system's styleguide — every role, token, and component on one page.",
   "private": true,
   "type": "module",
   "license": "MIT",
