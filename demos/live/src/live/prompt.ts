@@ -13,8 +13,10 @@ export const APP_BLURB =
 
 export const LIVE_SLOTS: LivePromptSlots = {
   app: `This app is ${APP_BLURB}`,
-  backendTools: `- App control: read the oscillator's settings (frequency, damping, amplitude, samples) and change them; kick it.
-- Analysis: read the app's source code to explain how the trace is computed and why it looks the way it does; this can take a while, sometimes a minute.`,
+  // A PREFACE: what the backend can do beyond the page's tools. The tools
+  // themselves (report, set, kick, …) are listed beneath this by the session,
+  // one sentence each, from the tool array it actually sends.
+  backendTools: `- Analysis: read the app's source code to explain how the trace is computed and why it looks the way it does; this can take a while, sometimes a minute.`,
   delegateWhen: `- The user asks to change a setting, kick the oscillator, or asks what a setting currently is.
 - The user asks why the trace looks some way (jagged, flat, fast), or anything about how the app works inside.`,
   dontDelegateWhen: `- The user greets you, thanks you, or asks you to repeat something you already said.

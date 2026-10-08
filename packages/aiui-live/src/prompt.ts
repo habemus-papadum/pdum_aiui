@@ -48,9 +48,11 @@ export interface LivePromptOptions {
 /**
  * The voice model's `Backend tools:` capability list, DERIVED from the tool
  * array and the app's brief (the vendor's template: one capability per line,
- * "what the backend can do"). The session uses it when the slots leave
- * `backendTools` unset, so the list the voice model reads is the list the
- * backend actually has — the hand-maintained copy it replaces drifted.
+ * "what the backend can do"). The session renders it beneath an authored
+ * `backendTools` slot when there is one (the slot is a preface: abilities the
+ * tool array cannot express, like reading the app's source) and alone
+ * otherwise — either way the list the voice model reads is the list the
+ * backend actually has; the hand-maintained copy this replaced drifted.
  * Returns undefined with nothing to say (the default text applies).
  */
 export function backendToolsFromTools(

@@ -151,6 +151,24 @@ describe("LiveSession lifecycle", () => {
     expect(live.currentBrief()).toBe("One damped oscillator. It has a trace.");
   });
 
+  it("renders an authored backendTools slot as a preface to the derived list", async () => {
+    const fake = fakeTransport();
+    const live = session(fake, {
+      config: {
+        instructions: { app: "wave app", backendTools: "- Analysis: read the app's source code." },
+      },
+    });
+    live.setTools(
+      [{ name: "kick", description: "Add a phase impulse.", parameters: {}, execute: () => null }],
+      { brief: "One damped oscillator." },
+    );
+    await startLive(fake, live);
+    const text = live.sessionConfig()?.instructions ?? "";
+    expect(text).toContain(
+      "Backend tools:\n- Analysis: read the app's source code.\n- App: One damped oscillator.\n- kick: Add a phase impulse.",
+    );
+  });
+
   it("closes on request and reports the reason", async () => {
     const fake = fakeTransport();
     const live = session(fake);

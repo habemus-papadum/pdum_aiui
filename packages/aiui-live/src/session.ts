@@ -496,17 +496,21 @@ export class LiveSession {
 
   private composeWire(): LiveSessionConfig {
     const config = this.options.config ?? {};
-    // The voice model's capability list, derived from the tools when the
-    // slots leave it unset (see backendToolsFromTools).
+    // The voice model's capability list. An authored `backendTools` slot is a
+    // PREFACE — what the backend can do beyond the page's tools ("read the
+    // app's source code") — and the list derived from the tool array always
+    // follows it, from the same array in the same call (the sync rule); with
+    // no slot the derived list stands alone (see backendToolsFromTools).
     const slots = typeof config.instructions === "string" ? undefined : (config.instructions ?? {});
     const derived =
-      slots !== undefined && slots.backendTools === undefined
-        ? backendToolsFromTools(this.tools, this.toolBrief)
-        : undefined;
+      slots !== undefined ? backendToolsFromTools(this.tools, this.toolBrief) : undefined;
+    const backendTools = [slots?.backendTools?.trim(), derived]
+      .filter((part): part is string => part !== undefined && part !== "")
+      .join("\n");
     const instructions =
       typeof config.instructions === "string"
         ? config.instructions
-        : livePrompt(derived !== undefined ? { ...slots, backendTools: derived } : slots);
+        : livePrompt(backendTools !== "" ? { ...slots, backendTools } : slots);
     let delegation: LiveDelegationConfig = config.delegation ?? { type: "client" };
     if (delegation.type === "responses" && delegation.responses.tools === undefined) {
       // The session manages the hosted backend's tool config: the tool array,
