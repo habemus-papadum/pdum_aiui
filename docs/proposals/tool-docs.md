@@ -5,8 +5,8 @@ per consumer, a library-grade DuckDB query tool, and an on-page record of who ca
 
 Status: **DECIDED 2026-09-19; milestones 1–4 SHIPPED the same day** (`tool docs I`–`IV`
 on main, released in 0.19.0), **milestone 5 VERIFIED 2026-10-08 in the session browser
-and headlessly against the real page tools** ([§10](#10-milestone-5-what-the-live-run-found-2026-10-08):
-six fixes, the measurements, and the two checks that still need a person at the mic). The owner asked for a synthesis of five requests (tool instructions in
+and headlessly against the real page tools, then by the owner by voice** ([§10](#10-milestone-5-what-the-live-run-found-2026-10-08):
+six fixes and the measurements; the follow-on work is in [work-plan-2026-10](./work-plan-2026-10.md)). The owner asked for a synthesis of five requests (tool instructions in
 system prompts, a generic DuckDB query tool, result truncation and error return, an on-page
 tool-call debugger, tool pass-through for the live oracle) and deferred every open decision
 to "simplest, least churn". Every claim about existing code cites the file as it was before
@@ -386,10 +386,13 @@ and runs aiui-live's delegator exactly as the relay would — no voice model, no
 6. `backendToolsFromTools` keeps one sentence per tool: the voice model decides whether to
    delegate; the procedure is the backend's reading.
 
-**Still needs a person at the mic.**
+**Verified by the owner, by voice (2026-10-08, later the same day).**
 
-- The oracle (OpenAI Realtime, the intent panel's oracle lab) on seismos: does the Realtime
-  model call `schema` before `sql`, and the woven instructions in the panel's prompt view
-  carry the `Tools:` section (the measurement above is that text).
-- demos/live with voice, hosted mode: the delegation over the relay carrying the brief
-  end to end (unit-tested at the frame; the delegators verified above).
+- The oracle (OpenAI Realtime, from the intent panel) on seismos: the panel's prompt view
+  carries the `Tools:` section, the query and the filter requests both worked, the calls
+  landed in the page's log as `oracle`.
+- demos/live with voice: hosted mode's session config carries the `Tools:` section in the
+  vendor-run backend's instructions and the tool array; the Claude backend answered through
+  `app_call`. One observation came out of reading those configs — the voice model's
+  `Backend tools:` list is the app's hand-written slot, not the derived one — and became
+  tranche 0 of [work-plan-2026-10](./work-plan-2026-10.md).
