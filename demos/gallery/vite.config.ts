@@ -43,7 +43,25 @@ export default defineConfig(({ command, isPreview }) => ({
     // (found live 2026-10-08). Declaring demos/ as app code stamps them with
     // root-relative locs ("../seismos/src/ui/App.tsx:42:7"), which /@fs/ and
     // the attribution consumers resolve against sourceRoot as before.
-    aiui({ locator: { stampRoots: [fileURLToPath(new URL("..", import.meta.url))] } }),
+    //
+    // The BUILD keeps the stamps and ships the sources (`sources: "ship"` —
+    // every demo's files under /aiui/__aiui/src/, a public repo's code on a
+    // public site), with sourceRoot pointing at the repo so a stamp on the
+    // published page links to GitHub; dev keeps the machine path the editor
+    // links need. The `source` and `locate` tools then answer on the site as
+    // they do here.
+    aiui({
+      locator: {
+        stampRoots: [fileURLToPath(new URL("..", import.meta.url))],
+        ...(command === "build" ? { stampJsx: true } : {}),
+      },
+      ...(command === "build"
+        ? {
+            sources: "ship",
+            sourceRoot: "https://github.com/habemus-papadum/pdum_aiui/blob/main/demos/gallery/",
+          }
+        : {}),
+    }),
     solid(),
     // Marker-driven discovery of the sibling demo packages (aiui.sitePage in
     // their package.json) — serves virtual:demo-pages; see demo-discovery.ts.

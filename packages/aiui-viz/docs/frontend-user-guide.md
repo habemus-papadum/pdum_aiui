@@ -541,6 +541,11 @@ Those two lines derive the whole standard surface from your declarations:
   `TeX` component leaves). Windowed (`maxChars`/`offset`), narrowable (`selector`), and blind
   to the agent's own chrome (`data-aiui-chrome`). The engine is `pageText` on
   `@habemus-papadum/aiui-viz/page-text`, framework-free.
+- **`source`** — the app's own code, one file by the path a stamp uses (`src/ui/App.tsx`),
+  as numbered lines (`from`/`to` windows; `more` says lines remain). On a dev server it reads
+  through Vite's `/@fs/…?raw`; on a production site it answers only when the build shipped its
+  sources — `aiui({ sources: "ship" })`, which also wants `locator: { stampJsx: true }` and a
+  `sourceRoot` URL so prod stamps link somewhere clickable. Shipping publishes the code.
 
 Rule of thumb: **don't write tools — declare controls and actions.** The hand-written
 set-this/get-that tool this framework once required is gone; `kit.registerTool` remains only for

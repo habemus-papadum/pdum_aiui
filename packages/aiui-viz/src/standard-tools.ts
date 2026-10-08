@@ -27,6 +27,9 @@
  *  - `locate` — element → source/cell stamps, unchanged.
  *  - `read-page` — the page as text (page-text.ts): headings, prose, lists,
  *    tables, every equation as its TeX; windowed, so a long page is paged.
+ *  - `source` — the app's own code, one file by its stamp path, numbered
+ *    lines (source-reader.ts): from the dev server, or from a build that
+ *    shipped its sources.
  *
  * Kept out of agent-tools.ts so that module stays dependency-free; kept
  * explicit (one line, not automatic) so a headless app can opt out and tests
@@ -40,6 +43,7 @@ import { actionByName, controlByName, controlSurface, subscribeControlSurface } 
 import { dependencyEdges } from "./graph-trace";
 import { pageText, READ_PAGE_DEFAULT_CHARS, READ_PAGE_MAX_CHARS } from "./page-text";
 import type { Scope } from "./scope";
+import { listShippedSources, readSource, SOURCE_DEFAULT_LINES } from "./source-reader";
 
 /** How many elements `locate` will describe in one call. */
 const LOCATE_LIMIT = 20;
@@ -338,6 +342,51 @@ export function registerStandardTools(
       const offset =
         typeof args?.offset === "number" && args.offset > 0 ? Math.floor(args.offset) : 0;
       return pageText({ root, maxChars, offset });
+    },
+  });
+
+  kit.registerTool({
+    name: "source",
+    description:
+      "Read the app's own source code: one file, by the path the stamps use (report " +
+      '{ format: "full" }, locate and data-source-loc say `src/ui/App.tsx:42`), as numbered ' +
+      "lines. Returns { file, from, to, total, more, text }.",
+    usage:
+      "Pass file exactly as a stamp names it — the part before the first colon. from/to pick " +
+      `a line range (default the first ${SOURCE_DEFAULT_LINES} lines; a call stops early at 32 KB ` +
+      "and `to` says where; `more` means lines remain). Omit file to list what a production " +
+      "build shipped. Answers on a dev server, or on a site built with " +
+      'aiui({ sources: "ship" }); otherwise it says the page carries no source.',
+    kind: "read",
+    params: {
+      file: "the file, as stamped (src/…)",
+      from: "first line, 1-based",
+      to: "last line, inclusive",
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        file: { type: "string" },
+        from: { type: "number", minimum: 1 },
+        to: { type: "number", minimum: 1 },
+      },
+      additionalProperties: false,
+    },
+    run: async (args) => {
+      const file = typeof args?.file === "string" ? args.file.trim() : "";
+      if (file === "") {
+        const files = await listShippedSources();
+        if (files === undefined) {
+          throw new Error(
+            "name a file as a stamp does (src/ui/App.tsx); a dev server has no file list",
+          );
+        }
+        return { files };
+      }
+      return readSource(file, {
+        ...(typeof args?.from === "number" ? { from: args.from } : {}),
+        ...(typeof args?.to === "number" ? { to: args.to } : {}),
+      });
     },
   });
 

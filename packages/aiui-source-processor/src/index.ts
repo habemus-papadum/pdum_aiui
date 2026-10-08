@@ -36,6 +36,7 @@ import {
 } from "@habemus-papadum/aiui-util";
 import type { Plugin } from "vite";
 import { type DuckdbAssetsOptions, duckdbAssets } from "./duckdb-assets.ts";
+import { shipSources } from "./ship-sources.ts";
 import {
   defaultFactories,
   type FactorySpec,
@@ -86,14 +87,28 @@ export interface AiuiPluginOptions {
    * ./duckdb-assets.ts.
    */
   duckdbAssets?: boolean | DuckdbAssetsOptions;
+  /**
+   * `"ship"`: a production build carries its own source — every app file
+   * (the root plus the locator's `stampRoots`; never node_modules) emitted
+   * unchanged under `__aiui/src/` with a manifest, and the page told where
+   * (`window.__AIUI__.sources`), so aiui-viz's `source` tool reads code on
+   * the published site as it does on a dev server. This PUBLISHES the source;
+   * off by default, for sites whose code is public anyway. Pair it with
+   * `locator: { stampJsx: true }` and a `sourceRoot` URL (see ./ship-sources).
+   */
+  sources?: "ship";
 }
 
-/** The dev-only `sourceRoot` seed (see the module doc). */
+/**
+ * The `sourceRoot` seed (see the module doc): dev-only when it is the Vite
+ * root (a machine path never ships); an EXPLICIT root — a URL, for a build
+ * that ships its sources and keeps its stamps — seeds every mode.
+ */
 function sourceRootSeed(explicit: string | undefined): Plugin {
   let root: string | undefined = explicit;
   return {
     name: "aiui:source-root",
-    apply: "serve",
+    ...(explicit === undefined ? { apply: "serve" as const } : {}),
     configResolved(config) {
       root ??= config.root;
     },
@@ -202,6 +217,12 @@ export function aiui(options: AiuiPluginOptions = {}): Plugin[] {
     plugins.push(sourceLocatorVite(locatorOptions));
   }
   plugins.push(sourceRootSeed(options.sourceRoot));
+  if (options.sources === "ship") {
+    const locator = typeof options.locator === "object" ? options.locator : undefined;
+    plugins.push(
+      shipSources(locator?.stampRoots !== undefined ? { roots: locator.stampRoots } : {}),
+    );
+  }
   if (options.devKeys !== undefined && options.devKeys.length > 0) {
     plugins.push(devKeysSeed(options.devKeys));
   }
@@ -220,5 +241,13 @@ export {
   duckdbAssets,
   locateDuckdbAssets,
 } from "./duckdb-assets.ts";
+export {
+  type ShipSourcesOptions,
+  SOURCES_DIR,
+  SOURCES_MANIFEST,
+  type SourcesManifest,
+  shippedPath,
+  shipSources,
+} from "./ship-sources.ts";
 
 export default aiui;

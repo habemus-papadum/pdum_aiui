@@ -112,6 +112,10 @@ export { scope } from "./scope";
 // site-page.ts — the mountable-page contract between an app and a site shell,
 // and the landing-card contract (type-only; the chrome lives behind ./site).
 export { type DemoCard, type SitePage, setSitePageActive } from "./site-page";
+// source-reader.ts — the app's own source read from the page (the `source`
+// standard tool's engine): a dev server's /@fs, or a build that shipped it.
+export type { ReadSourceOptions, SourceReaderDeps, SourceWindow } from "./source-reader";
+export { listShippedSources, readSource } from "./source-reader";
 // standard-tools.ts — the app-independent `locate` tool and `cells` reporter,
 // plus surfaceViewFor: the shared "which declarations are this scope's surface"
 // membership test (the toolkit and aiui-oracle project the SAME view).

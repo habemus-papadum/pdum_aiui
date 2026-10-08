@@ -134,6 +134,10 @@ export interface AiuiGlobal {
    * option injected (per-provider, e.g. `{ openai: "sk-…" }`). Never present
    * in a production build — the seeding plugin applies to serve alone. */
   devKeys?: Record<string, string>;
+  /** Where a production build made with `aiui({ sources: "ship" })` put its
+   * own source: `manifest` (a URL) maps stamp paths to published ones under
+   * `base`. Read by the `source` standard tool (source-reader.ts). */
+  sources?: { base: string; manifest: string };
   /** Where the aiui Vite plugin's `duckdbAssets` option published the
    * DuckDB-WASM binaries: `<prefix>duckdb-wasm-assets/<version>/…`. Present
    * in builds too (nothing secret) — see aiui-viz/duckdb.ts. */

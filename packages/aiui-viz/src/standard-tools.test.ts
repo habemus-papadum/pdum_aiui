@@ -58,6 +58,16 @@ describe("registerStandardTools", () => {
     expect(byName.get("peek")?.kind).toBe("read");
   });
 
+  it("`source` is registered, and without a dev server or shipped sources says so", async () => {
+    const kit = agentToolkit("stdSource");
+    registerStandardTools(kit);
+    expect(kit.handle().tools.map((t) => t.name)).toContain("source");
+    await expect(kit.handle().call("source", { file: "src/a.ts" })).rejects.toThrow(
+      /carries no source/,
+    );
+    await expect(kit.handle().call("source", {})).rejects.toThrow(/name a file/);
+  });
+
   it("is idempotent — a re-evaluated module replaces rather than duplicates", () => {
     const kit = agentToolkit("stdSmokeIdem");
     registerStandardTools(kit);
