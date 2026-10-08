@@ -261,70 +261,18 @@ Unlike a scaffolded sandbox, a demo is not its own git repo and ships no `.gitig
 `"aiui": { "scaffold": true }` marker — which makes `create-aiui` classify it as `occupied` and
 refuse to touch it. Exactly right.
 
-## The `apps/` directory — products staged for eviction
+## The `apps/` directory — retired
 
-`demos/*` are illustrations: they exist to be read, composed into the gallery,
-and to keep the packages honest. `apps/*` are **products** — things meant to end
-up in their own repository, installed by people who do not have this checkout.
-Today: `cc-miner` (a dashboard over your own Claude Code usage) and `cc-assay`
-(the tool that mines transcripts into Parquet).
-
-`cc-miner` is also where the **two-host pattern** is being worked out: the same
-app runs in a browser tab (`pnpm dev`) and in an Electron window
-(`pnpm dev:electron`), from two Vite configs over a shared
-`vite.config.base.ts`. Both are dev servers — Electron is a window pointed at a
-Vite server, not a different build — and there is deliberately no packaging yet.
-The renderer is byte-identical between them; where it needs to know its shell it
-asks at *runtime* (`src/host.ts` sniffs the Electron user-agent) rather than
-through a `define`, precisely so "it runs the same in both" stays a claim
-anyone can check. `apps/cc-miner/electron/` stays in-package until the shape has
-earned a home of its own (see the deployment-shapes proposal, git history).
-
-They are full workspace members right now — `workspace:^` source-first editing,
-CI typecheck, version lockstep — because that is what makes iteration fast while
-the `aiui-*` packages underneath them are still moving. What makes them
-*apps* rather than demos is where they are going, and one guarantee:
-
-**`pnpm evict:check` verifies every app can still leave.** An app may only be
-evicted if each workspace package it depends on is either evicted alongside it
-or already published to npm. Running that in CI turns "this can stand alone"
-into a maintained property rather than a discovery made on the day someone
-tries. It has already earned its keep: `cc-miner` depended on
-`@habemus-papadum/aiui-journal`, which is unpublished — and, as it turned out,
-never imported.
-
-```sh
-pnpm evict:check                                   # can every app still leave?
-pnpm evict cc-miner cc-assay --out /tmp/cc         # produce the standalone tree
-pnpm evict cc-miner cc-assay --out /tmp/cc --history   # …and carry the commits
-```
-
-`scripts/evict.mjs` rewrites `workspace:^` to the published range, drops the
-lockstep `+dev` version, hoists the packages to the new root, and carries the
-things a package copy silently leaves behind. That last list was found by
-running the eviction and watching it fail, not by reasoning:
-
-- **`tsconfig.base.json`** — extended by relative path, so both `tsc` and vite's
-  esbuild fail on an unresolvable `extends`. The tree installs, then cannot
-  compile.
-- **root `devDependencies`** — hoisted, therefore invisible to a package.
-  `cc-assay` compiled here and failed there on `Cannot find type definition file
-  for 'node'`.
-- **`overrides` and `allowBuilds`** from `pnpm-workspace.yaml` — without the
-  first, Mosaic's exact older `duckdb-wasm` pin installs a second copy and the
-  types stop unifying; without the second, install fails on esbuild's build
-  script.
-- **the `catalog:`/`catalogs:` blocks**, same file (this one carried by
-  reasoning when catalogs were introduced, not discovered by a failure: a
-  manifest's `catalog:` reference is unresolvable without its definition, so
-  the evicted tree could not even install).
-- **`../../` paths** — `apps/<name>/` is two levels below the root, `<name>/` in
-  the evicted repo is one.
-- **a root `.gitignore`** — `biome.json` sets `vcs.useIgnoreFile`, so lint
-  hard-errors without one.
-
-Adding a new app is `pnpm new-demo` followed by a move, for now; there is no
-`new-app` scaffolder and none is warranted until a third one exists.
+`apps/*` held **products** staged for eviction to their own repositories (where `demos/*`
+are illustrations): `cc-miner` (a dashboard over your own Claude Code usage) and `cc-assay`
+(the tool that mines transcripts into Parquet). Both left on 2026-10-08 — they live at
+`habemus-papadum/cc-miner` — and the staging machinery left with them: the `apps/*`
+workspace glob, `scripts/evict.mjs` (which rewrote `workspace:^` to published ranges and
+carried what a package copy silently leaves behind: `tsconfig.base.json`, hoisted root
+`devDependencies`, the `overrides`/`allowBuilds`/catalog blocks, `../../` paths, a root
+`.gitignore`), the `evict:check` guard, and the `cc-miner-release` workflow. Git history has
+all of it (`git log --all -- apps scripts/evict.mjs`); if a product ever stages here again,
+start from that commit rather than re-deriving the list.
 
 ## The `bootstrap/` directory — standalone, npm-pinned packages
 

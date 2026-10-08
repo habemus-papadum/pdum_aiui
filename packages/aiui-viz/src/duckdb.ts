@@ -223,7 +223,7 @@ export function duckdbRunner(connection: duckdb.AsyncDuckDBConnection): SqlRunne
 }
 
 /** The Mosaic `Connector` shape this adapter needs (structural on purpose —
- * no `@uwdata/*` import; the Quack path in apps/cc-miner is one). */
+ * no `@uwdata/*` import; the Quack path in the cc-miner app, now its own repo, is one). */
 export interface JsonConnector {
   query(request: { type: "json"; sql: string }): Promise<unknown>;
 }

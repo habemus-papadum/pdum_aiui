@@ -5,14 +5,6 @@ packages:
   # Note this also enrolls them in version lockstep — scripts/versioning.mjs reads
   # the globs in this list, so every demo carries the shared version.
   - "demos/*"
-  # Standalone apps, staged for eviction to their own repo. They are full
-  # workspace members TODAY — `workspace:^` source-first editing, CI typecheck,
-  # version lockstep — and `scripts/evict.mjs` rewrites a copy to consume
-  # `@habemus-papadum/*` from npm instead. Living here rather than in demos/
-  # says they are products, not illustrations: nothing discovers them, nothing
-  # composes them, and their dependency on this repo is meant to become a
-  # published version range. See CLAUDE.md → "The apps/ directory".
-  - "apps/*"
 
 # The ONE npm-pinned in-repo package (bootstrap/aiui-registry — outside the
 # workspace, published manually; see CLAUDE.md → "The bootstrap/ directory").
@@ -73,7 +65,7 @@ catalogs:
 # `AsyncDuckDBConnection` — same shape, different declaration. Collapsing to one
 # copy is what makes the types unify; keep this in step with the default
 # catalog's @duckdb/duckdb-wasm entry above (which is what the consumers —
-# aiui-viz, demos/seismos, apps/cc-miner — declare via `catalog:`).
+# aiui-viz, demos/seismos — declare via `catalog:`).
 overrides:
   "@duckdb/duckdb-wasm": 1.33.1-dev64.0
   # solid-js depends on @solidjs/signals via a caret that floats across
@@ -92,22 +84,7 @@ allowBuilds:
   # legacy credential store, vsce-sign's postinstall fetches its marketplace
   # signing binary — so both are explicitly denied, not trusted.
   "@vscode/vsce-sign": false
-  # cc-miner's second host (`pnpm dev:electron`). NOT optional and NOT cosmetic:
-  # pnpm 11 refuses to finish `pnpm install` while the decision is unmade
-  # (ERR_PNPM_IGNORED_BUILDS), and every script here runs a deps check first — so
-  # an undecided `electron` breaks the whole repo, including `pnpm dev` for apps
-  # that have nothing to do with Electron. Before you "correct" this: electron@43
-  # publishes NO `scripts` field at all (the ~200 MB binary is fetched lazily by
-  # index.js on the first `require("electron")`), and pnpm asks anyway. `true`
-  # buys no install-time download; it settles a question pnpm insists on.
-  electron: true
-  # Reached only through electron-builder, and only on the Windows path — its
-  # install script fetches the Squirrel.Windows binaries. cc-miner ships macOS
-  # (dmg + zip) and Linux (AppImage + deb) and no Windows target, so the
-  # download is pure cost. Denied rather than left undecided: pnpm 11 refuses to
-  # finish `pnpm install` while the question is open, which breaks every script
-  # in the repo (see the `electron` note above for the same trap).
-  electron-winstaller: false
+  electron: set this to true or false
   esbuild: true
   keytar: false
 

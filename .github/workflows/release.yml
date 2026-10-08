@@ -171,7 +171,7 @@ jobs:
           echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc-publish"
           export NPM_CONFIG_USERCONFIG="$HOME/.npmrc-publish"
           # ONE recursive publish across the workspace (the cf_browser_credentials
-          # pattern). pnpm auto-skips `private: true` members (demos/apps), applies
+          # pattern). pnpm auto-skips `private: true` members (demos), applies
           # the publishConfig dist/ swap, and expands each `workspace:^` dep to
           # ^<release> at pack time.
           #
