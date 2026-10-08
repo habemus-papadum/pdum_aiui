@@ -101,7 +101,7 @@ packages/): workspace-internal, version lockstep, CI-typechecked, no `publishCon
   Escape or backdrop closes. Arrow keys deliberately still drive the deck while the HUD is open
   (the HUD layer passes them): the HUD is a *projection* of the deck, and the highlight follows.
   Previews mount only while the HUD is open and dispose on close.
-- **`ScrollCue`** — the fai-canteen bob, adopted: a circled chevron pinned bottom-center,
+- **`ScrollCue`** — an earlier landing page's bob, adopted: a circled chevron pinned bottom-center,
   bobbing only under `prefers-reduced-motion: no-preference`, visible on the first slide and
   fading once you move (CSS owns the fade; the component only flips a class). Clicking it
   advances — it is a button, not just an ornament.

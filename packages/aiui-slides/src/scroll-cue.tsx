@@ -12,7 +12,7 @@
  * viewer who stalled. It points down while there is anything ahead and flips
  * up at the very end of the deck (where the only step left is back).
  *
- * Lineage: the fai-canteen landing page's `.scroll-cue`; this component only
+ * Lineage: an earlier landing page's `.scroll-cue`; this component only
  * flips classes — the half-second fade lives in the stylesheet, and with CSS
  * alone the cue simply stays visible (fails open).
  */

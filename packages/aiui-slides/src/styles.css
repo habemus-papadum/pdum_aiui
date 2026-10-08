@@ -83,7 +83,7 @@
   }
 }
 
-/* ── the scroll cue (fai-canteen lineage: bob, fade-out, fails open) ───── */
+/* ── the scroll cue (landing-page lineage: bob, fade-out, fails open) ────── */
 
 .aiui-deck-cue {
   position: absolute;

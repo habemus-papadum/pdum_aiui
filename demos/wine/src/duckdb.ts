@@ -6,7 +6,7 @@
  * cross-origin Blob bootstrap); the WASM binaries come from jsDelivr, pinned
  * to the installed package version by `getJsDelivrBundles()`: at ~35–41 MB
  * each they blow past static-host per-file limits (Cloudflare Workers assets
- * cap at 25 MiB — the FAI pitch deck hit it bundling this module), and the
+ * cap at 25 MiB — a downstream slide deck hit it bundling this module), and the
  * CDN copy is immutable, CORS-open, and shared across every deployment.
  * Only `mvp` + `eh` (no `coi`): the threaded bundle needs COOP/COEP headers a
  * static host can't set; `selectBundle` picks `eh` on every modern browser.

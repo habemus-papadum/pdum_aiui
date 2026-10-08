@@ -351,7 +351,7 @@ Found building the wine demo (embedding-atlas integration; full detail:
 - **The JSX compiler and runtime move in lockstep — fresh installs break otherwise.** Symptom:
   `"claimElement" is not exported by @solidjs/web/…` (or `scope`) at dev/build time: the newer
   compiler emits helpers the older runtime doesn't ship, and the plugin's `babel-preset-solid`
-  range floats to the newest beta on any *fresh* lockfile (first paid for in fai-design's
+  range floats to the newest beta on any *fresh* lockfile (first paid for in a downstream design package's
   styleguide). Same trap one layer down: `solid-js` depends on `@solidjs/signals` via a
   beta-crossing caret. Rule, rc line: pin `@solidjs/signals` to the same rc as the `solid`
   catalog via pnpm overrides (root `pnpm-workspace.yaml` and the create-aiui app template), and
