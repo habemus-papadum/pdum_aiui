@@ -22,14 +22,14 @@ import { type PromptWeave, promptWeaves, weaveSummary } from "./oracle-prompt-fo
 export const ORACLE_PROMPT_STYLES = `
   /* Rows read as ledger lines (the viewer's monospace idiom), not as panes. */
   .aiui-oracle-prompts { display: flex; flex-direction: column; gap: 2px; margin: 0 0 6px; }
-  .aiui-oracle-prompt { font: 11px ui-monospace, monospace; }
+  .aiui-oracle-prompt { font: 11px var(--stack-mono); }
   .aiui-oracle-prompt summary { cursor: pointer; opacity: 0.55; }
   .aiui-oracle-prompt[open] summary { opacity: 0.85; }
   /* Wrapped, not scrolled sideways — a persona is prose, and a horizontal
      scrollbar under 460px of side panel makes it unreadable. Capped in height
      so an open row cannot push the transcript off the fold. */
-  .aiui-oracle-prompt-text { margin: 3px 0 4px; padding: 5px; border-radius: 6px;
-    background: color-mix(in srgb, currentColor 8%, transparent);
+  .aiui-oracle-prompt-text { margin: 3px 0 4px; padding: 5px; border-radius: var(--radius);
+    background: var(--surface-sunken);
     white-space: pre-wrap; word-break: break-word;
     max-height: 260px; overflow-y: auto; }
 `;

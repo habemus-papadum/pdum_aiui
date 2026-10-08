@@ -11,6 +11,8 @@
  * changes after load.
  */
 
+import "@habemus-papadum/aiui-design/fonts.css";
+import "@habemus-papadum/aiui-design/tokens.css";
 import { mountDebugPage } from "@habemus-papadum/aiui-trace-ui";
 import { render } from "@solidjs/web";
 import { Dashboard } from "./dashboard";

@@ -18,11 +18,11 @@ import { createSignal, onCleanup, Show } from "solid-js";
 import type { PageEvent, SurfaceTargeting } from "../transport";
 
 export const TARGET_TAB_STYLES = `
-  .aiui-target { margin: 6px 12px 0; font: 12px system-ui; display: flex; }
+  .aiui-target { margin: 6px 12px 0; font: 12px var(--stack-sans); display: flex; }
   .aiui-target-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%;
     padding: 3px 10px; border-radius: 999px;
-    border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
-    background: color-mix(in srgb, currentColor 5%, transparent); }
+    border: 1px solid var(--hairline);
+    background: var(--surface-raised); }
   .aiui-target-eye { opacity: 0.5; font-size: 11px; }
   .aiui-target-fav { width: 14px; height: 14px; border-radius: 3px; flex: none; }
   .aiui-target-host { font-weight: 600; white-space: nowrap; }

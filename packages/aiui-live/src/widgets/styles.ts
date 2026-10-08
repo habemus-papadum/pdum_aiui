@@ -7,6 +7,12 @@
  */
 
 export const LIVE_WIDGET_STYLES = `
+  /* the widgets are chrome: the label face where a design system sets one,
+     the host's font otherwise */
+  .aiui-live-control, .aiui-live-captions, .aiui-live-tasks, .aiui-live-composer,
+  .aiui-live-keybox, .aiui-live-chips, .aiui-live-rows, .aiui-live-meter, .aiui-live-empty,
+  .aiui-live-error, .aiui-live-blocked, .aiui-live-closed {
+    font-family: var(--aiui-sans, inherit); }
   .aiui-live-control { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .aiui-live-control button, .aiui-live-composer button, .aiui-live-keybox button {
     font: inherit; padding: 3px 8px; border-radius: var(--aiui-radius, 6px); cursor: pointer; color: inherit;

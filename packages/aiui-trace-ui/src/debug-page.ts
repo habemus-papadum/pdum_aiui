@@ -65,14 +65,14 @@ export function mountDebugPage(opts: MountDebugPageOptions = {}): void {
   injectDebugUiStyles(document);
   const host = document.createElement("div");
   host.style.cssText =
-    "position: fixed; inset: 0; display: flex; flex-direction: column; background: #14171f;";
+    "position: fixed; inset: 0; display: flex; flex-direction: column; background: var(--aiui-surface, Canvas); color: var(--aiui-ink, CanvasText);";
   document.body.style.margin = "0";
   document.body.appendChild(host);
 
   if (initialPort === undefined) {
     const note = document.createElement("div");
     note.style.cssText =
-      "margin: auto; color: #9aa0aa; font: 13px/1.6 ui-sans-serif, system-ui, sans-serif;";
+      "margin: auto; color: var(--aiui-muted, color-mix(in srgb, CanvasText 55%, Canvas)); font: 13px/1.6 var(--aiui-sans, ui-sans-serif, system-ui, sans-serif);";
     note.textContent =
       "no channel port — open this page through the console (`aiui dashboard`) so it knows which channel to poll";
     host.appendChild(note);

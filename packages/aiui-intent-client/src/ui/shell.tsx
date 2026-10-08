@@ -108,7 +108,7 @@ export function WirePane(props: { narration: Narration }) {
     <div style="margin: 8px 12px; font: 12px system-ui; opacity: 0.85; max-width: 460px">
       <Show when={props.narration.toastLine()}>
         {(line) => (
-          <div style="color: #dc2626; border: 1px solid #dc2626; border-radius: 6px; padding: 4px 8px; margin-bottom: 6px">
+          <div style="color: var(--alarm); border: 1px solid var(--alarm); border-radius: var(--radius); padding: 4px 8px; margin-bottom: 6px">
             {line()}
           </div>
         )}

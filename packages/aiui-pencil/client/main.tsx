@@ -6,6 +6,8 @@
  * composes its own page from the same kit instead of forking this one.
  */
 
+import "@habemus-papadum/aiui-design/fonts.css";
+import "@habemus-papadum/aiui-design/tokens.css";
 import { PencilRemoteApp } from "@habemus-papadum/aiui-pencil/client";
 import { render } from "@solidjs/web";
 

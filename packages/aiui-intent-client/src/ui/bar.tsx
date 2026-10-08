@@ -23,25 +23,24 @@ export const BAR_STYLES = `
      caps still shows which belong together and how deep. Children flow inline
      right after their parent (depth-first), the group wraps as one unit. */
   .aiui-group { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center;
-    padding: 2px 5px; border-radius: 7px;
-    border-left: 1px solid color-mix(in srgb, currentColor 22%, transparent);
-    border-right: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+    padding: 2px 5px; border-radius: var(--radius);
+    border-left: 1px solid var(--hairline);
+    border-right: 1px solid var(--hairline);
     background: color-mix(in srgb, currentColor 4%, transparent); }
   .aiui-group[data-depth="1"] { background: color-mix(in srgb, currentColor 7%, transparent); }
   .aiui-group[data-depth="2"] { background: color-mix(in srgb, currentColor 10%, transparent); }
   .aiui-group[data-depth="3"] { background: color-mix(in srgb, currentColor 13%, transparent); }
   .aiui-group[data-depth="4"] { background: color-mix(in srgb, currentColor 16%, transparent); }
-  .aiui-cap { border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-    border-radius: 6px; padding: 3px 8px; background: transparent; cursor: pointer; font: inherit;
+  .aiui-cap { border: 1px solid var(--hairline);
+    border-radius: var(--radius); padding: 3px 8px; background: transparent; cursor: pointer; font: inherit;
     transition: background 250ms ease-out, border-color 250ms ease-out; }
-  .aiui-cap[data-lit="true"] { background: color-mix(in srgb, #7c3aed 18%, transparent);
-    border-color: #7c3aed; }
+  .aiui-cap[data-lit="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
   .aiui-cap:active:not([disabled]) { transform: translateY(1px);
     background: color-mix(in srgb, currentColor 14%, transparent); }
-  .aiui-cap[data-flash="true"] { background: color-mix(in srgb, #16a34a 22%, transparent);
-    border-color: #16a34a; transition: none; }
+  .aiui-cap[data-flash="true"] { background: var(--ok-wash); color: var(--ink);
+    border-color: var(--ok); transition: none; }
   .aiui-cap[disabled] { opacity: 0.35; cursor: default; }
-  .aiui-cap[data-tone="danger"] { border-color: color-mix(in srgb, #dc2626 60%, transparent); }
+  .aiui-cap[data-tone="danger"] { border-color: var(--alarm); }
   .aiui-widget .slider-label { opacity: 0.7; }
   .aiui-widget .slider-readout { font-variant-numeric: tabular-nums; min-width: 2.6em;
     text-align: right; opacity: 0.85; }

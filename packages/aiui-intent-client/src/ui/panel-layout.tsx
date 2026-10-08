@@ -56,12 +56,12 @@ export const PANEL_LAYOUT_STYLES =
      by a rule so the folds below read as belonging to it. */
   .aiui-oracle-panes-title { font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
     text-transform: uppercase; opacity: 0.55; padding: 2px 0 3px; margin-bottom: 3px;
-    border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent); }
+    border-bottom: 1px solid var(--ghost); }
   /* Quiet by default; the off-view case is the one worth a colour, since it
      is the state that used to read as "the oracle can't see my app". */
   .aiui-oracle-source { font-size: 11px; opacity: 0.55; padding: 0 2px 2px; }
   .aiui-oracle-source strong { font-weight: 600; }
-  .aiui-oracle-source[data-off-view] { opacity: 1; color: #d97706; }`;
+  .aiui-oracle-source[data-off-view] { opacity: 1; color: var(--warn); }`;
 
 export interface PanelLayoutProps {
   /** The channel this panel is bound to (undefined = none found). */
@@ -116,7 +116,7 @@ function GrantBanner(props: { client: IntentClient }) {
     <Show when={needsGrant()}>
       <div
         data-testid="grant-banner"
-        style="margin: 8px 12px; font: 12px system-ui; border: 1px solid #d97706; border-radius: 6px; padding: 6px 8px; max-width: 460px"
+        style="margin: 8px 12px; font: 12px var(--stack-sans); border: 1px solid var(--warn); border-radius: var(--radius); padding: 6px 8px; max-width: 460px"
       >
         <div>
           <strong>capture not granted for this tab</strong> — right-click the page →{" "}
@@ -162,7 +162,7 @@ function PausedBanner(props: { client: IntentClient }) {
         <div
           data-testid="paused-banner"
           data-reason={reason}
-          style="margin: 8px 12px; font: 12px system-ui; border: 1px solid #7c3aed; border-radius: 6px; padding: 6px 8px; max-width: 460px"
+          style="margin: 8px 12px; font: 12px var(--stack-sans); border: 1px solid var(--accent); border-radius: var(--radius); padding: 6px 8px; max-width: 460px"
         >
           <div>
             <strong>

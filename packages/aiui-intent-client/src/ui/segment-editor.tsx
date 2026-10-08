@@ -40,22 +40,24 @@ import type { ChannelLanes } from "../lanes";
 
 export const SEGMENT_EDITOR_STYLES = `
   .aiui-se-overlay { position: fixed; inset: 0; z-index: 2147483645;
-    background: rgba(0, 0, 0, 0.45); display: flex; align-items: center; justify-content: center; }
-  .aiui-se-card { width: min(560px, 92vw); background: #14171f; border-radius: 10px;
-    border: 1px solid #3a4152; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
-    padding: 12px; font: 13px/1.5 system-ui; color: #e8e8ea; }
-  .aiui-se-title { font-size: 11px; opacity: 0.6; margin-bottom: 8px; }
+    background: var(--scrim); display: flex; align-items: center; justify-content: center; }
+  .aiui-se-card { width: min(560px, 92vw); background: var(--surface-raised); border-radius: var(--radius);
+    border: 1px solid var(--hairline);
+    padding: 12px; font: 13px/1.5 var(--stack-sans); color: var(--ink); }
+  .aiui-se-title { font-size: 11px; color: var(--muted); letter-spacing: 0.08em;
+    text-transform: uppercase; margin-bottom: 8px; }
   .aiui-se-text { min-height: 88px; max-height: 50vh; overflow-y: auto; outline: none;
-    border: 1px solid #3a4152; border-radius: 6px; padding: 8px 10px; white-space: pre-wrap;
-    word-break: break-word; }
-  .aiui-se-text:focus { border-color: #8ab4f8; }
-  .aiui-se-atom { display: inline-block; margin: 0 2px; padding: 0 2px; border-radius: 4px;
-    background: color-mix(in srgb, #ffd166 16%, transparent); cursor: default; }
+    border: 1px solid var(--hairline); border-radius: var(--radius); padding: 8px 10px; white-space: pre-wrap;
+    word-break: break-word; background: var(--surface); font-family: var(--stack-serif);
+    font-size: var(--text-small); }
+  .aiui-se-text:focus { border-color: var(--accent); }
+  .aiui-se-atom { display: inline-block; margin: 0 2px; padding: 0 2px; border-radius: 3px;
+    background: var(--warn-wash); cursor: default; }
   .aiui-se-actions { display: flex; gap: 6px; justify-content: flex-end; margin-top: 10px; }
-  .aiui-se-actions button { font: 12px system-ui; padding: 3px 12px; border-radius: 6px;
-    border: 1px solid #3a4152; background: transparent; color: inherit; cursor: pointer; }
-  .aiui-se-actions button.primary { background: #7c3aed; border-color: #7c3aed; color: #fff; }
-  .aiui-se-hint { font-size: 11px; opacity: 0.55; margin-top: 6px; }
+  .aiui-se-actions button { font: 12px var(--stack-sans); padding: 3px 12px; border-radius: var(--radius);
+    border: 1px solid var(--hairline); background: transparent; color: inherit; cursor: pointer; }
+  .aiui-se-actions button.primary { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+  .aiui-se-hint { font-size: 11px; color: var(--muted); margin-top: 6px; }
 `;
 
 /** One atomic (move-whole-or-delete) item as the editor sees it. */

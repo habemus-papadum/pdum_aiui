@@ -21,30 +21,28 @@ import { Dropdown } from "@habemus-papadum/aiui-viz";
 import { createSignal, For, Show } from "solid-js";
 
 export const CHANNEL_HEADER_STYLES = `
-  .aiui-chan { margin: 12px 12px 0; font: 13px system-ui; }
+  .aiui-chan { margin: 12px 12px 0; font: 13px var(--stack-sans); }
   .aiui-chan-chip { display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
     font: inherit; color: inherit; background: transparent; padding: 3px 10px;
-    border-radius: 999px; border: 1px solid color-mix(in srgb, currentColor 25%, transparent); }
-  .aiui-chan-dot { width: 8px; height: 8px; border-radius: 50%; background: #9ca3af; }
-  .aiui-chan-dot[data-phase="connected"] { background: #16a34a; }
-  .aiui-chan-dot[data-phase="connecting"] { background: #d97706; }
-  .aiui-chan-phase { opacity: 0.55; font-size: 11px; }
-  .aiui-chan .aiui-dropdown-pop { background: Canvas; border-radius: 8px; padding: 6px;
-    border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35); width: max-content; }
+    border-radius: 999px; border: 1px solid var(--hairline); }
+  .aiui-chan-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--hairline); }
+  .aiui-chan-dot[data-phase="connected"] { background: var(--ok); }
+  .aiui-chan-dot[data-phase="connecting"] { background: var(--warn); }
+  .aiui-chan-phase { color: var(--muted); font-size: 11px; }
+  .aiui-chan .aiui-dropdown-pop { background: var(--surface-raised); border-radius: var(--radius); padding: 6px;
+    border: 1px solid var(--hairline); width: max-content; }
   .aiui-chan-list { display: flex; flex-direction: column; align-items: stretch; gap: 2px; }
-  .aiui-chan-list button { font: 12px system-ui; text-align: left; padding: 3px 8px;
-    border-radius: 6px; border: none; background: transparent; color: inherit; cursor: pointer; }
-  .aiui-chan-list button:hover {
-    background: color-mix(in srgb, currentColor 12%, transparent); }
+  .aiui-chan-list button { font: 12px var(--stack-sans); text-align: left; padding: 3px 8px;
+    border-radius: var(--radius); border: none; background: transparent; color: inherit; cursor: pointer; }
+  .aiui-chan-list button:hover { background: var(--ghost); }
   /* The bound channel: full-strength and clickable (picking it again is an
      idempotent no-op — owner, 2026-07-19, replacing the confusing grayed
      row), named by the ✓ tail instead. */
   .aiui-chan-list button[data-current] { font-weight: 600; }
-  .aiui-chan-current { font-size: 10px; color: #16a34a; margin-left: 8px; }
-  .aiui-chan-note { font-size: 11px; opacity: 0.6; padding: 2px 4px; }
+  .aiui-chan-current { font-size: 10px; color: var(--ok); margin-left: 8px; }
+  .aiui-chan-note { font-size: 11px; color: var(--ink-muted); padding: 2px 4px; }
   /* Native messaging itself is broken — the LOUD tone (not "nothing running"). */
-  .aiui-chan-note[data-tone="alarm"] { opacity: 1; color: #dc2626; font-weight: 600;
+  .aiui-chan-note[data-tone="alarm"] { color: var(--alarm); font-weight: 600;
     max-width: 280px; }
 `;
 

@@ -14,28 +14,28 @@ import { BarItemView, type CapRuntime } from "./bar";
 
 export const CONFIG_STRIP_STYLES = `
   .aiui-config { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; padding-top: 6px;
-    border-top: 1px solid color-mix(in srgb, currentColor 15%, transparent); }
+    border-top: 1px solid var(--ghost); }
   /* The lint lifecycle dot: a PERMANENT fixed box (1.4em) — phases swap glyph
      and color only, so the strip never relayouts. Phases mirror the sidecar's
      machine (linter-pulse.ts). */
   .aiui-linter-pulse { display: inline-block; width: 1.4em; text-align: center;
     font-size: 12px; line-height: 1; align-self: center; opacity: 0.35;
     margin-left: -6px; user-select: none; }
-  .aiui-linter-pulse[data-phase="listening"] { opacity: 1; color: #16a34a; }
-  .aiui-linter-pulse[data-phase="thinking"] { opacity: 1; color: #7c3aed;
+  .aiui-linter-pulse[data-phase="listening"] { opacity: 1; color: var(--ok); }
+  .aiui-linter-pulse[data-phase="thinking"] { opacity: 1; color: var(--accent);
     animation: aiui-pulse-breathe 0.9s ease-in-out infinite; }
-  .aiui-linter-pulse[data-phase="tool"] { opacity: 1; color: #7c3aed;
+  .aiui-linter-pulse[data-phase="tool"] { opacity: 1; color: var(--accent);
     animation: aiui-pulse-breathe 0.9s ease-in-out infinite; }
   .aiui-linter-pulse[data-phase="noted"] { opacity: 1; }
-  .aiui-linter-pulse[data-phase="stale"] { opacity: 1; color: #dc2626; }
+  .aiui-linter-pulse[data-phase="stale"] { opacity: 1; color: var(--alarm); }
   @keyframes aiui-pulse-breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
   /* The converse (debug) lint-now button beside the pulse dot. Same 12px
      voice as the strip; disabled = the phase can't use it. (The stop button
      was removed 2026-07-19: voice barge-in cancels an in-flight reply, and
      the select's off value is the off switch.) */
   .aiui-lint-btn { font-size: 11px; line-height: 1.4; align-self: center;
-    padding: 0 6px; border-radius: 4px; cursor: pointer;
-    border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+    padding: 0 6px; border-radius: var(--radius); cursor: pointer;
+    border: 1px solid var(--hairline);
     background: transparent; color: inherit; }
   .aiui-lint-btn:disabled { opacity: 0.35; cursor: default; }
 `;

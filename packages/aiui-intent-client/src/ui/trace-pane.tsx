@@ -25,13 +25,13 @@ import { TracesPane } from "@habemus-papadum/aiui-trace-ui";
 import { createEffect, createSignal, onCleanup } from "solid-js";
 
 export const TRACE_PANE_STYLES = `
-  .aiui-rich-trace { margin: 8px 12px; font: 12px system-ui; }
-  .aiui-rich-trace summary { cursor: pointer; opacity: 0.75; }
+  .aiui-rich-trace { margin: 8px 12px; font: 12px var(--stack-sans); }
+  .aiui-rich-trace summary { cursor: pointer; color: var(--ink-muted); }
   /* The debug-ui pane is built for a full page; here it gets a bounded,
      scrolling window. Its root is a flex column, so height must be pinned. */
   .aiui-rich-trace-host { height: min(52vh, 480px); display: flex; flex-direction: column;
-    overflow: hidden; margin-top: 4px; border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
-    border-radius: 6px; background: #14171f; }
+    overflow: hidden; margin-top: 4px; border: 1px solid var(--hairline);
+    border-radius: var(--radius); background: var(--surface-raised); }
 `;
 
 /**

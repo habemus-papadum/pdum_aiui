@@ -42,15 +42,15 @@ import { createPeek } from "./turn-preview-peek";
 import { type RowContext, renderRow } from "./turn-preview-rows";
 
 export const TURN_PREVIEW_STYLES = `
-  .aiui-tp { margin: 8px 12px; font: 12px system-ui; max-width: 460px; }
-  .aiui-tp summary { cursor: pointer; opacity: 0.75; }
+  .aiui-tp { margin: 8px 12px; font: 12px var(--stack-sans); max-width: 460px; }
+  .aiui-tp summary { cursor: pointer; color: var(--ink-muted); }
   .aiui-tp-body { margin-top: 4px; line-height: 2; }
   .aiui-tp-empty { opacity: 0.6; margin-top: 4px; }
   .aiui-tp-seg { opacity: 0.7; }
   .aiui-tp-seg.final { opacity: 1; }
   /* The kit's diff-flash runs (LiveDiffText stamps these class names). */
-  .mm-diff-del { color: #ff5c87; background: #ff5c8722; text-decoration: line-through; border-radius: 3px; }
-  .mm-diff-add { color: #7ee0a3; background: #7ee0a322; border-radius: 3px; }
+  .mm-diff-del { color: var(--alarm); background: var(--alarm-wash); text-decoration: line-through; border-radius: 3px; }
+  .mm-diff-add { color: var(--ok); background: var(--ok-wash); border-radius: 3px; }
   .aiui-tp-heat-word { border-radius: 3px; padding: 0 1px; }
   /* Chips + thumbs — the retired overlay's visual language, verbatim: amber = pixels,
      blue family = selections, gray = boundaries; substance rides the peek. */
@@ -61,21 +61,21 @@ export const TURN_PREVIEW_STYLES = `
      fixed object-fit: cover tile was compact but LIED — every capture became the
      same rectangle, edges cropped away. The max-width keeps even an ultrawide
      from running the pane; the hover peek carries the detail. */
-  .aiui-tp-thumb { max-height: 38px; max-width: 72px; border-radius: 4px;
-    border: 2px solid #ffd166; vertical-align: middle; display: block; }
-  .aiui-tp-thumb-chip { font-size: 11px; color: #ffd166; border: 1px solid #3a4152; border-radius: 999px;
+  .aiui-tp-thumb { max-height: 38px; max-width: 72px; border-radius: var(--radius);
+    border: 2px solid var(--warn); vertical-align: middle; display: block; }
+  .aiui-tp-thumb-chip { font-size: 11px; color: var(--warn); border: 1px solid var(--hairline); border-radius: 999px;
     padding: 1px 8px; display: inline-block; }
   .aiui-tp-x { position: absolute; top: -7px; right: -7px; width: 16px; height: 16px; padding: 0;
-    border: 1px solid #3a4152; border-radius: 50%; background: #171b25; color: #f28b82;
-    font: 10px/1 ui-sans-serif, system-ui; cursor: pointer; display: none; align-items: center;
+    border: 1px solid var(--hairline); border-radius: 50%; background: var(--surface-raised); color: var(--alarm);
+    font: 10px/1 var(--stack-sans); cursor: pointer; display: none; align-items: center;
     justify-content: center; }
   .aiui-tp-wrap:hover .aiui-tp-x { display: flex; }
-  .aiui-tp-x:hover { background: #f28b82; color: #171b25; border-color: #f28b82; }
-  .aiui-tp-chip { font-size: 11px; border: 1px solid #3a4152; border-radius: 999px;
+  .aiui-tp-x:hover { background: var(--alarm); color: var(--surface); border-color: var(--alarm); }
+  .aiui-tp-chip { font-size: 11px; border: 1px solid var(--hairline); border-radius: 999px;
     padding: 1px 8px; display: inline-block; vertical-align: middle; white-space: nowrap; }
-  .aiui-tp-sel-app { color: #8ab4f8; }
-  .aiui-tp-sel-code { color: #a5c8ff; }
-  .aiui-tp-nav { color: #7ee0a3; }
+  .aiui-tp-sel-app { color: var(--accent); }
+  .aiui-tp-sel-code { color: var(--accent); }
+  .aiui-tp-nav { color: var(--ok); }
   /* Peeks: fixed-position and body-attached — the pane scrolls, so an
      absolutely-positioned child would clip (the retired overlay's measured lesson). */
   /* The peek is the same capture at its NATURAL aspect within a bigger box — the
@@ -83,24 +83,25 @@ export const TURN_PREVIEW_STYLES = `
      a faithful magnification, not a re-crop. Its box size is only known once the
      image decodes, which is why showImage re-measures on load. */
   .aiui-tp-peek-img { position: fixed; z-index: 2147483644; max-width: min(480px, 60vw);
-    max-height: 60vh; border: 2px solid #ffd166; border-radius: 8px; background: #0f1117;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.55); pointer-events: none; }
+    max-height: 60vh; border: 2px solid var(--warn); border-radius: var(--radius); background: var(--surface-raised);
+    pointer-events: none; }
   .aiui-tp-peek { position: fixed; z-index: 2147483644; max-width: min(480px, 60vw);
-    border: 1px solid #8ab4f8; border-radius: 8px; background: #0f1117;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.55); pointer-events: none;
-    padding: 8px 10px; font: 12px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif; }
-  .aiui-tp-peek-loc { color: #9aa0aa; font-size: 11px; margin-bottom: 4px;
+    border: 1px solid var(--hairline); border-radius: var(--radius); background: var(--surface-raised);
+    pointer-events: none;
+    padding: 8px 10px; font: 12px/1.5 var(--stack-sans); }
+  .aiui-tp-peek-loc { color: var(--muted); font-size: 11px; margin-bottom: 4px;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .aiui-tp-peek-text { color: #e8e8ea; white-space: pre-wrap; word-break: break-word;
+  .aiui-tp-peek-text { color: var(--ink); font-family: var(--stack-serif); font-size: var(--text-small);
+    white-space: pre-wrap; word-break: break-word;
     display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 6; overflow: hidden; }
   .aiui-tp-textwrap { position: relative; display: inline; }
-  .aiui-tp-edit { color: #8ab4f8; }
-  .aiui-tp-add { cursor: pointer; background: transparent; font: inherit; color: inherit;
-    opacity: 0.7; margin-top: 4px; }
-  .aiui-tp-add:hover { opacity: 1; }
+  .aiui-tp-edit { color: var(--accent); }
+  .aiui-tp-add { cursor: pointer; background: transparent; font: inherit; color: var(--ink-muted);
+    margin-top: 4px; }
+  .aiui-tp-add:hover { color: var(--ink); }
   /* The linter's 💡 advice — chips below the flow, per-turn, locally dismissible. */
   .aiui-tp-lints { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
-  .aiui-tp-lint { color: #ffd166; border-color: #5a4a24; position: relative;
+  .aiui-tp-lint { color: var(--warn); border-color: var(--warn); position: relative;
     padding-right: 22px; white-space: normal; }
   .aiui-tp-lint .aiui-tp-x { display: flex; position: absolute; right: 2px; top: 50%;
     transform: translateY(-50%); }

@@ -1,7 +1,7 @@
 {
   "name": "@habemus-papadum/aiui-intent-client",
   "version": "0.20.0+dev",
-  "description": "The greenfield intent client: a detached plain-page panel on the mode engine — agent-drivable, HMR-native; the MV3 extension is a shell added last.",
+  "description": "The greenfield intent client: a detached plain-page panel on the mode engine \u2014 agent-drivable, HMR-native; the MV3 extension is a shell added last.",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -54,6 +54,7 @@
     "dev:plain": "vite"
   },
   "dependencies": {
+    "@habemus-papadum/aiui-design": "workspace:^",
     "@habemus-papadum/aiui-intent-runtime": "workspace:^",
     "@habemus-papadum/aiui-lowering-pipeline": "workspace:^",
     "@habemus-papadum/aiui-oracle": "workspace:^",

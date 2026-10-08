@@ -8,6 +8,6 @@
  */
 
 export const PANES_STYLES = `
-  .aiui-pane { margin: 8px 12px; font: 12px system-ui; max-width: 460px; }
-  .aiui-pane summary { cursor: pointer; opacity: 0.75; }
+  .aiui-pane { margin: 8px 12px; font: 12px var(--stack-sans); max-width: 460px; }
+  .aiui-pane summary { cursor: pointer; color: var(--ink-muted); }
 `;

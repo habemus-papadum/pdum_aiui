@@ -1,13 +1,11 @@
+/* The console's own rules. The look is the design system — main.tsx imports
+ * its tokens and fonts (not site.css: this is an instrument panel, and element
+ * defaults would fight the layout). Every color below is a token; the voice
+ * is the label face for rows and headers, the mono face for values and
+ * URLs, the display face for the masthead. */
+
 :root {
-  color-scheme: dark;
-  --bg: #0d0d11;
-  --panel: #16161d;
-  --panel-2: #1c1c25;
-  --border: #262631;
-  --text: #e8e8ee;
-  --muted: #9a9aa8;
-  --accent: #7c9cff;
-  --accent-soft: #2a3155;
+  color-scheme: light;
 }
 
 * {
@@ -16,16 +14,17 @@
 
 body {
   margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font:
-    15px / 1.5 system-ui,
-    -apple-system,
-    sans-serif;
+  background: var(--surface);
+  color: var(--ink);
+  font: 15px / 1.5 var(--stack-sans);
+}
+
+a {
+  color: var(--accent);
 }
 
 code {
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-family: var(--stack-mono);
   font-size: 0.9em;
 }
 
@@ -37,21 +36,24 @@ code {
 
 .masthead h1 {
   margin: 0;
+  font-family: var(--stack-display);
+  font-weight: 400;
   font-size: 28px;
-  letter-spacing: -0.01em;
+  font-variation-settings: var(--display-axes);
+  font-variant-ligatures: common-ligatures discretionary-ligatures;
 }
 
 .masthead .subtitle {
   margin: 6px 0 0;
-  color: var(--muted);
+  color: var(--ink-muted);
 }
 
 .masthead .subtitle code {
-  color: var(--text);
+  color: var(--ink);
 }
 
 .muted {
-  color: var(--muted);
+  color: var(--ink-muted);
 }
 
 .columns {
@@ -75,17 +77,18 @@ code {
 }
 
 .section {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  background: var(--surface-raised);
+  border: 1px solid var(--ghost);
+  border-radius: var(--radius);
   padding: 18px 20px;
 }
 
 .section h2 {
   margin: 0 0 12px;
+  font-family: var(--stack-sans);
   font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
+  font-weight: 400;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--muted);
 }
@@ -95,7 +98,7 @@ code {
   justify-content: space-between;
   gap: 16px;
   padding: 5px 0;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--ghost);
 }
 
 .field:first-child {
@@ -108,7 +111,7 @@ code {
 }
 
 .field-value {
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-family: var(--stack-mono);
   font-size: 0.9em;
   text-align: right;
   overflow-wrap: anywhere;
@@ -123,9 +126,9 @@ code {
 .link-card {
   display: block;
   padding: 14px 16px;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--ghost);
+  border-radius: var(--radius);
   text-decoration: none;
   color: inherit;
   transition:
@@ -134,8 +137,7 @@ code {
 }
 
 .link-card:hover {
-  border-color: var(--accent);
-  background: var(--accent-soft);
+  border-color: var(--ink);
 }
 
 .link-title {
@@ -148,8 +150,10 @@ code {
 .link-badge {
   font-size: 11px;
   font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--accent);
-  border: 1px solid var(--accent-soft);
+  border: 1px solid var(--hairline);
   border-radius: 999px;
   padding: 1px 8px;
 }
@@ -157,12 +161,12 @@ code {
 .link-desc {
   display: block;
   margin-top: 6px;
-  color: var(--muted);
+  color: var(--ink-muted);
   font-size: 13.5px;
 }
 
 .link-desc code {
-  color: var(--text);
+  color: var(--ink);
 }
 
 /* Extension-setup callout, full width above the columns. */
@@ -187,10 +191,11 @@ code {
   width: 22px;
   height: 22px;
   border-radius: 999px;
-  background: var(--accent-soft);
-  color: var(--accent);
+  border: 1px solid var(--ink);
+  color: var(--ink);
   font-size: 12px;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -202,31 +207,31 @@ code {
 
 .setup-item p {
   margin: 4px 0 0;
-  color: var(--muted);
+  color: var(--ink-muted);
   font-size: 13.5px;
 }
 
 .setup-item em {
-  color: var(--text);
+  color: var(--ink);
   font-style: normal;
 }
 
 /* Pencil card: the base card look, minus the whole-card link hover. */
 .pencil-card {
   padding: 14px 16px;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--ghost);
+  border-radius: var(--radius);
 }
 
 .pencil-note {
   margin: 10px 0 0;
-  color: var(--muted);
+  color: var(--ink-muted);
   font-size: 13px;
 }
 
 .pencil-note code {
-  color: var(--text);
+  color: var(--ink);
 }
 
 .copy-list {
@@ -246,7 +251,7 @@ code {
   flex: none;
   width: 60px;
   color: var(--muted);
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-family: var(--stack-mono);
   font-size: 12px;
   overflow-wrap: anywhere;
 }
@@ -255,30 +260,33 @@ code {
   flex: 1;
   min-width: 0;
   padding: 6px 8px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  background: var(--surface-sunken);
+  border: 1px solid var(--ghost);
+  border-radius: var(--radius);
+  font-family: var(--stack-mono);
   font-size: 12px;
-  color: var(--text);
+  color: var(--ink);
   overflow-wrap: anywhere;
 }
 
 .copy-btn {
   flex: none;
   padding: 6px 12px;
-  background: var(--accent-soft);
-  border: 1px solid var(--accent);
-  border-radius: 6px;
-  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  color: var(--ink);
   font: inherit;
-  font-size: 13px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   cursor: pointer;
 }
 
 .copy-btn:hover {
-  background: var(--accent);
-  color: var(--bg);
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--surface);
 }
 
 .card-open {
@@ -297,7 +305,7 @@ code {
 
 .tagline {
   margin: 4px 0 0;
-  opacity: 0.75;
+  color: var(--ink-muted);
 }
 
 .ledger {
@@ -308,20 +316,23 @@ code {
 
 .ledger th {
   text-align: left;
-  font-weight: 600;
-  opacity: 0.7;
+  font-weight: 400;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
   padding: 6px 10px;
-  border-bottom: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-bottom: 1px solid var(--hairline);
 }
 
 .ledger td {
   padding: 5px 10px;
-  border-bottom: 1px solid color-mix(in srgb, currentColor 10%, transparent);
+  border-bottom: 1px solid var(--ghost);
   vertical-align: top;
 }
 
 .ledger-desc {
-  opacity: 0.8;
+  color: var(--ink-muted);
   max-width: 34em;
 }
 

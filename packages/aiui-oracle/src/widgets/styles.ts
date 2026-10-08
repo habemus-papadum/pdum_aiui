@@ -13,6 +13,11 @@
  */
 
 export const ORACLE_WIDGET_STYLES = `
+  /* the widgets are chrome: the label face where a design system sets one,
+     the host's font otherwise */
+  .aiui-oracle-control, .aiui-oracle-usage, .aiui-oracle-mind, .aiui-oracle-chips,
+  .aiui-oracle-turns, .aiui-oracle-park, .aiui-oracle-params, .aiui-oracle-blocked {
+    font-family: var(--aiui-sans, inherit); }
   .aiui-oracle-control { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .aiui-oracle-control button { font: inherit; padding: 3px 8px; border-radius: var(--aiui-radius, 6px);
     cursor: pointer; color: inherit; background: transparent;

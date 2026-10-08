@@ -36,16 +36,16 @@ const pct = (scale: number): string => `${Math.round(scale * 100)}%`;
 const ZOOM_STYLES = `
   .aiui-zoom { position: fixed; top: 6px; right: 8px; z-index: 2147482000;
     display: inline-flex; align-items: stretch; opacity: 0.45;
-    transition: opacity 120ms ease; font: 11px system-ui; }
+    transition: opacity 120ms ease; font: 11px var(--stack-sans); }
   .aiui-zoom:hover, .aiui-zoom:focus-within { opacity: 1; }
   .aiui-zoom button { font: inherit; line-height: 1; cursor: pointer; color: inherit;
-    background: color-mix(in srgb, Canvas 80%, transparent);
-    border: 1px solid color-mix(in srgb, CanvasText 22%, transparent);
+    background: var(--surface-raised);
+    border: 1px solid var(--hairline);
     padding: 2px 7px; }
   .aiui-zoom button:not(:first-child) { border-left: none; }
-  .aiui-zoom button:first-child { border-radius: 6px 0 0 6px; }
-  .aiui-zoom button:last-child { border-radius: 0 6px 6px 0; }
-  .aiui-zoom button:hover { background: color-mix(in srgb, Canvas 55%, CanvasText 10%); }
+  .aiui-zoom button:first-child { border-radius: var(--radius) 0 0 var(--radius); }
+  .aiui-zoom button:last-child { border-radius: 0 var(--radius) var(--radius) 0; }
+  .aiui-zoom button:hover { background: var(--ghost); }
   .aiui-zoom .aiui-zoom-pct { min-width: 3.6em; text-align: center;
     font-variant-numeric: tabular-nums; }
 `;

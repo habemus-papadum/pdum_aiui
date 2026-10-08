@@ -14,6 +14,8 @@ import {
   type HealthInfo,
 } from "./api";
 import { CONSOLE_DEBUG_PATH, CONSOLE_TOOLS_PATH, INTENT_PATH, PENCIL_PATH } from "./routes";
+import "@habemus-papadum/aiui-design/fonts.css";
+import "@habemus-papadum/aiui-design/tokens.css";
 import "./styles.css";
 
 /** One label/value row; the value is monospace, and absent values read "—". */

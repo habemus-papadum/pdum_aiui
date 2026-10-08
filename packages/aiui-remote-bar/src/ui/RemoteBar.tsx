@@ -14,37 +14,38 @@ import { For, Show } from "solid-js";
 import type { RemoteBarClient } from "./client";
 
 export const REMOTE_BAR_STYLES = `
-  :root { color-scheme: light dark; }
-  .aiui-remote-bar { font: 13px/1.45 system-ui, sans-serif; padding: 12px; max-width: 460px; }
+  .aiui-remote-bar { font: 13px/1.45 var(--aiui-sans, system-ui, sans-serif); padding: 12px; max-width: 460px;
+    color: var(--aiui-ink, inherit); }
   .aiui-remote-status { font-size: 11px; opacity: 0.7; margin-bottom: 8px; }
   .aiui-remote-phase { display: inline-block; padding: 2px 10px; border-radius: 999px; font-weight: 600;
-    border: 1px solid color-mix(in srgb, currentColor 35%, transparent); }
-  .aiui-remote-phase[data-phase="turn"], .aiui-remote-phase[data-phase="tweak"] { color: #7c3aed; }
+    border: 1px solid var(--aiui-hairline, color-mix(in srgb, currentColor 35%, transparent)); }
+  .aiui-remote-phase[data-phase="turn"], .aiui-remote-phase[data-phase="tweak"] { color: var(--aiui-accent, #7c3aed); }
   .aiui-remote-rows { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; }
-  .aiui-remote-cap { border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-    border-radius: 6px; padding: 3px 8px; background: transparent; cursor: pointer; font: inherit;
+  .aiui-remote-cap { border: 1px solid var(--aiui-hairline, color-mix(in srgb, currentColor 25%, transparent));
+    border-radius: var(--aiui-radius, 6px); padding: 3px 8px; background: transparent; cursor: pointer; font: inherit;
     touch-action: manipulation; -webkit-tap-highlight-color: transparent;
     transition: transform 60ms ease-out, background 60ms ease-out, border-color 60ms ease-out; }
   .aiui-remote-cap:active:not([disabled]) { transform: scale(0.92);
-    background: color-mix(in srgb, #7c3aed 30%, transparent); border-color: #7c3aed; }
-  .aiui-remote-cap[data-lit="true"] { background: color-mix(in srgb, #7c3aed 18%, transparent);
-    border-color: #7c3aed; }
+    background: var(--aiui-ghost, color-mix(in srgb, currentColor 14%, transparent));
+    border-color: var(--aiui-accent, #7c3aed); }
+  .aiui-remote-cap[data-lit="true"] { background: var(--aiui-ink, CanvasText);
+    color: var(--aiui-surface, Canvas); border-color: var(--aiui-ink, CanvasText); }
   .aiui-remote-cap[disabled] { opacity: 0.4; cursor: default; }
-  .aiui-remote-cap[data-tone="danger"] { border-color: color-mix(in srgb, #dc2626 60%, transparent); }
+  .aiui-remote-cap[data-tone="danger"] { border-color: var(--aiui-alarm, #dc2626); }
   .aiui-remote-claims { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 4px; }
   .aiui-remote-claim { font-size: 11px; padding: 1px 7px; border-radius: 999px;
-    border: 1px solid color-mix(in srgb, currentColor 20%, transparent); opacity: 0.75; }
-  .aiui-remote-claim[data-phase="active"] { color: #16a34a; opacity: 1; }
-  .aiui-remote-claim[data-phase="pending"] { color: #d97706; opacity: 1; }
-  .aiui-remote-claim[data-phase="error"] { color: #dc2626; opacity: 1; }
+    border: 1px solid var(--aiui-hairline, color-mix(in srgb, currentColor 20%, transparent)); opacity: 0.75; }
+  .aiui-remote-claim[data-phase="active"] { color: var(--aiui-ok, #16a34a); opacity: 1; }
+  .aiui-remote-claim[data-phase="pending"] { color: var(--aiui-warn, #d97706); opacity: 1; }
+  .aiui-remote-claim[data-phase="error"] { color: var(--aiui-alarm, #dc2626); opacity: 1; }
   .aiui-remote-sessions { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
-  .aiui-remote-session { text-align: left; border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-    border-radius: 6px; padding: 6px 10px; background: transparent; cursor: pointer; font: inherit;
+  .aiui-remote-session { text-align: left; border: 1px solid var(--aiui-hairline, color-mix(in srgb, currentColor 25%, transparent));
+    border-radius: var(--aiui-radius, 6px); padding: 6px 10px; background: transparent; cursor: pointer; font: inherit;
     touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
-  .aiui-remote-session:active { background: color-mix(in srgb, currentColor 12%, transparent); }
+  .aiui-remote-session:active { background: var(--aiui-ghost, color-mix(in srgb, currentColor 12%, transparent)); }
   .aiui-remote-session small { display: block; opacity: 0.6; }
   .aiui-remote-note { margin-top: 8px; opacity: 0.8; }
-  .aiui-remote-note[data-tone="error"] { color: #dc2626; }
+  .aiui-remote-note[data-tone="error"] { color: var(--aiui-alarm, #dc2626); }
   .aiui-remote-leave { margin-top: 10px; font-size: 11px; background: none; border: none;
     color: inherit; opacity: 0.6; cursor: pointer; text-decoration: underline; padding: 0; }
 `;

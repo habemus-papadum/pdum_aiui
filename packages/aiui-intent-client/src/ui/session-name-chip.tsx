@@ -22,14 +22,14 @@ export interface SessionNameControl {
 }
 
 export const SESSION_NAME_STYLES = `
-  .aiui-session-name { margin: 6px 12px 0; font: 12px system-ui;
+  .aiui-session-name { margin: 6px 12px 0; font: 12px var(--stack-sans);
     display: inline-flex; align-items: center; gap: 6px; }
-  .aiui-session-name-tag { opacity: 0.55; }
+  .aiui-session-name-tag { color: var(--muted); }
   .aiui-session-name button { font: inherit; color: inherit; background: transparent;
-    border: 1px dashed color-mix(in srgb, currentColor 35%, transparent);
+    border: 1px dashed var(--hairline);
     border-radius: 999px; padding: 1px 8px; cursor: pointer; }
   .aiui-session-name input { font: inherit; color: inherit; background: transparent;
-    border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
+    border: 1px solid var(--hairline);
     border-radius: 999px; padding: 1px 8px; width: 14em; }
 `;
 

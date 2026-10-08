@@ -16,6 +16,8 @@
  * worker's message and crosses the imperative boundary exactly as the page does.
  */
 
+import "@habemus-papadum/aiui-design/tokens.css";
+import "@habemus-papadum/aiui-design/fonts.css";
 import { WorkletPcmSource } from "@habemus-papadum/aiui-intent-runtime/talk";
 import { render } from "@solidjs/web";
 import { createSignal } from "solid-js";

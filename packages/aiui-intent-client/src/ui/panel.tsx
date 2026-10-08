@@ -33,34 +33,35 @@ import { CONFIG_STRIP_STYLES, ConfigStrip, type LintControlHandlers } from "./co
 import { PILLS_STYLES, StatusPills } from "./pills";
 
 export const PANEL_STYLES = `
-  :root { color-scheme: light dark; }
-  .aiui-panel { font: 13px/1.45 system-ui, sans-serif; padding: 12px; max-width: 460px;
+  :root { color-scheme: light; }
+  body { background: var(--surface); color: var(--ink); }
+  .aiui-panel { font: var(--text-ui)/1.45 var(--stack-sans); padding: 12px; max-width: 460px;
     position: relative; /* the abandon-confirm scrim covers the panel, not the page */ }
   .aiui-help { margin-top: 10px; border-collapse: collapse; }
   .aiui-help td { padding: 1px 8px 1px 0; }
   /* Preview mode (no open turn): the same rows, dimmed — these keys aren't
      live yet; the note row stays at full strength and says how to get there. */
   .aiui-help[data-preview] tr:not(.aiui-help-note) { opacity: 0.45; }
-  .aiui-help kbd { border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
-    border-radius: 4px; padding: 0 5px; font: 11px ui-monospace, monospace; }
-  .aiui-blip { margin-top: 6px; color: #dc2626; font-size: 12px; }
+  .aiui-help kbd { border: 1px solid var(--hairline); border-bottom-width: 2px;
+    border-radius: var(--radius); padding: 0 5px; font: 11px var(--stack-mono); }
+  .aiui-blip { margin-top: 6px; color: var(--alarm); font-size: 12px; }
   /* Abandon-confirm: a panel-local scrim + card. Covers the panel (not the
      page); the turn stays open behind it until the user chooses. */
   .aiui-confirm-scrim { position: absolute; inset: 0; z-index: 20;
     display: flex; align-items: center; justify-content: center; padding: 16px;
-    background: color-mix(in srgb, currentColor 32%, transparent); }
-  .aiui-confirm { max-width: 340px; border-radius: 10px; padding: 14px 16px;
-    background: Canvas; color: CanvasText; border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45); font-size: 13px; line-height: 1.5; }
-  .aiui-confirm h2 { margin: 0 0 6px; font-size: 14px; }
+    background: var(--scrim); }
+  .aiui-confirm { max-width: 340px; border-radius: var(--radius); padding: 14px 16px;
+    background: var(--surface-raised); color: var(--ink); border: 1px solid var(--hairline);
+    font-size: 13px; line-height: 1.5; }
+  .aiui-confirm h2 { margin: 0 0 6px; font-size: 14px; font-family: var(--stack-serif); font-weight: 700; }
   .aiui-confirm p { margin: 0 0 6px; }
-  .aiui-confirm .aiui-confirm-keys { opacity: 0.7; font-size: 12px; }
-  .aiui-confirm kbd { border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
-    border-radius: 4px; padding: 0 5px; font: 11px ui-monospace, monospace; }
+  .aiui-confirm .aiui-confirm-keys { color: var(--ink-muted); font-size: 12px; }
+  .aiui-confirm kbd { border: 1px solid var(--hairline); border-bottom-width: 2px;
+    border-radius: var(--radius); padding: 0 5px; font: 11px var(--stack-mono); }
   .aiui-confirm-row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
-  .aiui-confirm-row button { font: inherit; padding: 5px 12px; border-radius: 6px; cursor: pointer;
-    border: 1px solid color-mix(in srgb, currentColor 30%, transparent); background: transparent; color: inherit; }
-  .aiui-confirm-row button.danger { border-color: #dc2626; color: #dc2626; }
+  .aiui-confirm-row button { font: inherit; padding: 5px 12px; border-radius: var(--radius); cursor: pointer;
+    border: 1px solid var(--hairline); background: transparent; color: inherit; }
+  .aiui-confirm-row button.danger { border-color: var(--alarm); color: var(--alarm); }
 `
   .concat(BAR_STYLES)
   .concat(PILLS_STYLES)

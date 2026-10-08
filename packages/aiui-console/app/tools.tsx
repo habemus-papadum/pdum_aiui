@@ -15,6 +15,8 @@ import type { JSX } from "@solidjs/web";
 import { createSignal, For, onCleanup, Show } from "solid-js";
 import { fetchPageTools, type PageToolRegistrationInfo } from "./api";
 import { CONSOLE_HOME_PATH } from "./routes";
+import "@habemus-papadum/aiui-design/fonts.css";
+import "@habemus-papadum/aiui-design/tokens.css";
 import "./styles.css";
 
 const POLL_MS = 2000;

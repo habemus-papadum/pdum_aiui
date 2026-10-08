@@ -15,6 +15,8 @@
  * tier swaps the host and the lanes, which is the whole architecture.
  */
 
+import "@habemus-papadum/aiui-design/tokens.css";
+import "@habemus-papadum/aiui-design/fonts.css";
 import { render } from "@solidjs/web";
 import { createSignal, Show } from "solid-js";
 import { activationGesture } from "../activation";
@@ -360,7 +362,7 @@ function SimulateStrip() {
         : "fake tier (no channel found) — simulate everything";
   return (
     <details
-      style="margin: 12px 0 0 12px; font: 12px system-ui; opacity: 0.8"
+      style="margin: 12px 0 0 12px; font: 12px var(--stack-sans); color: var(--ink-muted)"
       open={mode !== "cdp"}
     >
       <summary>{summary}</summary>

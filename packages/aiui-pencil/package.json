@@ -74,6 +74,7 @@
     "ws": "catalog:"
   },
   "dependencies": {
+    "@habemus-papadum/aiui-design": "workspace:^",
     "@habemus-papadum/aiui-remote-bar": "workspace:^",
     "@habemus-papadum/aiui-room-relay": "workspace:^",
     "@habemus-papadum/aiui-util": "workspace:^",

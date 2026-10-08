@@ -17,14 +17,17 @@ import { oracleMic, turnCollecting } from "../spec";
 import { type RingState, ringForTab } from "../transport";
 
 export const PILLS_STYLES = `
-  .aiui-pills { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; }
+  /* The on-page ring dot's two colors (cdp/page-script.ts assertRing / ext/content.ts
+     own these literals): the ring pill below MIRRORS that dot, so it keeps them
+     rather than the system's status colors — one home for both. */
+  .aiui-pills { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px;
+    --aiui-ring-armed: #7c3aed; --aiui-ring-turn: #dc2626; }
   .aiui-pill { font-size: 11px; padding: 1px 8px; border-radius: 999px;
-    border: 1px solid color-mix(in srgb, currentColor 20%, transparent); opacity: 0.6; }
-  .aiui-pill[data-state="on"] { color: #16a34a; border-color: #16a34a; opacity: 1; }
-  .aiui-pill[data-state="busy"] { color: #d97706; border-color: #d97706; opacity: 1; }
-  .aiui-pill[data-state="err"] { color: #dc2626; border-color: #dc2626; opacity: 1; }
-  .aiui-pill[data-state="live"] { color: #fff; background: #dc2626; border-color: #dc2626;
-    opacity: 1; font-weight: 600; }
+    border: 1px solid var(--hairline); color: var(--muted); }
+  .aiui-pill[data-state="on"] { color: var(--ok); border-color: var(--ok); }
+  .aiui-pill[data-state="busy"] { color: var(--warn); border-color: var(--warn); }
+  .aiui-pill[data-state="err"] { color: var(--alarm); border-color: var(--alarm); }
+  .aiui-pill[data-state="live"] { color: var(--alarm); border-color: var(--alarm); font-weight: 600; }
   /* The ring pill mirrors the ON-PAGE dot, not the generic pill palette
      (cdp/page-script.ts assertRing / ext/content.ts — the source of these
      literals): steady PURPLE #7c3aed = armed, breathing RED #dc2626 = turn,
@@ -32,25 +35,26 @@ export const PILLS_STYLES = `
      state — HOLLOW, "this tab's pixels need a grant" — is the outline pill
      (dashed, so a glance says "missing something"). The two can't share a
      clock across documents, so what aligns is color + cadence, not phase. */
-  .aiui-pill[data-pill="ring"][data-state="on"] { color: #fff; background: #7c3aed;
-    border-color: #7c3aed; font-weight: 600; }
-  .aiui-pill[data-pill="ring"][data-state="on"][data-hollow] { color: #7c3aed;
-    background: transparent; border: 1px dashed #7c3aed; font-weight: 400; }
-  .aiui-pill[data-pill="ring"][data-state="live"] {
+  .aiui-pill[data-pill="ring"][data-state="on"] { color: #fff; background: var(--aiui-ring-armed);
+    border-color: var(--aiui-ring-armed); font-weight: 600; }
+  .aiui-pill[data-pill="ring"][data-state="on"][data-hollow] { color: var(--aiui-ring-armed);
+    background: transparent; border: 1px dashed var(--aiui-ring-armed); font-weight: 400; }
+  .aiui-pill[data-pill="ring"][data-state="live"] { color: #fff; background: var(--aiui-ring-turn);
+    border-color: var(--aiui-ring-turn);
     animation: aiui-ring-breathe 1.6s ease-in-out infinite; }
-  .aiui-pill[data-pill="ring"][data-state="live"][data-hollow] { color: #dc2626;
-    background: transparent; border: 1px dashed #dc2626; font-weight: 400; }
+  .aiui-pill[data-pill="ring"][data-state="live"][data-hollow] { color: var(--aiui-ring-turn);
+    background: transparent; border: 1px dashed var(--aiui-ring-turn); font-weight: 400; }
   @keyframes aiui-ring-breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
   /* The cdp pill's SHARED face: aligned, and other channels co-drive this
      browser (a supported multi-agent workflow) — purple, like the ring's
      armed tone, distinct from the solo green. */
-  .aiui-pill[data-pill="cdp"][data-shared] { color: #fff; background: #7c3aed;
-    border-color: #7c3aed; opacity: 1; font-weight: 600; }
+  .aiui-pill[data-pill="cdp"][data-shared] { color: var(--surface); background: var(--ink);
+    border-color: var(--ink); font-weight: 600; }
   /* The REC meter rides with the pills (it renders inside the strip). */
   .aiui-meter { display: inline-block; width: 64px; height: 8px; border-radius: 4px;
-    border: 1px solid color-mix(in srgb, currentColor 25%, transparent); overflow: hidden;
+    border: 1px solid var(--hairline); overflow: hidden;
     vertical-align: middle; }
-  .aiui-meter > div { height: 100%; background: #dc2626; transition: width 80ms linear; }
+  .aiui-meter > div { height: 100%; background: var(--alarm); transition: width 80ms linear; }
 `;
 
 /** One status pill's view: stable label, varying state. */
