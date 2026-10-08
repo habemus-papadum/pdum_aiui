@@ -1,0 +1,107 @@
+/* tokens.css — every design value, as custom properties on :root. The values
+ * are owned by DESIGN.md (this package's root); change them there first.
+ *
+ * The palette anchors descend from Observable Framework's "cotton" theme
+ * (ISC): warm paper and one interaction color. The ink is slate rather than
+ * cotton's brown, and the whole ladder is MIXED from the two anchors, so
+ * retuning the palette is a two-value change. Light only — dark is not
+ * reserved, it is declined (DESIGN.md, "Color"). */
+
+:root {
+  color-scheme: light;
+
+  /* anchors */
+  --surface: #efeee9;
+  --ink: #3d434c;
+  --accent: #4b3fc4;
+  --alarm: #9b3b2a;
+  --ok: #2a6e4e;
+  --warn: #8a5f10;
+  /* The figure ground. Simulation canvases, boards, and worker rasters are
+   * dark PLATES mounted on the paper — a constant the page's palette never
+   * touches, so a shader or a raster never repaints for the chrome. */
+  --plate: #0e1119;
+  --plate-ink: #e8e8ea;
+
+  /* the mixed ladder (literal twins live in src/index.ts for canvases) */
+  --surface-raised: color-mix(in srgb, var(--ink) 4%, var(--surface));
+  --surface-sunken: color-mix(in srgb, var(--ink) 8%, var(--surface));
+  --ink-muted: color-mix(in srgb, var(--ink) 60%, var(--surface));
+  --muted: color-mix(in srgb, var(--ink) 50%, var(--surface));
+  --hairline: color-mix(in srgb, var(--ink) 30%, var(--surface));
+  --ghost: color-mix(in srgb, var(--ink) 14%, var(--surface));
+  --ink-hover: color-mix(in srgb, var(--ink) 85%, #000);
+  --accent-wash: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  --alarm-wash: color-mix(in srgb, var(--alarm) 8%, var(--surface));
+  --ok-wash: color-mix(in srgb, var(--ok) 10%, var(--surface));
+  --warn-wash: color-mix(in srgb, var(--warn) 10%, var(--surface));
+  --scrim: color-mix(in srgb, var(--ink) 40%, transparent);
+
+  /* font stacks — "Digits" (fonts.css) routes $ 0-9 : to Georgia in the
+   * reading and label faces; the mono stack omits it so code keeps its own
+   * digits. "Fraunces Variable" is the display face; its two expressive axes
+   * ride --display-axes so a title can turn them off. */
+  --stack-serif: "Digits", "Cormorant Garamond", Georgia, serif;
+  --stack-display: "Fraunces Variable", "Cormorant Garamond", Georgia, serif;
+  --stack-sans: "Digits", "Libre Franklin", system-ui, sans-serif;
+  --stack-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --display-axes: "SOFT" 50, "WONK" 1;
+
+  /* fluid type scale — clamp(), no breakpoints. The reading face is
+   * Cormorant, which sets small, so body sits one step above a sans scale
+   * and carries weight 500. */
+  --text-display: clamp(3rem, 8vw, 5.5rem);
+  --text-display-sub: clamp(1.2rem, 3vw, 1.8rem);
+  --text-heading: clamp(2rem, 5vw, 3rem);
+  --text-subhead: clamp(1.5rem, 3vw, 2rem);
+  --text-title: clamp(1.2rem, 2vw, 1.4rem);
+  --text-body: clamp(1.15rem, 1.6vw, 1.3rem);
+  --text-small: clamp(1rem, 1.4vw, 1.1rem);
+  --text-lede: clamp(1.3rem, 2vw, 1.5rem);
+  --text-lede-masthead: clamp(1.4rem, 2.2vw, 1.65rem);
+  --text-tagline: clamp(0.85rem, 1.5vw, 1.05rem);
+  --text-label: clamp(0.7rem, 1.2vw, 0.8rem);
+  --text-ui: 0.85rem;
+  --text-mono: 0.8rem;
+  --weight-body: 500;
+  --leading-body: 1.45;
+
+  /* spacing ramp (0.25rem base) */
+  --space-3xs: 0.25rem;
+  --space-2xs: 0.5rem;
+  --space-xs: 0.75rem;
+  --space-sm: 1rem;
+  --space-md: 1.5rem;
+  --space-lg: 2.5rem;
+  --space-xl: 4rem;
+  --space-2xl: 6rem;
+
+  /* layout */
+  --measure: 36rem; /* prose */
+  --measure-lede: 44rem; /* the standfirst's own line length */
+  --measure-wide: 52rem; /* notebook prose beside wide figures */
+  --page-max: 84rem; /* a notebook dashboard is wide; prose stays on its measure */
+  --nav-width: 15rem;
+  --hairline-width: 1px;
+  --radius: 0; /* square by intent */
+
+  /* Hooks for SHIPPED chrome — what a widget that may land on any page reads
+   * (the voice dock, the tool log, the trace debugger, the slides deck), each
+   * with its own neutral fallback in its own stylesheet. Prefixed so they
+   * never collide with a host's names; set here so our pages dress them. */
+  --aiui-surface: var(--surface);
+  --aiui-surface-raised: var(--surface-raised);
+  --aiui-ink: var(--ink);
+  --aiui-ink-muted: var(--ink-muted);
+  --aiui-muted: var(--muted);
+  --aiui-hairline: var(--hairline);
+  --aiui-ghost: var(--ghost);
+  --aiui-accent: var(--accent);
+  --aiui-ok: var(--ok);
+  --aiui-warn: var(--warn);
+  --aiui-alarm: var(--alarm);
+  --aiui-sans: var(--stack-sans);
+  --aiui-serif: var(--stack-serif);
+  --aiui-mono: var(--stack-mono);
+  --aiui-radius: var(--radius);
+}

@@ -1,0 +1,26 @@
+/* fonts.css — the faces, self-hosted through @fontsource (all OFL):
+ * Cormorant Garamond (reading), Libre Franklin (labels), Fraunces (display,
+ * the variable font with its optical-size, soft and wonk axes). Georgia is a
+ * system font reached through the "Digits" routing face. Nothing here is
+ * licensed beyond the OFL, so the package can be public. */
+
+@import "@fontsource/cormorant-garamond/400.css";
+@import "@fontsource/cormorant-garamond/400-italic.css";
+@import "@fontsource/cormorant-garamond/500.css";
+@import "@fontsource/cormorant-garamond/500-italic.css";
+@import "@fontsource/cormorant-garamond/600.css";
+@import "@fontsource/cormorant-garamond/700.css";
+@import "@fontsource/libre-franklin/300.css";
+@import "@fontsource/libre-franklin/400.css";
+@import "@fontsource/libre-franklin/500.css";
+@import "@fontsource-variable/fraunces/full.css";
+
+/* digit routing: placed first in the serif and sans stacks, this sends only
+ * $ 0-9 : to Georgia — every numeral is Georgia while the words keep their
+ * face. Where Georgia is not installed the digits fall through to the next
+ * face in the stack; nothing breaks. */
+@font-face {
+  font-family: "Digits";
+  src: local("Georgia");
+  unicode-range: U+0024, U+0030-003A;
+}

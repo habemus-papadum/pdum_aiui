@@ -1,0 +1,187 @@
+/* styles.css — the styleguide's OWN chrome: swatch grid, specimen labels, the
+ * exhibit rows. Everything else on the page is the design package,
+ * unassisted — that is the point of the sheet. Scoped under .styleguide so
+ * nothing leaks onto a sibling mounted in the same document. */
+
+.styleguide .hero {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  padding-block: var(--space-lg) var(--space-md);
+}
+
+.styleguide .swatch-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr));
+  gap: var(--space-sm);
+}
+.styleguide .swatch {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3xs);
+}
+.styleguide .swatch .chip {
+  height: 3rem;
+  border: var(--hairline-width) solid var(--ghost);
+}
+.styleguide .swatch small {
+  font-family: var(--stack-sans);
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.styleguide .specimen {
+  margin-block: var(--space-md);
+}
+.styleguide .spec {
+  display: block;
+  font-family: var(--stack-mono);
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin-bottom: var(--space-3xs);
+}
+
+.styleguide .control-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--space-sm) var(--space-md);
+  align-items: end;
+  margin-block: var(--space-sm);
+}
+
+.styleguide .exhibit {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: var(--space-md);
+  align-items: start;
+}
+@media (max-width: 760px) {
+  .styleguide .exhibit {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.styleguide .plate {
+  background: var(--plate);
+  border: var(--hairline-width) solid var(--hairline);
+  line-height: 0;
+}
+.styleguide .plate canvas {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* the tool-chrome exhibit: a static dock row and a log, in the system's
+ * voice (the live dock in the corner is the real thing) */
+.styleguide .tool {
+  background: var(--surface-raised);
+  border: var(--hairline-width) solid var(--hairline);
+  padding: var(--space-sm);
+  font-family: var(--stack-sans);
+  font-size: var(--text-ui);
+}
+.styleguide .dock-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.styleguide .pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border: var(--hairline-width) solid var(--hairline);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: var(--text-label);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.styleguide .pill[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+.styleguide .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--hairline);
+}
+.styleguide .dot.live {
+  background: var(--ok);
+}
+.styleguide .dot.busy {
+  background: var(--warn);
+}
+.styleguide .dot.err {
+  background: var(--alarm);
+}
+.styleguide .dot.parked {
+  background: var(--accent);
+}
+.styleguide .log {
+  width: 100%;
+  font-family: var(--stack-mono);
+  font-size: var(--text-mono);
+  margin-top: var(--space-sm);
+}
+.styleguide .log th {
+  font-family: var(--stack-sans);
+}
+.styleguide .transcript {
+  margin-top: var(--space-sm);
+  display: grid;
+  grid-template-columns: 5rem 1fr;
+  gap: 4px 12px;
+}
+.styleguide .transcript .role {
+  font-size: var(--text-label);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.styleguide .transcript .role.live {
+  color: var(--accent);
+}
+.styleguide .transcript .text {
+  font-family: var(--stack-serif);
+  font-size: var(--text-small);
+}
+.styleguide .transcript .text.mono {
+  font-family: var(--stack-mono);
+  font-size: var(--text-mono);
+  color: var(--ink-muted);
+}
+.styleguide .nav-sample {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 15rem;
+  border-right: var(--hairline-width) solid var(--ghost);
+  padding-right: var(--space-sm);
+}
+.styleguide .two {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-md);
+  align-items: start;
+}
+.styleguide .tool {
+  min-width: 0;
+  overflow-x: auto;
+}
+@media (max-width: 760px) {
+  .styleguide .two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .styleguide .nav-sample {
+    border-right: none;
+    border-bottom: var(--hairline-width) solid var(--ghost);
+    padding: 0 0 var(--space-sm);
+    max-width: none;
+  }
+}
