@@ -65,6 +65,17 @@ const rows = (root: HTMLElement): HTMLDetailsElement[] => [
   ...root.querySelectorAll<HTMLDetailsElement>("[data-testid=oracle-prompt]"),
 ];
 
+/** The weave's raw text: Markdown by default, the text itself behind the toggle. */
+async function rawText(row: HTMLElement): Promise<string | undefined> {
+  const toggle = row.querySelector<HTMLInputElement>(".aiui-text-toggle input");
+  if (toggle) {
+    toggle.checked = false;
+    toggle.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  await flush();
+  return row.querySelector(".aiui-text-raw")?.textContent ?? undefined;
+}
+
 describe("the panel's startup-prompt rows", () => {
   it("renders nothing until a session has been configured", () => {
     const root = mount(fakeSession([{ kind: "session", phase: "connecting" }]).session);
@@ -85,8 +96,10 @@ describe("the panel's startup-prompt rows", () => {
     expect(row.querySelector("summary")?.textContent).toBe(
       `startup prompt · ${PERSONA.length} chars`,
     );
-    // …and the whole weave is there to be read on expand.
-    expect(row.querySelector("pre")?.textContent).toBe(PERSONA);
+    // …and the whole weave is there to be read on expand — rendered, with the
+    // raw text one toggle away.
+    expect(row.querySelector(".aiui-md")?.textContent).toContain("You are the oracle.");
+    expect(await rawText(row)).toBe(PERSONA);
   });
 
   it("appends a re-weave and leaves an opened row open", async () => {
@@ -107,6 +120,6 @@ describe("the panel's startup-prompt rows", () => {
     expect(after.map((row) => row.getAttribute("data-kind"))).toEqual(["startup", "re-woven"]);
     expect(after[0].open).toBe(true); // the row survived the append, expanded
     expect(after[1].open).toBe(false);
-    expect(after[1].querySelector("pre")?.textContent).toBe(WITH_TAB);
+    expect(await rawText(after[1])).toBe(WITH_TAB);
   });
 });

@@ -60,6 +60,8 @@ import {
   OracleViewer,
 } from "@habemus-papadum/aiui-oracle/widgets";
 import { ensureAiuiGlobal } from "@habemus-papadum/aiui-viz";
+import { JsonView } from "@habemus-papadum/aiui-viz/site/json-view";
+import { TextView } from "@habemus-papadum/aiui-viz/site/markdown";
 import { ToolLog, toggleToolLog } from "@habemus-papadum/aiui-viz/site/tool-log";
 import type { JSX } from "@solidjs/web";
 import { createEffect, createSignal, For, onCleanup, Show, untrack } from "solid-js";
@@ -186,11 +188,12 @@ function LiveConfigFold(props: { session: LiveSession }): JSX.Element {
   return (
     <details>
       <summary>session config (as sent)</summary>
-      <pre>
-        {state().status === "idle"
-          ? "(connect to see the composed config)"
-          : JSON.stringify(props.session.sessionConfig(), null, 1)}
-      </pre>
+      <Show
+        when={state().status !== "idle"}
+        fallback={<p class="aiui-dock-note">(connect to see the composed config)</p>}
+      >
+        <JsonView value={props.session.sessionConfig()} depth={2} />
+      </Show>
     </details>
   );
 }
@@ -314,7 +317,12 @@ export function VoiceDock(props: VoiceDockProps): JSX.Element {
                 <OracleUsage session={session} />
                 <details>
                   <summary>prompt (as sent)</summary>
-                  <pre>{oraclePrompt() || "(connect to see the woven instructions)"}</pre>
+                  <Show
+                    when={oraclePrompt() !== ""}
+                    fallback={<p class="aiui-dock-note">(connect to see the woven instructions)</p>}
+                  >
+                    <TextView text={oraclePrompt()} />
+                  </Show>
                 </details>
                 <p class="aiui-dock-note">
                   tools: {surface().tools.length} from{" "}

@@ -418,6 +418,7 @@ function pageBootstrap(version: string, deps: PageBootstrapDeps): void {
             args?: unknown;
             callId?: string;
             caller?: string;
+            icon?: string;
           };
           const callId = String(p.callId ?? "");
           const registry = toolsRegistry();
@@ -425,7 +426,11 @@ function pageBootstrap(version: string, deps: PageBootstrapDeps): void {
             report({ kind: "toolsResult", callId, ok: false, error: "no tools registry" });
             return { ok: true } satisfies PageCapabilityMap["toolsCall"]["reply"];
           }
-          const meta = { caller: typeof p.caller === "string" ? p.caller : "panel", ref: callId };
+          const meta = {
+            caller: typeof p.caller === "string" ? p.caller : "panel",
+            ...(typeof p.icon === "string" ? { icon: p.icon } : {}),
+            ref: callId,
+          };
           void Promise.resolve()
             .then(() => registry.call(String(p.ns ?? ""), String(p.name ?? ""), p.args, meta))
             .then(

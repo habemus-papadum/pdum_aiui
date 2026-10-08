@@ -47,6 +47,10 @@ export interface AiuiCallMeta {
    * `live:<delegator>`, `page` (the app itself, or the console)… free-form;
    * each transport names itself. Absent ⇒ `unknown`. */
   caller?: string;
+  /** A glyph for the caller — an emoji or a Unicode symbol — shown beside its
+   * name wherever calls are listed. A transport may send its own; the on-page
+   * log has a default for the callers it knows. */
+  icon?: string;
   /** The turn, delegation, or MCP call the call belongs to, when known. */
   ref?: string;
 }
@@ -61,6 +65,8 @@ export interface AiuiToolCall {
   /** The arguments, JSON-clipped like `result`. */
   args?: unknown;
   caller: string;
+  /** The caller's glyph, when the transport sent one (see {@link AiuiCallMeta.icon}). */
+  icon?: string;
   ref?: string;
   ok: boolean;
   /** The result, clipped to {@link CALL_RESULT_CAP} bytes of JSON (`{ clipped,
@@ -222,7 +228,10 @@ function createRegistry(): AiuiToolsRegistry {
     },
     async call(ns, name, args, meta) {
       const caller = meta?.caller ?? "unknown";
-      const ref = meta?.ref !== undefined ? { ref: meta.ref } : {};
+      const ref = {
+        ...(meta?.ref !== undefined ? { ref: meta.ref } : {}),
+        ...(meta?.icon !== undefined ? { icon: meta.icon } : {}),
+      };
       const tool = byNs.get(ns)?.find((t) => t.name === name);
       if (tool === undefined) {
         const error = `no such page tool: ${ns}.${name}`;

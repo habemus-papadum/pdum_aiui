@@ -49,7 +49,8 @@ describe("ToolLog", () => {
     const row = document.querySelector(".aiui-toollog-call");
     expect(row?.textContent).toContain("channel");
     expect(row?.textContent).toContain("lab/set_freq");
-    expect(row?.textContent).toContain('{"applied":3}');
+    expect(row?.textContent).toContain("applied: 3"); // the explorer's inline form
+    expect(row?.querySelector(".aiui-toollog-glyph")?.textContent).toBe("🤖");
   });
 
   it("the 'as rendered' view is renderToolBrief over the live registry", async () => {
@@ -67,7 +68,17 @@ describe("ToolLog", () => {
     const tabs = [...document.querySelectorAll<HTMLButtonElement>(".aiui-toollog-tab")];
     tabs.find((b) => b.textContent === "as rendered")?.click();
     await tick();
-    const brief = document.querySelector(".aiui-toollog-brief")?.textContent;
+    // Markdown by default; the raw text — the fact — behind the toggle.
+    expect(document.querySelector(".aiui-toollog-brief .aiui-md")).not.toBeNull();
+    const toggle = document.querySelector<HTMLInputElement>(
+      ".aiui-toollog-brief .aiui-text-toggle input",
+    );
+    if (toggle) {
+      toggle.checked = false;
+      toggle.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    await tick();
+    const brief = document.querySelector(".aiui-toollog-brief .aiui-text-raw")?.textContent;
     const expected = renderToolBrief([
       {
         ns: "lab",

@@ -205,6 +205,7 @@ export function createToolsLink(options: ToolsLinkOptions): { dispose(): void } 
             args: msg.args,
             callId: msg.callId,
             caller: "channel", // Claude Code, through page_tools_call
+            icon: "🤖",
           })
           .catch(() => {
             pendingCalls.delete(msg.callId as string);

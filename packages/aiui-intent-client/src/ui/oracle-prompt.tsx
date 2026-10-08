@@ -16,6 +16,7 @@
  */
 
 import type { OracleSession } from "@habemus-papadum/aiui-oracle";
+import { TextView } from "@habemus-papadum/aiui-viz/site/markdown";
 import { createSignal, For, onCleanup, Show } from "solid-js";
 import { type PromptWeave, promptWeaves, weaveSummary } from "./oracle-prompt-fold";
 
@@ -30,8 +31,7 @@ export const ORACLE_PROMPT_STYLES = `
      so an open row cannot push the transcript off the fold. */
   .aiui-oracle-prompt-text { margin: 3px 0 4px; padding: 5px; border-radius: var(--radius);
     background: var(--surface-sunken);
-    white-space: pre-wrap; word-break: break-word;
-    max-height: 260px; overflow-y: auto; }
+    max-height: 320px; overflow-y: auto; }
 `;
 
 /** The session's woven prompts, newest last. Renders nothing until a session
@@ -73,7 +73,9 @@ export function OraclePromptWeaves(props: { session: OracleSession }) {
               data-seq={weave.seq}
             >
               <summary>{weaveSummary(weave)}</summary>
-              <pre class="aiui-oracle-prompt-text">{weave.text}</pre>
+              <div class="aiui-oracle-prompt-text">
+                <TextView text={weave.text} />
+              </div>
             </details>
           )}
         </For>

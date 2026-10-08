@@ -116,6 +116,8 @@ export interface PageCapabilityMap {
       callId: string;
       /** Who is asking, for the page's call log (`channel`, `oracle`; absent ⇒ `panel`). */
       caller?: string;
+      /** The caller's glyph for that log — an emoji or a Unicode symbol. */
+      icon?: string;
     };
     reply: Ack;
   };

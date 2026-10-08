@@ -23,6 +23,8 @@ import type { AppendKind, LiveBackendTool, LiveEvent, LiveSessionConfig } from "
  * the executor names itself (`live:responses`, `live:claude`) and the ticket. */
 export interface ToolCallContext {
   caller?: string;
+  /** The caller's glyph, shown beside its name in the page's tool log. */
+  icon?: string;
   ref?: string;
 }
 

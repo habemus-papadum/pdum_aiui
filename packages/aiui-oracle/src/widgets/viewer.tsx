@@ -14,6 +14,7 @@
  * knowledge, any transport.
  */
 
+import { JsonView } from "@habemus-papadum/aiui-viz/site/json-view";
 import { createMemo, createSignal, For, Show } from "solid-js";
 import type { OracleSession } from "../session";
 import type { LedgerEntry } from "../types";
@@ -62,7 +63,9 @@ function EntryRow(props: { entry: LedgerEntry }) {
         <span class="aiui-oracle-entry-body">{entryLine(props.entry)}</span>
       </button>
       <Show when={open() && detail !== undefined}>
-        <pre class="aiui-oracle-entry-json">{JSON.stringify(detail, null, 2)}</pre>
+        <div class="aiui-oracle-entry-json">
+          <JsonView value={detail} depth={2} />
+        </div>
       </Show>
     </div>
   );

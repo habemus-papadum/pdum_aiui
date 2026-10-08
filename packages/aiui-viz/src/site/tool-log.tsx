@@ -7,12 +7,15 @@
  * it. Three views over the page's own registry (`window.__AIUI__.tools`):
  *
  *  - **calls** — the registry's call log, live: who called what (`channel`,
- *    `oracle`, `live:claude`, `page`…), with what, how long it took, and the
- *    result or error;
- *  - **inventory** — `ledger()`: every registered tool with its class and usage;
+ *    `oracle`, `live:claude`, `page`…, each with its glyph), with what, how
+ *    long it took, and the result or error — args and results as a folding
+ *    JSON explorer, not a line of text;
+ *  - **inventory** — every registered kit, its brief, and each tool's class,
+ *    description, and usage, laid out to be read;
  *  - **as rendered** — what a model sees: the `Tools:` section
  *    (`renderToolBrief`, the same function the oracle and the live delegators
- *    call) and the structured form `page_tools_list` returns.
+ *    call) as Markdown with a raw toggle, and the structured form
+ *    `page_tools_list` returns.
  *
  * Its own subpath (`@habemus-papadum/aiui-viz/site/tool-log`) so pages that
  * never open it pay nothing. It is shipped chrome: its inline panel and one
@@ -24,6 +27,8 @@ import type { JSX } from "@solidjs/web";
 import { createEffect, createSignal, For, onCleanup, Show } from "solid-js";
 import { type AiuiToolCall, type AiuiToolsRegistry, ensureAiuiGlobal } from "../aiui-global";
 import { type KitDoc, renderToolBrief } from "../tool-brief";
+import { JsonView } from "./json-view";
+import { TextView } from "./markdown";
 
 /** The hash that opens the log on load (`…/page#aiui-tools`). */
 export const TOOL_LOG_HASH = "#aiui-tools";
@@ -63,14 +68,18 @@ function listing(registry: AiuiToolsRegistry | undefined): unknown {
   }));
 }
 
-function short(value: unknown): string {
-  if (value === undefined) return "";
-  try {
-    const text = JSON.stringify(value);
-    return text.length > 160 ? `${text.slice(0, 160)}…` : text;
-  } catch {
-    return String(value);
-  }
+/** The glyph for a caller the log knows; a transport's own `icon` wins. */
+const GLYPHS: Array<[RegExp, string]> = [
+  [/^channel$/, "🤖"],
+  [/^oracle$/, "🔮"],
+  [/^live(:|$)/, "🎙"],
+  [/^panel$/, "✳"],
+  [/^page$/, "📄"],
+];
+
+export function callerGlyph(call: Pick<AiuiToolCall, "caller" | "icon">): string {
+  if (call.icon !== undefined) return call.icon;
+  return GLYPHS.find(([re]) => re.test(call.caller))?.[1] ?? "·";
 }
 
 // Shipped chrome: every color and face reads a prefixed `--aiui-*` hook with a
@@ -81,33 +90,79 @@ const PANEL: JSX.CSSProperties = {
   right: "8px",
   bottom: "8px",
   "z-index": 2147483000,
-  "max-width": "min(720px, calc(100vw - 16px))",
-  "max-height": "60vh",
+  width: "min(760px, calc(100vw - 16px))",
+  "max-height": "64vh",
   overflow: "auto",
-  font: "12px/1.4 var(--aiui-mono, ui-monospace, SFMono-Regular, Menlo, monospace)",
+  font: "11px/1.45 var(--aiui-sans, ui-sans-serif, system-ui, sans-serif)",
   background: "var(--aiui-surface-raised, rgba(20, 20, 24, 0.96))",
   color: "var(--aiui-ink, #e6e6ea)",
   border: "1px solid var(--aiui-hairline, #444)",
   "border-radius": "var(--aiui-radius, 6px)",
-  padding: "8px",
+  padding: "8px 10px 10px",
+  "box-sizing": "border-box",
 };
 
-/** The rules inline styles cannot carry (pressed tabs, headers, failed rows),
- * injected once per document by the first mounted log. */
+/** The rules inline styles cannot carry, injected once per document by the
+ * first mounted log. */
 const TOOL_LOG_STYLES = `
+.aiui-toollog-bar { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.aiui-toollog-bar .aiui-toollog-close { margin-left: auto; }
 .aiui-toollog-tab, .aiui-toollog-close { background: transparent; color: inherit; cursor: pointer;
   border: 1px solid var(--aiui-hairline, #444); border-radius: var(--aiui-radius, 4px);
-  padding: 1px 8px; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
-  font-family: var(--aiui-sans, inherit); }
+  padding: 1px 8px; font: inherit; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; }
 .aiui-toollog-tab[aria-pressed="true"] { background: var(--aiui-ink, #e6e6ea);
   color: var(--aiui-surface, #141418); border-color: var(--aiui-ink, #e6e6ea); }
-.aiui-toollog th { text-align: left; font-weight: 400; font-size: 10px; letter-spacing: 0.1em;
-  text-transform: uppercase; font-family: var(--aiui-sans, inherit);
-  color: var(--aiui-muted, color-mix(in srgb, currentColor 65%, transparent));
-  padding: 2px 8px 2px 0; border-bottom: 1px solid var(--aiui-hairline, #444); }
-.aiui-toollog td { padding: 2px 8px 2px 0; vertical-align: top;
+.aiui-toollog-empty { color: var(--aiui-muted, color-mix(in srgb, currentColor 60%, transparent));
+  padding: 6px 0; }
+/* a host's own table rules (a design system sizes tables for prose) stop here */
+.aiui-toollog table { margin: 0; font: inherit; }
+.aiui-toollog-calls { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.aiui-toollog-calls th { text-align: left; font-weight: 400; font-size: 9.5px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--aiui-muted, color-mix(in srgb, currentColor 65%, transparent));
+  padding: 2px 8px 3px 0; border-bottom: 1px solid var(--aiui-hairline, #444); }
+.aiui-toollog-calls td { padding: 4px 8px 4px 0; vertical-align: top; font-size: 11px;
   border-bottom: 1px solid var(--aiui-ghost, color-mix(in srgb, currentColor 15%, transparent)); }
-.aiui-toollog-call[data-ok="false"] td:last-child { color: var(--aiui-alarm, #f87171); }
+.aiui-toollog-calls th:nth-child(1), .aiui-toollog-calls td:nth-child(1) { width: 2.2em;
+  font-variant-numeric: tabular-nums; color: var(--aiui-muted, color-mix(in srgb, currentColor 60%, transparent)); }
+.aiui-toollog-calls th:nth-child(2), .aiui-toollog-calls td:nth-child(2) { width: 9em; }
+.aiui-toollog-calls th:nth-child(3), .aiui-toollog-calls td:nth-child(3) { width: 13em; }
+.aiui-toollog-calls th:nth-child(5), .aiui-toollog-calls td:nth-child(5) { width: 3.5em; text-align: right;
+  font-variant-numeric: tabular-nums; }
+.aiui-toollog-tool { font: 11px var(--aiui-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  overflow-wrap: anywhere; }
+.aiui-toollog-glyph { display: inline-block; width: 1.4em; }
+.aiui-toollog-ref { display: block; font-size: 9.5px; word-break: break-all;
+  color: var(--aiui-muted, color-mix(in srgb, currentColor 60%, transparent)); }
+.aiui-toollog-error { color: var(--aiui-alarm, #f87171);
+  font: 11px var(--aiui-mono, ui-monospace, SFMono-Regular, Menlo, monospace); white-space: pre-wrap; }
+.aiui-toollog-kit { margin: 0 0 10px; }
+.aiui-toollog-kit-head { display: flex; align-items: baseline; gap: 8px; margin: 0 0 4px;
+  padding-bottom: 3px; border-bottom: 1px solid var(--aiui-hairline, #444); }
+.aiui-toollog-kit-ns { font: 11px var(--aiui-mono, ui-monospace, SFMono-Regular, Menlo, monospace); }
+.aiui-toollog-kit-state { font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--aiui-muted, color-mix(in srgb, currentColor 60%, transparent)); }
+.aiui-toollog-kit-brief { margin: 2px 0 6px; font: 12px/1.4 var(--aiui-serif, inherit);
+  color: var(--aiui-ink-muted, inherit); }
+.aiui-toollog-item { display: grid; grid-template-columns: 11em minmax(0, 1fr); gap: 2px 10px;
+  padding: 4px 0; border-bottom: 1px solid var(--aiui-ghost, color-mix(in srgb, currentColor 12%, transparent)); }
+.aiui-toollog-item-name { font: 11px var(--aiui-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  word-break: break-word; }
+.aiui-toollog-item-kind { display: inline-block; margin-left: 6px; font-size: 9px; letter-spacing: 0.1em;
+  text-transform: uppercase; padding: 0 4px; border-radius: 999px;
+  border: 1px solid var(--aiui-hairline, #444);
+  color: var(--aiui-muted, color-mix(in srgb, currentColor 60%, transparent)); }
+.aiui-toollog-item-desc { font: 12px/1.4 var(--aiui-serif, inherit); }
+.aiui-toollog-item-usage { grid-column: 2; font-size: 10.5px; line-height: 1.4; white-space: pre-wrap;
+  color: var(--aiui-ink-muted, inherit); }
+.aiui-toollog-section { margin: 10px 0 4px; font-size: 9.5px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--aiui-muted, color-mix(in srgb, currentColor 65%, transparent)); }
+@media (max-width: 640px) {
+  /* a phone: the calls table keeps its columns and the panel scrolls sideways,
+     rather than crushing args and results into one-character columns */
+  .aiui-toollog-calls { min-width: 640px; }
+  .aiui-toollog-item { grid-template-columns: minmax(0, 1fr); }
+  .aiui-toollog-item-usage { grid-column: 1; }
+}
 `;
 let stylesInjected = false;
 
@@ -151,9 +206,13 @@ export function ToolLog(props: ToolLogProps): JSX.Element {
     version();
     return kitDocs(registry());
   };
-  const rows = (): Array<{ ns: string; tool: string; kind?: string; usage?: string }> => {
+  const parked = (ns: string): boolean => {
     version();
-    return registry()?.ledger() ?? [];
+    return (
+      registry()
+        ?.list()
+        .find((k) => k.ns === ns)?.active === false
+    );
   };
 
   const tab = (v: View, label: string): JSX.Element => (
@@ -162,7 +221,6 @@ export function ToolLog(props: ToolLogProps): JSX.Element {
       class="aiui-toollog-tab"
       aria-pressed={view() === v ? "true" : "false"}
       onClick={() => setView(v)}
-      style={{ "margin-right": "6px" }}
     >
       {label}
     </button>
@@ -180,83 +238,122 @@ export function ToolLog(props: ToolLogProps): JSX.Element {
         aria-label="aiui tool log"
         data-aiui-chrome=""
       >
-        <div class="aiui-toollog-bar" style={{ "margin-bottom": "6px" }}>
+        <div class="aiui-toollog-bar">
           {tab("calls", `calls (${calls().length})`)}
           {tab("inventory", "inventory")}
           {tab("rendered", "as rendered")}
-          <button
-            type="button"
-            class="aiui-toollog-close"
-            onClick={() => setOpen(false)}
-            style={{ float: "right" }}
-          >
+          <button type="button" class="aiui-toollog-close" onClick={() => setOpen(false)}>
             close
           </button>
         </div>
+
         <Show when={view() === "calls"}>
-          <table class="aiui-toollog-calls" style={{ "border-collapse": "collapse" }}>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>caller</th>
-                <th>tool</th>
-                <th>args</th>
-                <th>ms</th>
-                <th>result</th>
-              </tr>
-            </thead>
-            <tbody>
-              <For each={[...calls()].reverse()}>
-                {(c) => (
-                  <tr data-ok={String(c.ok)} class="aiui-toollog-call">
-                    <td>{c.seq}</td>
-                    <td>
-                      {c.caller}
-                      {c.ref !== undefined ? ` (${c.ref})` : ""}
-                    </td>
-                    <td>
-                      {c.ns}/{c.tool}
-                    </td>
-                    <td>{short(c.args)}</td>
-                    <td>{c.ms}</td>
-                    <td>{c.ok ? short(c.result) : `✗ ${c.error ?? ""}`}</td>
-                  </tr>
-                )}
-              </For>
-            </tbody>
-          </table>
+          <Show
+            when={calls().length > 0}
+            fallback={<div class="aiui-toollog-empty">no calls yet on this page</div>}
+          >
+            <table class="aiui-toollog-calls">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>caller</th>
+                  <th>tool</th>
+                  <th>args</th>
+                  <th>ms</th>
+                  <th>result</th>
+                </tr>
+              </thead>
+              <tbody>
+                <For each={[...calls()].reverse()}>
+                  {(c) => (
+                    <tr data-ok={String(c.ok)} class="aiui-toollog-call">
+                      <td>{c.seq}</td>
+                      <td>
+                        <span class="aiui-toollog-glyph" aria-hidden="true">
+                          {callerGlyph(c)}
+                        </span>
+                        {c.caller}
+                        <Show when={c.ref}>
+                          {(ref) => <span class="aiui-toollog-ref">{ref()}</span>}
+                        </Show>
+                      </td>
+                      <td class="aiui-toollog-tool">
+                        {c.ns}/{c.tool}
+                      </td>
+                      <td>
+                        <Show
+                          when={c.args !== undefined}
+                          fallback={<span class="aiui-toollog-empty">—</span>}
+                        >
+                          <JsonView value={c.args} />
+                        </Show>
+                      </td>
+                      <td>{c.ms}</td>
+                      <td>
+                        <Show
+                          when={c.ok}
+                          fallback={<span class="aiui-toollog-error">✗ {c.error ?? ""}</span>}
+                        >
+                          <Show
+                            when={c.result !== undefined}
+                            fallback={<span class="aiui-toollog-empty">—</span>}
+                          >
+                            <JsonView value={c.result} />
+                          </Show>
+                        </Show>
+                      </td>
+                    </tr>
+                  )}
+                </For>
+              </tbody>
+            </table>
+          </Show>
         </Show>
+
         <Show when={view() === "inventory"}>
-          <table class="aiui-toollog-inventory" style={{ "border-collapse": "collapse" }}>
-            <thead>
-              <tr>
-                <th>ns</th>
-                <th>tool</th>
-                <th>kind</th>
-                <th>usage</th>
-              </tr>
-            </thead>
-            <tbody>
-              <For each={rows()}>
-                {(r) => (
-                  <tr>
-                    <td>{r.ns}</td>
-                    <td>{r.tool}</td>
-                    <td>{r.kind ?? ""}</td>
-                    <td>{r.usage ?? ""}</td>
-                  </tr>
-                )}
-              </For>
-            </tbody>
-          </table>
+          <Show
+            when={docs().length > 0}
+            fallback={<div class="aiui-toollog-empty">no kits registered on this page</div>}
+          >
+            <For each={docs()}>
+              {(kit) => (
+                <section class="aiui-toollog-kit">
+                  <div class="aiui-toollog-kit-head">
+                    <span class="aiui-toollog-kit-ns">{kit.ns}</span>
+                    <span class="aiui-toollog-kit-state">
+                      {parked(kit.ns) ? "parked" : "active"} · {kit.tools.length} tools
+                    </span>
+                  </div>
+                  <Show when={kit.brief}>
+                    {(brief) => <p class="aiui-toollog-kit-brief">{brief()}</p>}
+                  </Show>
+                  <For each={kit.tools}>
+                    {(t) => (
+                      <div class="aiui-toollog-item">
+                        <div class="aiui-toollog-item-name">
+                          {t.name}
+                          <Show when={t.kind}>
+                            {(kind) => <span class="aiui-toollog-item-kind">{kind()}</span>}
+                          </Show>
+                        </div>
+                        <div class="aiui-toollog-item-desc">{t.description}</div>
+                        <Show when={t.usage}>
+                          {(usage) => <div class="aiui-toollog-item-usage">{usage()}</div>}
+                        </Show>
+                      </div>
+                    )}
+                  </For>
+                </section>
+              )}
+            </For>
+          </Show>
         </Show>
+
         <Show when={view() === "rendered"}>
-          <pre class="aiui-toollog-brief" style={{ "white-space": "pre-wrap" }}>
-            {renderToolBrief(docs())}
-          </pre>
-          <pre class="aiui-toollog-listing" style={{ "white-space": "pre-wrap" }}>
-            {JSON.stringify(listing(registry()), null, 2)}
-          </pre>
+          <div class="aiui-toollog-section">the Tools: section, as a model reads it</div>
+          <TextView text={renderToolBrief(docs())} class="aiui-toollog-brief" />
+          <div class="aiui-toollog-section">the structured form (page_tools_list)</div>
+          <JsonView value={listing(registry())} depth={2} class="aiui-toollog-listing" />
         </Show>
       </aside>
     </Show>

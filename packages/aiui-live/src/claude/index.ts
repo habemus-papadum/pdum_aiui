@@ -197,6 +197,7 @@ export function claudeDelegator(options: ClaudeDelegatorOptions = {}): Delegator
             (turn) =>
               runTool(turn.req.tools, name, args ?? {}, {
                 caller: "live:claude",
+                icon: "🎙",
                 ref: turn.req.id,
               }),
             { error: "no active delegation" },

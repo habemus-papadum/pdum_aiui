@@ -182,7 +182,7 @@ export function createPageTools(options: PageToolsOptions): PageToolsRegistry {
         }, timeoutMs);
         pending.set(callId, { resolve, reject, timer });
         void options.host.transport
-          .requestPage(tab, "toolsCall", { ns, name, args, callId, caller: "oracle" })
+          .requestPage(tab, "toolsCall", { ns, name, args, callId, caller: "oracle", icon: "🔮" })
           .catch((error: unknown) => {
             // The REQUEST failed (no content script, tab gone) — distinct from
             // the tool running and failing, which comes back as a result.

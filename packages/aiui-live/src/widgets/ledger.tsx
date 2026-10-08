@@ -4,6 +4,7 @@
  * primary instrument — the numbers in the proposal were read off this.
  */
 
+import { JsonView } from "@habemus-papadum/aiui-viz/site/json-view";
 import { createMemo, createSignal, For, Show } from "solid-js";
 import type { LiveSession } from "../session";
 import type { LedgerEntry, LedgerKind } from "../types";
@@ -100,7 +101,11 @@ function Row(props: { entry: LedgerEntry; open: boolean; onToggle(): void }) {
         <span class="aiui-live-row-summary">{props.entry.summary}</span>
       </button>
       <Show when={props.open && props.entry.event}>
-        {(event) => <pre class="aiui-live-row-json">{JSON.stringify(event(), null, 1)}</pre>}
+        {(event) => (
+          <div class="aiui-live-row-json">
+            <JsonView value={event()} depth={2} />
+          </div>
+        )}
       </Show>
     </div>
   );

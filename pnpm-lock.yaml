@@ -1213,6 +1213,9 @@ importers:
       '@solidjs/web':
         specifier: catalog:solid
         version: 2.0.0-rc.13(solid-js@2.0.0-rc.13)
+      marked:
+        specifier: ^16.4.2
+        version: 16.4.2
       solid-js:
         specifier: catalog:solid
         version: 2.0.0-rc.13
@@ -1259,6 +1262,9 @@ importers:
       '@solidjs/web':
         specifier: catalog:solid
         version: 2.0.0-rc.13(solid-js@2.0.0-rc.13)
+      marked:
+        specifier: ^16.4.2
+        version: 16.4.2
       solid-js:
         specifier: catalog:solid
         version: 2.0.0-rc.13
@@ -1699,6 +1705,9 @@ importers:
       katex:
         specifier: ^0.17.0
         version: 0.17.0
+      marked:
+        specifier: ^16.4.2
+        version: 16.4.2
       solid-js:
         specifier: catalog:solid
         version: 2.0.0-rc.13

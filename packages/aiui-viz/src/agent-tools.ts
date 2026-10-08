@@ -155,6 +155,7 @@ function recordCall(ns: string, tool: string, args: unknown, run: () => unknown)
         tool,
         args,
         caller: "page",
+        icon: "📄",
         ok,
         ...(ok ? { result } : { error }),
         ms: Date.now() - t0,

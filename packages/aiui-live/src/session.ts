@@ -806,6 +806,7 @@ export class LiveSession {
       this.touchTask(task);
       void runTool(this.tools, call.name, call.arguments, {
         caller: "live:hosted",
+        icon: "🎙",
         ref: task.id,
       }).then((output) => {
         const eventId = this.nextEventId();

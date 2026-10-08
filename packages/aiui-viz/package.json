@@ -27,7 +27,9 @@
     "./tool-brief": "./src/tool-brief.ts",
     "./page-text": "./src/page-text.ts",
     "./modal": "./src/modal/index.ts",
-    "./testing": "./src/testing.ts"
+    "./testing": "./src/testing.ts",
+    "./site/json-view": "./src/site/json-view.tsx",
+    "./site/markdown": "./src/site/markdown.tsx"
   },
   "main": "./src/index.ts",
   "module": "./src/index.ts",
@@ -126,6 +128,16 @@
         "types": "./dist/testing.d.ts",
         "import": "./dist/testing.js",
         "default": "./dist/testing.js"
+      },
+      "./site/json-view": {
+        "types": "./dist/site/json-view.d.ts",
+        "import": "./dist/json-view.js",
+        "default": "./dist/json-view.js"
+      },
+      "./site/markdown": {
+        "types": "./dist/site/markdown.d.ts",
+        "import": "./dist/markdown.js",
+        "default": "./dist/markdown.js"
       }
     }
   },
@@ -144,7 +156,8 @@
     "@uwdata/flechette": ">=2.5",
     "embedding-atlas": ">=0.24",
     "solid-js": ">=2.0.0-rc.13 <3",
-    "katex": "^0.16 || ^0.17"
+    "katex": "^0.16 || ^0.17",
+    "marked": "^16"
   },
   "peerDependenciesMeta": {
     "@duckdb/duckdb-wasm": {
@@ -170,6 +183,9 @@
     },
     "katex": {
       "optional": true
+    },
+    "marked": {
+      "optional": true
     }
   },
   "devDependencies": {
@@ -185,6 +201,7 @@
     "@uwdata/vgplot": "0.28.1",
     "embedding-atlas": "catalog:",
     "katex": "^0.17.0",
+    "marked": "^16.4.2",
     "solid-js": "catalog:solid",
     "vite": "catalog:",
     "vite-plugin-solid": "catalog:solid"

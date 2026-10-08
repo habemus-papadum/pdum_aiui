@@ -64,6 +64,7 @@
     "@habemus-papadum/aiui-util": "workspace:^",
     "@habemus-papadum/aiui-viz": "workspace:^",
     "@solidjs/web": "catalog:solid",
+    "marked": "^16.4.2",
     "solid-js": "catalog:solid",
     "ws": "catalog:"
   },
