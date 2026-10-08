@@ -58,10 +58,20 @@ export function backendToolsFromTools(
   brief?: string,
 ): string | undefined {
   const lines: string[] = [];
-  const first = brief?.trim().split(/(?<=[.!?])\s+/)[0];
-  if (first !== undefined && first !== "") lines.push(`- App: ${first}`);
-  for (const tool of tools) lines.push(`- ${tool.name}: ${tool.description}`);
+  const first = brief === undefined ? "" : firstSentence(brief);
+  if (first !== "") lines.push(`- App: ${first}`);
+  // One sentence per tool: the voice model decides WHETHER to delegate; the
+  // procedure (clamping, re-reads, retries) is the backend's reading. On
+  // seismos the full descriptions ran to 5.9 KB — a capability list, not a
+  // manual (measured 2026-10-08).
+  for (const tool of tools) lines.push(`- ${tool.name}: ${firstSentence(tool.description)}`);
   return lines.length > 0 ? lines.join("\n") : undefined;
+}
+
+/** The first sentence of a text — up to the first `.`, `!` or `?` followed by
+ * whitespace — or the whole text when it has no such break. */
+function firstSentence(text: string): string {
+  return text.trim().split(/(?<=[.!?])\s+/)[0] ?? "";
 }
 
 /** Compose the session instructions. Deterministic — the same slots always

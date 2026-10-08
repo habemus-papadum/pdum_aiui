@@ -24,6 +24,7 @@ import { render } from "@solidjs/web";
 import "@habemus-papadum/aiui-journal/styles.css";
 import { PageBoundary, setSitePageActive } from "@habemus-papadum/aiui-viz";
 import { SiteNav } from "@habemus-papadum/aiui-viz/site";
+import { ToolLog } from "@habemus-papadum/aiui-viz/site/tool-log";
 import { createEffect, createSignal, Show, untrack } from "solid-js";
 import { Landing } from "./site/Landing";
 import { BRAND, LINKS, NAV_ITEMS } from "./site/nav";
@@ -105,6 +106,9 @@ function Shell() {
             )}
           </Show>
         </Show>
+        {/* The agent's tool calls for whichever page is up — hidden until the
+            URL ends in #aiui-tools; one instance for the whole shell. */}
+        <ToolLog />
       </main>
     </div>
   );

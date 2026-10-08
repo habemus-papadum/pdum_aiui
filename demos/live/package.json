@@ -21,6 +21,7 @@
     "dev": "vite",
     "open": "../../bin/aiui open",
     "headless": "tsx scripts/headless.mts",
+    "tools-bench": "tsx scripts/tools-bench.mts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json"
   },

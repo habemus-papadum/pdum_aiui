@@ -18,7 +18,7 @@ export default defineConfig({
     // The Worker stub must exist before @duckdb/duckdb-wasm's module body
     // runs (it references `Worker` at module scope). setupFiles run before
     // any test module, so no test has to remember to import the stub first.
-    setupFiles: ["./src/test-support/worker-stub.ts"],
+    setupFiles: ["./src/test-support/worker-stub.ts", "./src/test-support/web-storage.ts"],
     server: {
       // Solid must be INLINED under Vitest, not node-resolved. The full
       // finding — first recorded here — now lives with solidTestDeps

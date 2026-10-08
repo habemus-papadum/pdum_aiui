@@ -191,6 +191,39 @@ describe("createToolsLink", () => {
     expect(activation.tab).toEqual({ driverTab: 9, windowId: 0 });
   });
 
+  it("a blank tab record is asked again on the page's hello (tools reported before hello)", async () => {
+    const bus = fakeBus({ activeTab: 7 });
+    // The CDP host's record BEFORE the hello: this host's ids, blank url/title —
+    // what an instrumented document adopted mid-life answers, since its
+    // bootstrap reports the tools it finds before it says hello.
+    let info = { url: "", title: "", targetId: "T-7", driverTab: 7 };
+    const host = { ...bus, targeting: { ...bus.targeting, tabInfo: async () => info } };
+    const { all, factory } = fakeSockets();
+    createToolsLink({ host, port: () => 5050, tabIdKey: "driverTab", socketFactory: factory });
+    bus.firePageEvent({ kind: "pageTools", tab: 7, registrations: REGS });
+    all[0].emit("open");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const early = all[0].sent.map((s) => JSON.parse(s)).filter((m) => m.type === "register");
+    expect(early.at(-1).tab).toEqual({ driverTab: 7, url: "", title: "", targetId: "T-7" });
+
+    // The hello lands: the host knows the page now — the record is re-asked.
+    info = { url: "http://app/7", title: "app 7", targetId: "T-7", driverTab: 7 };
+    bus.firePageEvent({ kind: "aiuiSupport", tab: 7, supported: true });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const late = all[0].sent.map((s) => JSON.parse(s)).filter((m) => m.type === "register");
+    expect(late).toHaveLength(early.length + 1);
+    expect(late.at(-1)).toMatchObject({
+      url: "http://app/7",
+      tab: { driverTab: 7, targetId: "T-7", url: "http://app/7", title: "app 7" },
+    });
+
+    // Named: another hello (a reload) with nothing new re-registers nothing.
+    bus.firePageEvent({ kind: "aiuiSupport", tab: 7, supported: true });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const again = all[0].sent.map((s) => JSON.parse(s)).filter((m) => m.type === "register");
+    expect(again).toHaveLength(late.length);
+  });
+
   it("a navigation re-registers with the new url (the title dropped until the page reports)", async () => {
     const bus = fakeBus({ activeTab: 7 });
     bus.setTabUrl(7, "http://app/a", "Page A");

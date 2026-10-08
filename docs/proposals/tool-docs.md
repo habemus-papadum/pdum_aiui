@@ -4,8 +4,9 @@ Per-tool usage text and a per-kit brief that travel with the registration, one r
 per consumer, a library-grade DuckDB query tool, and an on-page record of who called what.
 
 Status: **DECIDED 2026-09-19; milestones 1–4 SHIPPED the same day** (`tool docs I`–`IV`
-on main), **milestone 5 (live verification) PENDING** — it needs the session browser and
-a person at the mic. The owner asked for a synthesis of five requests (tool instructions in
+on main, released in 0.19.0), **milestone 5 VERIFIED 2026-10-08 in the session browser
+and headlessly against the real page tools** ([§10](#10-milestone-5-what-the-live-run-found-2026-10-08):
+six fixes, the measurements, and the two checks that still need a person at the mic). The owner asked for a synthesis of five requests (tool instructions in
 system prompts, a generic DuckDB query tool, result truncation and error return, an on-page
 tool-call debugger, tool pass-through for the live oracle) and deferred every open decision
 to "simplest, least churn". Every claim about existing code cites the file as it was before
@@ -315,8 +316,80 @@ best test case for the docs (a tool that needs a table list and a retry rule); 5
 
 - Realtime prompt cost with the section in place: measure the instruction token count on
   seismos (about 20 tools) in milestone 5 and set `maxChars` from the measurement.
+  **Answered 2026-10-08** (§10): about 7.2 KB, ≈1.5–1.8k tokens for 20 tools; `maxChars`
+  stays unset — the renderer's lever (drop usage first) would recover under 1 KB, the bulk
+  is the eight `set-<dim>` descriptions' shared procedural tail.
 - Whether the voice model calls `schema` unprompted or needs the table list in `usage`
   (both are provided; milestone 5 says which one carries the weight).
+  **Answered for the delegating backends** (§10): the Responses backend called `schema`
+  before `sql` even with the table list in the usage — the usage names the table, `schema`
+  supplies the columns; both carry weight. The Realtime oracle itself is still to be heard.
 - The live relay executes page tools in the browser; the caller tag for the hosted Responses
   path (vendor-run backend) is `live:responses` set by the session's function-call handler.
-  Verify that path attributes correctly.
+  Verify that path attributes correctly. **In-process Responses delegator verified**
+  (`live:responses`, ref = the delegation id); the hosted path needs a voice session.
+
+## 10. Milestone 5: what the live run found (2026-10-08)
+
+Setup: an `aiui claude` session with the session browser; the plain-page intent host at
+`/intent/`; seismos (port 5199) and wine (5198) as the apps; and, for the backends, a
+headless harness (`demos/live/scripts/tools-bench.mts`) that takes the app's tool document
+from the channel's ledger (`/debug/api/page-tools` — what `page_tools_list` shows), executes
+every call IN THE PAGE over CDP (`__AIUI__.tools.call` with the backend's own caller tag),
+and runs aiui-live's delegator exactly as the relay would — no voice model, no mic.
+
+**Verified.**
+
+- The document rides the wire. `page_tools_list` shows the brief, and usage/kind on every
+  library tool; `sql`'s usage reads "Tables: `quakes`" on seismos and "Tables:
+  `province_geo`, `wine`" on wine.
+- Attribution. A `page_tools_call` lands in the page's log as `channel` with the relay's
+  call id as `ref`; the Responses backend's calls as `live:responses` and the SDK
+  delegator's as `live:claude`, each with the delegation id; a failed call is `ok: false`.
+- The Responses backend (gpt-5.4-mini, low effort) on "how many M≥7 in 2011, which month had
+  the most": `report` → `schema` → `sql` (DuckDB's binder error forwarded: GROUP BY with an
+  aggregate) → `sql` (fixed) → the right answer (20; January with 4). Five rounds, 10.8 s,
+  3.7–5.2k input tokens a round. The error-return-and-retry path works as designed. On
+  "show only the deep earthquakes, below 300 km": `report` → `set-depth { lo: 300, hi: 800 }`
+  → `report` → an answer carrying the filtered count (14,205) — the usage's "re-read report
+  after a write" is followed.
+- The Claude SDK delegator (Opus 5, the default) reached `sql` and answered (2007, with four
+  M≥8 events; 22 s, six turns, $0.42) — but its FIRST call guessed the argument name
+  (`query` for `sql`), failed, called `app_list` for the schema, and retried. Fix 5 below.
+- `ToolLog` renders on seismos at `#aiui-tools`: calls with caller and ref, args, ms, the
+  clipped result; inventory; as rendered.
+
+**Measured.**
+
+| What | Size |
+| --- | --- |
+| seismos `Tools:` section (20 tools) | 7,182 chars, 1,126 words, ≈1.5–1.8k tokens |
+| …of which descriptions / usage | 5,371 / 871 chars (four tools carry usage) |
+| the eight `set-<dim>` descriptions | ≈330 chars each; a shared procedural tail |
+| voice capability list (`Backend tools:`), full descriptions | 5,856 chars → one sentence per tool after fix 6 |
+| Responses round, duplication (tools array + section) | ≈1.3k tokens a round; accepted, the vendor's own guidance |
+
+**Fixed in the same commit.**
+
+1. Both DuckDB demos resolved the SQL runner at connect time, before `CREATE TABLE`, so the
+   one-shot introspection read an empty catalog and the generic usage stayed. They resolve
+   after their tables now; the `runner` contract says so ("resolve once the tables exist").
+2. No demo set a `brief`. seismos and wine have one; seismos's `suggest-mc` is a read.
+3. The CDP intent host named a tab's tools-link record once, from an empty record, when the
+   page's tools report preceded its hello (an instrumented document adopted mid-life) —
+   `page_tools_list({ url })` could never match the tab. The link asks again while unnamed
+   and on the page's hello; a test pins it.
+4. Nothing mounted `ToolLog`. The app template's `main.tsx`, the gallery shell, seismos, and
+   wine mount it.
+5. The Claude delegation message lists each tool's argument names from the same tool array
+   (`sql(sql, limit?, format?)`), so the first call does not guess.
+6. `backendToolsFromTools` keeps one sentence per tool: the voice model decides whether to
+   delegate; the procedure is the backend's reading.
+
+**Still needs a person at the mic.**
+
+- The oracle (OpenAI Realtime, the intent panel's oracle lab) on seismos: does the Realtime
+  model call `schema` before `sql`, and the woven instructions in the panel's prompt view
+  carry the `Tools:` section (the measurement above is that text).
+- demos/live with voice, hosted mode: the delegation over the relay carrying the brief
+  end to end (unit-tested at the frame; the delegators verified above).

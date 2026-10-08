@@ -117,7 +117,15 @@ function round(x: number, digits: number): number {
 }
 
 function registerTools(): void {
-  const kit = agentToolkit("seismos");
+  const kit = agentToolkit("seismos", {
+    brief:
+      "seismos: a cross-filtered global earthquake catalog (DuckDB table `quakes`, " +
+      "1976–2024) — a map, magnitude/depth/time histograms, and a Gutenberg–Richter " +
+      "fit whose completeness magnitude is the `mc` control. The set-<dim> tools ARE " +
+      "the filter clauses (mouse brushes and menus write the same crossfilter); " +
+      "report lists the active filters, the counts, and the fit; sql queries the " +
+      "whole table, not the current filter.",
+  });
   const { registerTool, registerReporter } = kit;
   const brush = store.brush;
   // The derived surface: report/set/locate (+ actions — one `set-<dim>` tool
@@ -144,6 +152,7 @@ function registerTools(): void {
     name: "suggest-mc",
     description:
       "Return the data-driven completeness magnitude (max-curvature of the filtered FMD); does not apply it.",
+    kind: "read",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
     run: () => ({ mcSuggested: mcMaxCurvature(store.histo()) }),
   });

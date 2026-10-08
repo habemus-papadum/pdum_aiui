@@ -16,6 +16,21 @@ describe("backendToolsFromTools", () => {
     );
     expect(backendToolsFromTools([])).toBeUndefined();
   });
+
+  it("keeps one sentence per tool — a capability, not the procedure", () => {
+    expect(
+      backendToolsFromTools([
+        {
+          name: "set-mag",
+          description:
+            "Magnitude window (moment magnitude) — one side alone is open-ended. — Set the cross-filter: pass lo and/or hi; { clear: true } removes it. Returns { applied }.",
+        },
+        { name: "sql", description: "Run one read-only SQL statement" },
+      ]),
+    ).toBe(
+      "- set-mag: Magnitude window (moment magnitude) — one side alone is open-ended.\n- sql: Run one read-only SQL statement",
+    );
+  });
 });
 
 import { backendPrompt, DELEGATION_CLOSING, livePrompt } from "./prompt";

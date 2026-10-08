@@ -56,7 +56,16 @@ export type AppGraph = ReturnType<typeof graph>;
 // --- agent tools --------------------------------------------------------------
 
 function registerTools(): void {
-  const kit = agentToolkit(appScope.name);
+  const kit = agentToolkit(appScope.name, {
+    brief:
+      "wine: wine reviews (DuckDB table `wine`, with `province_geo` for the regions) " +
+      "on two linked maps — an embedding atlas of the review text and a geographic " +
+      "map of provinces — plus histograms of points and price and menus for country " +
+      "and variety. The set-<dim> tools ARE the filter clauses: set-projx/set-projy " +
+      "box the embedding, set-lon/set-lat box the map, the rest filter one column; " +
+      "report lists the active filters; sql queries the whole table, not the current " +
+      "filter.",
+  });
   const { registerReporter } = kit;
   registerStandardTools(kit);
 

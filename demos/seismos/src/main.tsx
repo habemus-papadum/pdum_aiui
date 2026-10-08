@@ -8,9 +8,20 @@
  * otherwise provide: the stylesheet and the dark-theme stamp.
  */
 import "@habemus-papadum/aiui-journal/styles.css";
+import { ToolLog } from "@habemus-papadum/aiui-viz/site/tool-log";
 import { render } from "@solidjs/web";
 import { page } from "./page";
 
 document.title = page.title;
 page.activate?.();
-render(() => <page.App />, document.getElementById("root") as HTMLElement);
+// ToolLog: the agent's tool calls, hidden until the URL ends in #aiui-tools
+// (the gallery shell mounts the same one for every page).
+render(
+  () => (
+    <>
+      <page.App />
+      <ToolLog />
+    </>
+  ),
+  document.getElementById("root") as HTMLElement,
+);

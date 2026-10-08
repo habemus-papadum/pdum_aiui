@@ -233,6 +233,40 @@ export function createToolsLink(options: ToolsLinkOptions): { dispose(): void } 
     });
   };
 
+  /** Named = the record carries the page's url and title, not blanks. */
+  const named = (link: TabLink): boolean =>
+    (link.meta?.url ?? "") !== "" && (link.meta?.title ?? "") !== "";
+
+  /**
+   * The tab's identity — best-effort, then re-register so the directory's
+   * records carry the page's url/title and this host's other ids (the CDP
+   * target id; chrome window/index) instead of the bare transport number.
+   * Asked again while the record is unnamed: a page whose tools report
+   * precedes its hello (an instrumented document adopted mid-life — the CDP
+   * host's bootstrap reports the tools it finds before it says hello) answers
+   * the first ask with empty strings, and the directory must not keep those —
+   * `page_tools_list({ url })` would never match the tab (found live,
+   * 2026-10-08). Re-registers only when the record actually changed.
+   */
+  const nameTab = (tab: number, link: TabLink): void => {
+    if (named(link)) {
+      return;
+    }
+    void options.host.targeting
+      .tabInfo?.(tab)
+      .then((info) => {
+        if (info === undefined || links.get(tab) !== link) {
+          return;
+        }
+        const picked = pickTabRecord(info as Record<string, unknown>);
+        if (JSON.stringify(picked) !== JSON.stringify(link.meta)) {
+          link.meta = picked;
+          registerAll(tab, link);
+        }
+      })
+      .catch(() => {});
+  };
+
   const offPage = options.host.transport.onPageEvent((event) => {
     if (event.kind === "pageTools") {
       const existing = links.get(event.tab);
@@ -258,21 +292,17 @@ export function createToolsLink(options: ToolsLinkOptions): { dispose(): void } 
         links.set(event.tab, link);
         dial(event.tab, link);
         log(`tools: tab ${event.tab} connected (${event.registrations.length} namespace(s))`);
-        // The tab's identity, once per link — best-effort, then re-register
-        // so the directory's records carry the page's url/title and this
-        // host's other ids (the CDP target id; chrome window/index) instead
-        // of the bare transport number.
-        void options.host.targeting
-          .tabInfo?.(event.tab)
-          .then((info) => {
-            if (info !== undefined && links.get(event.tab) === link) {
-              link.meta = pickTabRecord(info as Record<string, unknown>);
-              registerAll(event.tab, link);
-            }
-          })
-          .catch(() => {});
       }
       registerAll(event.tab, link);
+      nameTab(event.tab, link);
+    } else if (event.kind === "aiuiSupport") {
+      // A document just said hello: its url and title are known NOW. A link
+      // still unnamed was asked too early (an already-running app reports its
+      // tools before its hello) — ask again.
+      const link = links.get(event.tab);
+      if (link !== undefined) {
+        nameTab(event.tab, link);
+      }
     } else if (event.kind === "navigation") {
       // The page moved: keep the registered url honest so the agent's url
       // addressing (and the DevTools MCP's list_pages join) keeps matching.

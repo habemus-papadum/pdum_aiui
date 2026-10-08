@@ -306,7 +306,6 @@ export const store: WineStore = appScope.durable("store", () => {
     const db: AsyncDuckDB = await instantiateDuckDB(BUNDLES);
     const mosaicCon = await db.connect();
     queryCon = await db.connect();
-    resolveRunner(duckdbRunner(queryCon));
     coordinator.databaseConnector(duckdbConnector({ duckdb: db, connection: mosaicCon }));
     report(0.75);
 
@@ -328,6 +327,10 @@ export const store: WineStore = appScope.durable("store", () => {
     await db.dropFile("dataset.parquet");
     await db.dropFile("precomputed.parquet");
     await db.dropFile("provinces.json");
+    // The agent's SQL runner resolves HERE, once both tables exist: the library
+    // introspects the table list the moment the promise settles, so resolving
+    // at connect time would have it read an empty catalog.
+    resolveRunner(duckdbRunner(queryCon));
     report(0.95);
 
     const s = (

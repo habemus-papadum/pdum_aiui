@@ -502,7 +502,6 @@ export const store: SeismosStore = seismosScope.durable("store", () => {
     const db: AsyncDuckDB = await instantiateDuckDB(BUNDLES);
     const mosaicCon = await db.connect();
     queryCon = await db.connect();
-    resolveRunner(duckdbRunner(queryCon));
     // Hand Mosaic our locally-bundled instance (no jsDelivr): the connector uses
     // this connection for every view query.
     coordinator.databaseConnector(duckdbConnector({ duckdb: db, connection: mosaicCon }));
@@ -525,6 +524,10 @@ export const store: SeismosStore = seismosScope.durable("store", () => {
               + POWER(ee_theta, 6) * (0.000893 + 0.003796*ee_theta*ee_theta)) AS eq_y
        FROM (SELECT *, ASIN(0.8660254037844386 * SIN(RADIANS(latitude))) AS ee_theta FROM ${TABLE})`,
     );
+    // The agent's SQL runner resolves HERE, once the table exists: the library
+    // introspects the table list the moment the promise settles, so resolving
+    // at connect time would have it read an empty catalog.
+    resolveRunner(duckdbRunner(queryCon));
     report(0.95);
 
     const s = await computeSummary(queryCon);

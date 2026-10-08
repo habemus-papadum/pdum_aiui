@@ -441,7 +441,10 @@ export async function schemaOf(
 
 export interface SqlToolsOptions {
   /** The runner, or a promise of one (the database loads later — the tools
-   * register now and answer "not loaded yet" until it resolves). */
+   * register now and answer "not loaded yet" until it resolves). Resolve it
+   * once the TABLES exist, not when the connection opens: the table list is
+   * introspected once, the moment the promise settles, and an empty catalog
+   * leaves the generic usage in place. */
   runner: SqlRunner | Promise<SqlRunner>;
   /** The tables to name in the tool's usage. Omitted, they are introspected
    * once the runner resolves and the `sql` tool is re-registered with them. */

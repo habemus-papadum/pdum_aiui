@@ -382,7 +382,10 @@ oracle, a live delegation and `page_tools_list` all render the same guidance):
 The table list is the one fact the `sql` tool's usage should carry and the app should not
 have to type: omitted, it is **introspected once the runner resolves** and the tool is
 re-registered with it (replace-by-name, HMR-safe — every consumer sees the new usage); pass
-`tables` to state it instead. The library still owns no connection and no Mosaic: the runner
+`tables` to state it instead. Resolve the runner's promise once the **tables exist**, not when
+the connection opens: the introspection runs the moment it settles, and an empty catalog
+leaves the generic usage in place (seismos and wine resolve it after their `CREATE TABLE`s —
+found live, 2026-10-08, when both shipped resolving at connect time). The library still owns no connection and no Mosaic: the runner
 seam has two adapters, `duckdbRunner(connection)` for duckdb-wasm and
 `connectorRunner(connector)` for a Mosaic `Connector` (the Quack path, where the SQL string
 travels — no type names on that path, `schema` still answers). `runSql` and `schemaOf` are

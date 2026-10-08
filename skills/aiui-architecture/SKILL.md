@@ -230,10 +230,12 @@ how the tools relate. Every consumer renders the same document from it (the orac
 that change with the data belong in the tool that owns them — a DuckDB app registers the
 library's `sql`/`schema` tools (`registerSqlTools(kit, { runner })` from
 `@habemus-papadum/aiui-viz/duckdb`, over a connection dedicated to agent reads) and the table
-list is introspected into the tool's usage. To see what a model sees, mount `ToolLog`
-(`@habemus-papadum/aiui-viz/site/tool-log`, hidden until `#aiui-tools`): its *as rendered*
-view is the document, and its *calls* view is the page's call log (who called what —
-`channel`, `oracle`, `live:…`, `page` — and the result). User guide: "Documenting a tool".
+list is introspected into the tool's usage — resolve the runner's promise once the tables
+exist, not when the connection opens. To see what a model sees, open the page with
+`#aiui-tools`: `ToolLog` (`@habemus-papadum/aiui-viz/site/tool-log`; the app template's
+`main.tsx` and the gallery shell mount it, hidden by default) shows the document *as
+rendered* and the page's call log (who called what — `channel`, `oracle`, `live:…`, `page`
+— and the result). User guide: "Documenting a tool".
 
 Forwarding is unconditional: the toolkit publishes every namespace into
 `window.__AIUI__.tools` (installed by the runtime, production included — the page dials
