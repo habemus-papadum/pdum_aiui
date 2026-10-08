@@ -31,6 +31,20 @@ account — see CLAUDE.md → *Publication convention*). Never run `pnpm publish
 cut a release, never push a `vX.Y.Z` tag, and do not suggest a release unless the user explicitly
 asks about the process.
 
+**The token expires.** `NPM_TOKEN` is an npm *granular access token* with an expiry chosen at
+creation (the one set 2026-10-08 expires **2027-01-06**; `gh secret list` shows the date it was
+set). An expired token fails the publish with `404 Not Found - PUT …` on the first package —
+npm answers an unauthorized PUT with 404, which reads like "package not found" — AFTER
+`prepare` has already committed and pushed the stamped version and the `vX.Y.Z` tag. Recover by
+replacing the secret (`gh secret set NPM_TOKEN --repo habemus-papadum/pdum_aiui`) and re-running
+the failed job in place: `gh run rerun <run-id> --failed`. Never re-dispatch the workflow for
+that release — it would compute the NEXT version from the tag that already exists. Two more
+registry facts as of 2026-10: a token's first publish of a NEW package leaves a public
+`0.0.0-stage` placeholder version beside the real one (harmless; carets never match it), and
+npm removes direct publishing by bypass-2FA tokens in **January 2027** — before then this
+workflow must move to trusted publishing (OIDC; pnpm already attempts the exchange) or to
+staged publishing with a human 2FA approval.
+
 **Name reservation is not releasing.** `pnpm npm:reserve <slug>` (placeholder-publish a name to
 claim it ahead of its first real release — optional; nothing requires it) is a deliberate local
 step run with the human's npm login. Do not run it on your own initiative; only when the user
