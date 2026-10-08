@@ -1,7 +1,7 @@
 /**
  * dock.tsx — the voice dock: both voice engines embedded in the page itself,
  * wired to the page's own tools, with viewers and a key field. A pill row in
- * the bottom-right corner (`🔮 oracle · 🎙 live · 🧰 tools · 🔑 key`), each
+ * the bottom-right corner (`oracle · live · tools · key`), each
  * opening one pane above it:
  *
  *  - **oracle** — an OpenAI Realtime session (`@habemus-papadum/aiui-oracle`)
@@ -79,7 +79,6 @@ export interface VoiceDockProps {
 
 type Pane = "none" | "oracle" | "live" | "key";
 
-const PANE_KEY = "aiui.dock.pane";
 const BACKEND_KEY = "aiui.dock.backend";
 const GREETING = "Hi there — I'm connected and listening.";
 
@@ -200,7 +199,9 @@ let stylesInjected = false;
 
 export function VoiceDock(props: VoiceDockProps): JSX.Element {
   const serverUrl = (): string => props.serverUrl ?? "/live/sessions";
-  const [pane, setPane] = createSignal<Pane>((stored(PANE_KEY) as Pane | undefined) ?? "none");
+  // Never restored across loads: a pane is only meaningful with the session
+  // it shows, and nothing connects until a pill is pressed.
+  const [pane, setPane] = createSignal<Pane>("none");
   const [keyPresent, setKeyPresent] = createSignal(browserKey() !== undefined);
   const [server, setServer] = createSignal<boolean | undefined>(undefined);
   void probeServer(serverUrl()).then(setServer);
@@ -286,7 +287,6 @@ export function VoiceDock(props: VoiceDockProps): JSX.Element {
     setKeyPresent(browserKey() !== undefined);
     const target = untrack(pane) === next ? "none" : next;
     setPane(target);
-    store(PANE_KEY, target);
     if (target === "oracle") ensureOracle();
     if (target === "live") ensureLive(untrack(backend));
   };
@@ -386,7 +386,8 @@ export function VoiceDock(props: VoiceDockProps): JSX.Element {
           aria-pressed={pane() === "oracle" ? "true" : "false"}
           onClick={() => openPane("oracle")}
         >
-          <span class="aiui-dock-dot" data-status={oracleStatus()} />🔮 oracle
+          <span class="aiui-dock-dot" data-status={oracleStatus()} />
+          oracle
         </button>
         <button
           type="button"
@@ -394,7 +395,8 @@ export function VoiceDock(props: VoiceDockProps): JSX.Element {
           aria-pressed={pane() === "live" ? "true" : "false"}
           onClick={() => openPane("live")}
         >
-          <span class="aiui-dock-dot" data-status={liveStatus()} />🎙 live
+          <span class="aiui-dock-dot" data-status={liveStatus()} />
+          live
         </button>
         <button
           type="button"
@@ -402,10 +404,9 @@ export function VoiceDock(props: VoiceDockProps): JSX.Element {
           onClick={() => {
             toggleToolLog();
             setPane("none");
-            store(PANE_KEY, "none");
           }}
         >
-          🧰 tools
+          tools
         </button>
         <button
           type="button"
@@ -413,7 +414,7 @@ export function VoiceDock(props: VoiceDockProps): JSX.Element {
           aria-pressed={pane() === "key" ? "true" : "false"}
           onClick={() => openPane("key")}
         >
-          🔑 key
+          key
         </button>
       </div>
       <ToolLog />

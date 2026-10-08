@@ -15,8 +15,10 @@
  *    call) and the structured form `page_tools_list` returns.
  *
  * Its own subpath (`@habemus-papadum/aiui-viz/site/tool-log`) so pages that
- * never open it pay nothing. Styling is the consumer's (`.aiui-toollog-*`);
- * the few inline styles only make it usable with no CSS at all.
+ * never open it pay nothing. It is shipped chrome: its inline panel and one
+ * injected stylesheet read the `--aiui-*` hooks a design system sets, with
+ * the dark panel it always had as the fallback; a consumer restyles through
+ * the hooks or the `.aiui-toollog-*` classes.
  */
 import type { JSX } from "@solidjs/web";
 import { createEffect, createSignal, For, onCleanup, Show } from "solid-js";
@@ -71,6 +73,9 @@ function short(value: unknown): string {
   }
 }
 
+// Shipped chrome: every color and face reads a prefixed `--aiui-*` hook with a
+// neutral fallback (the dark panel the log always had), so it is of a piece
+// with a page that sets the hooks and unchanged on any other page.
 const PANEL: JSX.CSSProperties = {
   position: "fixed",
   right: "8px",
@@ -79,13 +84,32 @@ const PANEL: JSX.CSSProperties = {
   "max-width": "min(720px, calc(100vw - 16px))",
   "max-height": "60vh",
   overflow: "auto",
-  font: "12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace",
-  background: "rgba(20, 20, 24, 0.96)",
-  color: "#e6e6ea",
-  border: "1px solid #444",
-  "border-radius": "6px",
+  font: "12px/1.4 var(--aiui-mono, ui-monospace, SFMono-Regular, Menlo, monospace)",
+  background: "var(--aiui-surface-raised, rgba(20, 20, 24, 0.96))",
+  color: "var(--aiui-ink, #e6e6ea)",
+  border: "1px solid var(--aiui-hairline, #444)",
+  "border-radius": "var(--aiui-radius, 6px)",
   padding: "8px",
 };
+
+/** The rules inline styles cannot carry (pressed tabs, headers, failed rows),
+ * injected once per document by the first mounted log. */
+const TOOL_LOG_STYLES = `
+.aiui-toollog-tab, .aiui-toollog-close { background: transparent; color: inherit; cursor: pointer;
+  border: 1px solid var(--aiui-hairline, #444); border-radius: var(--aiui-radius, 4px);
+  padding: 1px 8px; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+  font-family: var(--aiui-sans, inherit); }
+.aiui-toollog-tab[aria-pressed="true"] { background: var(--aiui-ink, #e6e6ea);
+  color: var(--aiui-surface, #141418); border-color: var(--aiui-ink, #e6e6ea); }
+.aiui-toollog th { text-align: left; font-weight: 400; font-size: 10px; letter-spacing: 0.1em;
+  text-transform: uppercase; font-family: var(--aiui-sans, inherit);
+  color: var(--aiui-muted, color-mix(in srgb, currentColor 65%, transparent));
+  padding: 2px 8px 2px 0; border-bottom: 1px solid var(--aiui-hairline, #444); }
+.aiui-toollog td { padding: 2px 8px 2px 0; vertical-align: top;
+  border-bottom: 1px solid var(--aiui-ghost, color-mix(in srgb, currentColor 15%, transparent)); }
+.aiui-toollog-call[data-ok="false"] td:last-child { color: var(--aiui-alarm, #f87171); }
+`;
+let stylesInjected = false;
 
 export interface ToolLogProps {
   class?: string;
@@ -138,14 +162,18 @@ export function ToolLog(props: ToolLogProps): JSX.Element {
       class="aiui-toollog-tab"
       aria-pressed={view() === v ? "true" : "false"}
       onClick={() => setView(v)}
-      style={{ "margin-right": "6px", font: "inherit" }}
+      style={{ "margin-right": "6px" }}
     >
       {label}
     </button>
   );
 
+  const injectStyles = !stylesInjected;
+  stylesInjected = true;
+
   return (
     <Show when={isOpen()}>
+      {injectStyles ? <style>{TOOL_LOG_STYLES}</style> : null}
       <aside
         class={`aiui-toollog${props.class !== undefined ? ` ${props.class}` : ""}`}
         style={PANEL}
@@ -160,7 +188,7 @@ export function ToolLog(props: ToolLogProps): JSX.Element {
             type="button"
             class="aiui-toollog-close"
             onClick={() => setOpen(false)}
-            style={{ float: "right", font: "inherit" }}
+            style={{ float: "right" }}
           >
             close
           </button>
