@@ -15,6 +15,12 @@ import { defineConfig } from "vitest/config";
 //    descriptions, package-qualified locs) is injected by THIS package's own
 //    toolchain — the library-grade identity story the tests pin.
 export default defineConfig({
+  // Vite 8 honours the tsconfig's `jsx: preserve`, and this plugin-less run
+  // still loads .tsx (a graph test reaching a component module): compile it
+  // with Solid's own jsx-runtime, never rendered by these tests. (The same
+  // literal as SOLID_TEST_OXC in @habemus-papadum/aiui-build-config, which a
+  // scaffolded app cannot import — this file mirrors the template's.)
+  oxc: { jsx: { runtime: "automatic", importSource: "@solidjs/web" } },
   plugins: [
     sourceLocatorVite({
       locPrefix: "@habemus-papadum/aiui-oscillator/",

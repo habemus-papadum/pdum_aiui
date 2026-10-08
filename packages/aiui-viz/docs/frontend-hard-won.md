@@ -280,6 +280,23 @@ Found building the wine demo (embedding-atlas integration; full detail:
   refresh on by default. The in-repo source locator is unaffected by the native default *by
   design* (its own `enforce: "pre"` Babel pass, not the plugin's `babel` option) — verified:
   `data-source-loc` stamps and HMR hot-swap both work under the native compiler.
+- **Vite 8 + Vitest 5 (upgraded 2026-10-08, the step before the Solid 2.0 RC):** four things
+  moved under the toolchain, each with one home. (1) Vite 8 compiles TS/JSX with **oxc and
+  honours the tsconfig's `jsx: "preserve"`** — Vite 6's esbuild compiled JSX with the automatic
+  runtime regardless, which is what let a test run WITHOUT the Solid plugin (the oracle, live,
+  dock, stt, pencil configs; every demo's locator-only `vitest.config.ts`) import component
+  modules. Those configs now pass `oxc: SOLID_TEST_OXC` (aiui-build-config; the template and
+  the demos inline the same literal) under Vitest — Solid's own jsx-runtime, never rendered by
+  such tests. (2) Vitest 5 no longer augments Vite's `UserConfig` with `test`: a config carrying
+  a test block imports `defineConfig` from **`vitest/config`**, or `tsc` on the config fails
+  (surfaced by the packaging test, which typechecks the intent client's config). (3) Vitest 5
+  **rewrote the benchmark API**: `bench()` is a fixture of the test context —
+  `test("…", async ({ bench }) => { await bench("case", fn).run() })`, `bench.compare(...)` for
+  several (the walkthrough's `diffusion.bench.ts`). (4) Vite 8 keeps source comments through
+  the test transform; a fixture whose marker text also appears in a source comment counts twice
+  (the CDP bus test's `the page bundle`). `vite-plugin-solid@3.0.0-next.24` runs unchanged on
+  Vite 8 (its peer range always allowed it); `aiui-live`'s vite peer is `^6 || ^7 || ^8`. pnpm's
+  release-age policy (one day) is why the catalog floors sit a patch behind the newest.
 - **Native compiler `0.50.0-next.40` (the pin behind `vite-plugin-solid@3.0.0-next.24`) drops
   the marker for a lone dynamic child between two text runs.** `<p>text <Comp/> text</p>` —
   one component (or `{expr}`-less JSX element) with static text on both sides — compiles to a

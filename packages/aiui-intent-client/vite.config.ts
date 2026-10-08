@@ -5,8 +5,10 @@ import {
   SOLID_TEST_CONDITIONS,
   solidTestDeps,
 } from "@habemus-papadum/aiui-build-config";
-import { defineConfig } from "vite";
 import solid from "vite-plugin-solid";
+// `vitest/config`, not `vite`: Vitest 5 no longer augments Vite's UserConfig
+// with `test`, so a config that carries a test block types it from here.
+import { defineConfig } from "vitest/config";
 
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
 const require = createRequire(import.meta.url);

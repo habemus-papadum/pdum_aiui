@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { externalizeDeps } from "@habemus-papadum/aiui-build-config";
+import { externalizeDeps, SOLID_TEST_OXC } from "@habemus-papadum/aiui-build-config";
 import { defineConfig } from "vite";
 import solid from "vite-plugin-solid";
 
@@ -15,6 +15,8 @@ export default defineConfig({
   // the recipe aiui-viz/vite.config.ts records (inline solid + pinned
   // conditions) instead.
   plugins: process.env.VITEST ? [] : [solid({ include: ["src/**/*.tsx"] })],
+  // Vite 8 honours `jsx: preserve`; a plugin-less test run still loads .tsx.
+  oxc: process.env.VITEST ? SOLID_TEST_OXC : undefined,
   build: {
     lib: {
       // Four entrypoints mirroring the exports map: the library (`.`), the

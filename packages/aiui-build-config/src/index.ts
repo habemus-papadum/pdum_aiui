@@ -63,3 +63,18 @@ export const solidTestDeps = {
  * aiui-remote-bar/aiui-intent-client's configs.)
  */
 export const SOLID_TEST_CONDITIONS = ["browser", "development", "import", "module", "default"];
+
+/**
+ * Vite 8's JSX transform for a test run WITHOUT the Solid plugin. Vite 8
+ * compiles with oxc and honours the tsconfig's `jsx: preserve`, so a headless
+ * test that imports a component module (a demo's graph test reaching viz's
+ * CellText, the oracle's widget models) fails import analysis on the first
+ * `.tsx` it loads. Vite 6's esbuild compiled such files with the automatic
+ * runtime regardless — which is what let those tests load them. This restores
+ * that: Solid's own jsx-runtime, which the tests never render through. Pass
+ * as `oxc: SOLID_TEST_OXC` under Vitest in a config whose Solid plugin is
+ * off (or absent); never in a config that compiles JSX for real.
+ */
+export const SOLID_TEST_OXC = {
+  jsx: { runtime: "automatic", importSource: "@solidjs/web" },
+} as const;

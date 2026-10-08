@@ -15,6 +15,12 @@ import { defineConfig } from "vitest/config";
 //  - passWithNoTests: a freshly reset blank app has no tests yet; `npm test`
 //    should still be green until your first cell brings its first test.
 export default defineConfig({
+  // Vite 8 honours the tsconfig's `jsx: preserve`, and this plugin-less run
+  // still loads .tsx (a graph test reaching a component module): compile it
+  // with Solid's own jsx-runtime, never rendered by these tests. (The same
+  // literal as SOLID_TEST_OXC in @habemus-papadum/aiui-build-config, which a
+  // scaffolded app cannot import — this file mirrors the template's.)
+  oxc: { jsx: { runtime: "automatic", importSource: "@solidjs/web" } },
   // The aiui compiler must run under Vitest too: control()/cell() names,
   // locations, and descriptions are compiler-injected, and tests exercise the
   // same inference the app gets (the locator is all it runs).

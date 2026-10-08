@@ -442,14 +442,17 @@ describe("CdpBus", () => {
       cdpUrl: BRIDGE,
       channelOrigin: ORIGIN,
       socketFactory: browser.factory,
-      bundleSource: async () => "/* the page bundle */ window.__aiuiIntentPage = {};",
+      // A marker no SOURCE comment can match: Vite 8 keeps comments through the
+      // test transform (Vite 6 stripped them), and the page bootstrap's own
+      // "the page bundle" comment then counted as an injection (2026-10-08).
+      bundleSource: async () => "/* PAGE_BUNDLE_FIXTURE */ window.__aiuiIntentPage = {};",
     });
     browser.attach("S1", "T1", "https://example.test/");
     await settle();
 
     await bus.transport.requestPage(1, "pencil", { op: "engage", fadeSec: 4 });
     const evaluated = browser.evaluated("S1");
-    const bundleAt = evaluated.findIndex((e) => e.includes("the page bundle"));
+    const bundleAt = evaluated.findIndex((e) => e.includes("PAGE_BUNDLE_FIXTURE"));
     const pencilAt = evaluated.findIndex((e) => e.includes(call("pencil")));
     expect(bundleAt).toBeGreaterThanOrEqual(0);
     expect(bundleAt).toBeLessThan(pencilAt); // the surface exists before we use it
@@ -457,14 +460,16 @@ describe("CdpBus", () => {
 
     // One document, one injection: a second op does not re-evaluate the bundle.
     await bus.transport.requestPage(1, "pencil", { op: "disengage" });
-    expect(browser.evaluated("S1").filter((e) => e.includes("the page bundle"))).toHaveLength(1);
+    expect(browser.evaluated("S1").filter((e) => e.includes("PAGE_BUNDLE_FIXTURE"))).toHaveLength(
+      1,
+    );
 
     // …but a NEW document has no bundle in it, so the next op re-injects.
     browser.report("S1", hello("https://example.test/next"));
     await settle();
     await bus.transport.requestPage(1, "pencil", { op: "engage", fadeSec: 0 });
     expect(
-      browser.evaluated("S1").filter((e) => e.includes("the page bundle")).length,
+      browser.evaluated("S1").filter((e) => e.includes("PAGE_BUNDLE_FIXTURE")).length,
     ).toBeGreaterThanOrEqual(2);
   });
 

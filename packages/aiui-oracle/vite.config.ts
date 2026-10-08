@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { externalizeDeps } from "@habemus-papadum/aiui-build-config";
+import { externalizeDeps, SOLID_TEST_OXC } from "@habemus-papadum/aiui-build-config";
 import { defineConfig } from "vite";
 import solid from "vite-plugin-solid";
 
@@ -10,6 +10,8 @@ export default defineConfig({
   // recipe (an unscoped plugin rewrites import.meta in pure-.ts cores, and
   // under Vitest it flips resolve conditions browser-ward).
   plugins: process.env.VITEST ? [] : [solid({ include: ["src/**/*.tsx"] })],
+  // Vite 8 honours `jsx: preserve`; a plugin-less test run still loads .tsx.
+  oxc: process.env.VITEST ? SOLID_TEST_OXC : undefined,
   build: {
     lib: {
       // Two entrypoints mirroring the exports map: the chromeless core (`.`)
