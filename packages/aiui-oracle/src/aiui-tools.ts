@@ -254,6 +254,22 @@ export function onControlSurfaceChange(listener: () => void): () => void {
 export interface RegistryToolsOptions {
   /** Keep only these namespaces (default: all registrations). */
   namespaces?: string[];
+  /** Also project PARKED namespaces (a multi-app document's off-route pages).
+   * Default false: a voice session sees the page in view, as the registry
+   * doc promises for the oracle projection. */
+  includeParked?: boolean;
+}
+
+/** The registrations a projection keeps: the named namespaces, minus the parked ones. */
+function selectRegistrations<T extends { ns: string; active?: boolean }>(
+  registrations: readonly T[],
+  options: RegistryToolsOptions,
+): T[] {
+  return registrations.filter(
+    (registration) =>
+      (options.namespaces === undefined || options.namespaces.includes(registration.ns)) &&
+      (options.includeParked === true || registration.active !== false),
+  );
 }
 
 /**
@@ -267,9 +283,7 @@ export function briefFromAiuiRegistry(options: RegistryToolsOptions = {}): strin
   if (registry === undefined) {
     return undefined;
   }
-  const briefs = registry
-    .list()
-    .filter((r) => options.namespaces === undefined || options.namespaces.includes(r.ns))
+  const briefs = selectRegistrations(registry.list(), options)
     .map((r) => r.brief?.trim())
     .filter((b): b is string => b !== undefined && b !== "");
   return briefs.length > 0 ? briefs.join("\n\n") : undefined;
@@ -288,12 +302,7 @@ export function toolsFromAiuiRegistry(
   if (registry === undefined) {
     return undefined;
   }
-  const registrations = registry
-    .list()
-    .filter(
-      (registration) =>
-        options.namespaces === undefined || options.namespaces.includes(registration.ns),
-    );
+  const registrations = selectRegistrations(registry.list(), options);
   const prefix = registrations.length > 1;
   const tools: OracleTool[] = [];
   for (const registration of registrations) {

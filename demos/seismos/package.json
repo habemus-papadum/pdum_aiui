@@ -1,7 +1,7 @@
 {
   "name": "@habemus-papadum/demo-seismos",
   "version": "0.20.0+dev",
-  "description": "Earthquakes & the Gutenberg–Richter law: DuckDB-WASM + Mosaic crossfilter over a bundled catalog, with a live b-value fit and an agent SQL tool.",
+  "description": "Earthquakes & the Gutenberg\u2013Richter law: DuckDB-WASM + Mosaic crossfilter over a bundled catalog, with a live b-value fit and an agent SQL tool.",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -21,7 +21,7 @@
   "aiui": {
     "sitePage": {
       "title": "seismos",
-      "desc": "earthquakes & the Gutenberg–Richter law",
+      "desc": "earthquakes & the Gutenberg\u2013Richter law",
       "order": 30,
       "card": "./card"
     }
@@ -35,6 +35,7 @@
   },
   "dependencies": {
     "@duckdb/duckdb-wasm": "catalog:",
+    "@habemus-papadum/aiui-dock": "workspace:^",
     "@habemus-papadum/aiui-journal": "workspace:^",
     "@habemus-papadum/aiui-source-processor": "workspace:^",
     "@habemus-papadum/aiui-viz": "workspace:^",

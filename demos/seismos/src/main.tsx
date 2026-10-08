@@ -7,20 +7,21 @@
  * standalone-specific work is the shared journal chrome the shell would
  * otherwise provide: the stylesheet and the dark-theme stamp.
  */
+import { VoiceDock } from "@habemus-papadum/aiui-dock";
 import "@habemus-papadum/aiui-journal/styles.css";
-import { ToolLog } from "@habemus-papadum/aiui-viz/site/tool-log";
 import { render } from "@solidjs/web";
 import { page } from "./page";
 
 document.title = page.title;
 page.activate?.();
-// ToolLog: the agent's tool calls, hidden until the URL ends in #aiui-tools
-// (the gallery shell mounts the same one for every page).
+// VoiceDock: the oracle and the live session on this page, its tool log,
+// and the key field — the pill row in the corner (the gallery shell mounts
+// the same one for every page).
 render(
   () => (
     <>
       <page.App />
-      <ToolLog />
+      <VoiceDock />
     </>
   ),
   document.getElementById("root") as HTMLElement,

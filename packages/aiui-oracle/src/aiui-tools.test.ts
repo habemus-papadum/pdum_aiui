@@ -7,7 +7,11 @@
  */
 import { action, control, ensureAiuiGlobal } from "@habemus-papadum/aiui-viz";
 import { describe, expect, it } from "vitest";
-import { toolsFromAiuiRegistry, toolsFromControlSurface } from "./aiui-tools";
+import {
+  briefFromAiuiRegistry,
+  toolsFromAiuiRegistry,
+  toolsFromControlSurface,
+} from "./aiui-tools";
 import type { OracleTool } from "./types";
 
 // Module-global registries — declare once, filter per test by prefix.
@@ -170,5 +174,28 @@ describe("toolsFromAiuiRegistry", () => {
     const hello = byName(tools ?? [], "hello");
     expect(hello.parameters).toEqual({ type: "object", properties: { who: { type: "string" } } });
     expect(await hello.execute({ who: "oracle" })).toBe("hello oracle");
+  });
+
+  it("leaves PARKED namespaces out — the tools and the brief alike — unless asked", () => {
+    const registry = ensureAiuiGlobal().tools;
+    registry.register("orlive", [{ name: "a", description: "a", run: () => 1 }], {
+      brief: "live kit",
+    });
+    registry.register("orparked", [{ name: "b", description: "b", run: () => 2 }], {
+      brief: "parked kit",
+    });
+    registry.setActive("orparked", false);
+    const names = (opts: Parameters<typeof toolsFromAiuiRegistry>[0]) =>
+      (toolsFromAiuiRegistry(opts) ?? []).map((tool) => tool.name);
+    expect(names({ namespaces: ["orlive", "orparked"] })).toEqual(["a"]);
+    expect(names({ namespaces: ["orlive", "orparked"], includeParked: true })).toEqual([
+      "orlive_a",
+      "orparked_b",
+    ]);
+    expect(briefFromAiuiRegistry({ namespaces: ["orlive", "orparked"] })).toBe("live kit");
+    expect(briefFromAiuiRegistry({ namespaces: ["orlive", "orparked"], includeParked: true })).toBe(
+      "live kit\n\nparked kit",
+    );
+    registry.setActive("orparked", true);
   });
 });
