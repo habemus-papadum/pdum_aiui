@@ -319,6 +319,13 @@ prerequisite:
 **Sequencing, revised.** 3a: Vite 8 (+ vitest 5), green on main. 3b: Solid rc on the parked
 branch, rebased. The procedure below is 3b's.
 
+**3a SHIPPED 2026-10-08 (`b8c60157`).** Vite ^8.3.3 and Vitest ^5.0.3 in the catalog, every
+suite, the packaging test, the template e2e, the gallery build and a dev server verified; the
+four toolchain moves (oxc honouring `jsx: preserve` → `SOLID_TEST_OXC` for plugin-less test
+runs; `test` blocks typed through `vitest/config`; the bench API as a test fixture; source
+comments surviving the test transform) are recorded in `frontend-hard-won.md`'s ecosystem
+section. pnpm's one-day release-age policy is why the floors sit a patch behind the newest.
+
 **Risks, named.** The native compiler in CI (binary install under `allowBuilds`); the
 `@solidjs/web` `latest` tag pointing at `rc.0` (pin exact, never `latest`); the template's
 npm/yarn consumers (literal pins, no overrides); the keyed-list driver changing DOM reuse
