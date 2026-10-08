@@ -12,7 +12,7 @@ loop went from 2 stamps to 180), `49fe7f2a` (`source` + `sources: "ship"`, verif
 browser-key live backends and the oracle verified connecting on seismos with the dev key; the
 static build's key pane verified on a preview). One finding on the way: Solid 2 stages signal
 writes, so a handler must not read a signal it just wrote — the dock holds its sessions in
-plain variables. **Tranche 3 (Solid 2.0 RC) was spiked and parked** on branch `solid-rc14`: it needs Vite 8 first (see its section). The owner asked for one plan covering five observations
+plain variables. **Tranche 3 SHIPPED 2026-10-08** in two steps: Vite 8 + Vitest 5 (`b8c60157`), then Solid 2.0 rc.13 (`969bb6aa`). Every tranche of this plan is on main. The owner asked for one plan covering five observations
 from that run (a session-config oddity, page text with TeX, source access that survives a
 production build, every demo driveable by voice without the intent panel, and Solid 2.0),
 to be worked **sequentially, Solid last**. Every "what exists" claim below was read from the
@@ -318,6 +318,16 @@ prerequisite:
 
 **Sequencing, revised.** 3a: Vite 8 (+ vitest 5), green on main. 3b: Solid rc on the parked
 branch, rebased. The procedure below is 3b's.
+
+**3b SHIPPED 2026-10-08 (`969bb6aa`), at rc.13 rather than rc.14:** the Vite plugin pins its
+compilers at rc.13, and pnpm's one-day release-age policy refused the runtime published that
+morning. Two code changes only — `createErrorBoundary` from `solid-js/internal`, and one
+`<pre>`-inside-`<p>` the native compiler refuses. Every suite passed unchanged (the beta.32
+probes hold), the packaging test, the template e2e and the gallery build are green, and the
+gallery runs in the session browser with the RC's new dev diagnostics flagging two real
+hot spots on the aztec page (a `<For>` re-creating rows on equivalent objects; tiles
+re-running on a `version` write) — queued as hints, with the RC's own repair skill pointed
+at from the architecture skill.
 
 **3a SHIPPED 2026-10-08 (`b8c60157`).** Vite ^8.3.3 and Vitest ^5.0.3 in the catalog, every
 suite, the packaging test, the template e2e, the gallery build and a dev server verified; the
