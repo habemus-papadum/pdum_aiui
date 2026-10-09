@@ -541,11 +541,21 @@ Those two lines derive the whole standard surface from your declarations:
   `TeX` component leaves). Windowed (`maxChars`/`offset`), narrowable (`selector`), and blind
   to the agent's own chrome (`data-aiui-chrome`). The engine is `pageText` on
   `@habemus-papadum/aiui-viz/page-text`, framework-free.
-- **`source`** — the app's own code, one file by the path a stamp uses (`src/ui/App.tsx`),
-  as numbered lines (`from`/`to` windows; `more` says lines remain). On a dev server it reads
-  through Vite's `/@fs/…?raw`; on a production site it answers only when the build shipped its
-  sources — `aiui({ sources: "ship" })`, which also wants `locator: { stampJsx: true }` and a
-  `sourceRoot` URL so prod stamps link somewhere clickable. Shipping publishes the code.
+- **`selection`** — what the user has selected: the text (default 1000 chars), its TeX when it
+  is rendered math, the elements that authored it and the cells that produced it (nearest first,
+  with their live states and every location split into `file`/`line`/`col`), and the control it
+  sits in. The page keeps the last selection for two minutes after focus moves on (`live` says
+  which). `source: false` drops the locations, `depth` bounds the chains, `format: "markdown"`
+  renders the fragment as `read-page` would, `rects: true` adds screen geometry. The engine is
+  `pageSelection` (`page-selection.ts`), also on `window.__AIUI__.selection()`.
+- **`sources`** — the source files this page can read, as the stamps name them. A dev server
+  lists the workspace it serves; a production site lists what the build shipped
+  (`aiui({ sources: "ship" })`, which publishes the code — pair it with a `sourceRoot` URL so prod
+  stamps link somewhere); anything else answers `mode: "none"` and says so.
+- **`source`** — one of those files, by the path a stamp uses (`src/ui/App.tsx` — exactly the
+  `file` a `selection` location carries), as numbered lines (`from`/`to` windows; `more` says
+  lines remain). A file the page cannot read answers `{ available: false, reason, suggestions }`
+  with the nearest names it does list, rather than failing.
 
 Rule of thumb: **don't write tools — declare controls and actions.** The hand-written
 set-this/get-that tool this framework once required is gone; `kit.registerTool` remains only for

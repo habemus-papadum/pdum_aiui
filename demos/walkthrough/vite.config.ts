@@ -6,7 +6,7 @@ import solid from "vite-plugin-solid";
 //
 // aiui() is the build-time integration (@habemus-papadum/aiui-source-processor): the
 // source-locator compiler pass — JSX gets data-source-loc = "src/…:line:col"
-// (dev-only stamps; production bundles ship clean) and `cell()` call sites get
+// (in every mode; `stampJsx: false` opts a build out) and `cell()` call sites get
 // their `{ name, loc }` identity injected in EVERY mode (load-bearing for
 // durable cells) — plus the dev-only sourceRoot seed. Nothing else: no overlay
 // injection, no channel port; connectivity arrives from the intent client

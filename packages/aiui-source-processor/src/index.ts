@@ -7,18 +7,22 @@
  * plugin, two jobs — and deliberately nothing else:
  *
  *  1. **The source-locator compiler pass** (./source-locator). It applies to
- *     serve AND build: factory identity
- *     injection is load-bearing (durable cells need their `{name, loc}`
- *     identity in production), so a build that violates the pass's
- *     expectations FAILS in prod exactly as it would in dev. What is dev-only
- *     is the EMISSION of instrumentation: the `data-source-loc` DOM stamps
- *     default to `command === "serve"` (owner, 2026-07-14 — production
- *     bundles ship clean of machine paths; pass `stampJsx: true` to keep them
- *     deliberately).
+ *     serve AND build, both halves: factory identity injection is
+ *     load-bearing (durable cells need their `{name, loc}` identity in
+ *     production), so a build that violates the pass's expectations FAILS in
+ *     prod exactly as it would in dev; and the `data-source-loc` DOM stamps
+ *     ride into builds too (owner, 2026-10-09 — a selection on the published
+ *     page attributes like one on the dev server; the stamps are
+ *     root-relative, never machine paths), with `stampJsx: false` as the
+ *     opt-out. (They were serve-only from 2026-07-14 until then.)
  *  2. **The dev-only `sourceRoot` seed**: a tiny HTML script setting
  *     `window.__AIUI__.sourceRoot` so the locator's relative stamps can be
- *     absolutized into the paths a prompt carries. Build-time knowledge,
- *     dev-only by the same rule as the stamps it serves.
+ *     absolutized into the paths an editor opens. A machine path never
+ *     ships; an explicit URL (`sourceRoot` option) seeds every mode.
+ *  3. **The page's own source** (./dev-sources, ./ship-sources): the dev
+ *     server lists the workspace files it serves; a build made with
+ *     `sources: "ship"` carries them. Either way `window.__AIUI__.sources`
+ *     names the manifest and aiui-viz's `source`/`sources` tools read it.
  *
  * What this plugin deliberately does NOT do (the old overlay plugin's magic,
  * retired): no channel-port injection, no page-side `/tools` dialing, no
@@ -35,6 +39,7 @@ import {
   vendorKeysModeSelf,
 } from "@habemus-papadum/aiui-util";
 import type { Plugin } from "vite";
+import { devSources } from "./dev-sources.ts";
 import { type DuckdbAssetsOptions, duckdbAssets } from "./duckdb-assets.ts";
 import { shipSources } from "./ship-sources.ts";
 import {
@@ -92,9 +97,10 @@ export interface AiuiPluginOptions {
    * (the root plus the locator's `stampRoots`; never node_modules) emitted
    * unchanged under `__aiui/src/` with a manifest, and the page told where
    * (`window.__AIUI__.sources`), so aiui-viz's `source` tool reads code on
-   * the published site as it does on a dev server. This PUBLISHES the source;
-   * off by default, for sites whose code is public anyway. Pair it with
-   * `locator: { stampJsx: true }` and a `sourceRoot` URL (see ./ship-sources).
+   * the published site as it does on a dev server (which lists its own
+   * workspace without any option — see ./dev-sources). This PUBLISHES the
+   * source; off by default, for sites whose code is public anyway. Pair it
+   * with a `sourceRoot` URL so prod stamps link somewhere (see ./ship-sources).
    */
   sources?: "ship";
 }
@@ -217,11 +223,11 @@ export function aiui(options: AiuiPluginOptions = {}): Plugin[] {
     plugins.push(sourceLocatorVite(locatorOptions));
   }
   plugins.push(sourceRootSeed(options.sourceRoot));
+  const locator = typeof options.locator === "object" ? options.locator : undefined;
+  const roots = locator?.stampRoots !== undefined ? { roots: locator.stampRoots } : {};
+  plugins.push(devSources(roots)); // serve-only: the workspace listing
   if (options.sources === "ship") {
-    const locator = typeof options.locator === "object" ? options.locator : undefined;
-    plugins.push(
-      shipSources(locator?.stampRoots !== undefined ? { roots: locator.stampRoots } : {}),
-    );
+    plugins.push(shipSources(roots));
   }
   if (options.devKeys !== undefined && options.devKeys.length > 0) {
     plugins.push(devKeysSeed(options.devKeys));
@@ -232,6 +238,7 @@ export function aiui(options: AiuiPluginOptions = {}): Plugin[] {
   return plugins;
 }
 
+export { type DevSourcesOptions, devSources, listSourceFiles } from "./dev-sources.ts";
 export {
   DUCKDB_ASSET_FILES,
   DUCKDB_ASSETS_DIR,
@@ -242,6 +249,7 @@ export {
   locateDuckdbAssets,
 } from "./duckdb-assets.ts";
 export {
+  SHIPPED_FILE,
   type ShipSourcesOptions,
   SOURCES_DIR,
   SOURCES_MANIFEST,

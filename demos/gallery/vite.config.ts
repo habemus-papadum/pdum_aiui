@@ -8,7 +8,7 @@ import { demoPages } from "./demo-discovery";
 //
 // aiui() is the build-time integration (@habemus-papadum/aiui-source-processor): the
 // source-locator compiler pass — JSX gets data-source-loc = "src/…:line:col"
-// (dev-only stamps; production bundles ship clean) and `cell()` call sites get
+// (in every mode; `stampJsx: false` opts a build out) and `cell()` call sites get
 // their `{ name, loc }` identity injected in EVERY mode (load-bearing for
 // durable cells) — plus the dev-only sourceRoot seed. Nothing else: no overlay
 // injection, no channel port; connectivity arrives from the intent client
@@ -44,11 +44,12 @@ export default defineConfig(({ command, isPreview }) => ({
     // root-relative locs ("../seismos/src/ui/App.tsx:42:7"), which /@fs/ and
     // the attribution consumers resolve against sourceRoot as before.
     //
-    // The BUILD keeps the stamps and ships the sources (`sources: "ship"` —
-    // every demo's files under /aiui/__aiui/src/, a public repo's code on a
-    // public site), with sourceRoot pointing at the repo so a stamp on the
-    // published page links to GitHub; dev keeps the machine path the editor
-    // links need. The `source` and `locate` tools then answer on the site as
+    // The BUILD ships the sources (`sources: "ship"` — every demo's files
+    // under /aiui/__aiui/src/, a public repo's code on a public site), with
+    // sourceRoot pointing at the repo so a stamp on the published page links
+    // to GitHub; dev keeps the machine path the editor links need (and lists
+    // the workspace on its own). The stamps ride into the build by default,
+    // so `selection`, `locate`, `source` and `sources` answer on the site as
     // they do here.
     aiui({
       // devKeys: the dev server injects the OpenAI key for the voice dock
@@ -56,7 +57,6 @@ export default defineConfig(({ command, isPreview }) => ({
       devKeys: ["openai"],
       locator: {
         stampRoots: [fileURLToPath(new URL("..", import.meta.url))],
-        ...(command === "build" ? { stampJsx: true } : {}),
       },
       ...(command === "build"
         ? {

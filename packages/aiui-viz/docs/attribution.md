@@ -20,7 +20,7 @@ Attribution is deliberately framework-neutral. The entire contract is data in th
 
 | Attribute | Meaning | Emitted by |
 | --- | --- | --- |
-| `data-source-loc="src/ui/Controls.tsx:44:7"` | this element's **authoring site** (the JSX that wrote it), app-root-relative | the aiui compiler's JSX-stamping half, at compile time, dev-only (its factory-identity half runs in production builds too) |
+| `data-source-loc="src/ui/Controls.tsx:44:7"` | this element's **authoring site** (the JSX that wrote it), app-root-relative | the aiui compiler's JSX-stamping half, at compile time, serve and build alike (`stampJsx: false` opts a build out; the factory-identity half has no opt-out) |
 | `data-cell="analysis"` | the **dataflow node** whose value is rendered inside this boundary | `CellView` and `CellText` (from the babel-injected cell name); a component rendering a cell's value *outside* them may declare it — the one manual attribute in the contract, and it is a *name*, so it cannot drift |
 | `data-cell-loc="src/model/graph.ts:31"` | the cell's **definition site** — the `cell(…)` call itself | `CellView`, from the same injection |
 | `data-control="kappa"` | the **control** this widget binds — the writable end of the surface | `ControlSlider`/`ControlToggle`/`ControlScrub`/`ControlSelect` (from the control's injected name); a hand-rolled binding declares it the same way — a name, never a location |
@@ -65,15 +65,30 @@ Two properties of this contract carry most of the weight:
 
 ## Resolving a text selection
 
-When the user selects on-page text (before or during a turn), `selection.ts` resolves from the
-selection's **start element** with `closest()` — nearest stamped ancestor wins:
+When the user selects on-page text, the resolution starts from the selection's **start element**
+and walks outward — nearest stamped ancestor first:
 
-- `closest("[data-source-loc]")` → the authoring site;
-- `closest("[data-cell]")` → the producing cell, and for its definition site the same ladder the
-  shot locator uses (next section): `data-cell-loc` first, else the first stamped element *inside*
-  the cell as an approximation.
+- `closest("[data-source-loc]")` → the authoring site, and its stamped ancestors beyond it (the
+  element chain: "which JSX authored this", at increasing levels of containment);
+- the `data-cell` ancestors → the producing cells (the cell chain), each at its definition site
+  through the same ladder the shot locator uses (next section): `data-cell-loc` first, the live
+  registry, the element's own stamp, else the first stamped element *inside* the cell;
+- `closest("[data-control]")` → the control the selection sits in.
 
-It renders into the prompt inline, compact but complete:
+The page does this itself: aiui-viz's `page-selection.ts` installs `window.__AIUI__.selection()`
+and registers it as the `selection` standard tool, so an agent (through the channel, the oracle,
+a live delegation) asks the page what is selected and gets the text, the TeX, both chains with
+every location split into `file`/`line`/`col` — `file` exactly what the `source` tool takes — the
+control, and optionally the client rects or the fragment rendered as Markdown. The page remembers
+the last non-collapsed selection for two minutes, because focus moving into a textarea (the dock's
+key field) empties the document's selection at exactly the moment a user presses a button; a read
+answered from memory says `live: false`. A selection inside agent chrome (`data-aiui-chrome`) is
+never one.
+
+The intent client's extension tier reads the same contract on its own (`aiui-intent-runtime`'s
+`selection.ts` — its content script runs in an isolated world and cannot see the page's global);
+the plain-page CDP tier asks the page. Either way the selection renders into the prompt inline,
+compact but complete:
 
 > Regarding the on-screen selection "3.2 eV" (authored at src/ui/Table.tsx:88:12; produced by cell
 > analysis defined at src/model/graph.ts:31)

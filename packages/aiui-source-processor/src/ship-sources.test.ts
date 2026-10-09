@@ -67,7 +67,7 @@ describe("shipSources", () => {
     const { plugin } = configured(() => "");
     const tags = (plugin.transformIndexHtml as unknown as Hook<Array<{ children: string }>>)();
     expect(tags[0]?.children).toBe(
-      '(window.__AIUI__ ??= { v: 1 }).sources = {"base":"/aiui/","manifest":"/aiui/__aiui/sources.json"};',
+      '(window.__AIUI__ ??= { v: 1 }).sources = {"base":"/aiui/","manifest":"/aiui/__aiui/sources.json","mode":"shipped"};',
     );
   });
 

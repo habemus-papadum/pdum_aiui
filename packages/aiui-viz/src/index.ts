@@ -108,6 +108,25 @@ export {
 // page-boundary.tsx — the mount-seam error boundary (one page's fault must
 // not halt a multi-app document); pairs with bridgeEffect for durable graphs.
 export { PageBoundary } from "./page-boundary";
+// page-selection.ts — what the user has selected, with its attribution (the
+// `selection` standard tool's engine and `window.__AIUI__.selection`).
+export type {
+  PageSelection,
+  PageSelectionOptions,
+  SelectedCell,
+  SelectedElement,
+  SelectionRect,
+  SourceLoc,
+} from "./page-selection";
+export {
+  clearPageSelection,
+  describeRange,
+  pageSelection,
+  SELECTION_DEFAULT_CHARS,
+  SELECTION_DEFAULT_DEPTH,
+  splitLoc,
+  watchPageSelection,
+} from "./page-selection";
 // page-text.ts — the page as text a model can read (the `read-page` standard
 // tool's engine), math as TeX; framework-free, also on `./page-text`.
 export type { PageHeading, PageTextOptions, PageTextResult } from "./page-text";
@@ -119,9 +138,23 @@ export { scope } from "./scope";
 // and the landing-card contract (type-only; the chrome lives behind ./site).
 export { type DemoCard, type SitePage, setSitePageActive } from "./site-page";
 // source-reader.ts — the app's own source read from the page (the `source`
-// standard tool's engine): a dev server's /@fs, or a build that shipped it.
-export type { ReadSourceOptions, SourceReaderDeps, SourceWindow } from "./source-reader";
-export { listShippedSources, readSource } from "./source-reader";
+// and `sources` standard tools' engine, and the dock's source browser): the
+// dev server's workspace, or a build that shipped its code.
+export type {
+  ReadSourceOptions,
+  SourceListing,
+  SourceReaderDeps,
+  SourcesMode,
+  SourceWindow,
+} from "./source-reader";
+export {
+  listSources,
+  readSource,
+  SourceUnavailableError,
+  sourcesMode,
+  sourceText,
+  suggestSources,
+} from "./source-reader";
 // standard-tools.ts — the app-independent `locate` tool and `cells` reporter,
 // plus surfaceViewFor: the shared "which declarations are this scope's surface"
 // membership test (the toolkit and aiui-oracle project the SAME view).

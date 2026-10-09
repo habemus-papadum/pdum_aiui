@@ -10,8 +10,10 @@
  * mapping the path a stamp uses ("../seismos/src/ui/App.tsx") to the
  * published one ("__aiui/src/up/seismos/src/ui/App.tsx" — a dotdot segment
  * becomes `up/`, since an emitted file name cannot climb). The page learns
- * where to look through `window.__AIUI__.sources = { base, manifest }`;
- * aiui-viz's `readSource` fetches the manifest lazily, then the file.
+ * where to look through `window.__AIUI__.sources = { base, manifest, mode:
+ * "shipped" }`; aiui-viz's source reader fetches the manifest lazily, then
+ * the file. (The dev server's listing is ./dev-sources — same manifest shape,
+ * `/@fs` URLs instead of published paths.)
  *
  * Shipping sources PUBLISHES them. The option is off by default and belongs
  * on a site whose code is public anyway (the gallery of a public repo). It
@@ -27,7 +29,8 @@ import type { Plugin } from "vite";
 export const SOURCES_DIR = "__aiui/src";
 /** The manifest's published path, relative to the app's base. */
 export const SOURCES_MANIFEST = "__aiui/sources.json";
-const SHIPPED = /\.(m?[tj]sx?|css|md|json)$/;
+/** What counts as a source file to ship or list: code, styles, markdown, json. */
+export const SHIPPED_FILE = /\.(m?[tj]sx?|css|md|json)$/;
 
 export interface ShipSourcesOptions {
   /** Directories besides the root whose files are app code (the locator's `stampRoots`). */
@@ -67,7 +70,8 @@ export function shipSources(options: ShipSourcesOptions = {}): Plugin {
     },
     transform(_code, id) {
       const file = id.replace(/[?#].*$/, "");
-      if (!SHIPPED.test(file) || !isAbsolute(file) || file.includes("node_modules")) return null;
+      if (!SHIPPED_FILE.test(file) || !isAbsolute(file) || file.includes("node_modules"))
+        return null;
       const own = file.startsWith(asDir(root)) || roots.some((dir) => file.startsWith(dir));
       if (!own) return null;
       seen.set(toPosix(relative(root, file)), file);
@@ -81,6 +85,7 @@ export function shipSources(options: ShipSourcesOptions = {}): Plugin {
           children: `(window.__AIUI__ ??= { v: 1 }).sources = ${JSON.stringify({
             base,
             manifest: `${base}${SOURCES_MANIFEST}`,
+            mode: "shipped",
           })};`,
         },
       ];

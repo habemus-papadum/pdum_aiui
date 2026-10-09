@@ -153,8 +153,17 @@ const registry = new Map<string, Cell<unknown>>();
 // Read-only and deliberately tiny; guarded because the barrel is imported
 // from workers and node-side tests where `window` doesn't exist.
 if (typeof window !== "undefined") {
-  (window as unknown as { __aiuiCells?: { loc(name: string): string | undefined } }).__aiuiCells = {
+  (
+    window as unknown as {
+      __aiuiCells?: {
+        loc(name: string): string | undefined;
+        state(name: string): string | undefined;
+      };
+    }
+  ).__aiuiCells = {
     loc: (name) => registry.get(name)?.loc,
+    // The live state too, for the page's own selection reader (page-selection.ts).
+    state: (name) => registry.get(name)?.state(),
   };
 }
 

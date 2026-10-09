@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { agentToolkit } from "./agent-tools";
 import { cell, cellGraph } from "./cell";
 import { action, control } from "./control";
+import { clearPageSelection } from "./page-selection";
 import { scope } from "./scope";
 import { registerStandardTools, surfaceViewFor } from "./standard-tools";
 
@@ -58,14 +59,59 @@ describe("registerStandardTools", () => {
     expect(byName.get("peek")?.kind).toBe("read");
   });
 
-  it("`source` is registered, and without a dev server or shipped sources says so", async () => {
+  it("`source` and `sources` say plainly when the page carries no source", async () => {
     const kit = agentToolkit("stdSource");
     registerStandardTools(kit);
-    expect(kit.handle().tools.map((t) => t.name)).toContain("source");
-    await expect(kit.handle().call("source", { file: "src/a.ts" })).rejects.toThrow(
-      /carries no source/,
+    expect(kit.handle().tools.map((t) => t.name)).toEqual(
+      expect.arrayContaining(["source", "sources", "selection"]),
     );
-    await expect(kit.handle().call("source", {})).rejects.toThrow(/name a file/);
+    expect(await kit.handle().call("source", { file: "src/a.ts" })).toMatchObject({
+      file: "src/a.ts",
+      available: false,
+      reason: expect.stringMatching(/carries no source/),
+    });
+    expect(await kit.handle().call("sources")).toMatchObject({
+      mode: "none",
+      total: 0,
+      files: [],
+      note: expect.stringMatching(/carries no source/),
+    });
+    // No file: the listing, as sources gives it.
+    expect(await kit.handle().call("source", {})).toMatchObject({ mode: "none", files: [] });
+    // A malformed name is still an error, not an unavailable file.
+    await expect(kit.handle().call("source", { file: "/etc/passwd" })).rejects.toThrow(
+      /not a stamp path/,
+    );
+  });
+
+  it("`selection` reports the document's selection with attribution, or that there is none", () => {
+    document.body.innerHTML = `
+      <div data-cell="rose" data-cell-loc="src/model/graph.ts:31">
+        <p data-source-loc="src/ui/Picture.tsx:12:4"><span id="leaf">petals</span></p>
+      </div>`;
+    const kit = agentToolkit("stdSelection");
+    registerStandardTools(kit);
+    window.getSelection()?.removeAllRanges();
+    clearPageSelection();
+    expect(kit.handle().call("selection")).toMatchObject({ selected: false });
+
+    const range = document.createRange();
+    range.selectNodeContents(document.getElementById("leaf") as Element);
+    window.getSelection()?.addRange(range);
+    const out = kit.handle().call("selection", { depth: 1 }) as Record<string, unknown>;
+    expect(out).toMatchObject({
+      selected: true,
+      text: "petals",
+      live: true,
+      elements: [{ tag: "p", file: "src/ui/Picture.tsx", line: 12, col: 4 }],
+      cells: [{ name: "rose", file: "src/model/graph.ts", line: 31 }],
+    });
+    expect(kit.handle().call("selection", { source: false })).toMatchObject({
+      elements: [{ tag: "p" }],
+      cells: [{ name: "rose" }],
+    });
+    window.getSelection()?.removeAllRanges();
+    clearPageSelection();
   });
 
   it("is idempotent — a re-evaluated module replaces rather than duplicates", () => {

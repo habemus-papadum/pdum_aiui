@@ -310,7 +310,7 @@ describe("sourceLocatorVite — plugin surface", () => {
     expect(p.apply).toBeUndefined();
   });
 
-  it("stamps JSX under serve but not under build; injection runs in both", async () => {
+  it("stamps JSX under serve AND build by default; stampJsx: false opts a build out", async () => {
     const stamped = "const k = <div/>;\nexport const kappa = control({ value: 1 });";
     const serve = sourceLocatorVite();
     (serve.configResolved as (c: object) => void)({ root: "/app", command: "serve" });
@@ -321,8 +321,14 @@ describe("sourceLocatorVite — plugin surface", () => {
     const build = sourceLocatorVite();
     (build.configResolved as (c: object) => void)({ root: "/app", command: "build" });
     const prod = await transformOf(build)(stamped, "/app/src/a.tsx");
-    expect(prod?.code).not.toContain("data-source-loc"); // instrumentation is dev-only
-    expect(prod?.code).toContain('name: "kappa"'); // identity is not
+    expect(prod?.code).toContain("data-source-loc"); // attribution works on the published page
+    expect(prod?.code).toContain('name: "kappa"');
+
+    const clean = sourceLocatorVite({ stampJsx: false });
+    (clean.configResolved as (c: object) => void)({ root: "/app", command: "build" });
+    const opted = await transformOf(clean)(stamped, "/app/src/a.tsx");
+    expect(opted?.code).not.toContain("data-source-loc");
+    expect(opted?.code).toContain('name: "kappa"'); // identity has no opt-out
   });
 
   it("transform skips node_modules and content with nothing to stamp", async () => {

@@ -43,6 +43,7 @@
     "@habemus-papadum/aiui-oracle": "workspace:^",
     "@habemus-papadum/aiui-viz": "workspace:^",
     "@solidjs/web": "catalog:solid",
+    "highlight.js": "^11.12.0",
     "marked": "^16.4.2",
     "solid-js": "catalog:solid"
   },

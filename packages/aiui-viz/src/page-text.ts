@@ -117,7 +117,10 @@ function skipped(el: Element): boolean {
   if (SKIP_TAGS.has(el.tagName.toLowerCase())) return true;
   if (el.hasAttribute("hidden") || el.getAttribute("aria-hidden") === "true") return true;
   if (el.hasAttribute(AGENT_CHROME_ATTR)) return true;
-  // Chrome 105+ / Safari 17.4+; absent in jsdom, where nothing is "off".
+  // Chrome 105+ / Safari 17.4+; absent in jsdom, where nothing is "off". A
+  // DETACHED element (a selection's cloned fragment) has no visibility to
+  // check — checkVisibility says false for it — so only a connected one asks.
+  if (!el.isConnected) return false;
   const visible = (el as Element & { checkVisibility?: () => boolean }).checkVisibility?.();
   return visible === false;
 }

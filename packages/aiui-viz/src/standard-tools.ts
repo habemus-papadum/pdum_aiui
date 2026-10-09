@@ -27,9 +27,15 @@
  *  - `locate` — element → source/cell stamps, unchanged.
  *  - `read-page` — the page as text (page-text.ts): headings, prose, lists,
  *    tables, every equation as its TeX; windowed, so a long page is paged.
- *  - `source` — the app's own code, one file by its stamp path, numbered
- *    lines (source-reader.ts): from the dev server, or from a build that
- *    shipped its sources.
+ *  - `selection` — what the user has selected (page-selection.ts): the text,
+ *    the TeX, the authoring elements and producing cells with their source
+ *    locations — every `file` exactly what `source` takes.
+ *  - `sources` — the files this page can read (source-reader.ts): the dev
+ *    server's workspace, or what a build shipped; says plainly when there
+ *    are none.
+ *  - `source` — one of those files by its stamp path, as numbered lines; a
+ *    file the page cannot read answers `{ available: false, reason }` with
+ *    the nearest names it can.
  *
  * Kept out of agent-tools.ts so that module stays dependency-free; kept
  * explicit (one line, not automatic) so a headless app can opt out and tests
@@ -41,9 +47,24 @@ import { bridgeRegistry } from "./bridge-effect";
 import { cellRegistry } from "./cell";
 import { actionByName, controlByName, controlSurface, subscribeControlSurface } from "./control";
 import { dependencyEdges } from "./graph-trace";
+import {
+  pageSelection,
+  SELECTION_DEFAULT_CHARS,
+  SELECTION_DEFAULT_DEPTH,
+  SELECTION_MAX_CHARS,
+  SELECTION_MAX_DEPTH,
+} from "./page-selection";
 import { pageText, READ_PAGE_DEFAULT_CHARS, READ_PAGE_MAX_CHARS } from "./page-text";
 import type { Scope } from "./scope";
-import { listShippedSources, readSource, SOURCE_DEFAULT_LINES } from "./source-reader";
+import {
+  listSources,
+  readSource,
+  SOURCE_DEFAULT_LINES,
+  SourceUnavailableError,
+} from "./source-reader";
+
+/** How many files `sources` lists when `limit` is not given. */
+const SOURCES_DEFAULT_LIMIT = 200;
 
 /** How many elements `locate` will describe in one call. */
 const LOCATE_LIMIT = 20;
@@ -346,17 +367,114 @@ export function registerStandardTools(
   });
 
   kit.registerTool({
+    name: "selection",
+    description:
+      "What the user has selected on the page: the text, its TeX when it is rendered " +
+      "mathematics, and where it came from — the elements that authored it (nearest first, " +
+      "with file:line:col), the cells that produced it (name, live state, definition site), " +
+      "and the control it sits in. The document's selection right now, or the last one for " +
+      "two minutes after focus moved (live says which). { selected: false } when there is none.",
+    usage:
+      'Call it when the user says "this", "here", "the selected…", or asks about something ' +
+      "they highlighted. Every location's file is exactly what source takes, so follow up " +
+      "with source { file, from: line - 20, to: line + 20 }. Pass source: false to drop the " +
+      `locations, depth to bound both chains (default ${SELECTION_DEFAULT_DEPTH}), maxChars ` +
+      `to widen the text (default ${SELECTION_DEFAULT_CHARS}), format: "markdown" to get a ` +
+      "table or an equation shaped, rects: true for screen geometry.",
+    kind: "read",
+    params: {
+      maxChars: `characters of text (default ${SELECTION_DEFAULT_CHARS}, max ${SELECTION_MAX_CHARS})`,
+      depth: `how many elements and cells each chain lists (default ${SELECTION_DEFAULT_DEPTH}, max ${SELECTION_MAX_DEPTH})`,
+      source: "include source locations (default true)",
+      rects: "include the selection's screen rectangles (default false)",
+      format: '"text" (default) | "markdown" (adds the fragment rendered as read-page does)',
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        maxChars: { type: "number", minimum: 1, maximum: SELECTION_MAX_CHARS },
+        depth: { type: "number", minimum: 0, maximum: SELECTION_MAX_DEPTH },
+        source: { type: "boolean" },
+        rects: { type: "boolean" },
+        format: { type: "string", enum: ["text", "markdown"] },
+      },
+      additionalProperties: false,
+    },
+    run: (args) => {
+      const selection = pageSelection({
+        ...(typeof args?.maxChars === "number" ? { maxChars: args.maxChars } : {}),
+        ...(typeof args?.depth === "number" ? { depth: args.depth } : {}),
+        ...(typeof args?.source === "boolean" ? { source: args.source } : {}),
+        ...(typeof args?.rects === "boolean" ? { rects: args.rects } : {}),
+        ...(args?.format === "markdown" ? { format: "markdown" as const } : {}),
+      });
+      if (selection === null) {
+        return {
+          selected: false,
+          note: "nothing is selected on the page (a selection is kept for two minutes after focus moves on)",
+        };
+      }
+      return { selected: true, ...selection };
+    },
+  });
+
+  kit.registerTool({
+    name: "sources",
+    description:
+      "List the source files this page can read — the paths source takes, as the stamps " +
+      'name them (src/ui/App.tsx). Returns { mode, total, files }: mode "dev" (a dev server ' +
+      'serving the workspace), "shipped" (a build that carries its code) or "none" (this ' +
+      "page carries no source, and the note says so).",
+    usage:
+      "Call it before source when no stamp has named a file yet (selection, locate and " +
+      "report full all do), or to see what a published build included. filter narrows by " +
+      `substring (a directory, an extension); limit caps the list (default ${SOURCES_DEFAULT_LIMIT}).`,
+    kind: "read",
+    params: {
+      filter: "keep paths containing this substring",
+      limit: `at most this many paths (default ${SOURCES_DEFAULT_LIMIT})`,
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        filter: { type: "string" },
+        limit: { type: "number", minimum: 1 },
+      },
+      additionalProperties: false,
+    },
+    run: async (args) => {
+      const listing = await listSources();
+      const filter = typeof args?.filter === "string" ? args.filter.trim().toLowerCase() : "";
+      const limit =
+        typeof args?.limit === "number" && args.limit > 0
+          ? Math.floor(args.limit)
+          : SOURCES_DEFAULT_LIMIT;
+      const all = (listing.files ?? []).filter(
+        (f) => filter === "" || f.toLowerCase().includes(filter),
+      );
+      return {
+        mode: listing.mode,
+        total: all.length,
+        files: all.slice(0, limit),
+        ...(all.length > limit ? { truncated: true } : {}),
+        ...(listing.note !== undefined ? { note: listing.note } : {}),
+      };
+    },
+  });
+
+  kit.registerTool({
     name: "source",
     description:
-      "Read the app's own source code: one file, by the path the stamps use (report " +
-      '{ format: "full" }, locate and data-source-loc say `src/ui/App.tsx:42`), as numbered ' +
-      "lines. Returns { file, from, to, total, more, text }.",
+      "Read one of the app's own source files, by the path the stamps use (selection, locate, " +
+      'report { format: "full" } and data-source-loc say `src/ui/App.tsx:42` — the file is the ' +
+      "part before the first colon), as numbered lines. Returns { file, from, to, total, more, " +
+      "text }, or { file, available: false, reason, suggestions } when this page cannot read it.",
     usage:
-      "Pass file exactly as a stamp names it — the part before the first colon. from/to pick " +
-      `a line range (default the first ${SOURCE_DEFAULT_LINES} lines; a call stops early at 32 KB ` +
-      "and `to` says where; `more` means lines remain). Omit file to list what a production " +
-      "build shipped. Answers on a dev server, or on a site built with " +
-      'aiui({ sources: "ship" }); otherwise it says the page carries no source.',
+      "Pass file exactly as a stamp names it. from/to pick a line range (default the first " +
+      `${SOURCE_DEFAULT_LINES} lines; a call stops early at 32 KB and \`to\` says where; \`more\` ` +
+      "means lines remain). Omit file to get the same listing sources gives. Reads on a dev " +
+      'server, or on a site built with aiui({ sources: "ship" }); otherwise available is false ' +
+      "and reason says why.",
     kind: "read",
     params: {
       file: "the file, as stamped (src/…)",
@@ -375,18 +493,30 @@ export function registerStandardTools(
     run: async (args) => {
       const file = typeof args?.file === "string" ? args.file.trim() : "";
       if (file === "") {
-        const files = await listShippedSources();
-        if (files === undefined) {
-          throw new Error(
-            "name a file as a stamp does (src/ui/App.tsx); a dev server has no file list",
-          );
-        }
-        return { files };
+        const listing = await listSources();
+        return {
+          mode: listing.mode,
+          total: listing.files?.length ?? 0,
+          files: listing.files?.slice(0, SOURCES_DEFAULT_LIMIT) ?? [],
+          ...(listing.note !== undefined ? { note: listing.note } : {}),
+        };
       }
-      return readSource(file, {
-        ...(typeof args?.from === "number" ? { from: args.from } : {}),
-        ...(typeof args?.to === "number" ? { to: args.to } : {}),
-      });
+      try {
+        return await readSource(file, {
+          ...(typeof args?.from === "number" ? { from: args.from } : {}),
+          ...(typeof args?.to === "number" ? { to: args.to } : {}),
+        });
+      } catch (err) {
+        if (err instanceof SourceUnavailableError) {
+          return {
+            file,
+            available: false,
+            reason: err.reason,
+            ...(err.suggestions.length > 0 ? { suggestions: err.suggestions } : {}),
+          };
+        }
+        throw err;
+      }
     },
   });
 

@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { AiuiGlobal } from "./aiui-global";
-import { joinSourcePath, listShippedSources, readSource } from "./source-reader";
+import {
+  joinSourcePath,
+  listSources,
+  readSource,
+  SourceUnavailableError,
+  sourcesMode,
+  sourceText,
+  suggestSources,
+} from "./source-reader";
 
 const FILE = ["line one", "line two", "line three", "line four"].join("\n");
 
@@ -28,16 +36,65 @@ describe("joinSourcePath", () => {
   });
 });
 
-describe("readSource on a dev server", () => {
-  const global: AiuiGlobal = { v: 1, sourceRoot: "/repo/demos/gallery" };
+describe("suggestSources", () => {
+  const files = ["src/main.tsx", "src/ui/App.tsx", "../seismos/src/ui/App.tsx", "src/ui/app.css"];
+  it("ranks same basename, then paths containing it, then the asked directory", () => {
+    expect(suggestSources("ui/App.tsx", files)).toEqual([
+      "src/ui/App.tsx",
+      "../seismos/src/ui/App.tsx",
+      "src/ui/app.css",
+    ]);
+    expect(suggestSources("src/nope.ts", files)).toEqual([
+      "src/main.tsx",
+      "src/ui/App.tsx",
+      "../seismos/src/ui/App.tsx",
+      "src/ui/app.css",
+    ]);
+    expect(suggestSources("zzz", [])).toEqual([]);
+  });
+});
 
-  it("imports the file as a raw string module through /@fs and numbers the lines", async () => {
+describe("sourcesMode", () => {
+  it("reads the seeds: dev by the dev manifest or a machine root, shipped by a manifest, else none", () => {
+    expect(sourcesMode({ v: 1 })).toBe("none");
+    expect(sourcesMode({ v: 1, sourceRoot: "https://example.test/" })).toBe("none");
+    expect(sourcesMode({ v: 1, sourceRoot: "/repo/app" })).toBe("dev");
+    expect(
+      sourcesMode({ v: 1, sources: { base: "/", manifest: "/__aiui/sources.json", mode: "dev" } }),
+    ).toBe("dev");
+    expect(
+      sourcesMode({
+        v: 1,
+        sourceRoot: "https://github.com/x/y/blob/main/",
+        sources: { base: "/aiui/", manifest: "/aiui/__aiui/sources.json" },
+      }),
+    ).toBe("shipped");
+  });
+});
+
+describe("readSource on a dev server", () => {
+  const listed: AiuiGlobal = {
+    v: 1,
+    sourceRoot: "/repo/demos/gallery",
+    sources: { base: "/", manifest: "/__aiui/sources.json", mode: "dev" },
+  };
+  const fetchImpl = fakeFetch({
+    "/__aiui/sources.json": {
+      files: {
+        "src/main.tsx": "/@fs/repo/demos/gallery/src/main.tsx",
+        "../seismos/src/ui/App.tsx": "/@fs/repo/demos/seismos/src/ui/App.tsx",
+      },
+    },
+  });
+
+  it("imports the listed file as a raw string module at its /@fs URL and numbers the lines", async () => {
     const urls: string[] = [];
     const out = await readSource(
       "../seismos/src/ui/App.tsx",
       {},
       {
-        global,
+        global: listed,
+        fetchImpl,
         importRaw: async (url) => {
           urls.push(url);
           return { default: `${FILE}\n` };
@@ -53,9 +110,49 @@ describe("readSource on a dev server", () => {
       more: false,
       text: "1 | line one\n2 | line two\n3 | line three\n4 | line four",
     });
+    expect(await listSources({ global: listed, fetchImpl })).toEqual({
+      mode: "dev",
+      files: ["../seismos/src/ui/App.tsx", "src/main.tsx"],
+    });
+  });
+
+  it("says when a file is not among the listed ones, with the nearest names", async () => {
+    const err = await readSource("src/ui/App.tsx", {}, { global: listed, fetchImpl }).catch(
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(SourceUnavailableError);
+    expect(err as SourceUnavailableError).toMatchObject({
+      file: "src/ui/App.tsx",
+      reason:
+        'no source "src/ui/App.tsx" among the 2 files this page lists — call sources to see them',
+      suggestions: ["../seismos/src/ui/App.tsx"],
+    });
+  });
+
+  it("falls back to joining the machine root when the plugin lists nothing (older seed)", async () => {
+    const global: AiuiGlobal = { v: 1, sourceRoot: "/repo/demos/gallery" };
+    const urls: string[] = [];
+    await sourceText("src/a.ts", {
+      global,
+      importRaw: async (url) => {
+        urls.push(url);
+        return FILE;
+      },
+    });
+    expect(urls).toEqual(["/@fs/repo/demos/gallery/src/a.ts?raw"]);
+    expect(await listSources({ global })).toMatchObject({ mode: "dev", note: /lists no files/ });
+    const err = await sourceText("src/gone.ts", {
+      global,
+      importRaw: async () => {
+        throw new Error("404");
+      },
+    }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(SourceUnavailableError);
+    expect((err as SourceUnavailableError).reason).toMatch(/does not serve "src\/gone.ts" \(404\)/);
   });
 
   it("windows by from/to and stops early at maxChars, saying so with `to` and `more`", async () => {
+    const global: AiuiGlobal = { v: 1, sourceRoot: "/repo/demos/gallery" };
     const deps = { global, importRaw: async () => FILE };
     expect(await readSource("a.ts", { from: 2, to: 3 }, deps)).toMatchObject({
       from: 2,
@@ -69,11 +166,10 @@ describe("readSource on a dev server", () => {
       to: 2,
       more: true,
     });
-    expect(await listShippedSources({ global })).toBeUndefined();
   });
 
   it("rejects names that are not stamp paths", async () => {
-    const deps = { global, importRaw: async () => FILE };
+    const deps = { global: listed, importRaw: async () => FILE };
     await expect(readSource("", {}, deps)).rejects.toThrow(/not a stamp path/);
     await expect(readSource("/etc/passwd", {}, deps)).rejects.toThrow(/not a stamp path/);
     await expect(readSource("https://x/y.ts", {}, deps)).rejects.toThrow(/not a stamp path/);
@@ -96,20 +192,27 @@ describe("readSource on a shipped build", () => {
   it("reads through the manifest and lists what shipped", async () => {
     const out = await readSource("src/main.tsx", { to: 1 }, { global, fetchImpl });
     expect(out).toMatchObject({ from: 1, to: 1, total: 4, more: true, text: "1 | line one" });
-    expect(await listShippedSources({ global, fetchImpl })).toEqual(["src/main.tsx"]);
-    await expect(readSource("src/nope.ts", {}, { global, fetchImpl })).rejects.toThrow(
-      /no shipped source "src\/nope.ts" — the build lists 1 files/,
+    expect(await listSources({ global, fetchImpl })).toEqual({
+      mode: "shipped",
+      files: ["src/main.tsx"],
+    });
+    const err = await readSource("src/nope.ts", {}, { global, fetchImpl }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(SourceUnavailableError);
+    expect((err as SourceUnavailableError).reason).toMatch(
+      /no source "src\/nope.ts" among the 1 files/,
     );
   });
 });
 
 describe("readSource elsewhere", () => {
-  it("says the page carries no source", async () => {
-    await expect(readSource("src/a.ts", {}, { global: { v: 1 } })).rejects.toThrow(
-      /carries no source/,
-    );
-    await expect(
-      readSource("src/a.ts", {}, { global: { v: 1, sourceRoot: "https://example.test/" } }),
-    ).rejects.toThrow(/carries no source/);
+  it("says the page carries no source, as an unavailable answer", async () => {
+    const err = await readSource("src/a.ts", {}, { global: { v: 1 } }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(SourceUnavailableError);
+    expect((err as SourceUnavailableError).reason).toMatch(/carries no source/);
+    expect(await listSources({ global: { v: 1 } })).toMatchObject({
+      mode: "none",
+      files: [],
+      note: /carries no source/,
+    });
   });
 });

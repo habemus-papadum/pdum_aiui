@@ -8,7 +8,7 @@
  *
  * Two halves with DIFFERENT lifecycles:
  *
- *  1. **JSX stamping** (dev-only) — every *host* JSX element gets
+ *  1. **JSX stamping** (dev AND build; `stampJsx: false` opts out) — every *host* JSX element gets
  *     `data-source-loc="src/ui/Controls.tsx:42:7"` (path relative to the app
  *     root, 1-based line:column). Paired with the injected
  *     `window.__AIUI__.sourceRoot` (this package's own seed script — see
@@ -157,9 +157,10 @@ export interface SourceLocatorOptions {
    */
   factories?: FactorySpec[];
   /**
-   * Stamp `data-source-loc` on host JSX elements (default true). The Vite
-   * plugin turns this off for production builds — instrumentation is dev-only;
-   * identity injection is not.
+   * Stamp `data-source-loc` on host JSX elements (default true, in every
+   * mode: the stamps are root-relative paths, and a selection on a published
+   * page attributes through them like one on the dev server). `false` opts a
+   * build out; identity injection has no opt-out.
    */
   stampJsx?: boolean;
 }
@@ -513,11 +514,12 @@ function buildSniff(factories: FactorySpec[], stampJsx: boolean): RegExp | undef
  * Solid apps — the JSX stamping half applies to every JSX framework, and the
  * factory half to anything cell-shaped.
  *
- * Applies to **serve AND build**: factory identity injection is load-bearing
- * (a control's compiled-in name is its durable key and tool identity), so a
- * production build must run it too. JSX stamping remains dev-only by default
- * (`stampJsx` defaults to `command === "serve"`); pass `stampJsx: true` to
- * keep instrumentation in a production build deliberately.
+ * Applies to **serve AND build**, both halves: factory identity injection is
+ * load-bearing (a control's compiled-in name is its durable key and tool
+ * identity), so a production build must run it too; and JSX stamping stays
+ * on in builds (since 2026-10-09 — before that it defaulted to serve only),
+ * so attribution works on the published page. `stampJsx: false` opts a build
+ * out of the stamps deliberately.
  *
  * Scope of processing: `node_modules` is always skipped (published deps carry
  * their identity from their own build, or write explicit names). Files under
@@ -533,13 +535,13 @@ function buildSniff(factories: FactorySpec[], stampJsx: boolean): RegExp | undef
  */
 export function sourceLocatorVite(options: SourceLocatorViteOptions = {}): Plugin {
   // Root defaults to the resolved Vite root (captured in configResolved); an
-  // explicit option always wins. stampJsx defaults per-command (serve only).
+  // explicit option always wins. stampJsx is on in every mode unless opted out.
   let root = options.root ?? "";
-  let stampJsx = options.stampJsx ?? true;
+  const stampJsx = options.stampJsx ?? true;
   const factories = resolveFactories(options);
-  let sniff = buildSniff(factories, stampJsx);
+  const sniff = buildSniff(factories, stampJsx);
   // The out-of-root sniff: factory calls only (no JSX part) — see transform.
-  let factorySniff = buildSniff(factories, false);
+  const factorySniff = buildSniff(factories, false);
 
   const load = options.loadBabel ?? (() => import("@babel/core"));
   let babel: BabelModule | undefined;
@@ -569,9 +571,6 @@ export function sourceLocatorVite(options: SourceLocatorViteOptions = {}): Plugi
     enforce: "pre",
     configResolved(config) {
       if (options.root === undefined) root = config.root;
-      if (options.stampJsx === undefined) stampJsx = config.command === "serve";
-      sniff = buildSniff(factories, stampJsx);
-      factorySniff = buildSniff(factories, false);
     },
     async buildStart() {
       // Fail fast with a clear message if the optional peer is missing, rather

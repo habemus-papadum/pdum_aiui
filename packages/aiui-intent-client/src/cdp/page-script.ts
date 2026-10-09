@@ -357,6 +357,49 @@ function pageBootstrap(version: string, deps: PageBootstrapDeps): void {
           return { ok: true } satisfies PageCapabilityMap["keylayer"]["reply"];
         }
         case "selection": {
+          // An aiui page reads its own selection (aiui-viz's page-selection:
+          // text, TeX, the authoring elements and producing cells with their
+          // stamps, remembered across a focus steal) — the same attribution
+          // the extension tier's watcher derives, which this main-world script
+          // can simply ask for. Structural and best-effort: a page without
+          // the reader, or a reader that throws, falls through to the
+          // text-and-TeX read below.
+          interface PageSelectionLike {
+            text: string;
+            tex?: string;
+            elements?: Array<{ loc?: string }>;
+            cells?: Array<{ name: string; loc?: string }>;
+          }
+          const reader = (
+            w.__AIUI__ as
+              | { selection?: (options?: unknown) => PageSelectionLike | null }
+              | undefined
+          )?.selection;
+          if (typeof reader === "function") {
+            let own: PageSelectionLike | null | undefined;
+            try {
+              own = reader({ maxChars: 2000 });
+            } catch {
+              own = undefined;
+            }
+            if (own !== undefined) {
+              if (own === null || own.text.trim() === "") {
+                return null satisfies PageCapabilityMap["selection"]["reply"];
+              }
+              const sourceLoc = own.elements?.[0]?.loc;
+              const cell = own.cells?.[0];
+              return {
+                text: own.text,
+                url: location.href,
+                title: document.title,
+                tab: tabRecord?.(),
+                ...(own.tex !== undefined ? { tex: own.tex } : {}),
+                ...(sourceLoc !== undefined ? { sourceLoc } : {}),
+                ...(cell !== undefined ? { cell: cell.name } : {}),
+                ...(cell?.loc !== undefined ? { cellLoc: cell.loc } : {}),
+              } satisfies PageCapabilityMap["selection"]["reply"];
+            }
+          }
           const selection = window.getSelection?.();
           const text = selection?.toString() ?? "";
           if (text.trim() === "") {

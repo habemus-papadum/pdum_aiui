@@ -5,7 +5,7 @@
 > additional per-package guides. The package overview comes from the `README.md`; the API
 > reference is generated from `src/index.ts`.
 
-The aiui source processor: the compile-time Babel pass that injects factory identity (name/loc/description for cell/control/action) and dev-only JSX source-location stamps, plus its Vite plugin. One transform, serve and build.
+The aiui source processor: the compile-time Babel pass that injects factory identity (name/loc/description for cell/control/action) and JSX source-location stamps, plus its Vite plugin. One transform, serve and build.
 
 ## Install
 

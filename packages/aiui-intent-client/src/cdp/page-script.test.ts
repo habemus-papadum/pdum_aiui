@@ -83,13 +83,53 @@ describe("buildPageScript() output, evaluated as the page runs it", () => {
     expect(page.handle("ring", { on: true, turnTone: false, hollow: false, hint: "" })).toEqual({
       ok: true,
     });
-    // The CDP tier's selection is text-only; a bare page has no selection → null.
+    // A bare page (no aiui reader) has no selection → null.
     expect(page.handle("selection", undefined)).toBeNull();
     // `size` answers the frame plane with no mounted surface — a window fact.
     expect(page.handle("pencil", { op: "size" })).toMatchObject({
       width: expect.any(Number),
       height: expect.any(Number),
     });
+  });
+
+  it("answers selection through the page's own reader when the aiui global has one", () => {
+    vi.useFakeTimers();
+    const reports: Report[] = [];
+    const page = evaluateBootstrap(reports);
+    const w = window as unknown as { __AIUI__?: unknown };
+    w.__AIUI__ = {
+      v: 1,
+      selection: (options: unknown) => ({
+        text: "petals",
+        tex: "x^2",
+        elements: [{ tag: "p", loc: "src/ui/Picture.tsx:12:4" }],
+        cells: [{ name: "rose", loc: "src/model/graph.ts:31" }],
+        options,
+      }),
+    };
+    try {
+      expect(page.handle("selection", undefined)).toMatchObject({
+        text: "petals",
+        tex: "x^2",
+        sourceLoc: "src/ui/Picture.tsx:12:4",
+        cell: "rose",
+        cellLoc: "src/model/graph.ts:31",
+        title: expect.any(String),
+      });
+      // The reader saying "nothing" is the answer, not a reason to fall through.
+      w.__AIUI__ = { v: 1, selection: () => null };
+      expect(page.handle("selection", undefined)).toBeNull();
+      // A reader that throws falls through to the text read (none here → null).
+      w.__AIUI__ = {
+        v: 1,
+        selection: () => {
+          throw new Error("broken");
+        },
+      };
+      expect(page.handle("selection", undefined)).toBeNull();
+    } finally {
+      w.__AIUI__ = undefined;
+    }
   });
 
   it("re-evaluating the SAME version adopts: exactly one new hello, no new listeners", () => {

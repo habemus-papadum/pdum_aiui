@@ -12,7 +12,12 @@ loop went from 2 stamps to 180), `49fe7f2a` (`source` + `sources: "ship"`, verif
 browser-key live backends and the oracle verified connecting on seismos with the dev key; the
 static build's key pane verified on a preview). One finding on the way: Solid 2 stages signal
 writes, so a handler must not read a signal it just wrote — the dock holds its sessions in
-plain variables. **Tranche 3 SHIPPED 2026-10-08** in two steps: Vite 8 + Vitest 5 (`b8c60157`), then Solid 2.0 rc.13 (`969bb6aa`). Every tranche of this plan is on main. The owner asked for one plan covering five observations
+plain variables. **Tranche 3 SHIPPED 2026-10-08** in two steps: Vite 8 + Vitest 5 (`b8c60157`), then Solid 2.0 rc.13 (`969bb6aa`). Every tranche of this plan is on main. **Revised
+2026-10-09** (owner): the `source` tool stays, joined by `sources` (the listing — a dev server
+now serves one too) and by `selection` (what the user selected, with attribution, on
+`window.__AIUI__.selection()`); JSX stamps ride into builds by default (`stampJsx: false` opts
+out), so the "serve only" line under 1b describes the state before that day; the dock's pills
+collapse into one and gained a source browser. The owner asked for one plan covering five observations
 from that run (a session-config oddity, page text with TeX, source access that survives a
 production build, every demo driveable by voice without the intent panel, and Solid 2.0),
 to be worked **sequentially, Solid last**. Every "what exists" claim below was read from the

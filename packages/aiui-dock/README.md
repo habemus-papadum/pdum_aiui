@@ -1,9 +1,12 @@
 # @habemus-papadum/aiui-dock
 
 The voice dock: both voice engines embedded in an aiui page, wired to the page's own tools,
-with viewers and a key field. A pill row in the corner — `🔮 oracle · 🎙 live · 🧰 tools ·
-🔑 key` — each opening one pane: an OpenAI Realtime **oracle** session, a GPT-Live **live**
-session with its delegation backends, the page's **tool log**, and one **key** for both.
+with viewers, a key field and a source browser. One `aiui` pill in the corner (the sessions'
+combined status dot) expands into the row — `🔮 oracle · 🎙 live · 🧰 tools · 🔑 key ·
+📄 source` — each opening one pane: an OpenAI Realtime **oracle** session, a GPT-Live **live**
+session with its delegation backends, the page's **tool log**, one **key** for both, and the
+page's own **source** files (a tree, each file syntax-coloured with line numbers; shown only
+when the page can read them — a dev server, or a build made with `aiui({ sources: "ship" })`).
 
 ## Install
 

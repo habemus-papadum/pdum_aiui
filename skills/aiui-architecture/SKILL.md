@@ -205,9 +205,12 @@ it derives the whole standard surface from the declarations: `report` (`brief`/`
 controls, cells, actions, bridge failures, and the live control→cell dependency edges), `set`
 (validated write; returns what was actually written, never a re-read), `locate` (element →
 source/cell stamps), `read-page` (the page as Markdown-shaped text, math as TeX from the
-`TeX` component's `data-tex` stamp; agent chrome excluded), `source` (one file by its stamp
-path, numbered lines — the dev server's `/@fs`, or a build made with `aiui({ sources:
-"ship" })`), and **one real named tool per registered `action()`** (kit-relative
+`TeX` component's `data-tex` stamp; agent chrome excluded), `selection` (what the user has
+selected: text, TeX, the authoring elements and producing cells with `file`/`line`/`col`, the
+control; kept two minutes past a focus steal — also `window.__AIUI__.selection()`), `sources`
+(the files the page can read: the dev server's workspace, or what a build shipped) and `source`
+(one of them by its stamp path, numbered lines; `{ available: false, reason, suggestions }` when
+it cannot), and **one real named tool per registered `action()`** (kit-relative
 names: `testapp/reseed` surfaces as `reseed`; a foreign-scoped action keeps its qualified
 name). A kit exposes only its OWN scope subtree plus unscoped declarations — a kit that
 iterated the whole global surface once registered every app's actions on every kit (M×N

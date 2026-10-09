@@ -8,7 +8,8 @@ notebook gallery both mount it.
 import { VoiceDock } from "@habemus-papadum/aiui-dock";
 ```
 
-Four pills, four panes:
+One `aiui` pill, carrying the sessions' combined status dot, expands into the row. Five pills,
+five panes:
 
 - **oracle** — an OpenAI Realtime session over the page's tools: the control strip (start,
   park, stop, the mic meter), the ledger viewer, usage, and the woven prompt as sent — the
@@ -21,5 +22,9 @@ Four pills, four panes:
 - **key** — one OpenAI key for both engines. A dev key is used when the dev server injected
   one (`aiui({ devKeys: ["openai"] })`); otherwise paste one — it stays in this browser's
   localStorage for the site and goes only to `api.openai.com`.
+- **source** — the page's own source files, as a tree, each opening syntax-coloured with line
+  numbers. Shown only when the page can read them: a dev server (which lists its workspace), or
+  a site built with `aiui({ sources: "ship" })`. The listing and the text are the ones the
+  `sources` and `source` page tools hand an agent.
 
 The dock is agent chrome (`data-aiui-chrome`): the `read-page` tool never reads it as the page.

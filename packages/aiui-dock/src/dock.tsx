@@ -1,8 +1,9 @@
 /**
  * dock.tsx — the voice dock: both voice engines embedded in the page itself,
- * wired to the page's own tools, with viewers and a key field. A pill row in
- * the bottom-right corner (`oracle · live · tools · key`), each
- * opening one pane above it:
+ * wired to the page's own tools, with viewers, a key field and a source
+ * browser. One `aiui` pill in the bottom-right corner, carrying the sessions'
+ * combined status dot, expands into the row (`oracle · live · tools · key ·
+ * source`), each opening one pane above it:
  *
  *  - **oracle** — an OpenAI Realtime session (`@habemus-papadum/aiui-oracle`)
  *    with the panel's audio tuning and greeting, the page's kit as its tools
@@ -14,7 +15,11 @@
  *    answer — the server's Responses and Claude Code;
  *  - **tools** — the page's ToolLog (calls, inventory, as rendered);
  *  - **key** — one OpenAI key for both engines, pasted into this browser's
- *    localStorage, or the dev server's injected key when there is one.
+ *    localStorage, or the dev server's injected key when there is one;
+ *  - **source** — the page's own source files (source-browser.tsx), shown
+ *    only when the page can read them: a dev server, or a build made with
+ *    `aiui({ sources: "ship" })`. What a person browses here is what the
+ *    `sources`/`source` tools hand an agent.
  *
  * Keys and posture: a pasted key lives in localStorage for this origin and is
  * sent only to api.openai.com by this page — the oracle mints its single-use
@@ -59,7 +64,7 @@ import {
   OracleUsage,
   OracleViewer,
 } from "@habemus-papadum/aiui-oracle/widgets";
-import { ensureAiuiGlobal } from "@habemus-papadum/aiui-viz";
+import { ensureAiuiGlobal, sourcesMode } from "@habemus-papadum/aiui-viz";
 import { JsonView } from "@habemus-papadum/aiui-viz/site/json-view";
 import { TextView } from "@habemus-papadum/aiui-viz/site/markdown";
 import { ToolLog, toggleToolLog } from "@habemus-papadum/aiui-viz/site/tool-log";
@@ -67,6 +72,8 @@ import type { JSX } from "@solidjs/web";
 import { createEffect, createSignal, For, onCleanup, Show, untrack } from "solid-js";
 import { availableBackends, type DockBackendId, probeServer } from "./backends";
 import { type DockSurface, projectSurface } from "./project";
+import { SourceBrowser } from "./source-browser";
+import { combinedStatus } from "./status";
 import { DOCK_STYLES } from "./styles";
 
 export interface VoiceDockProps {
@@ -79,7 +86,7 @@ export interface VoiceDockProps {
   class?: string;
 }
 
-type Pane = "none" | "oracle" | "live" | "key";
+type Pane = "none" | "oracle" | "live" | "key" | "source";
 
 const BACKEND_KEY = "aiui.dock.backend";
 const GREETING = "Hi there — I'm connected and listening.";
@@ -203,8 +210,12 @@ let stylesInjected = false;
 export function VoiceDock(props: VoiceDockProps): JSX.Element {
   const serverUrl = (): string => props.serverUrl ?? "/live/sessions";
   // Never restored across loads: a pane is only meaningful with the session
-  // it shows, and nothing connects until a pill is pressed.
+  // it shows, and nothing connects until a pill is pressed. The row starts
+  // collapsed to the one `aiui` pill; opening a pane expands it.
   const [pane, setPane] = createSignal<Pane>("none");
+  const [expanded, setExpanded] = createSignal(false);
+  // Whether this page can read its own source (decided once: the seed is static).
+  const hasSources = sourcesMode(ensureAiuiGlobal()) !== "none";
   const [keyPresent, setKeyPresent] = createSignal(browserKey() !== undefined);
   const [server, setServer] = createSignal<boolean | undefined>(undefined);
   void probeServer(serverUrl()).then(setServer);
@@ -290,8 +301,14 @@ export function VoiceDock(props: VoiceDockProps): JSX.Element {
     setKeyPresent(browserKey() !== undefined);
     const target = untrack(pane) === next ? "none" : next;
     setPane(target);
+    setExpanded(true);
     if (target === "oracle") ensureOracle();
     if (target === "live") ensureLive(untrack(backend));
+  };
+  const toggleRow = (): void => {
+    const next = !untrack(expanded);
+    setExpanded(next);
+    if (!next) setPane("none"); // collapsing folds the pane away with the row
   };
 
   const injectStyles = !stylesInjected;
@@ -387,42 +404,70 @@ export function VoiceDock(props: VoiceDockProps): JSX.Element {
         </section>
       </Show>
 
+      <Show when={pane() === "source"}>
+        <section class="aiui-dock-pane aiui-dock-pane-source" aria-label="source">
+          <SourceBrowser />
+        </section>
+      </Show>
+
       <div class="aiui-dock-row">
+        <Show when={expanded()}>
+          <button
+            type="button"
+            class="aiui-dock-pill"
+            aria-pressed={pane() === "oracle" ? "true" : "false"}
+            onClick={() => openPane("oracle")}
+          >
+            <span class="aiui-dock-dot" data-status={oracleStatus()} />
+            oracle
+          </button>
+          <button
+            type="button"
+            class="aiui-dock-pill"
+            aria-pressed={pane() === "live" ? "true" : "false"}
+            onClick={() => openPane("live")}
+          >
+            <span class="aiui-dock-dot" data-status={liveStatus()} />
+            live
+          </button>
+          <button
+            type="button"
+            class="aiui-dock-pill"
+            onClick={() => {
+              toggleToolLog();
+              setPane("none");
+            }}
+          >
+            tools
+          </button>
+          <button
+            type="button"
+            class="aiui-dock-pill"
+            aria-pressed={pane() === "key" ? "true" : "false"}
+            onClick={() => openPane("key")}
+          >
+            key
+          </button>
+          <Show when={hasSources}>
+            <button
+              type="button"
+              class="aiui-dock-pill"
+              aria-pressed={pane() === "source" ? "true" : "false"}
+              onClick={() => openPane("source")}
+            >
+              source
+            </button>
+          </Show>
+        </Show>
         <button
           type="button"
-          class="aiui-dock-pill"
-          aria-pressed={pane() === "oracle" ? "true" : "false"}
-          onClick={() => openPane("oracle")}
+          class="aiui-dock-pill aiui-dock-main"
+          aria-expanded={expanded() ? "true" : "false"}
+          title={expanded() ? "collapse the dock" : "expand the dock"}
+          onClick={toggleRow}
         >
-          <span class="aiui-dock-dot" data-status={oracleStatus()} />
-          oracle
-        </button>
-        <button
-          type="button"
-          class="aiui-dock-pill"
-          aria-pressed={pane() === "live" ? "true" : "false"}
-          onClick={() => openPane("live")}
-        >
-          <span class="aiui-dock-dot" data-status={liveStatus()} />
-          live
-        </button>
-        <button
-          type="button"
-          class="aiui-dock-pill"
-          onClick={() => {
-            toggleToolLog();
-            setPane("none");
-          }}
-        >
-          tools
-        </button>
-        <button
-          type="button"
-          class="aiui-dock-pill"
-          aria-pressed={pane() === "key" ? "true" : "false"}
-          onClick={() => openPane("key")}
-        >
-          key
+          <span class="aiui-dock-dot" data-status={combinedStatus(oracleStatus(), liveStatus())} />
+          aiui
         </button>
       </div>
       <ToolLog />

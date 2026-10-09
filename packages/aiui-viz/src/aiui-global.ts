@@ -13,7 +13,18 @@
  * the door stays open by shape) exactly as they serve the intent client,
  * which subscribes via `onChange` and relays registrations to the channel.
  * The page dials nothing; connectivity arrives from OUTSIDE.
+ *
+ * The selection half is a READER: `selection(options)` says what the user
+ * has selected — text, TeX, the authoring elements and producing cells with
+ * their source locations (page-selection.ts). The `selection` standard tool
+ * is this call; the CDP intent tier calls it when the page has it.
  */
+import {
+  type PageSelection,
+  type PageSelectionOptions,
+  pageSelection,
+  watchPageSelection,
+} from "./page-selection";
 
 /** One registered page tool (the shape `agentToolkit` forwards). */
 export interface AiuiPageTool {
@@ -136,14 +147,22 @@ export interface AiuiGlobal {
   v: 1;
   sourceRoot?: string;
   tools?: AiuiToolsRegistry;
+  /** What the user has selected on the page (page-selection.ts): the text,
+   * the TeX, the authoring elements and the producing cells with their
+   * source locations. Null when nothing is selected. Installed by the
+   * runtime like `tools`; read in-page, by the `selection` standard tool, and
+   * by the CDP intent tier. */
+  selection?: (options?: PageSelectionOptions) => PageSelection | null;
   /** DEV-SERVE ONLY: vendor keys the aiui Vite plugin's opt-in `devKeys`
    * option injected (per-provider, e.g. `{ openai: "sk-…" }`). Never present
    * in a production build — the seeding plugin applies to serve alone. */
   devKeys?: Record<string, string>;
-  /** Where a production build made with `aiui({ sources: "ship" })` put its
-   * own source: `manifest` (a URL) maps stamp paths to published ones under
-   * `base`. Read by the `source` standard tool (source-reader.ts). */
-  sources?: { base: string; manifest: string };
+  /** Where this page's own source is listed: `manifest` (a URL) maps stamp
+   * paths to published ones under `base`. A production build made with
+   * `aiui({ sources: "ship" })` seeds it (`mode: "shipped"`); the dev server
+   * seeds it too (`mode: "dev"`), listing the workspace it serves. Read by
+   * the `source` and `sources` standard tools (source-reader.ts). */
+  sources?: { base: string; manifest: string; mode?: "dev" | "shipped" };
   /** Where the aiui Vite plugin's `duckdbAssets` option published the
    * DuckDB-WASM binaries: `<prefix>duckdb-wasm-assets/<version>/…`. Present
    * in builds too (nothing secret) — see aiui-viz/duckdb.ts. */
@@ -301,5 +320,7 @@ export function ensureAiuiGlobal(): AiuiGlobal | undefined {
   const w = window as unknown as { __AIUI__?: AiuiGlobal };
   w.__AIUI__ ??= { v: 1 };
   w.__AIUI__.tools ??= createRegistry();
+  w.__AIUI__.selection ??= pageSelection;
+  watchPageSelection(); // idempotent: the page remembers selections from now on
   return w.__AIUI__;
 }
