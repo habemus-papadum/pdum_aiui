@@ -141,7 +141,7 @@ still hold for any consumer theming per system through aiui-viz's `colorMode()`.
   names would collide with a host's; hard-coding the palette would be wrong on every host but
   ours.
 
-## Mosaic / DuckDB-WASM (@uwdata/vgplot 0.28.1; the exact @duckdb/duckdb-wasm pin lives in pnpm-workspace.yaml — 1.33.1-dev61.0 today; live compatibility table: duckdb-mosaic.md)
+## Mosaic / DuckDB-WASM (@uwdata/vgplot 0.28.1; the exact @duckdb/duckdb-wasm pin lives in pnpm-workspace.yaml — 1.33.1-dev64.0 today; live compatibility table: duckdb-mosaic.md)
 
 Found building the seismos notebook (full detail: `demos/seismos/src/NOTES.md`):
 

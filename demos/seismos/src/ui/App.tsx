@@ -93,10 +93,10 @@ export function App() {
           <h2>cross-filtering</h2>
           <p class="section-lead">
             Every view publishes its brush into one Mosaic <b>Selection</b> built with{" "}
-            <span class="mono">Selection.crossfilter()</span>. Cross-filter resolution means a view
-            is filtered by <i>all</i> clauses except its own — so brushing the map narrows the
-            histograms without the map fighting its own filter. The predicates are compiled to SQL
-            and run in DuckDB; nothing round-trips to a server.
+            <span class="mono">crossfilter()</span> (aiui-viz's routed Mosaic Selection).
+            Cross-filter resolution means a view is filtered by <i>all</i> clauses except its own —
+            so brushing the map narrows the histograms without the map fighting its own filter. The
+            predicates are compiled to SQL and run in DuckDB; nothing round-trips to a server.
           </p>
           <p class="prose">
             Below is the same map and magnitude histogram as above — different DOM, same durable

@@ -1,7 +1,7 @@
 # MotherDuck in the tab: the design, the seams, and what was measured
 
 Status: ACCEPTED 2026-09-24 and BUILT the same day — Track A (the kit's `cf-creds-motherduck`,
-0.5.0, released) and Track B (this repo, 0.19.0 pending release). Probes 1, 2, 4, 5, 6, 7 and 8
+0.5.0, released) and Track B (this repo, 0.19.0, released). Probes 1, 2, 4, 5, 6, 7 and 8
 answered (§5); probe 3 answered 2026-10-09 (§5). This document is self-contained: it covers the two repos that hold
 the engine and its seams. A deployment — the broker route that mints tokens, the declared service
 accounts, the data load, the host's wasm serving — is a consumer's plan and lives with the
@@ -39,7 +39,7 @@ is warranted; the seam is "where does the engine come from and who holds the tok
 | A read-scaling token cannot `ATTACH`; the service account must attach the share ONCE with a read-write token | one hand step outside the declarative graph (a scripted verb) |
 | Token TTL 300 s…1 y; `POST /v1/users/{account}/tokens {name, ttl, token_type}` with an admin's read-write PAT; `DELETE` revokes at next connect | the minter is a plain REST call with a worker secret; the token `name` carries the visitor's identity |
 | The official OpenTofu provider `motherduckdb/motherduck` (0.2.12, 2026-09-24) has `_service_account`, `_duckling_config`, `_access_token`, `_database`, `_share`, `_share_grant`, `_role`, `_role_grant`; `MOTHERDUCK_TOKEN` for SQL resources, `MOTHERDUCK_ADMIN_TOKEN` for REST ones; an admin's PAT serves as both | a deployment declares accounts, compute, roles, shares and grants; no generic REST provider needed |
-| The client's `MDConnectionParams`: `mdToken`, `duckDBAssetsURLPrefix` (a `/`-relative prefix resolves against `window.origin`), `attachMode`, `sessionName`, `customUserAgent`; do NOT pass `accessMode: "read_only"` (it applies to the tab's own DB and fails); the read-scaling token is what makes the cloud read-only | self-hosting the wasm is one option; workspace attach mode is the proven one |
+| The client's `MDConnectionParams`: `mdToken`, `duckDBAssetsURLPrefix` (a `/`-relative prefix resolves against `window.origin`), `attachMode` (single mode also needs `skipWelcomePack: true` and an explicit ATTACH; both modes proven, Part 4b), `sessionName`, `customUserAgent`; do NOT pass `accessMode: "read_only"` (it applies to the tab's own DB and fails); the read-scaling token is what makes the cloud read-only | self-hosting the wasm is one option; workspace attach mode is the proven one |
 | The client loads assets at `<prefix>/duckdb-wasm-assets/<version>/{duckdb-eh.wasm, duckdb-browser-eh.worker.js, …}`; MotherDuck's copy is brotli at rest (36 MB → 5.3 MB, `content-encoding: br`, immutable) | the self-host layout is fixed; brotli-at-rest is the serving recipe for every wasm connector |
 | Cloudflare Workers Static Assets sites cap a file at 25 MiB (still, 2026); an R2-backed host does not, but sets no `Content-Encoding` on its own | raw wasm publishes on an uncapped host today; a capped host needs `duckdbAssets: { brotli: true }` served with `Content-Encoding: br` |
 | The kit (`cf_browser_credentials`) publishes browser packages only; `CredentialManager<C>` needs just an ISO `expiration`; AWS is the "session" species | `cf-creds-motherduck` is a session-species package |
@@ -184,7 +184,8 @@ exactly as the lab does, and — for a host that caps file sizes — brotli-at-r
    afterwards was a 4–8 ms local query over the cube. cc-miner's `preagg: false` was about
    cross-table clauses, not remote tables.
 5. **`information_schema` across catalogs — ANSWERED, with a hazard.** The `schema` tool lists
-   every attached catalog's tables raw. But **`MD_ALL_DATABASES()` under duckdb-wasm's blocking
+   every attached catalog's tables minus the system ones, named as FROM takes them
+   (`catalog.schema.name` outside the current catalog; `catalogs` narrows it, 2026-10-09). But **`MD_ALL_DATABASES()` under duckdb-wasm's blocking
    `RUN_QUERY` protocol (`connection.query()`, Mosaic's `runQuery`) never returns and wedges the
    whole engine** — alone, every time, every connection with it — while the same statement on the
    same raw connection through the pending-query protocol (`connection.send()`, which is what the
@@ -224,6 +225,6 @@ exactly as the lab does, and — for a host that caps file sizes — brotli-at-r
 
 A consumer app's `pnpm dev` shows a cloud table with a brush that re-queries locally; its published
 page does the same with a token minted per visitor and attributed by name in MotherDuck's token
-list and `QUERY_HISTORY`; no wasm is fetched from any third-party CDN; `pnpm evict:check`,
-`test:packaging`, `skills:check` and CI stay green here and in the kit; the memory file
+list and `QUERY_HISTORY`; no wasm is fetched from any third-party CDN; `test:packaging`,
+`skills:check` and CI stay green here and in the kit; the memory file
 `motherduck-connector-assessment` is superseded by this document and duckdb-mosaic.md Part 4b.

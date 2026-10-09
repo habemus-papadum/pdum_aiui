@@ -39,7 +39,7 @@ Ground rules (the same ones the starter ships with):
   through `ControlSlider`/`ControlToggle` (bounds from the control's meta — never re-state
   min/max in JSX) or a hand-rolled binding for shapes those don't fit.
 - **Declaring IS exposing.** Every `control()` is settable and every `action()` is a real named
-  agent tool automatically via `registerStandardTools` (`report`/`set`/`locate` + one tool
+  agent tool automatically via `registerStandardTools` (`report`/`set`/`locate`/`read-page`/`selection`/`sources`/`source` + one tool
   per action). Do NOT hand-write get-params/set-params tools; reserve `kit.registerTool` for the
   rare genuinely-bespoke case.
 - **Test the surface with the cells.** `resetControlSurface()` in afterEach, build cells inside

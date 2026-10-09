@@ -101,7 +101,12 @@ import { duckdbConnector } from "@habemus-papadum/aiui-viz/mosaic-connector";
 const engine = standardMotherDuckEngine({ key: "app", params: { sessionName: "app" } });
 const { db, connect, connection } = await engine.ready();
 coordinator.databaseConnector(duckdbConnector({ duckdb: db, connection: await connect() }));
-registerSqlTools(kit, { runner: motherDuckRunner(connection) });
+registerSqlTools(kit, {
+  runner: motherDuckRunner(connection),
+  views: [crossfilterViews({ selection: brush, scope })], // optional: the cross-filter's filtered twins
+  viewCatalog: "memory",                                   // in the tab's catalog, never the cloud's
+  viewEpoch: () => engine.generation,                      // a rebuild starts it empty
+});
 engine.onRebuild(() => { /* re-wire, re-materialize: local tables are gone */ });
 ```
 

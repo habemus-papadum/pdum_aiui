@@ -95,6 +95,18 @@ in that browser's localStorage for the origin and is sent only to `api.openai.co
 posts the SDP straight to the vendor. Never to a server of ours. A pasted key is exactly as safe
 as the browser profile holding it, and the pane's clear-the-field forgets it.
 
+## Source attribution and shipped sources
+
+Every page an aiui app serves carries **source attribution**: JSX elements are stamped with
+their root-relative file path and position (`data-source-loc`, in every mode since 2026-10-09;
+`stampJsx: false` opts a build out), so a selection or a screenshot can be traced to the code
+that drew it. The paths are relative to the project root; they name files, not contents. Under
+`vite serve` the plugin also serves a **listing of the project's source files** and the files
+themselves (`/__aiui/sources.json`, the `sources`/`source` page tools) — LAN-readable under
+`server.host: true`, like the dev key above. A built page lists and serves nothing unless the
+site opts in with `aiui({ sources: "ship" })`, which **publishes the code** with the page; the
+gallery of this public repo does, an app of yours should not unless its source is public anyway.
+
 ## The actual recommendation
 
 **Read this code rather than use it.** It's a working reference for a real workflow — channel

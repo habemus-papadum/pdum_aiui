@@ -63,9 +63,8 @@
  * Deliberately NOT here: column validation — ./crossfilter warns when a table's
  * columns are learned and a declared target names one it lacks — and named-view
  * serialization (a separate module; serialize dimension VALUES, never
- * clauses), and write-back into vgplot's own brush rectangles (an agent-set
- * dimension filters the data but draws no rectangle; d3-brush cannot be
- * driven by synthetic pointers — see NOTES.md finding 7 in demos/seismos).
+ * clauses). Write-back into a producer's own brush lives in mosaic-facet.ts
+ * (`bindSelectionComponents`): an agent-set dimension draws its rectangle.
  *
  * Lives on its own subpath (`@habemus-papadum/aiui-viz/mosaic-selection`) so
  * `@uwdata/mosaic-core` / `@uwdata/mosaic-sql` stay optional peers only

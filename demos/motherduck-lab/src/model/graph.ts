@@ -11,8 +11,8 @@
  * `reset-cross-filters`, the `crossfilter` report section — no dimension is
  * declared, the columns being picked at run time, so the tool clears by
  * component: `first`, `second`); the library's `sql` + `schema` over the same
- * runner (the table list introspected across EVERY attached catalog — cloud
- * and local alike) with the cross-filter's filtered twin of the bridged view
+ * runner (every attached catalog until a table is picked, then `memory`
+ * beside the picked one — `catalogs`) with the cross-filter's filtered twin of the bridged view
  * as `memory.crossfilter.<view>`; and four verbs: pick-table, pick-column,
  * materialize, rebuild-engine.
  */

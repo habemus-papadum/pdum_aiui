@@ -89,8 +89,8 @@ Ground rules:
   window-global registries. Never declare an unscoped control/cell/action; see the user guide's
   "Composing bigger apps" for the model.
 - **Declaring IS exposing.** Every `control()` is settable and every `action()` is a real named
-  agent tool automatically via `registerStandardTools` (`report`/`set`/`locate` + one tool per
-  action). Do NOT hand-write get-params/set-params tools; add an `action({ name, run })` next to
+  agent tool automatically via `registerStandardTools` (`report`/`set`/`locate`/`read-page`/`selection`/`sources`/`source` + one tool
+  per action). Do NOT hand-write get-params/set-params tools; add an `action({ name, run })` next to
   the feature for verbs, and reserve `kit.registerTool` for the rare genuinely-bespoke case.
 - **Test the surface with the cells.** `resetControlSurface()` in afterEach (controls are
   module-and-window state), build cells inside `cellHarness`, probe each input — see

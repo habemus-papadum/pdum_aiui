@@ -7,7 +7,8 @@
  *
  * The agent surface is mostly derived: ONE `cross-filter` tool over every
  * filter dimension declared in store.ts (points, price, country, variety,
- * and the projx/projy region pair that draws the embedding map's box) plus
+ * the projx/projy region pair that draws the embedding map's box, and the
+ * lon/lat pair for the world map) plus
  * `reset-cross-filters` and the `crossfilter` report section
  * (`registerCrossfilterTools`), the four named-view verbs, the library's
  * `sql`/`schema` tools over the dedicated read connection

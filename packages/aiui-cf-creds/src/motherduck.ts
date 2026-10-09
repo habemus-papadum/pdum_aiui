@@ -7,8 +7,9 @@
  * the MotherDuck extension attached: hand `db` + a connection to aiui-viz's
  * `duckdbConnector` (Mosaic's `wasmConnector` plus HUGEINT decoded to numbers;
  * the stock one draws a NaN axis after the first brush — aiui-viz's
- * duckdb-mosaic.md, Part 4), another connection to `duckdbRunner` for the
- * agent's `sql`/`schema` tools, and materialize local tables beside the cloud ones.
+ * duckdb-mosaic.md, Part 4), {@link motherDuckRunner} over the client's own
+ * connection for the agent's `sql`/`schema` tools (the RUN_QUERY rule below),
+ * and materialize local tables beside the cloud ones.
  *
  * Three facts the kit measured (2026-09-24) and this module inherits: the
  * token is consumed once, at connect; a live session outlives its token
@@ -155,8 +156,10 @@ function adapt(kit: KitEngine): MotherDuckEngine {
 export interface MotherDuckEngineComposeOptions extends MotherDuckEngineOptions {
   /**
    * The client's connection params — `sessionName`, `customUserAgent`,
-   * `duckDBAssetsURLPrefix` (self-hosted wasm), `attachMode`, … — never
-   * `mdToken` (the source supplies it) and never `accessMode: "read_only"`.
+   * `duckDBAssetsURLPrefix` (self-hosted wasm), `attachMode` (single mode
+   * also needs `skipWelcomePack: true` and an explicit ATTACH after connect;
+   * `databasePath` is the LOCAL file path), … — never `mdToken` (the source
+   * supplies it) and never `accessMode: "read_only"`.
    */
   params?: MotherDuckEngineParams;
 }

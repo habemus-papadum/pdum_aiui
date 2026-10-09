@@ -4,7 +4,9 @@
  * (from `aiui-viz/vite`, itself moved from the retired dev overlay in the
  * 2026-07-14 restructure) so the source transform is a standalone, testable
  * library. One
- * plugin, two jobs — and deliberately nothing else:
+ * plugin, a few build-time jobs — the locator pass, the dev source listing,
+ * and the opt-ins (`devKeys`, `sources: "ship"`, `duckdbAssets`) — and
+ * deliberately nothing else:
  *
  *  1. **The source-locator compiler pass** (./source-locator). It applies to
  *     serve AND build, both halves: factory identity injection is

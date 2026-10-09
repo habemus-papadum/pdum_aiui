@@ -4,8 +4,8 @@ import { SelectionViewsBar } from "@habemus-papadum/aiui-viz/selection-views";
  * Controls.tsx — the page's own (non-vgplot) controls: the completeness
  * magnitude Mc slider that drives the live b-value fit, a one-click "use
  * suggested Mc" (the max-curvature estimate from the current selection), a
- * reset that clears every crossfilter clause (store.clearFilters — the same
- * code the clear-filters agent tool runs), and the named-views bar (save/load
+ * reset that clears every crossfilter clause (store.clearFilters — what the
+ * reset-cross-filters agent tool also does), and the named-views bar (save/load
  * the dimension state; the same store the view agent tools drive). The clause
  * count reads store.brushSignal — the REACTIVE window onto the brush — so the
  * label follows every producer (a bare `brush.clauses.length` is an untracked

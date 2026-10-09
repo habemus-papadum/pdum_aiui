@@ -16,7 +16,13 @@ npm install @habemus-papadum/aiui-source-processor
 ## Usage
 
 ```ts
-import { greet } from "@habemus-papadum/aiui-source-processor";
+// vite.config.ts — before solid(), so the locator's `pre` pass stamps JSX first
+import aiui from "@habemus-papadum/aiui-source-processor";
+import solid from "vite-plugin-solid";
 
-greet("world"); // "Hello, world!"
+export default { plugins: [aiui(), solid()] };
 ```
+
+The plugin stamps JSX with `data-source-loc` (every mode; `stampJsx: false` opts a build out),
+injects `cell()`/`control()` identities, and under `vite serve` lists the project's sources for
+the page's `sources`/`source` tools. Opt-ins: `devKeys`, `sources: "ship"`, `duckdbAssets`.

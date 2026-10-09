@@ -9,8 +9,9 @@ the level of abstraction you prompt it at. Three layers:
    prompts — **interleaved text and images**, the format current agents execute best — and injected
    into the running session via a custom Claude Code channel. The lowering pipeline is meant to be
    inspectable — an open research area, not just a feature.
-2. **Intent tools** — frontends for that pipeline, starting with a browser overlay for the page
-   under development (speak a change, capture screenshots/DOM state, send it down the pipeline).
+2. **Intent tools** — frontends for that pipeline: the intent client (a side panel or the
+   channel-served `/intent/` page) for the page under development (speak a change, capture
+   screenshots/DOM state, send it down the pipeline).
 3. **Frontend for agents** — principles, utilities, and Claude skills for the code agents write in
    this loop: SolidJS 2.0 (beta), Observable-style async dataflow, debuggable by the agent's
    future self.

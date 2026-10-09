@@ -26,6 +26,10 @@ the sniff is the factory part alone, the file is skipped, and `control()` throws
 `needs a name` guard on the first page load. Nothing in `pnpm dev`, the tests or the
 typecheck sees it; only the built page does.
 
+> 2026-10-09: JSX stamping now runs in every mode by default (`stampJsx: false` opts a build
+> out), so the serve/build asymmetry below reaches only out-of-root files and builds that opt
+> out; `buildSniff` moved to `source-locator.ts:496-504`. The fix stands as proposed.
+
 ## 1. What exists (verified 2026-09-23, `aiui-source-processor` 0.18.0+dev, main at 656f294)
 
 | Piece | Where | The fact the fix leans on |

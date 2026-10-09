@@ -1,6 +1,6 @@
 /**
  * Controls.tsx — the page's non-vgplot controls: reset (clears every
- * crossfilter clause — the same code path as the clear-filters agent tool)
+ * crossfilter clause — what the reset-cross-filters agent tool also does)
  * and the named-views bar (save/load the dimension state). The clause count
  * reads store.brushSignal — the reactive window — so the label follows every
  * producer, the embedding lasso included.

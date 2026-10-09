@@ -6,8 +6,8 @@ description: Use inside an `aiui claude` session (or any aiui project) when the 
 # aiui workflow — introspect the running system
 
 If this session exists, the launcher's preflight already ran: `aiui claude` resolved a
-browser, spawned the channel MCP server, and resolved + validity-checked the vendor API keys
-(a definitively rejected key aborts the launch; missing keys warn with what degrades). So
+browser, spawned the channel MCP server, and resolved the vendor API keys (presence only —
+a bad key surfaces at first use; missing keys warn with what degrades). So
 don't re-derive the setup from first principles — **ask the running system**. Every fact
 below has a live source; prefer running the command to describing it, and prefer quoting its
 output to paraphrasing it.
@@ -94,9 +94,9 @@ DuckDB app's `devKeys: ["motherduck"]` uses it, and no launch ever asks for it.)
 **`aiui keys`**: `status` (mode, per-provider decision and
 effective source — never the values), `interview`, `set <provider>` (masked prompt,
 round-trip verified), `unset <provider>`. `aiui claude` gap-fills undecided providers on
-interactive launches and validity-checks found keys against each vendor's cheapest
-endpoint: a rejected key aborts the launch; a missing OpenAI or ElevenLabs key warns with
-exactly what degrades.
+interactive launches and checks each key's presence (nothing is probed against a vendor —
+a bad key surfaces at first use); a missing OpenAI or ElevenLabs key warns with exactly what
+degrades.
 
 ## When something's wrong
 

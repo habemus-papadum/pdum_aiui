@@ -28,8 +28,7 @@ The app has a **dual shape** — it is both a standalone app and a library:
 - `src/card.tsx` is the app's **landing card** (aiui-viz's `DemoCard`, the `./card` export): a
   blurb + a LIVE preview mini-app a gallery shows before you open the app. The preview must be
   self-contained and cheap — build it from your *pure* model only, never `store`/`graph` (a
-  landing mounts every app's preview at once). The starter previews the rose (`ui/RosePreview.tsx`,
-  scenery); after a reset it falls back to a name placeholder.
+  landing mounts every app's preview at once). The lab's card previews a name placeholder (its scenery was reset).
 
 ## Reset to a blank canvas
 
@@ -58,8 +57,8 @@ When building the user's real app, work in the four-layer order of the
 [frontend playbook](https://habemus-papadum.github.io/pdum_aiui/guide/frontend-playbook), thin
 vertical slices first:
 
-1. **Pure functions** (`src/model/*.ts`, like the rose's math) — domain logic, no framework, no
-   time; unit-test exhaustively (see `rose.test.ts` for the shape).
+1. **Pure functions** (`src/model/*.ts`, like `catalog.ts`) — domain logic, no framework, no
+   time; unit-test exhaustively (see `catalog.test.ts` for the shape).
 2. **Cells** (`src/model/graph.ts`) — the computation boundaries: fetches, workers, streams,
    cancellation; test headless with `@habemus-papadum/aiui-viz/testing` (see `scenery.test.ts` —
    one `whenReady` probe per input per cell).
@@ -99,8 +98,8 @@ Ground rules:
   window-global registries. Never declare an unscoped control/cell/action; see the user guide's
   "Composing bigger apps" for the model.
 - **Declaring IS exposing.** Every `control()` is settable and every `action()` is a real named
-  agent tool automatically via `registerStandardTools` (`report`/`set`/`locate` + one tool per
-  action). Do NOT hand-write get-params/set-params tools; add an `action({ name, run })` next to
+  agent tool automatically via `registerStandardTools` (`report`/`set`/`locate`/`read-page`/`selection`/`sources`/`source` + one tool
+  per action). Do NOT hand-write get-params/set-params tools; add an `action({ name, run })` next to
   the feature for verbs, and reserve `kit.registerTool` for the rare genuinely-bespoke case.
 - **Test the surface with the cells.** `resetControlSurface()` in afterEach (controls are
   module-and-window state), build cells inside `cellHarness`, probe each input — see
@@ -109,8 +108,6 @@ Ground rules:
   browser with `aiui open http://localhost:5173` (it starts the browser if needed). The intent
   client reaches the channel on its own (it is served by the channel at `/intent/`), so the app
   itself needs no channel wiring.
-- This is a standalone git repo scaffolded for the user; commit freely — history here belongs to
-  their sandbox and goes nowhere else.
 
 Methodology docs (user guide, playbook, design choices, hard-won details):
 <https://habemus-papadum.github.io/pdum_aiui/guide/frontend-user-guide>

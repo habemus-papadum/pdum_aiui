@@ -122,7 +122,8 @@ Mosaic owns an entire reactive world of its own: `Selection` → coordinator →
 per-client SQL → Arrow → SVG. Solid owns another. **They meet at exactly two
 points, both durable:**
 
-1. **The shared `Selection.crossfilter()`** (`store.brush`). Every vgplot view
+1. **The shared cross-filter** (`store.brush`, aiui-viz's routed `crossfilter()` since
+   2026-10-09 — below). Every vgplot view
    filters by it and publishes into it; the agent tools publish into it too. Solid
    never reads Mosaic's SVG.
 2. **One signal, `store.histo`.** A custom `MosaicClient` (`stats-client.ts`) is

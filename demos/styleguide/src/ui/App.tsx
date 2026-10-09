@@ -467,7 +467,7 @@ function Chrome() {
               <tr>
                 <td>41</td>
                 <td>oracle</td>
-                <td>seismos.set-magnitude</td>
+                <td>seismos.cross-filter</td>
                 <td class="numeric">12</td>
                 <td class="ok">ok</td>
               </tr>

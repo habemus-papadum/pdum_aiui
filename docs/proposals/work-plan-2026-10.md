@@ -125,7 +125,8 @@ root-relative `../seismos/src/…` paths, which Vite's `/@fs/` serves.
     `sourceRoot`.
   - **prod**: `window.__AIUI__.sources = { base: "/__aiui/src/", files: [...] }`, present
     only when the build shipped its sources (below); the tool fetches `base + file`.
-  - neither → `{ error: "this build carries no source" }`.
+  - neither → `{ error: "this build carries no source" }` (shipped as
+    `{ available: false, reason, suggestions }`, 2026-10-09).
 - Shipping sources: one plugin option, `aiui({ sources: "ship" })`. The locator's
   `transform` hook already sees every module id; the plugin collects the ids under the
   project (or workspace) root outside `node_modules`, and at `generateBundle` emits each as
@@ -134,8 +135,8 @@ root-relative `../seismos/src/…` paths, which Vite's `/@fs/` serves.
   `sourceRoot` option (already accepted by the seed) takes a URL — for the gallery,
   `https://github.com/habemus-papadum/pdum_aiui/blob/main/` — so `locate` answers in prod
   link somewhere a person can click. The gallery's vite config turns all three on; the
-  template does not (an app's source is the owner's call; the option is one line away and
-  the template's `CLAUDE.md` says so).
+  template does not (an app's source is the owner's call; the option is one line away —
+  `sources: "ship"` in `vite.config.ts`, documented in the source-processor README).
 - Policy to confirm with the owner: shipping sources publishes them. For the gallery that is
   a public repo's code on a public site; for a scaffolded app it stays off by default.
 - Tests: the tool against a fake fetch in jsdom (dev path via a stubbed `import`, prod path

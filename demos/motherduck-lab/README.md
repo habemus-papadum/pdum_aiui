@@ -14,7 +14,8 @@ What it exercises, end to end, in one page:
   the MotherDuck layout (`/duckdb-wasm-assets/<version>/…`) from this origin; the engine loads
   them from there, not from a CDN.
 - **One engine, the stock connector.** `@motherduck/wasm-client` boots a stock `AsyncDuckDB`
-  with the MotherDuck extension attached. Mosaic uses its stock `wasmConnector`;
+  with the MotherDuck extension attached. Mosaic uses aiui-viz's `duckdbConnector` (the stock
+  `wasmConnector` plus HUGEINT decoded to numbers);
   agent `sql`/`schema` tools use `motherDuckRunner` over the client's pending-query
   protocol. `MD_ALL_DATABASES()` through a raw blocking connection can wedge the engine.
 - **Qualified names.** A local view aliases each cloud table; histograms read

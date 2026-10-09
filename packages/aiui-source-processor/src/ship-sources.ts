@@ -17,7 +17,7 @@
  *
  * Shipping sources PUBLISHES them. The option is off by default and belongs
  * on a site whose code is public anyway (the gallery of a public repo). It
- * pairs with the locator's `stampJsx: true` (stamps in the build) and an
+ * pairs with the stamps every build carries (unless `stampJsx: false`) and an
  * explicit `sourceRoot` URL, so attribution on the published page links
  * somewhere a person can click.
  */
