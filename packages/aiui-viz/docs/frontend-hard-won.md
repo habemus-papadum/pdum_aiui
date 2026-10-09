@@ -162,11 +162,12 @@ Found building the seismos notebook (full detail: `demos/seismos/src/NOTES.md`):
   (`clients: plot.markSet`). The marimo-style gray-out of unselected categories therefore
   needs the toggle/legend to publish into its OWN non-cross Selection
   (`categorySelection()` in `aiui-viz/mosaic-selection`), include-relayed into the
-  crossfilter at construction (`Selection.crossfilter({ include: [origin] })`), with
+  crossfilter at construction (`crossfilter({ include: [origin] })`, aiui-viz's routed Selection), with
   `highlight({ by: origin })` beside the toggle.
 - **The include relay is one-way** (origin → includer): resetting the crossfilter never
   reaches the origin, whose Highlight then keeps the chart grayed over an unfiltered page.
-  Whole-state clears reset every dim-target Selection (`resetSelectionDimTargets`);
+  Whole-state clears reset every dim-target Selection (`resetSelectionDimTargets`) and the
+  cross-filter itself (`reset-cross-filters`, so a brush clears even with no dimension declared);
   per-component clears reset the clause subset on the producer's OWN selection
   (`clearSelectionFor` / `cross-filter { clear: [name] }` / the inspector's ✕).
 - **A category origin must be `intersect`, never `single`**: adoption follows each component

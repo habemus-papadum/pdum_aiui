@@ -55,10 +55,12 @@ The compiler/locator is its own package, **`@habemus-papadum/aiui-source-process
 `vite.config.ts`, `plugins: [aiui(), solid()]` (default export; `aiui()` MUST precede
 `solid()` — its `pre` Babel pass stamps JSX before vite-plugin-solid compiles each element
 into an opaque template); in `vitest.config.ts`, `aiui({ locator: true })` and no solid().
-It does two jobs only — JSX source-locator stamps (dev-serve) and `cell()`/`control()`
-identity injection (every mode, production included) — plus an opt-in
-`devKeys: ["openai"]` for dev-serve-only vendor-key injection; it deliberately does NOT
-inject ports, dial sockets, or mount UI. (The old `aiuiDevOverlay` plugin is retired.)
+Its jobs: JSX source-locator stamps (every mode; `stampJsx: false` opts a build out),
+`cell()`/`control()` identity injection (every mode, production included), and the dev
+server's listing of its own sources behind the `sources`/`source` tools — plus the opt-ins
+`devKeys: ["openai"]` (dev-serve-only vendor-key injection), `sources: "ship"` (the listing
+in a build) and `duckdbAssets` (the duckdb-wasm binaries from this origin); it deliberately
+does NOT inject ports, dial sockets, or mount UI. (The old `aiuiDevOverlay` plugin is retired.)
 
 Reference apps: **`demos/walkthrough`** (the playbook executed in order on 1-D diffusion,
 every layer left standing as its own page — read its WALKTHROUGH.md when unsure what a layer
@@ -234,7 +236,10 @@ Write that in the code you already have: the doc comment's first paragraph is th
 `agentToolkit(ns, { brief })` carries the kit's **brief** — what the app is, its data model,
 how the tools relate. Every consumer renders the same document from it (the oracle's
 `Tools:` section, a live delegation, `page_tools_list`), grouped read/write: an action is a
-**write** unless it declares `kind: "read"`. Keep the brief authored and standing; facts
+**write** unless it declares `kind: "read"` — and by `group` within each (`app`, `page`,
+`sql`, `crossfilter`, `views`, or your own word), rendered as sub-headings; a consumer keeps
+or drops whole groups with `toolsFromAiuiRegistry({ groups, excludeGroups })`. Keep the brief
+authored and standing; facts
 that change with the data belong in the tool that owns them — a DuckDB app registers the
 library's `sql`/`schema` tools (`registerSqlTools(kit, { runner })` from
 `@habemus-papadum/aiui-viz/duckdb`, over a connection dedicated to agent reads) and the table
@@ -449,13 +454,16 @@ Cross-filter conventions (the seismos reference implements all of them):
   unselected categories** — full bars, muted when excluded. `highlight({ by })` cannot ride the
   crossfilter (its resolver hides the chart's own clause from the chart's marks — a silent
   no-op). Mint the producer its own origin with `categorySelection()`, include-relay it
-  (`Selection.crossfilter({ include: [origin] })`), pair `toggleY({ as: origin })` with
+  (`crossfilter({ include: [origin] })` from `aiui-viz/crossfilter`), pair `toggleY({ as: origin })` with
   `highlight({ by: origin })`, and target the dim at the origin.
 - **Per-component clearing ships with the surface**: `cross-filter { clear: [name] }` takes a
   dim name or a component name (a 2-D box clears whole) and the SelectionInspector's per-row ✕
   drives the same `clearSelectionFor`. Whole-state clears go through `reset-cross-filters`
-  (`clearAllSelectionDims` + `resetSelectionDimTargets`) — never `brush.reset()` alone, which
-  cannot reach include-relayed origins.
+  (`clearAllSelectionDims` + `resetSelectionDimTargets` + the cross-filter's own `reset()`, so a
+  brush clears even with no dimension declared) — never `brush.reset()` alone, which cannot reach
+  include-relayed origins. A DuckDB app's `sql`/`schema` carry the cross-filter's filtered
+  twins as schema views (`crossfilterViews`); the MotherDuck wiring (`motherDuckRunner`,
+  `viewCatalog: "memory"`, `viewEpoch`, `catalogs`, `settleMs`) is duckdb-mosaic.md Part 4b.
 
 ## Composing and reusing (slices + scopes)
 

@@ -60,9 +60,8 @@
  *    every Mosaic root — the dimension's own value is; a disposable Selection
  *    would forget the clauses while the dimension remembers the range.
  *
- * Deliberately NOT here (yet): declaration-time column validation against the
- * live catalog (a cheap DESCRIBE turning tomorrow's silent binder error into
- * today's loud one — needs a coordinator handle, planned), named-view
+ * Deliberately NOT here: column validation — ./crossfilter warns when a table's
+ * columns are learned and a declared target names one it lacks — and named-view
  * serialization (a separate module; serialize dimension VALUES, never
  * clauses), and write-back into vgplot's own brush rectangles (an agent-set
  * dimension filters the data but draws no rectangle; d3-brush cannot be
@@ -133,10 +132,10 @@ export interface SelectionDimTarget {
    * expression (`sql`epoch_ms(ts)``) — per-target, which is what lets one
    * dimension speak each table's column vocabulary. */
   field: string | ExprNode;
-  /** The table this target's filtered clients query. Documentation surfaced
-   * in the surface snapshot and tool descriptions — Mosaic itself never
-   * routes clauses by table (module docblock); the declaration is where that
-   * knowledge lives. */
+  /** The table this target's filtered clients query. Surfaced in the snapshot
+   * and the report, and what ./crossfilter counts as a covered table (its
+   * `crossfilter.<table>` view) and checks the column against when it learns
+   * the table's columns. */
   table?: string;
 }
 
@@ -152,8 +151,8 @@ interface BaseDimSpec {
   scope?: Scope;
   /** Human description — compiler-lifted from the doc comment, or explicit. */
   description?: string;
-  /** How to use the derived `set-<name>` tool — compiler-lifted from
-   * `@usage` / `@example`, or explicit. */
+  /** How to use this dimension — its line in the `cross-filter` tool's usage —
+   * compiler-lifted from `@usage` / `@example`, or explicit. */
   usage?: string;
   /** Definition site "file:line" — compiler-injected. */
   loc?: string;
@@ -263,9 +262,9 @@ function targetLabel(t: SelectionDimTarget): { table?: string; field: string } {
 }
 
 /**
- * Declare one cross-filter dimension. Returns the semantic-value box; also
- * registers a real `set-<name>` action (a named, schema'd agent tool via the
- * standard-tools pipeline) and enrolls the dimension in the surface snapshot.
+ * Declare one cross-filter dimension. Returns the semantic-value box and
+ * enrolls the dimension in the surface snapshot; `registerCrossfilterTools`
+ * (./crossfilter) gives it a typed property on the one `cross-filter` tool.
  *
  * ```ts
  * /** Magnitude window — the completeness bracket every view filters by. *\/

@@ -559,7 +559,9 @@ Those two lines derive the whole standard surface from your declarations:
 
 Rule of thumb: **don't write tools — declare controls and actions.** The hand-written
 set-this/get-that tool this framework once required is gone; `kit.registerTool` remains only for
-the genuinely bespoke operation (a database query, say). Declaring is exposing — and it is how
+the genuinely bespoke operation no library tool covers (a DuckDB app gets `sql` and `schema`
+from `registerSqlTools`, a Mosaic app its `cross-filter` from `registerCrossfilterTools`).
+Declaring is exposing — and it is how
 the agent verifies its own work: `set` a parameter, read the `report`, check the cell states —
 rather than squinting at screenshots.
 
@@ -594,12 +596,6 @@ Two places to write it, both in the code you already have:
 - **Per kit, the brief.** What the app *is*, its data model, and how the tools relate — the
   paragraph a consumer renders above the tool list:
 
-  Every tool also carries a **`group`** — `app` (report, set, locate, and an action unless it
-  says otherwise), `page` (read-page, selection, sources, source), `sql`, `crossfilter`,
-  `views`, or your own word on a `kit.registerTool` or an `action`. The brief renders groups as
-  sub-headings inside the read and write sections, and a consumer can keep or drop whole groups
-  (`toolsFromAiuiRegistry({ groups, excludeGroups })`) to shape a scenario.
-
   ```ts
   const kit = agentToolkit("app", {
     brief:
@@ -610,6 +606,12 @@ Two places to write it, both in the code you already have:
 
   Keep the brief authored and standing. Facts that change with the data (a table list) belong
   in the tool that owns them.
+- **Per tool, a `group`.** Every tool carries one — `app` (report, set, locate, and an action
+  unless it says otherwise), `page` (read-page, selection, sources, source), `sql`,
+  `crossfilter`, `views`, or your own word on a `kit.registerTool` or an `action`. The brief
+  renders groups as sub-headings inside the read and write sections, and a consumer can keep
+  or drop whole groups (`toolsFromAiuiRegistry({ groups, excludeGroups })`) to shape a
+  scenario.
 
 Everything above is optional — an undocumented action still becomes a tool with its
 description — but it is cheap, and it is the part of the surface a model reads most.

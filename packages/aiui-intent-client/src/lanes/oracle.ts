@@ -145,6 +145,7 @@ export function oracleToolsForTab(
       description: tool.description,
       ...(tool.usage !== undefined ? { usage: tool.usage } : {}),
       ...(tool.kind !== undefined ? { kind: tool.kind } : {}),
+      ...(tool.group !== undefined ? { group: tool.group } : {}),
       parameters: tool.inputSchema ?? {
         type: "object",
         properties: {},

@@ -49,7 +49,8 @@ not take. Verified live on seismos (single-table: nothing changes on screen) and
 its schema a typed property per declared dimension (bounds, enums, unit, the doc comment),
 re-rendered on `onSelectionDimsChange`; several dimensions in one call is one write; `clear`
 takes dimensions or components (`clearSelectionFor`). `reset-cross-filters` clears every
-dimension value and resets every target Selection (brushes, menus, include-relayed origins). The
+dimension value, resets every target Selection (brushes, menus, include-relayed origins) and,
+since §4, the cross-filter itself. The
 `crossfilter` report section replaces the old four: predicate, per-table WHERE, view names,
 dimensions, attributed clauses, capabilities. Results wait for the Selection's emits to quiesce
 (400 ms for the first, 150 ms each after, 1.5 s at most) because a Selection's clause list is its
@@ -62,7 +63,8 @@ as a real DuckDB view through the runner's new `exec` (`CREATE SCHEMA IF NOT EXI
 signalled (DDL only when the body text changed), drop what a provider stops offering, list
 them in `schema` with provenance (`views`, and `tables[].views`), name them in `sql`'s usage,
 and attach a used view's provenance to a `sql` answer. `schemaOf` now names a table outside
-`main` as `schema.name`. The cross-filter's provider (`crossfilterViews`) offers
+`main` as `schema.name` (and, since §4, `catalog.schema.name` outside the current catalog).
+The cross-filter's provider (`crossfilterViews`) offers
 `crossfilter.<table>` per covered table and teaches the router the columns; seismos adds
 `complete.quakes` from the `mc` control — a provider owing Mosaic nothing, which is the point.
 Without `exec` (a fresh-session connector) the views are reported by body text,
@@ -100,7 +102,7 @@ staged-write guard — found live).
   registers the cross-filter tools and `memory.crossfilter.<view>`, verified LIVE on the
   MotherDuck client over `sample_data.who.ambient_air_quality`: the view materializes in the
   tab's catalog (36 of 40098 rows under a brush), `cross-filter { clear }` and the reset hold,
-  and the view comes back after `rebuild-engine` (viewEpoch). Three things the run taught:
+  and the view comes back after `rebuild-engine` (viewEpoch). Four things the run taught:
   the base tables must be re-read by `schema`, and a provider's `wants` makes `sql` look again
   before a call (a bridge view created after registration was invisible to the providers, and
   the report named a view `sql` could not find); a client with no clause to route still counts as covered

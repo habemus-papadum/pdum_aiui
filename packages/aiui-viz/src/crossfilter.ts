@@ -470,8 +470,9 @@ export interface CrossfilterToolsOptions {
   tables?: readonly string[];
   /** The schema the views live in (default `crossfilter`), for the report's `views`. */
   schema?: string;
-  /** App-specific work after a reset (the default clears every dimension and
-   * resets every target Selection — brushes and menus included). */
+  /** App-specific work after a reset — which always clears every dimension,
+   * resets every target Selection (brushes and menus included) and resets
+   * the cross-filter itself. */
   onReset?: () => void;
   /**
    * How long a write's result waits for the first emit before reporting the

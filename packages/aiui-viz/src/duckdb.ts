@@ -51,7 +51,13 @@
  * connection: the app hands over a {@link SqlRunner}, and two adapters cover
  * the shapes in use — a duckdb-wasm connection ({@link duckdbRunner}) and a
  * Mosaic `Connector` ({@link connectorRunner}, the Quack path, where the SQL
- * string travels). Mosaic stays optional throughout.
+ * string travels); aiui-cf-creds adds `motherDuckRunner` over the MotherDuck
+ * client. A runner with `exec` can hold **schema views** ({@link SchemaViewProvider}:
+ * the cross-filter's filtered twins, a control-driven subset) that the tools
+ * materialize lazily, in a named catalog if asked. Introspection is
+ * catalog-aware: a table outside the current catalog is `catalog.schema.name`
+ * (a bare name never resolves across catalogs), and `catalogs` narrows the
+ * listing. Mosaic stays optional throughout.
  */
 import * as duckdb from "@duckdb/duckdb-wasm";
 import type { AgentToolkit } from "./agent-tools";

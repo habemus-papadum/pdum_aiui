@@ -24,8 +24,9 @@ routing table, not an event feed. Ask when you have a question.
   `activeTab` (the tab the user is looking at, when known), and `namespaces[]` — each with `ns`,
   `active` (false = the app parked it, off-route; still callable), `shadowed`, its `brief`
   (what the app is and how its tools relate — **read it before driving the app**), and its
-  `tools[]` (`name`/`description`/`usage`/`kind`/`inputSchema`; `usage` says when to call a
-  tool and what its result means, `kind` is `read` or `write`). Name a tab with any of `chromeTabId`,
+  `tools[]` (`name`/`description`/`usage`/`kind`/`group`/`inputSchema`; `usage` says when to call a
+  tool and what its result means, `kind` is `read` or `write`, `group` is `app`, `page`, `sql`,
+  `crossfilter`, `views` or the app's own word). Name a tab with any of `chromeTabId`,
   `targetId`, `driverTab`, `url` (exact href or a prefix), or `clientId`; no arguments lists
   every tab. A named tab that is not connected errors and **names the tabs that are**. An EMPTY
   list means **no intent client is running** — the page dials nothing itself.
@@ -41,21 +42,26 @@ Whichever host is running, the tab's url works in both directions.
 Every aiui app carries a standard surface via `registerStandardTools`: `report`
 (`format: "brief" | "full"` — controls, cells, actions, bridge failures, and the live
 control→cell dependency edges), `set` (validated write; returns what was written, never a
-re-read), `locate` (element → source/cell stamps), plus **one real named tool per registered
-`action()`**. A page without its own reporter still gets a synthetic `report` — the single
-most useful call.
+re-read), `locate` (element → source/cell stamps), `read-page` (the page as text),
+`selection` (what the user selected: text, TeX, the authoring elements and cells),
+`sources` (the files the page can read) and `source` (one file by its stamp path;
+`{ available: false, reason, suggestions }` when it cannot), plus **one real named tool per
+registered `action()`**. A page without its own reporter still gets a synthetic `report` — the
+single most useful call.
 
 Flow: **list (by tab), then call (by tab).** After a call that mutates state, **read back in a
 separate call, not the same tick** — Solid batches writes; a same-tick read lies.
 
 A page can also be driven by voice WITHOUT the panel: every demo and scaffolded app mounts the
-voice dock (`@habemus-papadum/aiui-dock` — the pill row in the corner: oracle, live, tools, key).
+voice dock (`@habemus-papadum/aiui-dock` — one `aiui` pill in the corner that expands to oracle,
+live, tools, key and, when the page can read its sources, a source browser).
 Its calls land in the page's log as `oracle` / `live:…`; `page_tools_*` see the same tools.
 
 ## Channel server endpoints
 
 Find the port with the **`channel_info` MCP tool**. (There is no `window.__AIUI__.port` — the
-page-side global carries only `v`, `sourceRoot`, `tools`, `devKeys`; pages dial nothing.) On
+page-side global carries `v`, `sourceRoot`, `tools`, `selection()`, `sources`, `devKeys`,
+`duckdbAssets`; pages dial nothing.) On
 that port:
 
 - `GET /health` — liveness plus bind `host`, LAN `interfaces`, and `pageTools` / `session`

@@ -31,8 +31,8 @@
  *    (mosaic-facet.ts's self-driving-producer seam) that routes a driven
  *    value through `update({ rangeSelectionValue })` — the component draws
  *    the rectangle AND publishes the clause itself, so a pair of interval
- *    selectionDims bound to this producer gives agents a `set-<dim>` that
- *    moves the on-screen region, and a mouse lasso mirrors back into the
+ *    selectionDims bound to this producer lets `cross-filter { set: { projx, projy } }`
+ *    move the on-screen region, and a mouse lasso mirrors back into the
  *    dims. (A freehand lasso publishes a polygon; the dims mirror its
  *    bounding box — the clause keeps the exact polygon.)
  *

@@ -83,8 +83,9 @@ inject) and covers `cell`, `control`, and `action` by default; names are inferre
 `const` binding (or, for `action`, required inline as a string literal), and the JSDoc or `//`
 comment immediately above a declaration is lifted into `description`. Identity injection runs in
 **build and serve alike** — the compiler is load-bearing, because control names are durable keys
-and tool identities, and a production build without them would be a different app. Only the JSX
-`data-source-loc` stamping stays serve-only.
+and tool identities, and a production build without them would be a different app. JSX
+`data-source-loc` stamping runs in every mode too since 2026-10-09 (`stampJsx: false` opts a
+build out), so a shipped page still attributes a selection or a screenshot to its source.
 
 Named cells self-register into a per-page registry (`cellRegistry()`) and deregister via
 `onCleanup` on their reactive owner — so a graph hot-swap replaces the population atomically and
@@ -220,10 +221,12 @@ carrying `{min, max, step, unit, options, description}` declared once; validatio
 enum check) lives in the library and guards *every* write — widget, keyboard, and agent alike.
 `registerStandardTools` derives the whole tool surface from the declarations: `report`
 (brief/full — controls, cells with state, actions, and the **dependency edges** recorded live as
-each cell's deps run), `set` (validated write, returns what was actually written), `locate`, and
-**one real named tool per registered action**. The hand-written get-params/set-params pair this
-framework once required is gone; hand-written tools remain only for the genuinely bespoke
-(gallery's `set-filter`, `query`). Deliberately absent: a generated control panel. Widgets are
+each cell's deps run), `set` (validated write, returns what was actually written), `locate`,
+`read-page`, `selection`, `sources`, `source`, and **one real named tool per registered
+action**. The hand-written get-params/set-params pair this framework once required is gone;
+hand-written tools remain only for the genuinely bespoke operation no library tool covers (a
+DuckDB app gets `sql`/`schema` from `registerSqlTools`, a Mosaic app `cross-filter` from
+`registerCrossfilterTools`). Deliberately absent: a generated control panel. Widgets are
 hand-placed (`ControlSlider`/`ControlToggle`/`ControlScrub`/`ControlSelect` read bounds and
 options from the declaration and stamp `data-control`), and porcelain is extracted from
 repetition in real apps, never invented ahead of evidence — the scrub pill arrived as three

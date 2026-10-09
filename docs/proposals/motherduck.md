@@ -2,7 +2,7 @@
 
 Status: ACCEPTED 2026-09-24 and BUILT the same day — Track A (the kit's `cf-creds-motherduck`,
 0.5.0, released) and Track B (this repo, 0.19.0 pending release). Probes 1, 2, 4, 5, 6, 7 and 8
-answered (§5); probe 3 open. This document is self-contained: it covers the two repos that hold
+answered (§5); probe 3 answered 2026-10-09 (§5). This document is self-contained: it covers the two repos that hold
 the engine and its seams. A deployment — the broker route that mints tokens, the declared service
 accounts, the data load, the host's wasm serving — is a consumer's plan and lives with the
 consumer, not here; §3 states the contract such a deployment meets. The measured facts behind every
@@ -172,7 +172,12 @@ exactly as the lab does, and — for a host that caps file sizes — brotli-at-r
 2. **In-place token swap — ANSWERED: impossible.** `SET motherduck_token` after init: "can only be
    set during initialization"; `DETACH` of the workspace: refused for read-only credentials;
    `ATTACH 'md:'`: "already attached". Only `terminateDuckDB()` + create, which drops local tables.
-3. `attachMode: "single"` + `databasePath` vs the proven workspace mode — still open.
+3. **Single mode — ANSWERED 2026-10-09** (motherduck-lab `?database=<name>`): the client's
+   `attachMode: "single"` only sets `motherduck_attach_mode`; its welcome pack (`PRAGMA
+   MD_USE_DEFAULT`, a `USE my_db`) then fails with nothing attached, so pass
+   `skipWelcomePack: true` and attach the database yourself after connect with
+   `ATTACH 'md:<database>'` (engine-wide; a share attaches by URL). `databasePath` is the LOCAL DuckDB file path, not a MotherDuck database. Make `memory`
+   current on every connection (`USE` is per connection). Record: duckdb-mosaic.md Part 4b.
 4. **Pre-aggregation — ANSWERED: leave it on.** Over a 766 k-row remote table through a local
    view, two linked histograms + crossfilter: the cube `memory.mosaic.preagg_…` was created in
    59 ms (dual execution ran the group-by on the Duckling, the cube came down), and every brush
