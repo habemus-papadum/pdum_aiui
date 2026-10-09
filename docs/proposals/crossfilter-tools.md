@@ -110,6 +110,11 @@ staged-write guard — found live).
   `registerCrossfilterTools` (the lab: 3 s; a reset that already emptied the list does not wait).
   Known: routed tables are remembered for the session, so a table whose client is gone still
   gets a view while its base exists.
+- TAKEN 2026-10-09 (evening): `schemaOf` is catalog-aware (`catalog.schema.name` outside the
+  current catalog, same-named tables in two catalogs kept apart, system catalogs skipped) with a
+  `catalogs` option on `registerSqlTools`; motherduck-lab runs single mode from
+  `?database=<name>` (verified live: only the asked database and the sample share attach) and
+  narrows `schema` to `memory` beside the picked table's database.
 - TAKEN 2026-10-09: the SelectionInspector's lists are keyed (origin + producer, the column
   set, the member name), so a brush moving rewrites rows in place.
 - The published gallery runs the previous surface until the next release's site publish.

@@ -58,7 +58,12 @@ export interface Session {
   username: string;
   version: string;
   generation: number;
+  /** Every database on the account (MD_ALL_DATABASES — the RUN_QUERY-wedge probe). */
   databases: Array<{ alias: string; type: string }>;
+  /** What this engine actually attached: all of the workspace, or the one database and the sample share. */
+  attached: string[];
+  /** What the engine's own connection calls current — `memory`, the tab's catalog. */
+  current: string;
 }
 
 export interface ColumnInfo {
@@ -81,18 +86,24 @@ export const graph = hotCellGraph(
     session: cell(
       () => ({ generation: store.generation() }),
       async ({ generation }): Promise<Session> => {
-        const [who, ver, dbs] = await Promise.all([
+        const [who, ver, dbs, att, cur] = await Promise.all([
           q<{ username: string }>("SELECT username FROM md_user_info()"),
           q<{ v: string }>("SELECT version() AS v"),
           q<{ alias: string; type: string }>(
             "SELECT alias, type FROM MD_ALL_DATABASES() ORDER BY alias",
           ),
+          q<{ n: string }>(
+            "SELECT database_name AS n FROM duckdb_databases() WHERE NOT internal ORDER BY 1",
+          ),
+          q<{ c: string }>("SELECT current_database() AS c"),
         ]);
         return {
           username: String(who[0]?.username ?? "?"),
           version: String(ver[0]?.v ?? "?"),
           generation,
           databases: dbs.map((d) => ({ alias: String(d.alias), type: String(d.type) })),
+          attached: att.map((a) => String(a.n)),
+          current: String(cur[0]?.c ?? "?"),
         };
       },
       { scope: appScope, name: "session" },
@@ -180,11 +191,19 @@ registerCrossfilterTools(kit, { scope: appScope, selection: store.brush, settleM
 // The schema views live in the tab's own catalog (`memory`), never in a cloud
 // database — and a rebuild starts that catalog empty, so the engine's
 // generation is the epoch that has them created again.
+// catalogs: before a pick, every attached database (so the agent can choose
+// one); after, the tab's own catalog beside the picked table's — a personal
+// workspace attaches dozens of databases, and a bare name resolves only in
+// the current catalog anyway.
 registerSqlTools(kit, {
   runner: store.sqlRunner,
   views: [crossfilterViews({ selection: store.brush, scope: appScope })],
   viewCatalog: "memory",
   viewEpoch: () => store.engine.generation,
+  catalogs: () => {
+    const pick = store.pick.get();
+    return pick === undefined ? undefined : ["memory", pick.catalog];
+  },
 });
 
 /** Choose the table the histograms and the sample come from (`catalog.schema.table`). */
@@ -253,6 +272,7 @@ action({
 });
 
 kit.registerReporter("generation", () => store.generation());
+kit.registerReporter("attach", () => store.attach);
 kit.registerReporter("pick", () => {
   const pick = store.pick.get();
   return pick === undefined

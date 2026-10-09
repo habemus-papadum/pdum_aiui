@@ -402,8 +402,14 @@ oracle, a live delegation and `page_tools_list` all render the same guidance):
   candidate names, and every consumer forwards it, so the model fixes the statement and
   retries. A statement that names a schema view gets that view's provenance in the answer.
 - **`schema { table?, summarize? }`** — tables and columns with types from
-  `information_schema` (every catalog, minus the system schemas; a table outside `main` is
-  named `schema.name`, what FROM takes); `summarize: true` with a table adds DuckDB's
+  `information_schema`: every attached catalog minus the system ones (DuckDB's, and
+  MotherDuck's `md_information_schema`), or the `catalogs` option's — a list, or a function
+  read at each call, for an app that attaches dozens of databases and means one. Names are
+  what FROM takes: bare in the current catalog's `main`, `schema.name` elsewhere in it,
+  `catalog.schema.name` in another catalog — a bare name never resolves across catalogs
+  (DuckDB searches the current one only), and two catalogs' same-named tables stay two
+  entries (found live on a MotherDuck workspace, 2026-10-09: three databases' `blocks`
+  had merged into one 33-column entry). `summarize: true` with a table adds DuckDB's
   `SUMMARIZE`, on request only since it scans the table. With view providers registered, each
   base table lists the views that are views *of* it, and a `views` section carries every
   view's provenance.
@@ -492,6 +498,17 @@ registerSqlTools(kit, {
   viewEpoch: () => engine.generation,                         // a rebuild starts it empty
 });
 ```
+
+**Attach modes (2026-10-09, motherduck-lab).** The client's `attachMode: "single"` only
+`SET motherduck_attach_mode='single'`; its welcome pack (`PRAGMA MD_USE_DEFAULT`, a `USE my_db`)
+then fails with nothing attached, so pass `skipWelcomePack: true` and `ATTACH 'md:<database>'`
+yourself after connect — ATTACH is engine-wide, so Mosaic's raw connection sees it too; a share
+attaches by its URL. `databasePath` is the LOCAL DuckDB file path, not a MotherDuck database.
+Single mode attached exactly what the lab asked for (`my_db` and the sample share; the
+workspace's other databases stayed away), while `MD_ALL_DATABASES()` still lists every
+database on the account. Make the tab's `memory` catalog current on EVERY connection
+(`USE memory` — `USE` is per connection): the bridge views and the local sample are unqualified,
+and a bare name never resolves across catalogs.
 
 **Measured 2026-09-24 (headless Chrome, a service account's Standard flock), the rules:**
 

@@ -26,6 +26,13 @@ function Session() {
           </span>
           <span>engine generation {s().generation}</span>
           <span>
+            {store.attach.mode === "single"
+              ? `single mode on ${store.attach.database}`
+              : "workspace mode"}
+            , current catalog {s().current}; attached: {s().attached.join(" · ")}
+          </span>
+          <span>
+            on the account:{" "}
             {s()
               .databases.map((d) => `${d.alias} (${d.type})`)
               .join(" · ")}

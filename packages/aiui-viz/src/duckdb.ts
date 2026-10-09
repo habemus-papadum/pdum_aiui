@@ -410,10 +410,15 @@ export function formatMarkdown(result: SqlToolResult): string {
 }
 
 export interface SchemaTable {
-  /** The name to write after FROM: bare in the `main` schema, `schema.name` elsewhere. */
+  /** The name to write after FROM: bare in the current catalog's `main`
+   * schema, `schema.name` elsewhere in that catalog, `catalog.schema.name`
+   * in another attached catalog (a bare name never resolves across
+   * catalogs — DuckDB only searches the current one). */
   name: string;
   /** The schema it lives in. */
   schema: string;
+  /** The catalog (attached database) it lives in, when the runner said. */
+  catalog?: string;
   /** `BASE TABLE` or `VIEW`, as information_schema says. */
   type: string;
   columns: Array<{ name: string; type: string }>;
@@ -423,6 +428,8 @@ export interface SchemaTable {
 
 export interface SchemaResult {
   tables: SchemaTable[];
+  /** The current catalog — what a bare name resolves in — when the runner said. */
+  catalog?: string;
   /** The schema views a provider contributed, with their provenance (see
    * {@link SchemaViewStatus}); absent when the tools registered none. */
   views?: SchemaViewStatus[];
@@ -433,10 +440,25 @@ export interface SchemaResult {
 const quoteIdent = (name: string): string => `"${name.replace(/"/g, '""')}"`;
 const quoteLit = (s: string): string => `'${s.replace(/'/g, "''")}'`;
 const USER_SCHEMAS = "table_schema NOT IN ('information_schema', 'pg_catalog')";
+/** DuckDB's own catalogs, and MotherDuck's metadata catalog: never data. */
+const SYSTEM_CATALOGS = "table_catalog NOT IN ('system', 'temp', 'md_information_schema')";
 
-/** `schema.name` for a table outside `main`, else the bare name. */
-export function qualifiedTableName(schema: string, name: string): string {
-  return schema === "main" || schema === "" ? name : `${schema}.${name}`;
+/**
+ * What to write after FROM: the bare name in the current catalog's `main`,
+ * `schema.name` elsewhere in that catalog, and `catalog.schema.name` in
+ * another catalog (given both the table's and the current one).
+ */
+export function qualifiedTableName(
+  schema: string,
+  name: string,
+  catalog?: string,
+  current?: string,
+): string {
+  const bareSchema = schema === "main" || schema === "";
+  if (catalog !== undefined && current !== undefined && catalog !== current) {
+    return `${catalog}.${bareSchema ? "main" : schema}.${name}`;
+  }
+  return bareSchema ? name : `${schema}.${name}`;
 }
 
 /** A `catalog.schema.name`, `schema.name` or bare `name` back into its parts. */
@@ -461,51 +483,89 @@ function tableRef(name: string): string {
 }
 
 /**
- * Tables and columns from `information_schema` (every catalog, minus the
- * system schemas); `summarize` adds DuckDB's `SUMMARIZE` for one table —
- * on request only, since it scans the table. A table outside `main` (a
- * schema view, say) is named `schema.name`, which is what FROM takes.
+ * Tables and columns from `information_schema` — every attached catalog
+ * minus the system ones, or the `catalogs` asked for — named the way FROM
+ * takes them ({@link qualifiedTableName}: a table in another catalog is
+ * `catalog.schema.name`, and two catalogs' same-named tables stay two
+ * entries). `summarize` adds DuckDB's `SUMMARIZE` for one table — on
+ * request only, since it scans the table.
  */
 export async function schemaOf(
   runner: SqlRunner | Promise<SqlRunner>,
-  options: { table?: string; summarize?: boolean; timeoutMs?: number } = {},
+  options: {
+    table?: string;
+    summarize?: boolean;
+    timeoutMs?: number;
+    /** List only these catalogs (attached databases); default: every one. */
+    catalogs?: readonly string[];
+  } = {},
 ): Promise<SchemaResult> {
   const want = options.table !== undefined ? splitTableName(options.table) : undefined;
   const only =
-    want === undefined
+    (want === undefined
       ? ""
       : ` AND table_name = ${quoteLit(want.name)}` +
         (want.schema !== undefined ? ` AND table_schema = ${quoteLit(want.schema)}` : "") +
-        (want.catalog !== undefined ? ` AND table_catalog = ${quoteLit(want.catalog)}` : "");
+        (want.catalog !== undefined ? ` AND table_catalog = ${quoteLit(want.catalog)}` : "")) +
+    (options.catalogs !== undefined && options.catalogs.length > 0
+      ? ` AND table_catalog IN (${options.catalogs.map(quoteLit).join(", ")})`
+      : "");
   const run = (sql: string) =>
     runSql(runner, sql, { limit: SQL_ROW_CAP, byteCap: 1 << 20, timeoutMs: options.timeoutMs });
-  const tables = await run(
-    `SELECT table_schema, table_name, table_type FROM information_schema.tables WHERE ${USER_SCHEMAS}${only} ORDER BY table_schema, table_name`,
-  );
-  const columns = await run(
-    `SELECT table_schema, table_name, column_name, data_type FROM information_schema.columns WHERE ${USER_SCHEMAS}${only} ORDER BY table_schema, table_name, ordinal_position`,
-  );
   // Read by column name: a runner that answers with fewer columns (no
-  // schema column) still works, as `main`.
+  // schema or catalog column) still works, as `main` in the current catalog.
   const pick = (result: SqlResult, row: unknown[], name: string, fallback = ""): string => {
     const i = result.columns.indexOf(name);
     return i === -1 ? fallback : String(row[i]);
   };
+  const tables = await run(
+    `SELECT table_catalog, table_schema, table_name, table_type FROM information_schema.tables WHERE ${USER_SCHEMAS} AND ${SYSTEM_CATALOGS}${only} ORDER BY table_catalog, table_schema, table_name`,
+  );
+  const columns = await run(
+    `SELECT table_catalog, table_schema, table_name, column_name, data_type FROM information_schema.columns WHERE ${USER_SCHEMAS} AND ${SYSTEM_CATALOGS}${only} ORDER BY table_catalog, table_schema, table_name, ordinal_position`,
+  );
+  // The current catalog names the rest; a runner that cannot say (a server
+  // behind a JSON connector, say) still gets the listing, unqualified.
+  let current: string | undefined;
+  try {
+    const currentRows = await run("SELECT current_database() AS catalog");
+    const cell = currentRows.rows[0]?.[currentRows.columns.indexOf("catalog")];
+    if (typeof cell === "string" && cell !== "") current = cell;
+  } catch {
+    current = undefined;
+  }
+  const nameOf = (
+    result: SqlResult,
+    row: unknown[],
+  ): { name: string; schema: string; catalog?: string } => {
+    const schema = pick(result, row, "table_schema", "main");
+    const catalog = pick(result, row, "table_catalog", current ?? "");
+    return {
+      name: qualifiedTableName(
+        schema,
+        pick(result, row, "table_name"),
+        catalog === "" ? undefined : catalog,
+        current,
+      ),
+      schema,
+      ...(catalog === "" ? {} : { catalog }),
+    };
+  };
   const byTable = new Map<string, SchemaTable>();
   for (const row of tables.rows) {
-    const schema = pick(tables, row, "table_schema", "main");
-    const name = qualifiedTableName(schema, pick(tables, row, "table_name"));
-    byTable.set(name, { name, schema, type: pick(tables, row, "table_type"), columns: [] });
+    const id = nameOf(tables, row);
+    byTable.set(id.name, { ...id, type: pick(tables, row, "table_type"), columns: [] });
   }
   for (const row of columns.rows) {
-    const schema = pick(columns, row, "table_schema", "main");
-    const name = qualifiedTableName(schema, pick(columns, row, "table_name"));
-    byTable.get(name)?.columns.push({
+    byTable.get(nameOf(columns, row).name)?.columns.push({
       name: pick(columns, row, "column_name"),
       type: pick(columns, row, "data_type"),
     });
   }
-  const out: SchemaResult = { tables: [...byTable.values()] };
+  const out: SchemaResult = {
+    tables: [...byTable.values()],
+    ...(current !== undefined ? { catalog: current } : {}),
+  };
   if (options.summarize === true && options.table !== undefined) {
     out.summary = await run(`SELECT * FROM (SUMMARIZE ${tableRef(options.table)})`);
   }
@@ -810,6 +870,12 @@ export interface SqlToolsOptions {
   /** Put the views in this catalog (`memory` beside a remote database). */
   viewCatalog?: string;
   /**
+   * The catalogs (attached databases) `schema` lists and the usage names —
+   * a list, or a function read at each call (the picked database beside
+   * the tab's own). Default: every attached catalog but the system ones.
+   */
+  catalogs?: readonly string[] | (() => readonly string[] | undefined);
+  /**
    * Read before every call: when it changes, the views are re-created at
    * that call — for a database that gets rebuilt under the tools (the
    * MotherDuck engine's generation, whose tab catalog starts empty).
@@ -817,9 +883,13 @@ export interface SqlToolsOptions {
   viewEpoch?: () => unknown;
 }
 
-/** The tables the usage lists and the view providers build on: `main`'s. */
+/** The tables the usage lists and the view providers build on: the current catalog's `main`. */
 function baseTablesOf(schema: SchemaResult): SchemaTable[] {
-  return schema.tables.filter((t) => t.schema === "main" || t.schema === "");
+  return schema.tables.filter(
+    (t) =>
+      (t.catalog === undefined || schema.catalog === undefined || t.catalog === schema.catalog) &&
+      (t.schema === "main" || t.schema === ""),
+  );
 }
 
 /**
@@ -833,6 +903,10 @@ export function registerSqlTools(kit: AgentToolkit, options: SqlToolsOptions): v
   const defaultLimit = Math.min(rowCap, options.defaultLimit ?? SQL_DEFAULT_LIMIT);
   const byteCap = options.byteCap ?? SQL_BYTE_CAP;
   const caps = { rowCap, byteCap, timeoutMs: options.timeoutMs };
+  const catalogsNow = (): { catalogs?: readonly string[] } => {
+    const c = typeof options.catalogs === "function" ? options.catalogs() : options.catalogs;
+    return c !== undefined ? { catalogs: c } : {};
+  };
   const views =
     options.views !== undefined && options.views.length > 0
       ? new SchemaViews({
@@ -840,7 +914,9 @@ export function registerSqlTools(kit: AgentToolkit, options: SqlToolsOptions): v
           ...(options.viewCatalog !== undefined ? { catalog: options.viewCatalog } : {}),
           ...(options.viewEpoch !== undefined ? { epoch: options.viewEpoch } : {}),
           introspect: async () =>
-            baseTablesOf(await schemaOf(options.runner, { timeoutMs: options.timeoutMs })),
+            baseTablesOf(
+              await schemaOf(options.runner, { timeoutMs: options.timeoutMs, ...catalogsNow() }),
+            ),
         })
       : undefined;
   let knownTables: string[] | undefined = options.tables;
@@ -933,6 +1009,7 @@ export function registerSqlTools(kit: AgentToolkit, options: SqlToolsOptions): v
         ...(typeof args?.table === "string" ? { table: args.table } : {}),
         summarize: args?.summarize === true,
         timeoutMs: options.timeoutMs,
+        ...catalogsNow(),
       });
       if (views === undefined) return schema;
       if (typeof args?.table !== "string") {
@@ -944,7 +1021,10 @@ export function registerSqlTools(kit: AgentToolkit, options: SqlToolsOptions): v
         views.setTables(base);
         await views.refresh(options.runner);
         if (views.viewNames().join("\n") !== namesBefore) {
-          schema = await schemaOf(options.runner, { timeoutMs: options.timeoutMs });
+          schema = await schemaOf(options.runner, {
+            timeoutMs: options.timeoutMs,
+            ...catalogsNow(),
+          });
         }
         if (options.tables === undefined) {
           const names = base.map((t) => t.name);
@@ -972,7 +1052,7 @@ export function registerSqlTools(kit: AgentToolkit, options: SqlToolsOptions): v
   // the first refresh follows so the view names ride the same usage.
   if (options.tables === undefined || views !== undefined) {
     void Promise.resolve(options.runner)
-      .then((runner) => schemaOf(runner, { timeoutMs: options.timeoutMs }))
+      .then((runner) => schemaOf(runner, { timeoutMs: options.timeoutMs, ...catalogsNow() }))
       .then(async (schema) => {
         const base = baseTablesOf(schema);
         if (options.tables === undefined) knownTables = base.map((t) => t.name);

@@ -31,9 +31,19 @@ What it exercises, end to end, in one page:
   (`viewEpoch`: the engine generation).
 
 ```sh
-aiui keys set motherduck      # once: paste a read-scaling token
+aiui keys set motherduck      # once: paste a read-scaling token (pbpaste | aiui keys set motherduck)
 pnpm dev                      # then open the page; pick a table and a numeric column
 ```
+
+**Attach mode.** The page URL decides how the engine attaches, once per load (a mode is fixed
+by the first connect): `/?database=my_db` is **single mode** on that one database you own —
+MotherDuck's recommendation for apps and service accounts; the session touches no saved
+workspace and sees nothing else, so the lab attaches the public `sample_data` share for
+something to look at. No parameter is **workspace mode**: every database saved in your
+workspace, the personal default — a busy account attaches dozens. Either way the tab's own
+`memory` catalog is made current on every connection (bridge views and the local sample are
+unqualified; a bare name never resolves across catalogs), and after a table is picked the
+`schema` tool lists only `memory` beside the picked table's database.
 
 Agent tools install at `window.__motherduck-lab`: the standard set, `cross-filter` /
 `reset-cross-filters` (no dimension is declared — the columns are picked at run time — so the

@@ -62,8 +62,35 @@ export const appScope = scope("motherduck-lab");
  * the lab runs on the dev key; the key is what a deployed page would send. */
 export const BROKER_KEY = "motherduck-lab";
 
+/** MotherDuck's public `sample_data` share — attached in single mode so the lab has tables to show. */
+export const SAMPLE_DATA_SHARE = "md:_share/sample_data/23b0d623-1361-421d-ae77-62d701d471e6";
+
+/**
+ * How the engine attaches to MotherDuck — decided by the page URL, once, at
+ * the durable root (a mode is fixed by the first connect; a change is a
+ * reload): `?database=<name>` is SINGLE mode on that one database you own
+ * (the docs' choice for apps and service accounts: the session touches no
+ * saved workspace, and sees nothing else unless attached by hand — the lab
+ * attaches the public sample_data share), no parameter is WORKSPACE mode
+ * (every database saved in your workspace, the personal default).
+ */
+export interface AttachConfig {
+  mode: "single" | "workspace";
+  /** The one database, in single mode. */
+  database?: string;
+}
+
+export function attachConfigFromUrl(search: string): AttachConfig {
+  const database = new URLSearchParams(search).get("database")?.trim();
+  return database !== undefined && database !== ""
+    ? { mode: "single", database }
+    : { mode: "workspace" };
+}
+
 export interface LabStore {
   engine: MotherDuckEngine;
+  /** How the engine attached (see {@link attachConfigFromUrl}). */
+  attach: AttachConfig;
   coordinator: Coordinator;
   /** The one cross-filter both histograms brush and filter by — aiui-viz's
    * routed one: a clause reaches a client only when its table has the
@@ -103,12 +130,19 @@ function assetsPrefix(): string | undefined {
 
 export const store: LabStore = appScope.durable("store", () => {
   const prefix = assetsPrefix();
+  const attach = attachConfigFromUrl(typeof location === "undefined" ? "" : location.search);
   const engine = standardMotherDuckEngine({
     key: BROKER_KEY,
     params: {
       sessionName: "motherduck-lab",
       customUserAgent: "aiui-motherduck-lab/0",
       ...(prefix !== undefined ? { duckDBAssetsURLPrefix: prefix } : {}),
+      // single: the client only SETs motherduck_attach_mode, and its
+      // "welcome pack" (PRAGMA MD_USE_DEFAULT: USE my_db) would fail with
+      // nothing attached — the database itself is attached below, at
+      // wiring (`databasePath` is the LOCAL DuckDB file path, not a
+      // MotherDuck database).
+      ...(attach.mode === "single" ? { attachMode: "single" as const, skipWelcomePack: true } : {}),
     },
   });
   const coordinator = new Coordinator();
@@ -148,8 +182,25 @@ export const store: LabStore = appScope.durable("store", () => {
     if (wired === handle.generation) return Promise.resolve();
     wiring ??= (async () => {
       const mosaicCon = await handle.connect();
+      const agent = motherDuckRunner(handle.connection);
+      // The tab's own catalog is CURRENT on every connection the lab holds:
+      // the bridge views and the local sample are created and read
+      // unqualified (Mosaic's marks cannot take a qualified name), and a
+      // bare name never resolves across catalogs. Single mode may have
+      // left the attached database current.
+      await mosaicCon.query("USE memory");
+      await agent.exec?.("USE memory");
+      if (attach.mode === "single") {
+        // The one database — ATTACH is engine-wide, so Mosaic's connection
+        // sees it too — and, for something to look at beside it, the public
+        // sample share (a share attaches by its URL in single mode).
+        await agent.exec?.(`ATTACH IF NOT EXISTS 'md:${attach.database?.replaceAll("'", "''")}'`);
+        await agent.exec?.(`ATTACH IF NOT EXISTS '${SAMPLE_DATA_SHARE}'`).catch((err) => {
+          console.warn("[motherduck-lab] could not attach the sample_data share", err);
+        });
+      }
       coordinator.databaseConnector(duckdbConnector({ duckdb: handle.db, connection: mosaicCon }));
-      current = motherDuckRunner(handle.connection);
+      current = agent;
       wired = handle.generation;
       setGeneration(handle.generation);
     })().finally(() => {
@@ -179,6 +230,7 @@ export const store: LabStore = appScope.durable("store", () => {
 
   return {
     engine,
+    attach,
     coordinator,
     brush,
     generation,

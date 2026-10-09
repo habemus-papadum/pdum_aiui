@@ -309,6 +309,53 @@ describe("schemaOf", () => {
     expect(schema.summary).toBeUndefined();
   });
 
+  it("names a table in another catalog catalog.schema.name, keeps same-named tables apart, and scopes to catalogs", async () => {
+    const multi = fakeRunner([
+      [/current_database\(\)/, { columns: ["catalog"], rows: [["memory"]] }],
+      [
+        /information_schema\.tables/,
+        {
+          columns: ["table_catalog", "table_schema", "table_name", "table_type"],
+          rows: [
+            ["cloud", "main", "blocks", "BASE TABLE"],
+            ["memory", "main", "local_sample", "BASE TABLE"],
+            ["memory", "crossfilter", "bridge", "VIEW"],
+            ["other", "main", "blocks", "BASE TABLE"],
+            ["other", "raw", "events", "BASE TABLE"],
+          ],
+        },
+      ],
+      [
+        /information_schema\.columns/,
+        {
+          columns: ["table_catalog", "table_schema", "table_name", "column_name", "data_type"],
+          rows: [
+            ["cloud", "main", "blocks", "height", "BIGINT"],
+            ["memory", "main", "local_sample", "x", "DOUBLE"],
+            ["memory", "crossfilter", "bridge", "x", "DOUBLE"],
+            ["other", "main", "blocks", "height", "BIGINT"],
+            ["other", "main", "blocks", "hash", "VARCHAR"],
+            ["other", "raw", "events", "kind", "VARCHAR"],
+          ],
+        },
+      ],
+    ]);
+    const schema = await schemaOf(multi.runner, { catalogs: ["memory", "cloud", "other"] });
+    expect(schema.catalog).toBe("memory");
+    expect(schema.tables.map((t) => `${t.name} (${t.columns.length})`)).toEqual([
+      "cloud.main.blocks (1)",
+      "local_sample (1)",
+      "crossfilter.bridge (1)",
+      "other.main.blocks (2)",
+      "other.raw.events (1)",
+    ]);
+    expect(schema.tables[0]).toMatchObject({ catalog: "cloud", schema: "main" });
+    // The SQL excludes the system catalogs and narrows to the ones asked for.
+    const tablesSql = multi.seen.find((q) => /information_schema\.tables/.test(q)) ?? "";
+    expect(tablesSql).toContain("table_catalog NOT IN ('system', 'temp', 'md_information_schema')");
+    expect(tablesSql).toContain("table_catalog IN ('memory', 'cloud', 'other')");
+  });
+
   it("narrows to one table (quoted) and adds SUMMARIZE only on request", async () => {
     const schema = await schemaOf(catalog.runner, { table: "quakes", summarize: true });
     expect(catalog.seen.some((s) => s.includes("table_name = 'quakes'"))).toBe(true);
