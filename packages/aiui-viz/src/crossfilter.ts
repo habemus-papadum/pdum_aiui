@@ -191,15 +191,21 @@ function makeRouting(
     },
   };
 
+  /** Record the client's table as one the cross-filter reaches (clauses or not). */
+  const meet = (client: MosaicClient | null | undefined): string | undefined => {
+    if (client === null || client === undefined) return undefined;
+    const table = clientTable(client);
+    if (table !== undefined) seen.add(table);
+    return table;
+  };
+
   const routedSkip = (
     client: MosaicClient | null | undefined,
     clause: SelectionClause,
   ): boolean => {
     if (base.skip(client, clause)) return true; // self-exclusion, as Mosaic does it
-    if (client === null || client === undefined) return false;
-    const table = clientTable(client);
+    const table = meet(client);
     if (table === undefined) return false;
-    seen.add(table);
     if (clause === null || clause === undefined) return false;
     return !routing.routes(clause, table);
   };
@@ -213,6 +219,7 @@ function makeRouting(
   resolver.predicate = (clauseList, active, client) => {
     if (base.empty && clauseList.length === 0) return [literal(false)];
     if (base.skip(client, active)) return undefined;
+    meet(client); // a client with no clause to route is still a table the cross-filter covers
     const predicates = clauseList
       .filter((clause) => !routedSkip(client, clause))
       .map((clause) => clause.predicate as NonNullable<SelectionClause["predicate"]>);
@@ -392,6 +399,7 @@ export function crossfilterViews(options: CrossfilterViewsOptions): SchemaViewPr
       sel.addEventListener?.("value", onChange);
       return () => sel.removeEventListener?.("value", onChange);
     },
+    wants: () => coveredTables(sel, options.scope, options.tables),
   };
 }
 
@@ -465,6 +473,13 @@ export interface CrossfilterToolsOptions {
   /** App-specific work after a reset (the default clears every dimension and
    * resets every target Selection — brushes and menus included). */
   onReset?: () => void;
+  /**
+   * How long a write's result waits for the first emit before reporting the
+   * predicate (default 400 ms, an in-tab DuckDB's query batch); the later
+   * windows scale with it. A remote engine wants its round trip — a few
+   * seconds — or the result reports the clause the page is still replacing.
+   */
+  settleMs?: number;
 }
 
 /** The `crossfilter` report section. */
@@ -533,13 +548,14 @@ export function registerCrossfilterTools(
   // waits for the emits to quiesce (bounded): the first within SETTLE_MS, each
   // further one within SETTLE_MORE_MS, SETTLE_MAX_MS in all. report() after a
   // task boundary remains the final word, as the usage says.
+  const scale = (options.settleMs ?? SETTLE_MS) / SETTLE_MS;
   const settled = async (): Promise<void> => {
     const start = Date.now();
-    let timeout = SETTLE_MS;
+    let timeout = SETTLE_MS * scale;
     for (;;) {
       const emitted = await nextEmit(selection, timeout);
-      if (!emitted || Date.now() - start > SETTLE_MAX_MS) break;
-      timeout = SETTLE_MORE_MS;
+      if (!emitted || Date.now() - start > SETTLE_MAX_MS * scale) break;
+      timeout = SETTLE_MORE_MS * scale;
     }
     await new Promise((resolve) => setTimeout(resolve, 0));
   };
@@ -668,8 +684,15 @@ export function registerCrossfilterTools(
     run: async () => {
       clearAllSelectionDims(scope);
       resetSelectionDimTargets(scope);
+      // The cross-filter itself, too: with no dimension declared (columns
+      // picked at run time, say) it is nobody's target, and its brushes
+      // would stay. Selection.reset is idempotent.
+      (selection as { reset?: () => void }).reset?.();
       options.onReset?.();
-      await settled();
+      // A reset clears the clause list at once and may emit nothing after:
+      // wait for the page only while something is still to be retracted.
+      if (selection.clauses.length > 0) await settled();
+      else await new Promise((resolve) => setTimeout(resolve, 0));
       return { reset: true, activeClauses: selection.clauses.length, ...predicateNow() };
     },
   });

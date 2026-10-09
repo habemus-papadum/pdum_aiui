@@ -429,9 +429,12 @@ there `viewCatalog: "memory"` puts the views in the tab's own catalog, so a clou
 never receives DDL, and `viewEpoch` (the engine's generation) has them created again after a
 rebuild, which starts that catalog empty. A fresh-session connector cannot hold a view, so
 there `schema` reports each view's body text as `sql` with `materialized: false` and the agent
-inlines it. The catalog-qualified DDL over a local view of an attached catalog is verified on
-DuckDB 1.5.5 (an in-memory database with a second catalog attached, 2026-10-09); the MotherDuck
-client itself awaits a run with a token.
+inlines it. The base tables the providers build on are re-read by every full `schema` call, and
+a provider may say which tables it `wants` (the cross-filter's: the tables its clients read), so
+a table created after registration (a view bridging a picked cloud table) gets its filtered twin
+at the next `sql` or `schema` call — one look per new want. Verified live on the MotherDuck client (2026-10-09, motherduck-lab over
+`sample_data`): the view materializes in `memory.crossfilter`, counts through it, clears by
+component, and comes back after a rebuild.
 
 The table list is the one fact the `sql` tool's usage should carry and the app should not
 have to type: omitted, it is **introspected once the runner resolves** and the tool is
@@ -481,7 +484,7 @@ const engine = standardMotherDuckEngine({
 });
 const { db, connect, connection } = await engine.ready();
 coordinator.databaseConnector(duckdbConnector({ duckdb: db, connection: await connect() })); // Mosaic: raw
-registerCrossfilterTools(kit, { scope, selection: brush });   // the tools over the routed brush
+registerCrossfilterTools(kit, { scope, selection: brush, settleMs: 3000 }); // a brush re-queries the cloud
 registerSqlTools(kit, {
   runner: motherDuckRunner(connection),                       // the agent: the client's connection
   views: [crossfilterViews({ selection: brush, scope })],

@@ -553,6 +553,10 @@ export interface SchemaViewProvider {
   /** Fires when a view's body may have changed. Absent ⇒ the bodies are
    * re-read before every call (a body that did not change costs no DDL). */
   subscribe?(onChange: () => void): () => void;
+  /** The base tables this provider would cover were they present — lets the
+   * tools notice a table that appeared since the last introspection (a view
+   * bridging a picked cloud table) and look again before the next call. */
+  wants?(): readonly string[];
 }
 
 /** One schema view as the `schema` tool reports it. */
@@ -584,6 +588,9 @@ interface SchemaViewsOptions {
    * was rebuilt (an engine generation, say) and holds none of it any more.
    */
   epoch?: () => unknown;
+  /** The base tables as of now, when a provider `wants` one the last
+   * introspection did not list. */
+  introspect?: () => Promise<readonly SchemaTable[]>;
 }
 
 /**
@@ -596,12 +603,16 @@ export class SchemaViews {
   private readonly providers: readonly SchemaViewProvider[];
   private readonly catalog: string | undefined;
   private tables: readonly SchemaTable[] = [];
+  private tablesSignature = "";
   private dirty = true;
   /** `schema.name` → the body last materialized. */
   private readonly bodies = new Map<string, string>();
   private readonly schemasMade = new Set<string>();
   private readonly epoch: (() => unknown) | undefined;
   private lastEpoch: unknown;
+  private readonly introspect: (() => Promise<readonly SchemaTable[]>) | undefined;
+  /** Wanted tables the last introspection did not find: not asked again until a new want. */
+  private missing = new Set<string>();
   private current: Array<{ view: SchemaView; status: SchemaViewStatus }> = [];
   private readonly onNames = new Set<(names: string[]) => void>();
   private names: string[] = [];
@@ -610,6 +621,7 @@ export class SchemaViews {
     this.providers = options.providers;
     this.catalog = options.catalog;
     this.epoch = options.epoch;
+    this.introspect = options.introspect;
     for (const p of this.providers) {
       p.subscribe?.(() => {
         this.dirty = true;
@@ -617,10 +629,26 @@ export class SchemaViews {
     }
   }
 
-  /** The base tables providers see; call after introspection. */
+  /** The base tables providers see; call after every introspection — a
+   * table created since the last one (a view bridging a picked cloud table,
+   * say) becomes coverable here. Dirty only when the set changed. */
   setTables(tables: readonly SchemaTable[]): void {
-    this.tables = tables.filter((t) => !this.schemasMade.has(t.schema));
+    const next = tables.filter((t) => !this.schemasMade.has(t.schema));
+    // What the providers want and this introspection did not find: not
+    // looked for again until the next introspection or epoch.
+    const names = new Set(next.map((t) => t.name));
+    this.missing = new Set(this.wants().filter((t) => !names.has(t)));
+    const signature = next
+      .map((t) => `${t.name}:${t.columns.map((c) => c.name).join(",")}`)
+      .join("\n");
+    if (signature === this.tablesSignature) return;
+    this.tablesSignature = signature;
+    this.tables = next;
     this.dirty = true;
+  }
+
+  private wants(): string[] {
+    return this.providers.flatMap((p) => [...(p.wants?.() ?? [])]);
   }
 
   /** The views' FROM-able names as of the last refresh. */
@@ -658,7 +686,20 @@ export class SchemaViews {
         this.lastEpoch = epoch;
         this.bodies.clear();
         this.schemasMade.clear();
+        this.missing.clear();
         this.dirty = true;
+      }
+    }
+    if (this.introspect !== undefined) {
+      // A provider wants a table the last introspection did not list: look
+      // again, once per new want (a table that is truly absent stays absent).
+      const known = new Set(this.tables.map((t) => t.name));
+      if (this.wants().some((t) => !known.has(t) && !this.missing.has(t))) {
+        try {
+          this.setTables(await this.introspect());
+        } catch {
+          // Introspection is a convenience; the views stand on what is known.
+        }
       }
     }
     const always = this.providers.some((p) => p.subscribe === undefined);
@@ -776,6 +817,11 @@ export interface SqlToolsOptions {
   viewEpoch?: () => unknown;
 }
 
+/** The tables the usage lists and the view providers build on: `main`'s. */
+function baseTablesOf(schema: SchemaResult): SchemaTable[] {
+  return schema.tables.filter((t) => t.schema === "main" || t.schema === "");
+}
+
 /**
  * Register the agent's `sql` and `schema` tools on a kit. Both are reads;
  * both carry their usage (the tool-docs convention): the caps, the table
@@ -793,6 +839,8 @@ export function registerSqlTools(kit: AgentToolkit, options: SqlToolsOptions): v
           providers: options.views,
           ...(options.viewCatalog !== undefined ? { catalog: options.viewCatalog } : {}),
           ...(options.viewEpoch !== undefined ? { epoch: options.viewEpoch } : {}),
+          introspect: async () =>
+            baseTablesOf(await schemaOf(options.runner, { timeoutMs: options.timeoutMs })),
         })
       : undefined;
   let knownTables: string[] | undefined = options.tables;
@@ -836,7 +884,10 @@ export function registerSqlTools(kit: AgentToolkit, options: SqlToolsOptions): v
         if (views !== undefined) await views.refresh(options.runner);
         const result = await runSql(options.runner, sql, { ...caps, limit });
         // The views the statement names, with what filtered them at this moment.
-        const used = (views?.status() ?? []).filter((v) => sql.includes(v.name));
+        // A view in a named catalog answers to `schema.name` as well.
+        const used = (views?.status() ?? []).filter(
+          (v) => sql.includes(v.name) || sql.includes(v.name.split(".").slice(-2).join(".")),
+        );
         const extra =
           used.length > 0
             ? {
@@ -878,12 +929,31 @@ export function registerSqlTools(kit: AgentToolkit, options: SqlToolsOptions): v
     },
     run: async (args) => {
       if (views !== undefined) await views.refresh(options.runner);
-      const schema = await schemaOf(options.runner, {
+      let schema = await schemaOf(options.runner, {
         ...(typeof args?.table === "string" ? { table: args.table } : {}),
         summarize: args?.summarize === true,
         timeoutMs: options.timeoutMs,
       });
       if (views === undefined) return schema;
+      if (typeof args?.table !== "string") {
+        // The base tables as of NOW: one created since registration becomes
+        // coverable here; when that minted or dropped a view, introspect once
+        // more so the table list carries it. The usage's table list follows.
+        const base = baseTablesOf(schema);
+        const namesBefore = views.viewNames().join("\n");
+        views.setTables(base);
+        await views.refresh(options.runner);
+        if (views.viewNames().join("\n") !== namesBefore) {
+          schema = await schemaOf(options.runner, { timeoutMs: options.timeoutMs });
+        }
+        if (options.tables === undefined) {
+          const names = base.map((t) => t.name);
+          if (names.join("\n") !== (knownTables ?? []).join("\n")) {
+            knownTables = names;
+            registerSql(knownTables);
+          }
+        }
+      }
       const status = views.status();
       // Each base table lists the views that are views OF it; a materialized
       // view that information_schema already listed keeps its row.
@@ -904,7 +974,7 @@ export function registerSqlTools(kit: AgentToolkit, options: SqlToolsOptions): v
     void Promise.resolve(options.runner)
       .then((runner) => schemaOf(runner, { timeoutMs: options.timeoutMs }))
       .then(async (schema) => {
-        const base = schema.tables.filter((t) => t.schema === "main" || t.schema === "");
+        const base = baseTablesOf(schema);
         if (options.tables === undefined) knownTables = base.map((t) => t.name);
         if (views !== undefined) {
           views.setTables(base);

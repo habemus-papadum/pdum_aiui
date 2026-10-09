@@ -97,10 +97,19 @@ staged-write guard — found live).
 ## 4. Follow-ups
 
 - TAKEN 2026-10-09 (later the same day): motherduck-lab builds its brush with `crossfilter()`,
-  registers the cross-filter tools and `memory.crossfilter.<view>` — verified by the unit tests
-  and a DuckDB 1.5.5 probe of the catalog-qualified DDL over a local view of an attached
-  catalog. NOT yet run against the MotherDuck client: that needs a stored read-scaling token
-  (`aiui keys set motherduck`).
+  registers the cross-filter tools and `memory.crossfilter.<view>`, verified LIVE on the
+  MotherDuck client over `sample_data.who.ambient_air_quality`: the view materializes in the
+  tab's catalog (36 of 40098 rows under a brush), `cross-filter { clear }` and the reset hold,
+  and the view comes back after `rebuild-engine` (viewEpoch). Three things the run taught:
+  the base tables must be re-read by `schema`, and a provider's `wants` makes `sql` look again
+  before a call (a bridge view created after registration was invisible to the providers, and
+  the report named a view `sql` could not find); a client with no clause to route still counts as covered
+  (the view used to appear only after the first brush); `reset-cross-filters` resets the
+  cross-filter itself, not only the dimensions' targets (with no dimension declared, the brushes
+  stayed); and a write's result must wait a cloud round trip, not a local batch — `settleMs` on
+  `registerCrossfilterTools` (the lab: 3 s; a reset that already emptied the list does not wait).
+  Known: routed tables are remembered for the session, so a table whose client is gone still
+  gets a view while its base exists.
 - TAKEN 2026-10-09: the SelectionInspector's lists are keyed (origin + producer, the column
   set, the member name), so a brush moving rewrites rows in place.
 - The published gallery runs the previous surface until the next release's site publish.

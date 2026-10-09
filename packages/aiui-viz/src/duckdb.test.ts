@@ -394,7 +394,8 @@ describe("self-hosted assets (duckdbAssetsLocation / duckdbAssetBundles)", () =>
 
 describe("schema views", () => {
   /** A runner over a tiny catalog that can hold views: records every exec. */
-  function viewRunner(opts: { exec?: boolean } = {}) {
+  function viewRunner(opts: { exec?: boolean; tables?: string[] } = {}) {
+    const base = opts.tables ?? ["quakes"]; // mutable on purpose: a table may appear later
     const execs: string[] = [];
     const queries: string[] = [];
     const views = new Map<string, string>(); // qualified → body, as the fake catalog
@@ -402,7 +403,7 @@ describe("schema views", () => {
       async query(sql) {
         queries.push(sql);
         if (/information_schema\.tables/.test(sql)) {
-          const rows: unknown[][] = [["main", "quakes", "BASE TABLE"]];
+          const rows: unknown[][] = base.map((t) => ["main", t, "BASE TABLE"]);
           for (const name of views.keys()) {
             const [schema, table] = name.split(".");
             rows.push([schema, table, "VIEW"]);
@@ -412,10 +413,10 @@ describe("schema views", () => {
         if (/information_schema\.columns/.test(sql)) {
           return {
             columns: ["table_schema", "table_name", "column_name", "data_type"],
-            rows: [
-              ["main", "quakes", "mag", "DOUBLE"],
-              ["main", "quakes", "year", "INTEGER"],
-            ],
+            rows: base.flatMap((t) => [
+              ["main", t, "mag", "DOUBLE"],
+              ["main", t, "year", "INTEGER"],
+            ]),
           };
         }
         return { columns: ["n"], rows: [[3]] };
@@ -577,11 +578,95 @@ describe("schema views", () => {
   it("puts the views in a named catalog when asked (a remote database never receives them)", async () => {
     const { runner, execs } = viewRunner();
     const { provider } = filterProvider({ predicate: "TRUE", offer: true });
-    const { kit } = fakeKit();
+    const { kit, tools } = fakeKit();
     registerSqlTools(kit, { runner, views: [provider], viewCatalog: "memory" });
     await settle();
     expect(execs[0]).toBe('CREATE SCHEMA IF NOT EXISTS "memory"."crossfilter"');
     expect(execs[1]).toContain('CREATE OR REPLACE VIEW "memory"."crossfilter"."quakes"');
+    // The provenance follows the view under either spelling.
+    const short = (await tools
+      .get("sql")
+      ?.run({ sql: "select count(*) from crossfilter.quakes" })) as {
+      views?: Record<string, unknown>;
+    };
+    expect(Object.keys(short.views ?? {})).toEqual(["memory.crossfilter.quakes"]);
+  });
+
+  it("schema hands the providers the base tables as of now: a table created later gets its view", async () => {
+    const base = ["quakes"];
+    const { runner, execs } = viewRunner({ tables: base });
+    const provider = {
+      id: "cross-filter",
+      views: (tables: readonly { name: string }[]) =>
+        tables.map((t) => ({
+          schema: "crossfilter",
+          name: t.name,
+          of: t.name,
+          sql: () => `SELECT * FROM "main"."${t.name}" WHERE TRUE`,
+          describe: () => ({}),
+        })),
+    };
+    const { kit, tools } = fakeKit();
+    registerSqlTools(kit, { runner, views: [provider] });
+    await settle();
+    expect(execs).toHaveLength(2);
+    // A table created since registration — a view bridging a picked cloud table, say.
+    base.push("stations");
+    const out = (await tools.get("schema")?.run({})) as {
+      tables: Array<{ name: string; views?: string[] }>;
+      views: Array<{ name: string }>;
+    };
+    expect(execs).toHaveLength(3);
+    expect(execs[2]).toContain('CREATE OR REPLACE VIEW "crossfilter"."stations"');
+    expect(out.views.map((v) => v.name)).toEqual(["crossfilter.quakes", "crossfilter.stations"]);
+    // Introspected again after the DDL: the new view is a table, attributed to its base.
+    expect(out.tables.some((t) => t.name === "crossfilter.stations")).toBe(true);
+    expect(out.tables.find((t) => t.name === "stations")?.views).toEqual(["crossfilter.stations"]);
+    expect(tools.get("sql")?.usage).toContain("`stations`");
+    // Nothing changed: the next call costs no DDL.
+    await tools.get("schema")?.run({});
+    expect(execs).toHaveLength(3);
+  });
+
+  it("looks again when a provider wants a table the last introspection missed — once per want", async () => {
+    const base = ["quakes"];
+    const { runner, execs, queries } = viewRunner({ tables: base });
+    const wanted = ["quakes", "ghost"];
+    const provider = {
+      id: "cross-filter",
+      views: (tables: readonly { name: string }[]) =>
+        tables
+          .filter((t) => wanted.includes(t.name))
+          .map((t) => ({
+            schema: "crossfilter",
+            name: t.name,
+            of: t.name,
+            sql: () => `SELECT * FROM "main"."${t.name}" WHERE TRUE`,
+            describe: () => ({}),
+          })),
+      wants: () => wanted,
+    };
+    const { kit, tools } = fakeKit();
+    registerSqlTools(kit, { runner, views: [provider] });
+    await settle();
+    const introspections = () => queries.filter((q) => /information_schema\.tables/.test(q)).length;
+    expect(execs).toHaveLength(2);
+    // Registration introspected once; `ghost`, wanted and absent, was noted
+    // there — no second look for it.
+    const after0 = introspections();
+    expect(after0).toBe(1);
+    await tools.get("sql")?.run({ sql: "select count(*) from quakes" });
+    await tools.get("sql")?.run({ sql: "select count(*) from quakes" });
+    expect(introspections()).toBe(after0);
+    // `stations` appears and the router meets its client: the next sql — no
+    // schema call first — looks again and covers it; `ghost` stays absent.
+    base.push("stations");
+    wanted.push("stations");
+    await tools.get("sql")?.run({ sql: "select count(*) from crossfilter.stations" });
+    expect(introspections()).toBe(after0 + 1);
+    await tools.get("sql")?.run({ sql: "select count(*) from crossfilter.stations" });
+    expect(introspections()).toBe(after0 + 1);
+    expect(execs.at(-1)).toContain('CREATE OR REPLACE VIEW "crossfilter"."stations"');
   });
 
   it("issues everything again when the epoch changes (the database was rebuilt)", async () => {

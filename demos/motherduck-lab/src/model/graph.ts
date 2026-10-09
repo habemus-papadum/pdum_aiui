@@ -174,7 +174,9 @@ export type AppGraph = ReturnType<typeof graph>;
 
 const kit = agentToolkit(appScope.name);
 registerStandardTools(kit);
-registerCrossfilterTools(kit, { scope: appScope, selection: store.brush });
+// settleMs: a brush's re-query is a cloud round trip, not a local batch, so a
+// tool result waits longer before reporting the predicate now in force.
+registerCrossfilterTools(kit, { scope: appScope, selection: store.brush, settleMs: 3000 });
 // The schema views live in the tab's own catalog (`memory`), never in a cloud
 // database — and a rebuild starts that catalog empty, so the engine's
 // generation is the epoch that has them created again.

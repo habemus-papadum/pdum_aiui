@@ -81,6 +81,13 @@ describe("crossfilter routing", () => {
     expect(sqlOf(sel.predicate())).toHaveLength(3);
   });
 
+  it("counts a client's table as covered from its first query, clauses or not", () => {
+    const sel = crossfilter({ columns: { quakes: ["mag"] } });
+    expect(crossfilterRouting(sel)?.routedTables()).toEqual([]);
+    expect(sqlOf(sel.predicate(mark("quakes")))).toHaveLength(0); // nothing to route yet
+    expect(crossfilterRouting(sel)?.routedTables()).toEqual(["quakes"]); // but met
+  });
+
   it("keeps Mosaic's self-exclusion", () => {
     const sel = crossfilter({ columns: { quakes: ["mag"] } });
     const me = mark("quakes");
@@ -328,6 +335,34 @@ describe("registerCrossfilterTools", () => {
         c.producers.some((p) => p.name === "cft/menu" && p.tables[0] === "quakes"),
       ),
     ).toBe(true);
+    off();
+  });
+
+  it("reset clears the cross-filter itself when no dimension targets it", async () => {
+    const s = scope("cft-nodims");
+    const sel = crossfilter({ columns: { quakes: ["mag"] } });
+    const { kit } = fakeKit();
+    const off = registerCrossfilterTools(kit, { scope: s, selection: sel, settleMs: 50 });
+    sel.update(clauseInterval(column("mag"), [5, 6], { source: { name: "brush" } }));
+    await tick();
+    expect(sel.clauses).toHaveLength(1);
+    const out = await actionByName("cft-nodims/reset-cross-filters")?.run?.({});
+    expect(out).toMatchObject({ reset: true, activeClauses: 0, predicate: "TRUE" });
+    expect(sel.clauses).toHaveLength(0);
+    off();
+  });
+
+  it("settleMs stretches the wait for the page's emits (a remote engine's round trip)", async () => {
+    const s = scope("cft-settle");
+    const sel = crossfilter({ columns: { quakes: ["mag"] } });
+    const { kit } = fakeKit();
+    const off = registerCrossfilterTools(kit, { scope: s, selection: sel, settleMs: 2000 });
+    const tool = actionByName("cft-settle/cross-filter");
+    const outcome = await Promise.race([
+      tool?.run?.({ clear: ["nobody"] }).then(() => "answered"),
+      new Promise<string>((resolve) => setTimeout(() => resolve("still waiting"), 150)),
+    ]);
+    expect(outcome).toBe("still waiting"); // the default window (400 ms) would have answered
     off();
   });
 

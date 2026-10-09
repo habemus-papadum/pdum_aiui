@@ -129,6 +129,14 @@ export const store: LabStore = appScope.durable("store", () => {
       return current.query(sql, options);
     },
     cancel: () => current?.cancel?.() ?? Promise.resolve(),
+    // The schema views' DDL (graph.ts puts them in the tab's `memory`
+    // catalog): forwarded, so the tools know this runner can hold a view.
+    exec(sql): Promise<void> {
+      if (current?.exec === undefined) {
+        return Promise.reject(new Error("the MotherDuck engine is not built yet"));
+      }
+      return current.exec(sql);
+    },
   };
 
   // Wire one generation: a raw connection for Mosaic (through the decoding
