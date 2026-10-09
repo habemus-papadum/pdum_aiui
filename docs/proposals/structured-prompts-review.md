@@ -148,7 +148,24 @@ ledgers reference entries there; a trace stage kind `prompt` carries the same re
 foundation's part is only item 1: a record small enough to put there, and a `rehydrate` that
 recompiles it and diffs against the stored fingerprint.
 
-### 10. Smaller notes
+### 10. Adapters are consumer-specific — make the framework flexible, ship a few as utilities
+
+Decided with the owner, 2026-10-09. The consumers in this repo do not fit one request shape:
+a Realtime session over WebRTC or WebSocket with instruction replacement, per-response
+instructions and mid-session appends (OR4–OR8, LV6); a channel notification to a Claude Code
+session that carries a path to an image rather than the image (CH8, LP4); a stateless Responses
+loop (LV9); a nested Claude Agent SDK query where later delegations are continuations (LV11);
+and a linter session on Gemini Live (CH13). Adapters will therefore live with their consumers,
+and the toolkit's job is the **adapter framework**: a contract flexible enough for transports and
+protocols it did not anticipate — streams, sockets, sessions that mutate, hosts that deliver
+assets by reference — with a few **reference adapters that are also utilities** (the
+Responses-style one, a messages/content-block one) rather than examples only. The capability
+profile, the lowering result (payload, map, status), the session-operation record and the
+asset-reference policy are the parts the framework must own; what a given adapter does with a
+socket is the consumer's. An adapter written here that turns out general — the Realtime one is
+the likely case — gets upstreamed into the toolkit later.
+
+### 11. Smaller notes
 
 - Content fingerprints must be cheap and exclude telemetry (the proposal says so); the oracle
   recomposes on every completed turn (OR4) and must not pay a full compile to learn nothing
@@ -159,11 +176,22 @@ recompiles it and diffs against the stored fingerprint.
 - The spike's single `Node` type with optional fields is noted as a non-contract; the survey
   confirms the consumers want discriminated unions — the tool projections and markers are new
   kinds, not new optional fields.
-- The first adapter is Responses-style; note that the oracle speaks the Realtime API
-  (`session.update`, `conversation.item.create`), which is neither Responses nor messages. It
-  is the third adapter and the one with session operations (item 6).
+- The oracle speaks the Realtime API (`session.update`, `conversation.item.create`), which is
+  neither Responses nor messages; it is the adapter with session operations (item 6) and will
+  be written beside the oracle first (item 10).
 
 ## Part 2 — staging the migration
+
+### Decisions taken 2026-10-09
+
+- The corpus is a **baseline, not a contract**: a migrated site may differ from today's output
+  with a reviewed diff.
+- Adapters are consumer-specific (item 10); the toolkit owns the framework and a few utility
+  adapters.
+- The `.prompt.tsx` routing (item 8) is the toolkit agent's **first task**, settled before any
+  app-side composition.
+- The pre-work below is done in this repo now, by the sites' owner; `render-audit.mts` retires
+  in favour of the corpus.
 
 ### What can be done now, before the toolkit exists
 
