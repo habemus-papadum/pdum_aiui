@@ -269,7 +269,7 @@ export interface RegistryToolsOptions {
 function keepGroup(group: string | undefined, options: RegistryToolsOptions): boolean {
   const g = group ?? "app";
   if (options.groups !== undefined && !options.groups.includes(g)) return false;
-  if (options.excludeGroups !== undefined && options.excludeGroups.includes(g)) return false;
+  if (options.excludeGroups?.includes(g)) return false;
   return true;
 }
 
