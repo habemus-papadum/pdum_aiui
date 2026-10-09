@@ -66,3 +66,36 @@ describe("renderToolBrief", () => {
     for (const t of seismos.tools) expect(tight).toContain(`- ${t.name}:`);
   });
 });
+
+describe("renderToolBrief — groups", () => {
+  it("gathers a section's tools under their group sub-headings, ungrouped first", () => {
+    const text = renderToolBrief([
+      {
+        ns: "app",
+        tools: [
+          { name: "sql", description: "Run SQL.", kind: "read", group: "sql" },
+          { name: "report", description: "Snapshot.", kind: "read", group: "app" },
+          { name: "peek", description: "Custom read.", kind: "read" },
+          { name: "schema", description: "Describe.", kind: "read", group: "sql" },
+          { name: "cross-filter", description: "Filter.", kind: "write", group: "crossfilter" },
+        ],
+      },
+    ]);
+    expect(text).toBe(
+      [
+        "Tools:",
+        "Read tools (call freely once the intent is clear; no confirmation needed):",
+        "- peek: Custom read.",
+        "sql:",
+        "- sql: Run SQL.",
+        "- schema: Describe.",
+        "app:",
+        "- report: Snapshot.",
+        "Write tools (they change the app; the result is the value actually applied):",
+        "crossfilter:",
+        "- cross-filter: Filter.",
+        "If a tool fails, say what failed in a few words and do not repeat the same call unchanged.",
+      ].join("\n"),
+    );
+  });
+});

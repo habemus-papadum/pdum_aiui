@@ -201,6 +201,7 @@ function registerViewActions(store: SelectionViewsStore, scope: Scope | undefine
   action({
     ...scoped,
     name: "save-view",
+    group: "views",
     description:
       "Save the current cross-filter state — every selection dimension's value, unfiltered " +
       "ones included — as a named view (persisted locally; survives reload; same name " +
@@ -211,6 +212,7 @@ function registerViewActions(store: SelectionViewsStore, scope: Scope | undefine
   action({
     ...scoped,
     name: "load-view",
+    group: "views",
     description:
       "Restore a saved view by name: the cross-filter is reset first (every clause from " +
       "every producer — mouse brushes and menus included — is dropped), then every " +
@@ -223,6 +225,7 @@ function registerViewActions(store: SelectionViewsStore, scope: Scope | undefine
   action({
     ...scoped,
     name: "list-views",
+    group: "views",
     kind: "read",
     description: "List the saved cross-filter views: name, savedAt, and the values each holds.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
@@ -231,6 +234,7 @@ function registerViewActions(store: SelectionViewsStore, scope: Scope | undefine
   action({
     ...scoped,
     name: "delete-view",
+    group: "views",
     description: "Delete a saved cross-filter view by name. Returns { removed: true | false }.",
     inputSchema: nameArg,
     run: (args) => {

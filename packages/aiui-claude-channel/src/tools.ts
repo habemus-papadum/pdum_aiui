@@ -52,7 +52,7 @@ const PAGE_TOOLS_LIST_DESCRIPTION =
   "url, title, and the ids the intent-client host has: chromeTabId/windowId/tabIndex under the " +
   "browser extension, targetId/driverTab under the plain-page CDP host), activeTab: true when the " +
   "user is looking at that tab (when known), and namespaces[] — each with ns, active (false = " +
-  "the app parked it, off-route; still callable), and tools[] (name/description/inputSchema). " +
+  "the app parked it, off-route; still callable), and tools[] (name/description/kind/group/inputSchema). " +
   "To narrow to ONE tab pass any id copied from the prompt's <tab …/> marker (chrome-tab-id → " +
   "chromeTabId, cdp-target-id → targetId, driver-tab → driverTab) or the tab's url (exact href, " +
   "or a prefix — the url list_pages prints works); no arguments lists every connected tab. " +

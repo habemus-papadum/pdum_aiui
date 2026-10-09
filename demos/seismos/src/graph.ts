@@ -18,20 +18,14 @@
  * beside the capabilities they expose.
  */
 import {
-  action,
   agentToolkit,
   type Cell,
   cell,
   hotCellGraph,
   registerStandardTools,
 } from "@habemus-papadum/aiui-viz";
-import { registerSqlTools } from "@habemus-papadum/aiui-viz/duckdb";
-import {
-  registerClearSelection,
-  selectionDimReport,
-} from "@habemus-papadum/aiui-viz/mosaic-selection";
-import { selectionInspectorModel } from "@habemus-papadum/aiui-viz/selection-inspector";
-import type { Selection } from "@uwdata/mosaic-core";
+import { crossfilterViews, registerCrossfilterTools } from "@habemus-papadum/aiui-viz/crossfilter";
+import { registerSqlTools, type SchemaViewProvider } from "@habemus-papadum/aiui-viz/duckdb";
 import { type Accessor, createMemo } from "solid-js";
 import {
   bValue,
@@ -107,81 +101,95 @@ export const seismosGraph = hotCellGraph<SeismosGraph>(
 
 // --- agent tools --------------------------------------------------------------
 
-function clauseCount(brush: Selection): number {
-  return brush.clauses.length;
-}
-
 function round(x: number, digits: number): number {
   const p = 10 ** digits;
   return Math.round(x * p) / p;
 }
+
+/**
+ * The fitted sample as a schema view — `complete.quakes`, the events at or
+ * above the completeness magnitude — driven by the `mc` CONTROL, not by
+ * Mosaic: the proof that the DuckDB tools' view seam is generic. No
+ * `subscribe`: the body is re-read before every sql/schema call, and only a
+ * changed body costs a CREATE OR REPLACE.
+ */
+const completeView: SchemaViewProvider = {
+  id: "control",
+  views: (tables) =>
+    tables.some((t) => t.name === "quakes")
+      ? [
+          {
+            schema: "complete",
+            name: "quakes",
+            of: "quakes",
+            // Schema-qualified: a bare "quakes" inside complete.quakes would
+            // bind to the view itself (DuckDB's "infinite recursion").
+            sql: () => `SELECT * FROM "main"."quakes" WHERE mag >= ${store.mc.get()}`,
+            describe: () => ({
+              provider: "control",
+              control: "seismos/mc",
+              mc: store.mc.get(),
+              meaning:
+                "events at or above the completeness magnitude Mc — the sample the " +
+                "Gutenberg–Richter fit uses",
+              changedBy: 'set { name: "seismos/mc", value }',
+            }),
+          },
+        ]
+      : [],
+};
 
 function registerTools(): void {
   const kit = agentToolkit("seismos", {
     brief:
       "seismos: a cross-filtered global earthquake catalog (DuckDB table `quakes`, " +
       "1976–2024) — a map, magnitude/depth/time histograms, and a Gutenberg–Richter " +
-      "fit whose completeness magnitude is the `mc` control. The set-<dim> tools ARE " +
-      "the filter clauses (mouse brushes and menus write the same crossfilter); " +
-      "report lists the active filters, the counts, and the fit; sql queries the " +
-      "whole table, not the current filter.",
+      "fit whose completeness magnitude is the `mc` control. cross-filter is the one " +
+      "tool for every filter dimension (mouse brushes and menus write the same " +
+      "crossfilter); report's crossfilter section lists what is active and the WHERE in " +
+      "force; sql on `quakes` queries everything, on `crossfilter.quakes` the current " +
+      "subset, on `complete.quakes` the fitted sample (at or above mc).",
   });
   const { registerTool, registerReporter } = kit;
-  const brush = store.brush;
-  // The derived surface: report/set/locate (+ actions — one `set-<dim>` tool
-  // per filter dimension declared in store.ts, the four view verbs from
-  // selectionViews, and clear-filters below). The old hand-written set-filter
-  // tool dissolved into the dims — declaring IS exposing.
+  // The derived surface: report/set/locate/read-page/selection/sources/source
+  // (+ the four view verbs from selectionViews). The old hand-written
+  // set-filter tool dissolved into the dims (2026-08-12), and the per-dim
+  // set-<dim> tools into ONE cross-filter tool (2026-10-09): declaring IS
+  // exposing, and one verb carries every dimension.
   registerStandardTools(kit);
 
-  /** Remove every cross-filter clause — filter dimensions, map/histogram
-   * brushes, and facet menus alike. Returns the clause count left (0). */
-  action({
-    scope: seismosScope,
-    name: "clear-filters",
-    inputSchema: { type: "object", properties: {}, additionalProperties: false },
-    run: () => ({ activeClauses: store.clearFilters() }),
-  });
-
-  // The per-component companion: `clear-selection { name }` — one dimension
-  // ("mag") or one component ("seismos/map", the whole 2-D box) — clause and
-  // visual both; everything else stays. Same code path as the inspector's ✕.
-  registerClearSelection(seismosScope);
+  // The cross-filter surface: `cross-filter { set, clear }` over every
+  // dimension store.ts declares, `reset-cross-filters` (dims first — their
+  // VALUES too — then every producer's clause, brushes and facet menus
+  // included, through Selection.reset so visuals clear), and the
+  // `crossfilter` report section (predicate, per-table WHERE, views, the
+  // dimensions, the attributed clauses, the capabilities).
+  registerCrossfilterTools(kit, { scope: seismosScope, selection: store.brush });
 
   registerTool({
     name: "suggest-mc",
     description:
       "Return the data-driven completeness magnitude (max-curvature of the filtered FMD); does not apply it.",
     kind: "read",
+    group: "app",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
     run: () => ({ mcSuggested: mcMaxCurvature(store.histo()) }),
   });
 
   // The agent's `sql` + `schema` tools over the dedicated read connection —
   // the library's, with the table list introspected into the tool's usage
-  // once the catalog is loaded (the hand-typed column list is gone).
-  registerSqlTools(kit, { runner: store.sqlRunner });
+  // once the catalog is loaded — plus two schema views: the cross-filter's
+  // filtered twin of `quakes` (the Mosaic provider: it also hands the table's
+  // columns to the router), and the fitted sample above Mc (a control-driven
+  // view that owes Mosaic nothing).
+  registerSqlTools(kit, {
+    runner: store.sqlRunner,
+    views: [crossfilterViews({ selection: store.brush, scope: seismosScope }), completeView],
+  });
 
   registerReporter("loadState", () => store.loadState());
   registerReporter("rowsTotal", () => store.summary()?.rowsTotal ?? null);
   registerReporter("rowsFiltered", () => seismosGraph().grStats().rowsFiltered ?? null);
-  registerReporter("activeClauses", () => clauseCount(brush));
-  // Attributed clauses (dim | component | unknown, with fields + SQL) — the
-  // same rows the on-page SelectionInspector renders; one computation, two
-  // audiences.
-  registerReporter("filters", () => {
-    return selectionInspectorModel({ signal: store.brushSignal, scope: seismosScope }).clauses;
-  });
-  // What COULD filter here, grouped by column: each group lists the declared
-  // dimensions and the live components (map/histogram brushes, menus) that
-  // speak it. One member = an unambiguous target for a spoken filter;
-  // several = worth a clarifying question.
-  registerReporter("capabilities", () => {
-    return selectionInspectorModel({ signal: store.brushSignal, scope: seismosScope }).capabilities;
-  });
-  // The declared dimensions with their semantic values (null = inactive but
-  // available) — the agent-facing view of what set-<dim> can move.
-  registerReporter("dimensions", () => selectionDimReport(seismosScope));
   registerReporter("mc", () => store.mc.get());
   registerReporter("bValue", () => {
     const fit = seismosGraph().grStats().fit;

@@ -45,6 +45,9 @@ export interface PageToolDescriptor {
   /** Eagerness class: `read` is called freely once the intent is clear,
    * `write` changes the app (aiui-viz `AgentTool.kind`). */
   kind?: "read" | "write";
+  /** Category — `app`, `page`, `sql`, `crossfilter`, `views`, or the app's
+   * own word (aiui-viz `AgentTool.group`); a consumer may skip whole groups. */
+  group?: string;
   /** JSON Schema (draft 2020-12 object schema) for the tool's arguments. */
   inputSchema?: Record<string, unknown>;
 }
@@ -380,6 +383,7 @@ export class PageToolDirectory {
         description: typeof t.description === "string" ? t.description : "",
         ...(typeof t.usage === "string" ? { usage: t.usage } : {}),
         ...(t.kind === "read" || t.kind === "write" ? { kind: t.kind } : {}),
+        ...(typeof t.group === "string" ? { group: t.group } : {}),
         ...(asRecord(t.inputSchema) ? { inputSchema: asRecord(t.inputSchema) } : {}),
       }));
     const hash = typeof msg.hash === "string" ? msg.hash : "";

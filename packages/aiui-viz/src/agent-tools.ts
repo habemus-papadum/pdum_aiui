@@ -49,6 +49,12 @@ export interface AgentTool {
    * clear, `write` changes the app. Library-derived tools set it; a custom
    * tool without one is listed under neither class. */
   kind?: ToolKind;
+  /** Category for presentation and selection — `app` (the app's own surface:
+   * report, set, locate, its actions), `page` (read-page, selection, sources,
+   * source), `sql`, `crossfilter`, `views`, or an app's own word. Consumers
+   * group the brief by it and may include or exclude whole groups per
+   * scenario. */
+  group?: string;
   /** Human/agent-readable parameter description, WebMCP-style (loose schema). */
   params?: Record<string, string>;
   /**
@@ -123,6 +129,7 @@ function forwardToRegistry(ns: string, h: AgentToolkitHandle): void {
         description: t.description,
         ...(t.usage !== undefined ? { usage: t.usage } : {}),
         ...(t.kind !== undefined ? { kind: t.kind } : {}),
+        ...(t.group !== undefined ? { group: t.group } : {}),
         ...(t.inputSchema ? { inputSchema: t.inputSchema } : {}),
         run: (args?: unknown) => t.run(args as Record<string, unknown> | undefined),
       }));

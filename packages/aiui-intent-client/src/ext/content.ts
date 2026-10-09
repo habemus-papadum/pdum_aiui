@@ -202,6 +202,7 @@ window.addEventListener("message", (event) => {
         description: string;
         usage?: string;
         kind?: "read" | "write";
+        group?: string;
         inputSchema?: Record<string, unknown>;
       }>;
     }>;

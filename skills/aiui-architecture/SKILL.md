@@ -428,20 +428,33 @@ in the store; specs are reactive thunks (theme reads rebuild views against the s
 coordinator). Pin `@duckdb/duckdb-wasm` to the exact version `@uwdata/mosaic-core` uses (one
 deduped copy), and read the hard-won doc's Mosaic section before writing a custom MosaicClient.
 
-Cross-filter conventions (the seismos reference implements all three):
+Cross-filter conventions (the seismos reference implements all of them):
+- **The brush is `crossfilter()`** (`aiui-viz/crossfilter`), Mosaic's `Selection.crossfilter()`
+  with clause ROUTING: a clause reaches a view only when its table has every column the clause
+  names, so one Selection serves every table and a table without the column drops the clause.
+  Same column name means the same thing (`exclude` for the accidental case).
 - **Declare a `selectionDim` per logical filter** (`aiui-viz/mosaic-selection`) and bind it to
-  its on-screen component (`bindSelectionComponents`) — each dim is a validated `set-<name>`
-  tool, saved views serialize its value, and voice/mouse share one clause source.
+  its on-screen component (`bindSelectionComponents`) — saved views serialize its value, and
+  voice/mouse share one clause source. The agent drives every dimension through ONE tool,
+  `cross-filter { set: { <dim>: value }, clear: [names] }`, plus `reset-cross-filters` and the
+  `crossfilter` report section — `registerCrossfilterTools(kit, { scope, selection })`, the way
+  `set` is one tool for every control (no per-dimension `set-<name>` tools since 2026-10-09).
+- **The database the agent sees carries the cross-filter as a view**: `registerSqlTools(kit, {
+  runner, views: [crossfilterViews({ selection, scope })] })` materializes `crossfilter.<table>`
+  (the table under the WHERE in force) and lists it in `schema` with provenance; `sql` on the
+  base table queries everything, on the view the current subset. Any other provider can add a
+  view the same way (seismos's `complete.quakes` rides the `mc` control). A view body must name
+  its base table schema-qualified (`"main"."quakes"`) or DuckDB binds it to the view itself.
 - **A category-filter producer (click-to-toggle bar, interactive legend) must gray out its
   unselected categories** — full bars, muted when excluded. `highlight({ by })` cannot ride the
   crossfilter (its resolver hides the chart's own clause from the chart's marks — a silent
   no-op). Mint the producer its own origin with `categorySelection()`, include-relay it
   (`Selection.crossfilter({ include: [origin] })`), pair `toggleY({ as: origin })` with
   `highlight({ by: origin })`, and target the dim at the origin.
-- **Per-component clearing ships with the surface**: register `registerClearSelection(scope)`
-  (the `clear-selection { name }` tool — a dim name, or a component name to clear a 2-D box
-  whole) and the SelectionInspector's per-row ✕ drives the same `clearSelectionFor`. Whole-state
-  clears go through `resetSelectionDimTargets(scope)` — never `brush.reset()` alone, which
+- **Per-component clearing ships with the surface**: `cross-filter { clear: [name] }` takes a
+  dim name or a component name (a 2-D box clears whole) and the SelectionInspector's per-row ✕
+  drives the same `clearSelectionFor`. Whole-state clears go through `reset-cross-filters`
+  (`clearAllSelectionDims` + `resetSelectionDimTargets`) — never `brush.reset()` alone, which
   cannot reach include-relayed origins.
 
 ## Composing and reusing (slices + scopes)

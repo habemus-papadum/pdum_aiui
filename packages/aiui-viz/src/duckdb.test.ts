@@ -296,13 +296,14 @@ describe("schemaOf", () => {
     expect(schema.tables).toEqual([
       {
         name: "quakes",
+        schema: "main", // a runner answering without table_schema reads as main
         type: "BASE TABLE",
         columns: [
           { name: "mag", type: "DOUBLE" },
           { name: "time", type: "TIMESTAMP" },
         ],
       },
-      { name: "world", type: "VIEW", columns: [{ name: "lon", type: "DOUBLE" }] },
+      { name: "world", schema: "main", type: "VIEW", columns: [{ name: "lon", type: "DOUBLE" }] },
     ]);
     expect(catalog.seen[0]).toContain("table_schema NOT IN ('information_schema', 'pg_catalog')");
     expect(schema.summary).toBeUndefined();
@@ -388,5 +389,198 @@ describe("self-hosted assets (duckdbAssetsLocation / duckdbAssetBundles)", () =>
     expect(() => duckdbAssetsLocation({ __AIUI__: { duckdbAssets: { prefix: "/" } } })).toThrow(
       /aiui\(\)/,
     );
+  });
+});
+
+describe("schema views", () => {
+  /** A runner over a tiny catalog that can hold views: records every exec. */
+  function viewRunner(opts: { exec?: boolean } = {}) {
+    const execs: string[] = [];
+    const queries: string[] = [];
+    const views = new Map<string, string>(); // qualified → body, as the fake catalog
+    const runner: SqlRunner = {
+      async query(sql) {
+        queries.push(sql);
+        if (/information_schema\.tables/.test(sql)) {
+          const rows: unknown[][] = [["main", "quakes", "BASE TABLE"]];
+          for (const name of views.keys()) {
+            const [schema, table] = name.split(".");
+            rows.push([schema, table, "VIEW"]);
+          }
+          return { columns: ["table_schema", "table_name", "table_type"], rows };
+        }
+        if (/information_schema\.columns/.test(sql)) {
+          return {
+            columns: ["table_schema", "table_name", "column_name", "data_type"],
+            rows: [
+              ["main", "quakes", "mag", "DOUBLE"],
+              ["main", "quakes", "year", "INTEGER"],
+            ],
+          };
+        }
+        return { columns: ["n"], rows: [[3]] };
+      },
+      ...(opts.exec === false
+        ? {}
+        : {
+            async exec(sql: string) {
+              execs.push(sql);
+              const m = /CREATE OR REPLACE VIEW "(\w+)"\."(\w+)" AS (.*)$/s.exec(sql);
+              if (m) views.set(`${m[1]}.${m[2]}`, m[3] ?? "");
+              const d = /DROP VIEW IF EXISTS "(\w+)"\."(\w+)"/.exec(sql);
+              if (d) views.delete(`${d[1]}.${d[2]}`);
+            },
+          }),
+    };
+    return { runner, execs, queries, views };
+  }
+
+  function fakeKit() {
+    const tools = new Map<string, Parameters<AgentToolkit["registerTool"]>[0]>();
+    const kit = {
+      ns: "test",
+      registerTool: (tool: Parameters<AgentToolkit["registerTool"]>[0]) =>
+        void tools.set(tool.name, tool),
+    } as unknown as AgentToolkit;
+    return { kit, tools };
+  }
+
+  /** A provider whose one view's body follows a mutable predicate. */
+  function filterProvider(state: { predicate: string; offer: boolean }, withSubscribe = true) {
+    const listeners = new Set<() => void>();
+    const provider = {
+      id: "cross-filter",
+      views: (tables: readonly { name: string }[]) =>
+        state.offer && tables.some((t) => t.name === "quakes")
+          ? [
+              {
+                schema: "crossfilter",
+                name: "quakes",
+                of: "quakes",
+                sql: () => `SELECT * FROM "quakes" WHERE ${state.predicate}`,
+                describe: () => ({ predicate: state.predicate, changedBy: "cross-filter" }),
+              },
+            ]
+          : [],
+      ...(withSubscribe
+        ? {
+            subscribe: (fn: () => void) => {
+              listeners.add(fn);
+              return () => listeners.delete(fn);
+            },
+          }
+        : {}),
+    };
+    return {
+      provider,
+      changed: () => {
+        for (const fn of listeners) fn();
+      },
+    };
+  }
+
+  const settle = async () => {
+    for (let i = 0; i < 4; i++) await new Promise((r) => setTimeout(r, 0));
+  };
+
+  it("materializes a provider's view lazily, re-issues DDL only when the body changes, and reports provenance", async () => {
+    const { runner, execs } = viewRunner();
+    const state = { predicate: "TRUE", offer: true };
+    const { provider, changed } = filterProvider(state);
+    const { kit, tools } = fakeKit();
+    registerSqlTools(kit, { runner, views: [provider] });
+    await settle();
+    // Introspection ran, the view was materialized once, and `sql` names it.
+    expect(execs).toEqual([
+      'CREATE SCHEMA IF NOT EXISTS "crossfilter"',
+      'CREATE OR REPLACE VIEW "crossfilter"."quakes" AS SELECT * FROM "quakes" WHERE TRUE',
+    ]);
+    expect(tools.get("sql")?.usage).toContain("Views: `crossfilter.quakes`");
+    expect(tools.get("sql")?.usage).toContain("Tables: `quakes`");
+
+    // Unchanged: a call issues no DDL.
+    await tools.get("sql")?.run({ sql: "select count(*) from crossfilter.quakes" });
+    expect(execs).toHaveLength(2);
+
+    // The filter moved: the next call re-materializes, once, and the result
+    // carries what filtered the view it named.
+    state.predicate = '("mag" >= 7)';
+    changed();
+    const out = (await tools
+      .get("sql")
+      ?.run({ sql: "select count(*) from crossfilter.quakes" })) as {
+      rows: unknown[][];
+      views?: Record<string, unknown>;
+    };
+    expect(execs).toHaveLength(3);
+    expect(execs[2]).toContain('WHERE ("mag" >= 7)');
+    expect(out.views).toEqual({
+      "crossfilter.quakes": { predicate: '("mag" >= 7)', changedBy: "cross-filter" },
+    });
+    const plain = (await tools.get("sql")?.run({ sql: "select count(*) from quakes" })) as {
+      views?: unknown;
+    };
+    expect(plain.views).toBeUndefined();
+
+    // schema: the base table lists its view; the views section carries provenance.
+    const schema = (await tools.get("schema")?.run({})) as {
+      tables: Array<{ name: string; views?: string[] }>;
+      views: Array<{
+        name: string;
+        of?: string;
+        materialized: boolean;
+        about: Record<string, unknown>;
+      }>;
+    };
+    expect(schema.tables.find((t) => t.name === "quakes")?.views).toEqual(["crossfilter.quakes"]);
+    expect(schema.tables.map((t) => t.name)).toContain("crossfilter.quakes"); // information_schema lists it too
+    expect(schema.views).toEqual([
+      {
+        name: "crossfilter.quakes",
+        of: "quakes",
+        provider: "cross-filter",
+        materialized: true,
+        about: { predicate: '("mag" >= 7)', changedBy: "cross-filter" },
+      },
+    ]);
+
+    // A view the provider stops offering is dropped, and `sql` stops naming it.
+    state.offer = false;
+    changed();
+    await tools.get("schema")?.run({});
+    expect(execs.at(-1)).toBe('DROP VIEW IF EXISTS "crossfilter"."quakes"');
+    expect(tools.get("sql")?.usage).not.toContain("Views:");
+  });
+
+  it("falls back to the body text when the runner cannot hold a view", async () => {
+    const { runner, execs } = viewRunner({ exec: false });
+    const state = { predicate: '("year" > 2000)', offer: true };
+    const { provider } = filterProvider(state, false); // no subscribe: re-read every call
+    const { kit, tools } = fakeKit();
+    registerSqlTools(kit, { runner, views: [provider] });
+    await settle();
+    expect(execs).toEqual([]);
+    const schema = (await tools.get("schema")?.run({})) as {
+      views: Array<{ materialized: boolean; sql?: string }>;
+    };
+    expect(schema.views[0]).toMatchObject({
+      materialized: false,
+      sql: 'SELECT * FROM "quakes" WHERE ("year" > 2000)',
+    });
+    // the sql result carries the body for a statement naming the view
+    const out = (await tools.get("sql")?.run({ sql: "select 1 from crossfilter.quakes" })) as {
+      views?: Record<string, { sql?: string }>;
+    };
+    expect(out.views?.["crossfilter.quakes"]?.sql).toContain("WHERE");
+  });
+
+  it("puts the views in a named catalog when asked (a remote database never receives them)", async () => {
+    const { runner, execs } = viewRunner();
+    const { provider } = filterProvider({ predicate: "TRUE", offer: true });
+    const { kit } = fakeKit();
+    registerSqlTools(kit, { runner, views: [provider], viewCatalog: "memory" });
+    await settle();
+    expect(execs[0]).toBe('CREATE SCHEMA IF NOT EXISTS "memory"."crossfilter"');
+    expect(execs[1]).toContain('CREATE OR REPLACE VIEW "memory"."crossfilter"."quakes"');
   });
 });

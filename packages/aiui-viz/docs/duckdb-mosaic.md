@@ -306,17 +306,23 @@ If you use the `ATTACH` route, bridge it with an unqualified local view (this co
 CREATE VIEW events AS SELECT * FROM remote.events;   -- then api.from("events")
 ```
 
-### Driving the crossfilter programmatically — selection dimensions
+### Driving the crossfilter programmatically — the cross-filter and its dimensions
 
-Mouse interactors are not the only writers a Selection should have. The
-`aiui-viz/mosaic-selection` subpath gives one logical filter the `control()`
-treatment — declared in the store, compiler-named, validated once, durable,
-and surfaced to agents as a real `set-<name>` tool (via `action()`, so the
-standard tools, the page-tools relay, and the oracle all see a real JSON
-Schema):
+The brush every view filters by is aiui-viz's `crossfilter()` (`aiui-viz/crossfilter`) —
+Mosaic's `Selection.crossfilter()` with clause **routing**. Mosaic itself routes nothing: every
+clause reaches every filtered client verbatim, and a clause naming a column a client's table
+lacks is a binder error Mosaic logs and swallows while that chart freezes. The routed resolver
+adds one rule to Mosaic's own self-exclusion: a clause is skipped for a client whose table does
+not have every column the clause names (the columns come from the SQL tools' introspection, or
+`columns`/`describe` on the factory; until known, everything routes). Same column name means
+the same thing; `exclude` covers the accidental case. One Selection therefore serves every
+table, and a dimension declares one target with a plain column name.
 
 ```ts
+import { crossfilter } from "@habemus-papadum/aiui-viz/crossfilter";
 import { selectionDim, selectionSignal } from "@habemus-papadum/aiui-viz/mosaic-selection";
+
+const brush = crossfilter({ include: [depthClassSel] });   // in the durable store
 
 /** Magnitude window — the completeness bracket every view filters by. */
 export const mag = selectionDim({
@@ -328,29 +334,46 @@ export const mag = selectionDim({
 mag.set({ lo: 5 });          // one-sided; publishes exactly like a brush drag
 ```
 
-Setting a dimension publishes clauses with a stable per-(dimension, target)
-source, so re-sets replace rather than stack — the same semantics as a
-re-dragged brush. A dimension with several targets fans one semantic value
-out as a table-appropriate clause per Selection ("time" as `epoch_ms(ts)` on
-one table, `started_at` on another) — necessary because Mosaic itself routes
-nothing: every clause reaches every filtered client verbatim, and a clause
-naming a column a client's table lacks is a binder error Mosaic logs and
-swallows. The read side is `selectionSignal(brush)` — a version counter over
-the Selection's own value event, with reactive `clauses()`/`active()`/`sql()`
-views that track *every* producer (mouse, menu, agent), not just dimensions.
+A dimension gives one logical filter the `control()` treatment — declared in the store,
+compiler-named, validated once, durable, visible in `report()`. Setting it publishes a clause
+with a stable per-(dimension, target) source, so re-sets replace rather than stack — the same
+semantics as a re-dragged brush. The multi-target fan-out (one semantic value as a
+table-appropriate clause per Selection — "time" as `epoch_ms(ts)` on one table, `started_at` on
+another) remains for a renamed or computed column, publishing into the same routed Selection.
 
-The module docblock in `src/mosaic-selection.ts` carries the full contract
-and the encoded gotchas (2×1-D over 2-D boxes, preagg vs. cross-table
-clauses, report-after-a-task-boundary); `src/mosaic-selection.test.ts` pins
-the behaviors against the real pinned mosaic-core.
+The agent's verb is ONE tool for every dimension, the way `set` is one tool for every control:
 
-### The agent's SQL tools — `sql` and `schema`
+```ts
+import { registerCrossfilterTools } from "@habemus-papadum/aiui-viz/crossfilter";
+
+registerCrossfilterTools(kit, { scope: appScope, selection: brush });
+// cross-filter { set: { mag: { lo: 7 }, type: ["earthquake"] }, clear: ["seismos/map"] }
+// reset-cross-filters
+// report().crossfilter → { predicate, tables, views, dimensions, active, capabilities }
+```
+
+`cross-filter`'s schema carries a typed property per declared dimension (bounds, enums, the
+doc comment) and re-renders as dimensions are declared; several dimensions in one call is one
+write; `clear` names dimensions or on-screen components. The result waits for the Selection's
+emits to quiesce and reports the predicate then in force, the views that carry it, and any
+per-name error — but a Selection's clause list is its *emitted* state, which Mosaic emits
+after the coordinator's query batch, so `report()` after a task boundary stays the final word.
+The read side is `selectionSignal(brush)` — a version counter over the Selection's own value
+event, with reactive `clauses()`/`active()`/`sql()` views that track *every* producer.
+
+The module docblocks in `src/crossfilter.ts` and `src/mosaic-selection.ts` carry the full
+contracts and the encoded gotchas (2×1-D over 2-D boxes, the emitted-state lag, routing and the
+pre-aggregator); `src/crossfilter.test.ts` and `src/mosaic-selection.test.ts` pin the behaviors
+against the real pinned mosaic-core.
+
+### The agent's SQL tools — `sql` and `schema`, and the views they carry
 
 Every DuckDB app used to hand-roll the same bounded `query` tool, with the column list typed
 into its description (and drifting). The `aiui-viz/duckdb` subpath now owns it:
 
 ```ts
 import { duckdbRunner, registerSqlTools } from "@habemus-papadum/aiui-viz/duckdb";
+import { crossfilterViews } from "@habemus-papadum/aiui-viz/crossfilter";
 
 // In the store: a connection DEDICATED to agent reads, so a slow question
 // never contends with Mosaic's views. The runner resolves once loaded.
@@ -358,7 +381,10 @@ queryCon = await db.connect();
 resolveRunner(duckdbRunner(queryCon));
 
 // In graph.ts, beside the standard tools:
-registerSqlTools(kit, { runner: store.sqlRunner });
+registerSqlTools(kit, {
+  runner: store.sqlRunner,
+  views: [crossfilterViews({ selection: store.brush, scope: appScope })],
+});
 ```
 
 Two read tools land on the kit, each carrying its usage (the tool-docs convention, so the
@@ -374,10 +400,35 @@ oracle, a live delegation and `page_tools_list` all render the same guidance):
   returns a table with a row-count footer, for a voice model that summarizes rather than
   reads. Errors are thrown with DuckDB's message untouched: it carries the position and the
   candidate names, and every consumer forwards it, so the model fixes the statement and
-  retries.
+  retries. A statement that names a schema view gets that view's provenance in the answer.
 - **`schema { table?, summarize? }`** — tables and columns with types from
-  `information_schema` (every catalog, minus the system schemas); `summarize: true` with a
-  table adds DuckDB's `SUMMARIZE`, on request only since it scans the table.
+  `information_schema` (every catalog, minus the system schemas; a table outside `main` is
+  named `schema.name`, what FROM takes); `summarize: true` with a table adds DuckDB's
+  `SUMMARIZE`, on request only since it scans the table. With view providers registered, each
+  base table lists the views that are views *of* it, and a `views` section carries every
+  view's provenance.
+
+**Schema views.** Something that filters the data — the cross-filter, a control-driven subset,
+a named view — contributes views to the database the agent sees through the `views` option: a
+`SchemaViewProvider` offers `{ schema, name, of, sql(), describe() }` entries given the base
+tables, and may `subscribe` to say when a body changed. The tools own everything after that:
+they materialize each view as a real DuckDB view in its schema through the runner's `exec`
+(`CREATE SCHEMA IF NOT EXISTS`, `CREATE OR REPLACE VIEW` — metadata only, twelve milliseconds
+for two hundred replacements), refresh lazily before the next `sql`/`schema` call once a
+provider signalled a change (text equality: a brush drag costs one DDL at the next call, not
+one per event), drop a view a provider stops offering, list them in `schema` with provenance,
+and name them in `sql`'s usage. The cross-filter's provider (`crossfilterViews`) offers
+`crossfilter.<table>` for every table the cross-filter covers — the table under its routed
+WHERE — and hands the base tables' columns to the router; seismos adds `complete.quakes`, the
+events above the completeness magnitude, driven by the `mc` control and owing Mosaic nothing.
+Two rules learned live: a view body must name its base table schema-qualified
+(`"main"."quakes"` — a bare name inside `crossfilter.quakes` binds to the view itself, and
+DuckDB reports infinite recursion), and only a runner whose database can hold catalog state,
+and may receive it, implements `exec`: `duckdbRunner` does; a fresh-session connector cannot
+and a remote database (MotherDuck) must not be written to, so there `schema` reports each
+view's body text as `sql` with `materialized: false` and the agent inlines it. `viewCatalog`
+puts the views in a named catalog (`memory`) beside a remote database, unverified on that
+client as of 2026-10-09.
 
 The table list is the one fact the `sql` tool's usage should carry and the app should not
 have to type: omitted, it is **introspected once the runner resolves** and the tool is

@@ -108,6 +108,9 @@ export interface ActionSpec {
   /** Eagerness class of the derived tool. An action changes the app, so the
    * default is `write`; declare `read` for a pure query. */
   kind?: "read" | "write";
+  /** Category of the derived tool (see `AgentTool.group`); the standard
+   * tools default an action to `app`. */
+  group?: string;
   /** Definition site "file:line" — compiler-injected. */
   loc?: string;
   /** Human/agent-readable parameter docs (WebMCP-style loose schema). */
@@ -144,6 +147,7 @@ export type ControlSurfaceEntry =
       usage?: string;
       /** The derived tool's eagerness class (see {@link ActionSpec.kind}). */
       toolKind?: "read" | "write";
+      group?: string;
       loc?: string;
       params?: Record<string, string>;
     };
@@ -371,6 +375,7 @@ export function controlSurface(): ControlSurfaceEntry[] {
       ...(a.description !== undefined ? { description: a.description } : {}),
       ...(a.usage !== undefined ? { usage: a.usage } : {}),
       ...(a.kind !== undefined ? { toolKind: a.kind } : {}),
+      ...(a.group !== undefined ? { group: a.group } : {}),
       ...(a.loc !== undefined ? { loc: a.loc } : {}),
       ...(a.params !== undefined ? { params: a.params } : {}),
     });

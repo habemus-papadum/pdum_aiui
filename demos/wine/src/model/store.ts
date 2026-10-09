@@ -27,6 +27,7 @@
  */
 import type { AsyncDuckDB, AsyncDuckDBConnection } from "@duckdb/duckdb-wasm";
 import { scope } from "@habemus-papadum/aiui-viz";
+import { crossfilter } from "@habemus-papadum/aiui-viz/crossfilter";
 import { duckdbRunner, type SqlRunner } from "@habemus-papadum/aiui-viz/duckdb";
 import { duckdbConnector } from "@habemus-papadum/aiui-viz/mosaic-connector";
 import {
@@ -44,7 +45,7 @@ import {
   type SelectionViewsStore,
   selectionViews,
 } from "@habemus-papadum/aiui-viz/selection-views";
-import { Coordinator, Selection } from "@uwdata/mosaic-core";
+import { Coordinator, type Selection } from "@uwdata/mosaic-core";
 import { type Accessor, createSignal } from "solid-js";
 // Bundled assets (NOT public/ fetches): they travel with the package into
 // any consumer's build. countries-110m is the same Natural Earth border
@@ -154,7 +155,12 @@ export const store: WineStore = appScope.durable("store", () => {
   // The variety bar's origin, minted BEFORE the crossfilter so the include
   // relay is wired at construction (categorySelection's docblock).
   const varietySel = categorySelection();
-  const brush = Selection.crossfilter({ include: [varietySel] });
+  // aiui-viz's cross-filter: Mosaic's Selection.crossfilter() with clause
+  // routing — a clause reaches a view only when its table has the columns
+  // it names (`wine` and `province_geo` here; the sql tools' introspection
+  // teaches the router both). Feeds the `cross-filter` tool, the
+  // `crossfilter.wine` schema view, and the report section (graph.ts).
+  const brush = crossfilter({ include: [varietySel] });
   const brushSignal = selectionSignal(brush);
 
   // ---- the filter dimensions: declared writers over the shared brush -------

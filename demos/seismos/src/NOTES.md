@@ -386,3 +386,29 @@ Per-component clearing landed with it: `clear-selection { name }` (a
 dimension, or a component name — "seismos/map" clears the 2-D box WHOLE,
 where clearing `lon` alone would widen that side to full extent) and the
 inspector's per-row ✕, both over the same `clearSelectionFor`.
+
+## One cross-filter tool, and the database has views (2026-10-09)
+
+The eight `set-<dim>` tools, `clear-selection` and `clear-filters` are gone.
+`registerCrossfilterTools` (aiui-viz/crossfilter) registers ONE write verb,
+`cross-filter { set: { mag: {lo, hi}, type: [...] }, clear: [names] }`, whose
+schema carries a typed property per declared dimension (bounds, enums, the doc
+comment) and re-renders as dimensions are declared — the way `set` is one tool
+for every control — plus `reset-cross-filters` (everything, visuals included)
+and a `crossfilter` report section that replaces the old four (`filters`,
+`capabilities`, `dimensions`, `activeClauses`): the aggregate predicate, each
+covered table's WHERE, the view names, the dimensions, the attributed clauses,
+the capabilities. The brush is now aiui-viz's `crossfilter()` — Mosaic's
+`Selection.crossfilter()` with clause routing (a clause reaches a view only
+when its table has the columns it names; one table here, so nothing changes
+on screen).
+
+The `sql`/`schema` tools now carry schema VIEWS: `crossfilter.quakes` (the
+cross-filter's filtered twin, body = `quakes` under the WHERE in force,
+re-created lazily before a tool call once the Selection changed) and
+`complete.quakes` (events at or above `mc` — a view driven by a CONTROL, the
+proof the view seam is generic). `schema` lists them with provenance; `sql`
+names them in its usage and, when a statement uses one, reports what
+filtered it at that moment. Real DuckDB views in their own schemas, which is
+why the dedicated read connection's `exec` exists; a runner that cannot hold
+catalog state reports the bodies as text instead.

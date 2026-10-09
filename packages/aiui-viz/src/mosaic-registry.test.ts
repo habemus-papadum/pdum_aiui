@@ -156,3 +156,37 @@ describe("registerMosaicInput and value()", () => {
     expect(mosaicProducers()[0].value()).toEqual([5, 6]);
   });
 });
+
+describe("producer tables", () => {
+  it("records the tables a plot's marks and an input's `from` query, and reads a client's table", async () => {
+    const m = await import("./mosaic-registry");
+    const sel = {};
+    const brush = { selection: sel, field: "mag", channel: "x" };
+    const off = m.registerMosaicPlot({
+      scope: "tx",
+      name: "hist",
+      plot: {
+        interactors: [brush],
+        marks: [
+          { sourceTable: () => "quakes" },
+          { sourceTable: () => "quakes" },
+          { sourceTable: () => null },
+        ],
+      },
+    });
+    const off2 = m.registerMosaicInput({
+      scope: "tx",
+      name: "menu",
+      input: { selection: sel, field: "type", from: "sessions" },
+    });
+    const byName = new Map(m.mosaicProducers("tx").map((e) => [e.name, e]));
+    expect(byName.get("tx/hist")?.tables).toEqual(["quakes"]);
+    expect(byName.get("tx/menu")?.tables).toEqual(["sessions"]);
+    expect(m.clientTable({ sourceTable: () => "a" })).toBe("a");
+    expect(m.clientTable({ from: "b" })).toBe("b");
+    expect(m.clientTable({})).toBeUndefined();
+    expect(m.tablesOf([{ from: "x" }, { from: "x" }, { table: "y" }, {}])).toEqual(["x", "y"]);
+    off();
+    off2();
+  });
+});

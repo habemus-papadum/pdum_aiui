@@ -204,6 +204,7 @@ export function toolsFromControlSurface(options: ControlSurfaceToolsOptions = {}
         ...(entry.usage !== undefined ? { usage: entry.usage } : {}),
         // An action changes the app unless it says otherwise.
         kind: entry.toolKind ?? "write",
+        group: entry.group ?? "app",
         parameters:
           // An action that declares a real inputSchema hands it to the model —
           // the selection dims do, and realtime tools have no strict mode, so
@@ -254,10 +255,22 @@ export function onControlSurfaceChange(listener: () => void): () => void {
 export interface RegistryToolsOptions {
   /** Keep only these namespaces (default: all registrations). */
   namespaces?: string[];
+  /** Keep only tools in these groups (a tool without one counts as `app`). */
+  groups?: string[];
+  /** Drop tools in these groups. */
+  excludeGroups?: string[];
   /** Also project PARKED namespaces (a multi-app document's off-route pages).
    * Default false: a voice session sees the page in view, as the registry
    * doc promises for the oracle projection. */
   includeParked?: boolean;
+}
+
+/** Does a tool's group pass the projection's group filters? Ungrouped reads as `app`. */
+function keepGroup(group: string | undefined, options: RegistryToolsOptions): boolean {
+  const g = group ?? "app";
+  if (options.groups !== undefined && !options.groups.includes(g)) return false;
+  if (options.excludeGroups !== undefined && options.excludeGroups.includes(g)) return false;
+  return true;
 }
 
 /** The registrations a projection keeps: the named namespaces, minus the parked ones. */
@@ -307,11 +320,13 @@ export function toolsFromAiuiRegistry(
   const tools: OracleTool[] = [];
   for (const registration of registrations) {
     for (const tool of registration.tools) {
+      if (!keepGroup(tool.group, options)) continue;
       tools.push({
         name: toolName(prefix ? `${registration.ns}_` : "", tool.name),
         description: tool.description,
         ...(tool.usage !== undefined ? { usage: tool.usage } : {}),
         ...(tool.kind !== undefined ? { kind: tool.kind } : {}),
+        ...(tool.group !== undefined ? { group: tool.group } : {}),
         parameters: tool.inputSchema ?? {
           type: "object",
           properties: {},

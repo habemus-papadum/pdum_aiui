@@ -52,6 +52,7 @@ const reportTools = (): void => {
             description: tool.description,
             ...(typeof tool.usage === "string" ? { usage: tool.usage } : {}),
             ...(tool.kind !== undefined ? { kind: tool.kind } : {}),
+            ...(typeof tool.group === "string" ? { group: tool.group } : {}),
             ...(tool.inputSchema !== undefined ? { inputSchema: tool.inputSchema } : {}),
           })),
         })),

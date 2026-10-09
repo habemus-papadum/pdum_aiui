@@ -12,6 +12,12 @@ tool-call debugger, tool pass-through for the live oracle) and deferred every op
 to "simplest, least churn". Every claim about existing code cites the file as it was before
 the work. Milestones are in [§7](#7-milestones); non-goals in [§8](#8-non-goals).
 
+> **2026-10-09.** The per-dimension `set-<dim>` tools this document uses as its running example,
+> with `clear-selection` and `clear-filters`, became one `cross-filter` tool plus
+> `reset-cross-filters`; tools gained a `group`; the DuckDB tools carry schema views. See
+> [crossfilter-tools](./crossfilter-tools.md). The conventions here (usage, brief, kinds,
+> the renderer) are unchanged.
+
 ## 0. In one screen
 
 The five requests are one gap seen from five sides: **the tool surface is a schema, not a

@@ -50,6 +50,8 @@ export default defineConfig({
         mosaic: "src/mosaic.tsx",
         embedding: "src/embedding-view.tsx",
         "mosaic-selection": "src/mosaic-selection.ts",
+        // The cross-filter with clause routing + the schema-view provider.
+        crossfilter: "src/crossfilter.ts",
         "mosaic-connector": "src/mosaic-connector.ts",
         "selection-views": "src/selection-views.tsx",
         "selection-inspector": "src/selection-inspector.tsx",

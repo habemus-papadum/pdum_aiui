@@ -34,6 +34,8 @@ export interface AiuiPageTool {
   usage?: string;
   /** Eagerness class (see `AgentTool.kind`). */
   kind?: "read" | "write";
+  /** Category (see `AgentTool.group`). */
+  group?: string;
   inputSchema?: Record<string, unknown>;
   run: (args?: unknown) => unknown;
 }
@@ -134,6 +136,7 @@ export interface AiuiToolsRegistry {
     description: string;
     active: boolean;
     kind?: "read" | "write";
+    group?: string;
     usage?: string;
   }>;
   /** Fires after every `register` AND every activity flip. Returns the
@@ -295,6 +298,7 @@ function createRegistry(): AiuiToolsRegistry {
           description: t.description,
           active: !parked.has(ns),
           ...(t.kind !== undefined ? { kind: t.kind } : {}),
+          ...(t.group !== undefined ? { group: t.group } : {}),
           ...(t.usage !== undefined ? { usage: t.usage } : {}),
         })),
       );

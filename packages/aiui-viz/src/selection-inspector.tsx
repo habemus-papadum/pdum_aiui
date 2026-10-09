@@ -53,7 +53,15 @@ export interface InspectorCapabilityRow {
   /** Sorted column names — the group key. */
   fields: string[];
   dims: { name: string; kind: string; value: unknown }[];
-  producers: { name: string; host: string; kind: string; value: unknown; active: boolean }[];
+  producers: {
+    name: string;
+    host: string;
+    kind: string;
+    value: unknown;
+    active: boolean;
+    /** The tables the producer's host queries (best-effort). */
+    tables: string[];
+  }[];
 }
 
 export interface SelectionInspectorModel {
@@ -148,6 +156,7 @@ export function selectionInspectorModel(opts: {
       kind: p.kind,
       value: p.value(),
       active: activeSources.has(p.source),
+      tables: p.tables,
     });
   }
 
@@ -175,7 +184,7 @@ export function formatInspectorValue(v: unknown): string {
  * The panel: active clauses with provenance and SQL, the resolved WHERE,
  * and the capability map. Attributed rows carry a clear button — the mouse
  * half of the per-component clear, driving the same {@link clearSelectionFor}
- * the `clear-selection` action runs (voice and mouse stay equals); unknown
+ * `cross-filter { clear: [name] }` runs (voice and mouse stay equals); unknown
  * rows get none, having no resolvable name. No styles ship — the class
  * contract is `selection-inspector` on the root; `inspector-clause` rows
  * (stamped `data-origin="dim|component|unknown"`) with `inspector-producer` /

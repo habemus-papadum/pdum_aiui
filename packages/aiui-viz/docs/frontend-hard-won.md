@@ -168,7 +168,7 @@ Found building the seismos notebook (full detail: `demos/seismos/src/NOTES.md`):
   reaches the origin, whose Highlight then keeps the chart grayed over an unfiltered page.
   Whole-state clears reset every dim-target Selection (`resetSelectionDimTargets`);
   per-component clears reset the clause subset on the producer's OWN selection
-  (`clearSelectionFor` / the `clear-selection` action / the inspector's ✕).
+  (`clearSelectionFor` / `cross-filter { clear: [name] }` / the inspector's ✕).
 - **A category origin must be `intersect`, never `single`**: adoption follows each component
   publish with a headless retraction from the dimension's source, and single resolution lets
   that different-source, null-predicate update displace the component clause — the origin

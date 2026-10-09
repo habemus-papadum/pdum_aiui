@@ -90,9 +90,9 @@ export function App() {
             histograms brush into, and its rectangle/lasso publishes clauses back into it, exactly
             like a vgplot interactor. The aiui bridge adds identity: the view registers as the
             producer <span class="mono">wine/embedding</span>, so the inspector below names its
-            clause, <span class="ctrl">clear-selection</span> can reset it, and the{" "}
-            <span class="ctrl">set-projx</span>/<span class="ctrl">set-projy</span> agent tools draw
-            a real box on the map (a spoken region and a mouse lasso are one producer).
+            clause, <span class="ctrl">cross-filter {"{ clear }"}</span> can reset it, and the{" "}
+            <span class="ctrl">cross-filter</span> agent tool, setting projx and projy, draws a real
+            box on the map (a spoken region and a mouse lasso are one producer).
           </p>
         </section>
 

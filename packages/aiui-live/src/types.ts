@@ -36,6 +36,8 @@ export interface LiveTool {
   usage?: string;
   /** Eagerness class, `read` or `write`. */
   kind?: "read" | "write";
+  /** Category (aiui-viz `AgentTool.group`). */
+  group?: string;
   /** JSON Schema for the arguments. */
   parameters: Record<string, unknown>;
   /** Run the call. `context` says who asked, for the page's call log; a tool
@@ -49,6 +51,7 @@ export interface LiveToolSpec {
   description: string;
   usage?: string;
   kind?: "read" | "write";
+  group?: string;
   parameters: Record<string, unknown>;
 }
 
@@ -58,6 +61,7 @@ export function toolSpec(tool: LiveTool | LiveToolSpec): LiveToolSpec {
     description: tool.description,
     ...(tool.usage !== undefined ? { usage: tool.usage } : {}),
     ...(tool.kind !== undefined ? { kind: tool.kind } : {}),
+    ...(tool.group !== undefined ? { group: tool.group } : {}),
     parameters: tool.parameters,
   };
 }

@@ -28,6 +28,7 @@
  */
 import type { AsyncDuckDB, AsyncDuckDBConnection } from "@duckdb/duckdb-wasm";
 import { type ControlBox, control, scope } from "@habemus-papadum/aiui-viz";
+import { crossfilter } from "@habemus-papadum/aiui-viz/crossfilter";
 import { duckdbRunner, type SqlRunner } from "@habemus-papadum/aiui-viz/duckdb";
 import { duckdbConnector } from "@habemus-papadum/aiui-viz/mosaic-connector";
 import {
@@ -45,7 +46,7 @@ import {
   type SelectionViewsStore,
   selectionViews,
 } from "@habemus-papadum/aiui-viz/selection-views";
-import { Coordinator, loadParquet, Selection } from "@uwdata/vgplot";
+import { Coordinator, loadParquet, type Selection } from "@uwdata/vgplot";
 import { type Accessor, createSignal } from "solid-js";
 // The bundled catalog + optional border overlay, as hashed Vite assets — NOT
 // public/-dir fetches: asset imports resolve from THIS package, so the data
@@ -241,7 +242,8 @@ export interface SeismosDims {
 
 export interface SeismosStore {
   coordinator: Coordinator;
-  /** The one crossfilter selection every view filters by. Most producers
+  /** The one cross-filter selection every view filters by (aiui-viz's
+   * routed crossfilter — a Mosaic Selection to every consumer). Most producers
    * publish straight into it; the depth-class toggle publishes into
    * `depthClassSel`, whose clauses relay in (include). */
   brush: Selection;
@@ -291,7 +293,13 @@ export const store: SeismosStore = seismosScope.durable("store", () => {
   // point). See categorySelection's docblock for the why; NOTES.md, "Category
   // filters gray out now".
   const depthClassSel = categorySelection();
-  const brush = Selection.crossfilter({ include: [depthClassSel] });
+  // aiui-viz's cross-filter: Mosaic's `Selection.crossfilter()` with clause
+  // ROUTING — a clause reaches a view only when its table has the columns the
+  // clause names (one table here, so nothing drops; the schema's columns
+  // reach the router through the sql tools' introspection). The same object
+  // feeds the `cross-filter` tool, the `crossfilter.quakes` schema view, and
+  // the report section (graph.ts).
+  const brush = crossfilter({ include: [depthClassSel] });
   const brushSignal = selectionSignal(brush);
 
   // ---- the filter dimensions: declared writers over the shared brush --------

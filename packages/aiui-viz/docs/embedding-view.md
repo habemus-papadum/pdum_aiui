@@ -28,7 +28,7 @@ Mosaic is a *peer* of `embedding-atlas`, so the component shares the app's
 `@uwdata/mosaic-core` classes — its clauses land in your Selections as plain
 clauses. The full-app tier would sit in the page as a sealed appliance: none
 of its internal charts could be a `selectionDim`, nothing would appear in the
-producer registry, and saved views/`clear-selection`/`report()` would see only
+producer registry, and saved views/`cross-filter { clear }`/`report()` would see only
 a predicate string. Component level + our own cross-filter widgets *recreates*
 the Atlas experience on aiui's terms.
 
@@ -65,7 +65,7 @@ import { EmbeddingView } from "@habemus-papadum/aiui-viz/embedding";
   `Selection.reset`). The vanilla API never hands that client out, so the
   bridge captures it with a forwarding facade on the `rangeSelection` prop
   and registers it under `name` — the SelectionInspector attributes its
-  clauses, and `clear-selection { name: "<scope>/<name>" }` clears the region
+  clauses, and `cross-filter { clear: ["<scope>/<name>"] }` clears the region
   with its visuals.
 - **No ghost clauses.** Unlike vgplot interactors, the component retracts its
   own clauses on destroy (verified in 0.24's source) — the bridge just calls

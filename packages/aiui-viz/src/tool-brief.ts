@@ -28,6 +28,8 @@ export interface ToolDoc {
   description: string;
   usage?: string;
   kind?: ToolKind;
+  /** Category — a sub-heading inside the eagerness section when present. */
+  group?: string;
 }
 
 /** One kit's worth of tools, with its brief. */
@@ -87,10 +89,25 @@ export function renderToolBrief(kits: KitDoc[], options: RenderToolBriefOptions 
     for (const k of live) {
       if (k.brief !== undefined && k.brief.trim() !== "") parts.push(k.brief.trim());
     }
+    // Inside a section, tools gather under their group (a sub-heading), the
+    // ungrouped ones first; a section with no groups reads as before.
     const section = (heading: string, rows: typeof named): void => {
       if (rows.length === 0) return;
       parts.push(heading);
-      for (const row of rows) parts.push(line(row.tool, row.name, !drop.has(row.name)));
+      const groups = new Map<string | undefined, typeof rows>();
+      for (const row of rows) {
+        const key = row.tool.group;
+        const list = groups.get(key);
+        if (list === undefined) groups.set(key, [row]);
+        else list.push(row);
+      }
+      const ordered = [...groups.entries()].sort(([a], [b]) =>
+        a === undefined ? -1 : b === undefined ? 1 : 0,
+      );
+      for (const [group, list] of ordered) {
+        if (group !== undefined) parts.push(`${group}:`);
+        for (const row of list) parts.push(line(row.tool, row.name, !drop.has(row.name)));
+      }
     };
     section(READ_HEADING, reads);
     section(WRITE_HEADING, writes);

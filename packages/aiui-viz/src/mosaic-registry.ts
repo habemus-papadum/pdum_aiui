@@ -48,6 +48,9 @@ export interface MosaicProducerEntry {
   kind: MosaicProducerKind;
   /** Column names it filters (best-effort; expressions stringified). */
   fields: string[];
+  /** The tables its host queries (a plot's marks' tables, an input's `from`),
+   * best-effort — empty when the host names none. */
+  tables: string[];
   /** The live instance — clause `source` identity for everything it publishes. */
   source: object;
   /** The Selection it publishes into. */
@@ -63,6 +66,45 @@ export interface MosaicProducerEntry {
 export interface MosaicPlotLike {
   interactors: readonly object[];
   legends?: readonly { legend?: { handler?: object } }[];
+  /** The marks, for the tables they query (`sourceTable()`). */
+  marks?: readonly object[];
+}
+
+/** A Mosaic client as the table reader sees it: whichever table handle it honestly has. */
+interface ClientShape {
+  sourceTable?: () => string | null | undefined;
+  from?: unknown;
+  table?: unknown;
+  source?: { table?: unknown };
+}
+
+/**
+ * The table a Mosaic client queries, if it says: a mosaic-plot mark's
+ * `sourceTable()`, a mosaic-inputs widget's `from`, or a declared `table` /
+ * `source.table`. Structural, pinned to mosaic-plot/-inputs 0.28 like the
+ * interactor introspection below; the cross-filter router reads the same.
+ */
+export function clientTable(client: unknown): string | undefined {
+  if (client === null || typeof client !== "object") return undefined;
+  const c = client as ClientShape;
+  if (typeof c.sourceTable === "function") {
+    const t = c.sourceTable();
+    return typeof t === "string" && t !== "" ? t : undefined;
+  }
+  for (const t of [c.table, c.from, c.source?.table]) {
+    if (typeof t === "string" && t !== "") return t;
+  }
+  return undefined;
+}
+
+/** The distinct tables a set of clients query, in first-seen order. */
+export function tablesOf(clients: readonly object[] | undefined): string[] {
+  const out: string[] = [];
+  for (const c of clients ?? []) {
+    const t = clientTable(c);
+    if (t !== undefined && !out.includes(t)) out.push(t);
+  }
+  return out;
 }
 
 interface Registration {
@@ -210,6 +252,7 @@ export function registerMosaicPlot(reg: {
 }): () => void {
   const scope = scopeName(reg.scope);
   const base = qualify(reg.scope, reg.name);
+  const tables = tablesOf(reg.plot.marks);
   const found: Omit<MosaicProducerEntry, "name">[] = [];
   for (const source of reg.plot.interactors) {
     const info = introspectInteractor(source);
@@ -219,6 +262,7 @@ export function registerMosaicPlot(reg: {
       host: "plot",
       kind: info.kind,
       fields: info.fields,
+      tables,
       source,
       selection: info.selection,
       value: makeValueReader(source, info.selection),
@@ -235,6 +279,7 @@ export function registerMosaicPlot(reg: {
       host: "plot",
       kind: info.kind,
       fields: info.fields,
+      tables,
       source: handler,
       selection: info.selection,
       value: makeValueReader(handler, info.selection),
@@ -259,6 +304,8 @@ export function registerMosaicInput(reg: {
   selection?: object;
   fields?: string[];
   kind?: MosaicProducerKind;
+  /** The table it queries; read off the instance's `from` when omitted. */
+  table?: string;
 }): () => void {
   const scope = scopeName(reg.scope);
   const name = qualify(reg.scope, reg.name);
@@ -269,10 +316,12 @@ export function registerMosaicInput(reg: {
   }
   const fallback = s.field ?? s.column;
   const fields = reg.fields ?? (fallback != null ? [fieldName(fallback)] : []);
+  const table = reg.table ?? clientTable(reg.input);
   const entry: MosaicProducerEntry = {
     name,
     ...(scope !== undefined ? { scope } : {}),
     host: "input",
+    tables: table !== undefined ? [table] : [],
     kind: reg.kind ?? "point",
     fields,
     source: reg.input,

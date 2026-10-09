@@ -594,6 +594,12 @@ Two places to write it, both in the code you already have:
 - **Per kit, the brief.** What the app *is*, its data model, and how the tools relate — the
   paragraph a consumer renders above the tool list:
 
+  Every tool also carries a **`group`** — `app` (report, set, locate, and an action unless it
+  says otherwise), `page` (read-page, selection, sources, source), `sql`, `crossfilter`,
+  `views`, or your own word on a `kit.registerTool` or an `action`. The brief renders groups as
+  sub-headings inside the read and write sections, and a consumer can keep or drop whole groups
+  (`toolsFromAiuiRegistry({ groups, excludeGroups })`) to shape a scenario.
+
   ```ts
   const kit = agentToolkit("app", {
     brief:

@@ -54,6 +54,7 @@ function kitDocs(registry: AiuiToolsRegistry | undefined): KitDoc[] {
       description: t.description,
       ...(t.usage !== undefined ? { usage: t.usage } : {}),
       ...(t.kind !== undefined ? { kind: t.kind } : {}),
+      ...(t.group !== undefined ? { group: t.group } : {}),
     })),
   }));
 }
@@ -332,6 +333,9 @@ export function ToolLog(props: ToolLogProps): JSX.Element {
                       <div class="aiui-toollog-item">
                         <div class="aiui-toollog-item-name">
                           {t.name}
+                          <Show when={t.group}>
+                            {(group) => <span class="aiui-toollog-item-kind">{group()}</span>}
+                          </Show>
                           <Show when={t.kind}>
                             {(kind) => <span class="aiui-toollog-item-kind">{kind()}</span>}
                           </Show>

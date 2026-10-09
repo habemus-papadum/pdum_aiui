@@ -112,6 +112,9 @@ export interface OracleTool {
   usage?: string;
   /** Eagerness class, `read` or `write` — groups the `Tools:` section. */
   kind?: "read" | "write";
+  /** Category (aiui-viz `AgentTool.group`) — a sub-heading in the `Tools:`
+   * section, and what a projection filters by. */
+  group?: string;
   /** JSON Schema for the arguments. Realtime has NO strict mode — the bridge
    * validates defensively; this schema is advisory to the model. */
   parameters: Record<string, unknown>;

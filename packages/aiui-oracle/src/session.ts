@@ -449,6 +449,7 @@ export class OracleSession {
       description: tool.description,
       ...(tool.usage !== undefined ? { usage: tool.usage } : {}),
       ...(tool.kind !== undefined ? { kind: tool.kind } : {}),
+      ...(tool.group !== undefined ? { group: tool.group } : {}),
     }));
     return renderToolBrief([{ ns: "app", brief: this.toolBrief, tools }]);
   }

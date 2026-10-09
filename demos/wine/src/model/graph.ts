@@ -5,27 +5,24 @@
  * and rebuilds this over the surviving DuckDB table, coordinator, and
  * crossfilter.
  *
- * The agent surface is mostly derived: one `set-<dim>` tool per filter
- * dimension declared in store.ts (points, price, country, variety, and the
- * projx/projy region pair that draws the embedding map's box), the four
- * named-view verbs, `clear-selection`, the library's `sql`/`schema` tools
- * over the dedicated read connection (`registerSqlTools`), and the reporters
- * below.
+ * The agent surface is mostly derived: ONE `cross-filter` tool over every
+ * filter dimension declared in store.ts (points, price, country, variety,
+ * and the projx/projy region pair that draws the embedding map's box) plus
+ * `reset-cross-filters` and the `crossfilter` report section
+ * (`registerCrossfilterTools`), the four named-view verbs, the library's
+ * `sql`/`schema` tools over the dedicated read connection
+ * (`registerSqlTools`, with the cross-filter's `crossfilter.wine` view), and
+ * the reporters below.
  */
 import {
-  action,
   agentToolkit,
   type Cell,
   cell,
   hotCellGraph,
   registerStandardTools,
 } from "@habemus-papadum/aiui-viz";
+import { crossfilterViews, registerCrossfilterTools } from "@habemus-papadum/aiui-viz/crossfilter";
 import { registerSqlTools } from "@habemus-papadum/aiui-viz/duckdb";
-import {
-  registerClearSelection,
-  selectionDimReport,
-} from "@habemus-papadum/aiui-viz/mosaic-selection";
-import { selectionInspectorModel } from "@habemus-papadum/aiui-viz/selection-inspector";
 import { appScope, type Summary, store } from "./store";
 
 export interface WineGraph {
@@ -61,46 +58,34 @@ function registerTools(): void {
       "wine: wine reviews (DuckDB table `wine`, with `province_geo` for the regions) " +
       "on two linked maps — an embedding atlas of the review text and a geographic " +
       "map of provinces — plus histograms of points and price and menus for country " +
-      "and variety. The set-<dim> tools ARE the filter clauses: set-projx/set-projy " +
-      "box the embedding, set-lon/set-lat box the map, the rest filter one column; " +
-      "report lists the active filters; sql queries the whole table, not the current " +
-      "filter.",
+      "and variety. cross-filter is the one tool for every filter dimension (mouse " +
+      "brushes, the lasso and the menus write the same crossfilter): projx+projy box " +
+      "the embedding, lon+lat box the map, the rest filter one column; report's " +
+      "crossfilter section lists what is active and the WHERE in force; sql on `wine` " +
+      "queries everything, on `crossfilter.wine` the current subset.",
   });
   const { registerReporter } = kit;
   registerStandardTools(kit);
 
-  /** Remove every cross-filter clause — dimensions, the map's region, the
-   * histogram brushes, the variety toggle, and the country menu alike. */
-  action({
-    scope: appScope,
-    name: "clear-filters",
-    inputSchema: { type: "object", properties: {}, additionalProperties: false },
-    run: () => ({ activeClauses: store.clearFilters() }),
-  });
-
-  // `clear-selection { name }` — one dimension ("points") or one component
-  // ("wine/embedding", the whole region box); clause and visual both.
-  registerClearSelection(appScope);
+  // The cross-filter surface: `cross-filter { set, clear }` over every
+  // dimension store.ts declares (clear takes a dimension or a component —
+  // "wine/embedding" clears the whole region box), `reset-cross-filters`,
+  // and the `crossfilter` report section.
+  registerCrossfilterTools(kit, { scope: appScope, selection: store.brush });
 
   // The agent's `sql` + `schema` tools over the dedicated read connection —
   // the library's; the `wine` and `province_geo` tables are introspected into
-  // the tool's usage once loaded (the hand-typed column list is gone).
-  registerSqlTools(kit, { runner: store.sqlRunner });
+  // the tool's usage once loaded — with the cross-filter's filtered twin of
+  // `wine` as a schema view.
+  registerSqlTools(kit, {
+    runner: store.sqlRunner,
+    views: [crossfilterViews({ selection: store.brush, scope: appScope })],
+  });
 
   registerReporter("loadState", () => store.loadState());
   registerReporter("rowsTotal", () => store.summary()?.rowsTotal ?? null);
   registerReporter("rowsFiltered", () => store.stats()?.rows ?? null);
   registerReporter("varieties", () => store.summary()?.varieties ?? null);
-  // Attributed clauses — the same rows the on-page SelectionInspector renders.
-  registerReporter("filters", () => {
-    return selectionInspectorModel({ signal: store.brushSignal, scope: appScope }).clauses;
-  });
-  // What COULD filter here, grouped by column (dims + live components).
-  registerReporter("capabilities", () => {
-    return selectionInspectorModel({ signal: store.brushSignal, scope: appScope }).capabilities;
-  });
-  // The declared dimensions with their semantic values (null = inactive).
-  registerReporter("dimensions", () => selectionDimReport(appScope));
   registerReporter("summary", () => store.summary() ?? null);
 }
 

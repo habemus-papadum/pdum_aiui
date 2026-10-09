@@ -22,6 +22,8 @@ export type PageToolDescriptorReport = {
   usage?: string;
   /** Eagerness class (aiui-viz `AgentTool.kind`). */
   kind?: "read" | "write";
+  /** Category (aiui-viz `AgentTool.group`). */
+  group?: string;
   inputSchema?: Record<string, unknown>;
 };
 

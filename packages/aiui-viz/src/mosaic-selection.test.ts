@@ -4,7 +4,7 @@
  * Selections: publication/replacement/retraction against the REAL pinned
  * mosaic-core Selection (the behaviors the module docblock claims are
  * verified here, not assumed), validation, durability across re-declaration
- * (the HMR shape), the derived set-<name> action, and the Selection→signal
+ * (the HMR shape), the spec surface the cross-filter tool renders, and the Selection→signal
  * read-back bridge.
  */
 import { clauseInterval, clausePoints, Selection } from "@uwdata/mosaic-core";
@@ -18,7 +18,7 @@ import {
   clearAllSelectionDims,
   clearSelectionDimRegistry,
   clearSelectionFor,
-  registerClearSelection,
+  onSelectionDimsChange,
   resetSelectionDimTargets,
   type SelectionClauseLike,
   selectionDim,
@@ -230,34 +230,22 @@ describe("selectionDim: durability across re-declaration (the HMR shape)", () =>
   });
 });
 
-describe("selectionDim: the derived set-<name> action", () => {
-  it("registers a real schema'd action whose run sets, clamps, and clears", () => {
+describe("selectionDim: the surface carries the spec the cross-filter tool renders", () => {
+  it("exposes bounds, unit, options and usage, and announces declarations", () => {
     const s = scope("selx");
     const sel = Selection.crossfilter();
+    let announced = 0;
+    const off = onSelectionDimsChange(() => announced++);
     selectionDim({
       name: "mag",
       scope: s,
       kind: "interval",
       min: 0,
       max: 10,
+      unit: "Mw",
+      usage: "Open-ended on one side.",
       targets: [{ selection: sel, field: "mag", table: "quakes" }],
     });
-    const a = actionByName("selx/set-mag");
-    expect(a).toBeDefined();
-    expect(a?.description).toContain("quakes.mag");
-    const schema = a?.inputSchema as { properties: Record<string, Record<string, unknown>> };
-    expect(schema.properties.lo).toMatchObject({ type: "number", minimum: 0, maximum: 10 });
-
-    expect(a?.run?.({ lo: -3, hi: 8 })).toEqual({ name: "selx/mag", applied: { lo: 0, hi: 8 } });
-    expect(sel.clauses).toHaveLength(1);
-    expect(a?.run?.({ clear: true })).toEqual({ name: "selx/mag", applied: null });
-    expect(sel.clauses).toHaveLength(0);
-    expect(() => a?.run?.({})).toThrow(/lo and\/or hi/);
-  });
-
-  it("a point dim's action carries the options as an enum and applies values", () => {
-    const s = scope("selx");
-    const sel = Selection.crossfilter();
     selectionDim({
       name: "type",
       scope: s,
@@ -265,16 +253,23 @@ describe("selectionDim: the derived set-<name> action", () => {
       options: ["earthquake", "eruption"],
       targets: [{ selection: sel, field: "type" }],
     });
-    const a = actionByName("selx/set-type");
-    const schema = a?.inputSchema as {
-      properties: { values: { items: { enum?: unknown[] } } };
-    };
-    expect(schema.properties.values.items.enum).toEqual(["earthquake", "eruption"]);
-    expect(a?.run?.({ values: ["eruption"] })).toEqual({
-      name: "selx/type",
-      applied: ["eruption"],
+    off();
+    expect(announced).toBe(2);
+    const byName = new Map(selectionDimSurface(s).map((e) => [e.name, e]));
+    expect(byName.get("selx/mag")).toMatchObject({
+      kind: "interval",
+      min: 0,
+      max: 10,
+      unit: "Mw",
+      usage: "Open-ended on one side.",
+      targets: [{ table: "quakes", field: "mag" }],
     });
-    expect(sel.clauses).toHaveLength(1);
+    expect(byName.get("selx/type")).toMatchObject({
+      kind: "point",
+      options: ["earthquake", "eruption"],
+    });
+    // No per-dimension action any more: the cross-filter tool is the verb.
+    expect(actionByName("selx/set-mag")).toBeUndefined();
   });
 });
 
@@ -422,25 +417,6 @@ describe("clearSelectionFor: the per-component clear", () => {
       targets: [{ selection: sel, field: "mag" }],
     });
     expect(() => clearSelectionFor("nope", s)).toThrow(/matches no dimension.*selx\/mag/s);
-  });
-
-  it("registerClearSelection registers the scope-qualified action over the same path", async () => {
-    const s = scope("selx");
-    const sel = Selection.crossfilter();
-    const mag = selectionDim({
-      name: "mag",
-      scope: s,
-      kind: "interval",
-      targets: [{ selection: sel, field: "mag" }],
-    });
-    registerClearSelection(s);
-    const a = actionByName("selx/clear-selection");
-    expect(a).toBeDefined();
-    mag.set({ lo: 5 });
-    await tick();
-    expect(a?.run?.({ name: "mag" })).toEqual({ cleared: "selx/mag", via: "dim" });
-    await tick();
-    expect(sel.clauses).toHaveLength(0);
   });
 });
 

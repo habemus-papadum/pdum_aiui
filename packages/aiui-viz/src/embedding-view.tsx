@@ -26,7 +26,7 @@
  *    forwarding facade on the `rangeSelection` prop (the one Selection prop
  *    the component uses without an `isSelection` brand check) and registers
  *    it in the producer registry under `name` — the inspector, `report()`,
- *    and `clear-selection` then attribute its clauses like any plot brush.
+ *    and `cross-filter { clear }` then attribute its clauses like any plot brush.
  *  - **Region adoption.** The captured client gets an `__aiuiDrive` hook
  *    (mosaic-facet.ts's self-driving-producer seam) that routes a driven
  *    value through `update({ rangeSelectionValue })` — the component draws

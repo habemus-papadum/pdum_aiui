@@ -194,6 +194,15 @@ export interface SqlRunner {
   query(sql: string, options?: { signal?: AbortSignal }): Promise<SqlResult>;
   /** Best-effort cancel of the in-flight statement (a timeout calls it). */
   cancel?(): Promise<void>;
+  /**
+   * Run one statement for its effect — the schema views' DDL (`CREATE
+   * SCHEMA`, `CREATE OR REPLACE VIEW`). Only a runner whose database can
+   * HOLD catalog state across calls, and may receive it, implements this:
+   * duckdb-wasm does; a fresh-session connector cannot, and a remote
+   * database must not be written to. Without it, schema views are reported
+   * by their body text instead of materialized (see {@link SchemaViewProvider}).
+   */
+  exec?(sql: string): Promise<void>;
 }
 
 /** Arrow's row proxies read like objects; this is all we need of them. */
@@ -218,6 +227,9 @@ export function duckdbRunner(connection: duckdb.AsyncDuckDBConnection): SqlRunne
     },
     async cancel() {
       await connection.cancelSent();
+    },
+    async exec(sql) {
+      await connection.query(sql);
     },
   };
 }
@@ -397,8 +409,23 @@ export function formatMarkdown(result: SqlToolResult): string {
   return lines.join("\n") + note;
 }
 
+export interface SchemaTable {
+  /** The name to write after FROM: bare in the `main` schema, `schema.name` elsewhere. */
+  name: string;
+  /** The schema it lives in. */
+  schema: string;
+  /** `BASE TABLE` or `VIEW`, as information_schema says. */
+  type: string;
+  columns: Array<{ name: string; type: string }>;
+  /** The schema views (see {@link SchemaViewProvider}) that are views OF this table. */
+  views?: string[];
+}
+
 export interface SchemaResult {
-  tables: Array<{ name: string; type: string; columns: Array<{ name: string; type: string }> }>;
+  tables: SchemaTable[];
+  /** The schema views a provider contributed, with their provenance (see
+   * {@link SchemaViewStatus}); absent when the tools registered none. */
+  views?: SchemaViewStatus[];
   /** `SUMMARIZE <table>`, when asked for. */
   summary?: SqlToolResult;
 }
@@ -407,36 +434,296 @@ const quoteIdent = (name: string): string => `"${name.replace(/"/g, '""')}"`;
 const quoteLit = (s: string): string => `'${s.replace(/'/g, "''")}'`;
 const USER_SCHEMAS = "table_schema NOT IN ('information_schema', 'pg_catalog')";
 
+/** `schema.name` for a table outside `main`, else the bare name. */
+export function qualifiedTableName(schema: string, name: string): string {
+  return schema === "main" || schema === "" ? name : `${schema}.${name}`;
+}
+
+/** A `catalog.schema.name`, `schema.name` or bare `name` back into its parts. */
+function splitTableName(name: string): { catalog?: string; schema?: string; name: string } {
+  const parts = name.split(".");
+  const bare = parts.pop() ?? name;
+  const schema = parts.pop();
+  const catalog = parts.pop();
+  return {
+    ...(catalog !== undefined ? { catalog } : {}),
+    ...(schema !== undefined ? { schema } : {}),
+    name: bare,
+  };
+}
+
+/** The SQL to name a table in a statement: every dotted part quoted. */
+function tableRef(name: string): string {
+  return name
+    .split(".")
+    .map((part) => quoteIdent(part))
+    .join(".");
+}
+
 /**
  * Tables and columns from `information_schema` (every catalog, minus the
  * system schemas); `summarize` adds DuckDB's `SUMMARIZE` for one table —
- * on request only, since it scans the table.
+ * on request only, since it scans the table. A table outside `main` (a
+ * schema view, say) is named `schema.name`, which is what FROM takes.
  */
 export async function schemaOf(
   runner: SqlRunner | Promise<SqlRunner>,
   options: { table?: string; summarize?: boolean; timeoutMs?: number } = {},
 ): Promise<SchemaResult> {
-  const only = options.table !== undefined ? ` AND table_name = ${quoteLit(options.table)}` : "";
+  const want = options.table !== undefined ? splitTableName(options.table) : undefined;
+  const only =
+    want === undefined
+      ? ""
+      : ` AND table_name = ${quoteLit(want.name)}` +
+        (want.schema !== undefined ? ` AND table_schema = ${quoteLit(want.schema)}` : "") +
+        (want.catalog !== undefined ? ` AND table_catalog = ${quoteLit(want.catalog)}` : "");
   const run = (sql: string) =>
     runSql(runner, sql, { limit: SQL_ROW_CAP, byteCap: 1 << 20, timeoutMs: options.timeoutMs });
   const tables = await run(
-    `SELECT table_name, table_type FROM information_schema.tables WHERE ${USER_SCHEMAS}${only} ORDER BY table_name`,
+    `SELECT table_schema, table_name, table_type FROM information_schema.tables WHERE ${USER_SCHEMAS}${only} ORDER BY table_schema, table_name`,
   );
   const columns = await run(
-    `SELECT table_name, column_name, data_type FROM information_schema.columns WHERE ${USER_SCHEMAS}${only} ORDER BY table_name, ordinal_position`,
+    `SELECT table_schema, table_name, column_name, data_type FROM information_schema.columns WHERE ${USER_SCHEMAS}${only} ORDER BY table_schema, table_name, ordinal_position`,
   );
-  const byTable = new Map<string, SchemaResult["tables"][number]>();
-  for (const [name, type] of tables.rows) {
-    byTable.set(String(name), { name: String(name), type: String(type), columns: [] });
+  // Read by column name: a runner that answers with fewer columns (no
+  // schema column) still works, as `main`.
+  const pick = (result: SqlResult, row: unknown[], name: string, fallback = ""): string => {
+    const i = result.columns.indexOf(name);
+    return i === -1 ? fallback : String(row[i]);
+  };
+  const byTable = new Map<string, SchemaTable>();
+  for (const row of tables.rows) {
+    const schema = pick(tables, row, "table_schema", "main");
+    const name = qualifiedTableName(schema, pick(tables, row, "table_name"));
+    byTable.set(name, { name, schema, type: pick(tables, row, "table_type"), columns: [] });
   }
-  for (const [table, column, type] of columns.rows) {
-    byTable.get(String(table))?.columns.push({ name: String(column), type: String(type) });
+  for (const row of columns.rows) {
+    const schema = pick(columns, row, "table_schema", "main");
+    const name = qualifiedTableName(schema, pick(columns, row, "table_name"));
+    byTable.get(name)?.columns.push({
+      name: pick(columns, row, "column_name"),
+      type: pick(columns, row, "data_type"),
+    });
   }
   const out: SchemaResult = { tables: [...byTable.values()] };
   if (options.summarize === true && options.table !== undefined) {
-    out.summary = await run(`SELECT * FROM (SUMMARIZE ${quoteIdent(options.table)})`);
+    out.summary = await run(`SELECT * FROM (SUMMARIZE ${tableRef(options.table)})`);
   }
   return out;
+}
+
+// ── schema views ──────────────────────────────────────────────────────────
+
+/**
+ * One view a provider contributes to the database the agent sees:
+ * `<schema>.<name>`, usually a filtered twin of a base table (`of`). The
+ * body is read when the view is (re)materialized; the provenance rides in
+ * the `schema` tool's answer so the model knows what it is looking at.
+ */
+export interface SchemaView {
+  /** The schema the view lives in — the provider's word (`crossfilter`). */
+  schema: string;
+  /** The view's name; a filtered twin keeps its base table's name. */
+  name: string;
+  /** The base table this is a view of, when it is one. */
+  of?: string;
+  /** The body: one SELECT over the base tables. Read at materialization. */
+  sql(): string;
+  /** Provenance for the `schema` tool: what the view is, what filters it,
+   * which tool changes it. Read on every `schema` call. */
+  describe(): Record<string, unknown>;
+}
+
+/**
+ * Something that contributes views to the agent's database — the cross-
+ * filter (aiui-viz/crossfilter), a control-driven subset, a named view…
+ * The SQL tools own what follows: materializing the views as real DuckDB
+ * views in their schema (when the runner can hold them — see
+ * {@link SqlRunner.exec}), refreshing them lazily before the next `sql` or
+ * `schema` call once the provider signalled a change, listing them with
+ * provenance in `schema`, and naming them in `sql`'s usage. The provider
+ * knows nothing of the tools; the tools know nothing of what filters.
+ */
+export interface SchemaViewProvider {
+  /** A short id for the provenance (`cross-filter`, `control`). */
+  id: string;
+  /** The views, given the base tables the tools introspected (so a provider
+   * can learn columns, or offer a view per table it covers). */
+  views(tables: readonly SchemaTable[]): SchemaView[];
+  /** Fires when a view's body may have changed. Absent ⇒ the bodies are
+   * re-read before every call (a body that did not change costs no DDL). */
+  subscribe?(onChange: () => void): () => void;
+}
+
+/** One schema view as the `schema` tool reports it. */
+export interface SchemaViewStatus {
+  /** `schema.name` — what FROM takes. */
+  name: string;
+  of?: string;
+  provider: string;
+  /** True when the view exists in the database; false when this runner
+   * cannot hold one, in which case `sql` carries the body to inline. */
+  materialized: boolean;
+  /** The body, when not materialized (use it as a subquery or a CTE). */
+  sql?: string;
+  /** The provider's provenance (see {@link SchemaView.describe}). */
+  about: Record<string, unknown>;
+  /** The materialization error, when the last attempt failed. */
+  error?: string;
+}
+
+/** Options for {@link SchemaViews}. */
+interface SchemaViewsOptions {
+  providers: readonly SchemaViewProvider[];
+  /** Prefix the views' schemas with this catalog (`memory` beside a remote
+   * database), so a cloud database never receives them. */
+  catalog?: string;
+}
+
+/**
+ * The materializer: the state behind the `sql`/`schema` tools' views. Lazy —
+ * `refresh` runs before a tool call, and only re-issues DDL for a view whose
+ * body changed (text equality), so a brush drag marks dirty and costs one
+ * `CREATE OR REPLACE VIEW` at the next call, not one per event.
+ */
+export class SchemaViews {
+  private readonly providers: readonly SchemaViewProvider[];
+  private readonly catalog: string | undefined;
+  private tables: readonly SchemaTable[] = [];
+  private dirty = true;
+  /** `schema.name` → the body last materialized. */
+  private readonly bodies = new Map<string, string>();
+  private readonly schemasMade = new Set<string>();
+  private current: Array<{ view: SchemaView; status: SchemaViewStatus }> = [];
+  private readonly onNames = new Set<(names: string[]) => void>();
+  private names: string[] = [];
+
+  constructor(options: SchemaViewsOptions) {
+    this.providers = options.providers;
+    this.catalog = options.catalog;
+    for (const p of this.providers) {
+      p.subscribe?.(() => {
+        this.dirty = true;
+      });
+    }
+  }
+
+  /** The base tables providers see; call after introspection. */
+  setTables(tables: readonly SchemaTable[]): void {
+    this.tables = tables.filter((t) => !this.schemasMade.has(t.schema));
+    this.dirty = true;
+  }
+
+  /** The views' FROM-able names as of the last refresh. */
+  viewNames(): string[] {
+    return [...this.names];
+  }
+
+  /** Fires when the SET of view names changes (bodies changing is not an event). */
+  onViewNames(fn: (names: string[]) => void): () => void {
+    this.onNames.add(fn);
+    return () => this.onNames.delete(fn);
+  }
+
+  /** Every provider's views and their status as of the last refresh. */
+  status(): SchemaViewStatus[] {
+    return this.current.map((c) => ({ ...c.status, about: c.view.describe() }));
+  }
+
+  private qualified(view: SchemaView): string {
+    const schema = this.catalog !== undefined ? `${this.catalog}.${view.schema}` : view.schema;
+    return `${schema}.${view.name}`;
+  }
+
+  /**
+   * Bring the database's views up to date with the providers: materialize
+   * through the runner's `exec` when it has one, else carry the bodies in
+   * the status for the tools to report. Never throws — a failing view is
+   * reported with its error and the user's statement still runs.
+   */
+  async refresh(runner: SqlRunner | Promise<SqlRunner>): Promise<void> {
+    const always = this.providers.some((p) => p.subscribe === undefined);
+    if (!this.dirty && !always) return;
+    this.dirty = false;
+    const views = this.providers.flatMap((p) =>
+      p.views(this.tables).map((view) => ({ provider: p.id, view })),
+    );
+    const live = await Promise.resolve(runner);
+    const canHold = typeof live.exec === "function";
+    const next: Array<{ view: SchemaView; status: SchemaViewStatus }> = [];
+    const keep = new Set<string>();
+    for (const { provider, view } of views) {
+      const name = this.qualified(view);
+      keep.add(name);
+      let body: string;
+      try {
+        body = view.sql();
+      } catch (err) {
+        next.push({
+          view,
+          status: {
+            name,
+            ...(view.of !== undefined ? { of: view.of } : {}),
+            provider,
+            materialized: false,
+            about: {},
+            error: message(err),
+          },
+        });
+        continue;
+      }
+      const status: SchemaViewStatus = {
+        name,
+        ...(view.of !== undefined ? { of: view.of } : {}),
+        provider,
+        materialized: false,
+        about: {},
+      };
+      if (!canHold || live.exec === undefined) {
+        status.sql = body;
+      } else if (this.bodies.get(name) === body) {
+        status.materialized = true;
+      } else {
+        try {
+          const schemaName =
+            this.catalog !== undefined ? `${this.catalog}.${view.schema}` : view.schema;
+          if (!this.schemasMade.has(view.schema)) {
+            await live.exec(`CREATE SCHEMA IF NOT EXISTS ${schemaRef(schemaName)}`);
+            this.schemasMade.add(view.schema);
+          }
+          await live.exec(`CREATE OR REPLACE VIEW ${tableRef(name)} AS ${body}`);
+          this.bodies.set(name, body);
+          status.materialized = true;
+        } catch (err) {
+          status.sql = body;
+          status.error = message(err);
+          this.bodies.delete(name);
+        }
+      }
+      next.push({ view, status });
+    }
+    // Views a provider stopped offering: drop them from the database.
+    for (const stale of [...this.bodies.keys()].filter((n) => !keep.has(n))) {
+      this.bodies.delete(stale);
+      if (live.exec !== undefined) {
+        await live.exec(`DROP VIEW IF EXISTS ${tableRef(stale)}`).catch(() => {});
+      }
+    }
+    this.current = next;
+    const names = next.map((c) => c.status.name);
+    if (names.join("\n") !== this.names.join("\n")) {
+      this.names = names;
+      for (const fn of [...this.onNames]) fn([...names]);
+    }
+  }
+}
+
+/** The SQL to name a schema: `catalog.schema` quoted part by part. */
+function schemaRef(name: string): string {
+  return name
+    .split(".")
+    .map((part) => quoteIdent(part))
+    .join(".");
 }
 
 export interface SqlToolsOptions {
@@ -453,6 +740,15 @@ export interface SqlToolsOptions {
   defaultLimit?: number;
   byteCap?: number;
   timeoutMs?: number;
+  /**
+   * Views to add to the database the agent sees (see
+   * {@link SchemaViewProvider}): the cross-filter's filtered twins, a
+   * control-driven subset… Materialized through the runner's `exec` when it
+   * has one; reported by body otherwise.
+   */
+  views?: readonly SchemaViewProvider[];
+  /** Put the views in this catalog (`memory` beside a remote database). */
+  viewCatalog?: string;
 }
 
 /**
@@ -466,21 +762,35 @@ export function registerSqlTools(kit: AgentToolkit, options: SqlToolsOptions): v
   const defaultLimit = Math.min(rowCap, options.defaultLimit ?? SQL_DEFAULT_LIMIT);
   const byteCap = options.byteCap ?? SQL_BYTE_CAP;
   const caps = { rowCap, byteCap, timeoutMs: options.timeoutMs };
+  const views =
+    options.views !== undefined && options.views.length > 0
+      ? new SchemaViews({
+          providers: options.views,
+          ...(options.viewCatalog !== undefined ? { catalog: options.viewCatalog } : {}),
+        })
+      : undefined;
+  let knownTables: string[] | undefined = options.tables;
 
   const registerSql = (tables: string[] | undefined): void => {
     const tableList =
       tables !== undefined && tables.length > 0
         ? `Tables: ${tables.map((t) => `\`${t}\``).join(", ")} (call schema for their columns and types).`
         : "Call schema first to learn the tables and columns.";
+    const viewNames = views?.viewNames() ?? [];
+    const viewList =
+      viewNames.length > 0
+        ? ` Views: ${viewNames.map((v) => `\`${v}\``).join(", ")} — each a filtered twin of the table it is named after (schema says by what); query one to ask about the current subset, the base table for everything.`
+        : "";
     kit.registerTool({
       name: "sql",
       description: "Run one read-only SQL SELECT/WITH statement against the app's DuckDB database.",
       usage:
-        `${tableList} Results come back columnar (columns, types, rows) capped at ${defaultLimit} rows ` +
+        `${tableList}${viewList} Results come back columnar (columns, types, rows) capped at ${defaultLimit} rows ` +
         `by default (limit up to ${rowCap}) and ${byteCap} bytes; \`truncated\` says when either cut ` +
         "in, so aggregate in SQL rather than fetching rows. An error carries DuckDB's message " +
         'and position: fix the statement and retry. format: "markdown" returns a table instead.',
       kind: "read",
+      group: "sql",
       inputSchema: {
         type: "object",
         properties: {
@@ -497,14 +807,29 @@ export function registerSqlTools(kit: AgentToolkit, options: SqlToolsOptions): v
       run: async (args) => {
         const sql = String(args?.sql ?? "");
         const limit = typeof args?.limit === "number" ? args.limit : defaultLimit;
+        if (views !== undefined) await views.refresh(options.runner);
         const result = await runSql(options.runner, sql, { ...caps, limit });
+        // The views the statement names, with what filtered them at this moment.
+        const used = (views?.status() ?? []).filter((v) => sql.includes(v.name));
+        const extra =
+          used.length > 0
+            ? {
+                views: Object.fromEntries(
+                  used.map((v) => [
+                    v.name,
+                    { ...v.about, ...(v.sql !== undefined ? { sql: v.sql } : {}) },
+                  ]),
+                ),
+              }
+            : {};
         return args?.format === "markdown"
-          ? { markdown: formatMarkdown(result), truncated: result.truncated }
-          : result;
+          ? { markdown: formatMarkdown(result), truncated: result.truncated, ...extra }
+          : { ...result, ...extra };
       },
     });
   };
   registerSql(options.tables);
+  views?.onViewNames(() => registerSql(knownTables));
 
   kit.registerTool({
     name: "schema",
@@ -516,6 +841,7 @@ export function registerSqlTools(kit: AgentToolkit, options: SqlToolsOptions): v
       "table, and summarize: true (with a table) for per-column min/max/nulls — slow on a " +
       "large table, so only when the question needs it.",
     kind: "read",
+    group: "sql",
     inputSchema: {
       type: "object",
       properties: {
@@ -524,21 +850,42 @@ export function registerSqlTools(kit: AgentToolkit, options: SqlToolsOptions): v
       },
       additionalProperties: false,
     },
-    run: (args) =>
-      schemaOf(options.runner, {
+    run: async (args) => {
+      if (views !== undefined) await views.refresh(options.runner);
+      const schema = await schemaOf(options.runner, {
         ...(typeof args?.table === "string" ? { table: args.table } : {}),
         summarize: args?.summarize === true,
         timeoutMs: options.timeoutMs,
-      }),
+      });
+      if (views === undefined) return schema;
+      const status = views.status();
+      // Each base table lists the views that are views OF it; a materialized
+      // view that information_schema already listed keeps its row.
+      for (const t of schema.tables) {
+        const mine = status.filter((v) => v.of === t.name).map((v) => v.name);
+        if (mine.length > 0) t.views = mine;
+      }
+      return { ...schema, views: status };
+    },
   });
 
   // The table list is the one fact the usage should carry and the app
   // should not have to type: introspect once the database is there, and
   // re-register `sql` (replace-by-name, HMR-safe) so every consumer sees it.
-  if (options.tables === undefined) {
+  // The view providers get the same introspection (their base tables), and
+  // the first refresh follows so the view names ride the same usage.
+  if (options.tables === undefined || views !== undefined) {
     void Promise.resolve(options.runner)
       .then((runner) => schemaOf(runner, { timeoutMs: options.timeoutMs }))
-      .then((schema) => registerSql(schema.tables.map((t) => t.name)))
+      .then(async (schema) => {
+        const base = schema.tables.filter((t) => t.schema === "main" || t.schema === "");
+        if (options.tables === undefined) knownTables = base.map((t) => t.name);
+        if (views !== undefined) {
+          views.setTables(base);
+          await views.refresh(options.runner);
+        }
+        registerSql(knownTables);
+      })
       .catch(() => {
         // Introspection is a convenience; the generic usage stands.
       });

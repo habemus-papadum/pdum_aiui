@@ -205,8 +205,10 @@ function toolOfAction(name: string, toolName: string): AgentTool | undefined {
     name: toolName,
     description: a.description ?? `Run the app's "${a.name}" action.`,
     ...(a.usage !== undefined ? { usage: a.usage } : {}),
-    // An action changes the app unless it says otherwise.
+    // An action changes the app unless it says otherwise; it is the app's
+    // own surface unless it says otherwise.
     kind: a.kind ?? "write",
+    group: a.group ?? "app",
     ...(a.params !== undefined ? { params: a.params } : {}),
     ...(a.inputSchema !== undefined ? { inputSchema: a.inputSchema } : {}),
     // Late-bound through the registry so an HMR re-declaration swaps the
@@ -260,6 +262,7 @@ export function registerStandardTools(
       "Call it before answering a question about the app's state or before the first " +
       "write, and again after a write when a count or a derived value matters.",
     kind: "read",
+    group: "app",
     params: { format: '"brief" (default) | "full"' },
     inputSchema: {
       type: "object",
@@ -280,6 +283,7 @@ export function registerStandardTools(
       "One control per call; trust the returned value over the request (it clamps and " +
       "snaps). Names, bounds, and units come from report.",
     kind: "write",
+    group: "app",
     params: { name: "control name (see report)", value: "the new value" },
     inputSchema: {
       type: "object",
@@ -311,6 +315,7 @@ export function registerStandardTools(
       "Map DOM elements to their source locations (compile-time data-source-loc stamps). " +
       "Combine with window.__AIUI__.sourceRoot for absolute paths.",
     kind: "read",
+    group: "app",
     params: { selector: `CSS selector; first ${LOCATE_LIMIT} matches returned` },
     run: (args) => {
       const selector = String(args?.selector ?? "*");
@@ -336,6 +341,7 @@ export function registerStandardTools(
       "offset when truncated is true. The page's own agent chrome (the tool log, a voice " +
       "dock) is never included.",
     kind: "read",
+    group: "page",
     params: {
       selector: "CSS selector of the region to read (default: the whole page)",
       maxChars: `characters per call (default ${READ_PAGE_DEFAULT_CHARS}, max ${READ_PAGE_MAX_CHARS})`,
@@ -382,6 +388,7 @@ export function registerStandardTools(
       `to widen the text (default ${SELECTION_DEFAULT_CHARS}), format: "markdown" to get a ` +
       "table or an equation shaped, rects: true for screen geometry.",
     kind: "read",
+    group: "page",
     params: {
       maxChars: `characters of text (default ${SELECTION_DEFAULT_CHARS}, max ${SELECTION_MAX_CHARS})`,
       depth: `how many elements and cells each chain lists (default ${SELECTION_DEFAULT_DEPTH}, max ${SELECTION_MAX_DEPTH})`,
@@ -430,6 +437,7 @@ export function registerStandardTools(
       "report full all do), or to see what a published build included. filter narrows by " +
       `substring (a directory, an extension); limit caps the list (default ${SOURCES_DEFAULT_LIMIT}).`,
     kind: "read",
+    group: "page",
     params: {
       filter: "keep paths containing this substring",
       limit: `at most this many paths (default ${SOURCES_DEFAULT_LIMIT})`,
@@ -476,6 +484,7 @@ export function registerStandardTools(
       'server, or on a site built with aiui({ sources: "ship" }); otherwise available is false ' +
       "and reason says why.",
     kind: "read",
+    group: "page",
     params: {
       file: "the file, as stamped (src/…)",
       from: "first line, 1-based",

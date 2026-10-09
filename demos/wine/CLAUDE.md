@@ -38,12 +38,12 @@ are instant.
 - **Keep the split.** `src/model/store.ts` = the durable DuckDB/Mosaic island: coordinator,
   crossfilter brush, the variety origin (`categorySelection`), the six `selectionDim`s, and
   the component bindings — including the region pair `[projx, projy] → "wine/embedding"` that
-  adopts the embedding view (agent `set-projx`/`set-projy` draws the on-map box; a mouse lasso
+  adopts the embedding view (an agent `cross-filter { set: { projx, projy } }` draws the on-map box; a mouse lasso
   mirrors its bounding box back). `src/model/graph.ts` = disposable cells + agent tools.
   `src/ui/` = pure readers.
 - **The embedding view is a producer like any plot.** Its `filter` and `rangeSelection` are
   the shared brush; its `name="embedding"` prop is what the region binding, the inspector,
-  and `clear-selection` key on. Don't bypass the bridge to talk to `embedding-atlas` directly.
+  and `cross-filter { clear: [name] }` key on. Don't bypass the bridge to talk to `embedding-atlas` directly.
 - **Don't remove the integration.** The `aiui()` plugin in vite.config.ts stamps source
   locations; the locator also runs under Vitest.
 

@@ -16,21 +16,27 @@
  * A **selection dimension** reifies one logical filter (a magnitude range, an
  * event-type pick) the way `control()` reifies one parameter: declared once
  * in the store with a compiler-injected name and description, validated in
- * one place, durable across hot edits, visible in `report()`, and exposed to
- * agents as a real named tool (`set-<name>`, registered through `action()` so
- * the standard-tools pipeline, the page-tools relay, and the oracle all see
- * it with a real JSON Schema). Setting a dimension publishes clauses exactly
- * the way a mouse brush does — same Selection, same clause shape, stable
- * per-(dimension, target) sources — so every coordinated view cross-filters
- * identically for a drag, a `page_tools_call`, and a spoken sentence.
+ * one place, durable across hot edits, visible in `report()`, and driven by
+ * agents through ONE tool for all of them — `cross-filter { set, clear }`
+ * (./crossfilter's `registerCrossfilterTools`), the way `set` is one tool
+ * for every control; its schema carries a typed property per dimension and
+ * re-renders as dimensions are declared. (Each dimension was its own
+ * `set-<name>` tool until 2026-10-09.) Setting a dimension publishes clauses
+ * exactly the way a mouse brush does — same Selection, same clause shape,
+ * stable per-(dimension, target) sources — so every coordinated view
+ * cross-filters identically for a drag, a `page_tools_call`, and a spoken
+ * sentence.
  *
- * Multi-table is first-class because Mosaic won't do it for us: a dimension
- * takes a LIST of targets, each pairing a Selection with a table-appropriate
- * field expression, and fans the semantic value out as one clause per target
- * ("time" can be `epoch_ms(ts)` on `turns` and `started_at` on `sessions`).
- * The `include` relay cannot substitute — it forwards the same clause object
- * verbatim. One coordinator, one table, one Selection stays the degenerate
- * common case: one target.
+ * Multi-table: the cross-filter from ./crossfilter ROUTES clauses — a clause
+ * reaches a client only when its table has every column the clause names —
+ * so one Selection serves every table, a dimension declares ONE target with
+ * a plain column name, and a table without that column simply drops the
+ * clause. The fan-out below — a dimension with a LIST of targets, each a
+ * table-appropriate field expression ("time" as `epoch_ms(ts)` on `turns`
+ * and `started_at` on `sessions`) — remains for a renamed or computed
+ * column, publishing into that same routed Selection. The `include` relay
+ * forwards clause objects verbatim; routing happens where they are
+ * resolved, so relayed clauses route too.
  *
  * Distilled from the two apps that hand-rolled all of this (seismos'
  * `set-filter` tool; cc-miner's filter/version-counter bridge), including the
@@ -45,8 +51,11 @@
  *  - The coordinator batches: a `report()` immediately after a set reads
  *    pre-update counts — await a task boundary before re-reading them.
  *  - Pre-aggregation binds a clause's raw columns against each client's own
- *    table; a deliberately cross-table dimension therefore needs preagg
- *    disabled (cc-miner's global switch) or `filterStable = false` clients.
+ *    table; on a stock `Selection.crossfilter()` a deliberately cross-table
+ *    dimension therefore needs preagg disabled or `filterStable = false`
+ *    clients. The routed cross-filter retires that rule: the pre-aggregator
+ *    asks `skip` before materializing, and a client whose table cannot bind
+ *    the active clause is skipped.
  *  - The Selections a dimension targets must be DURABLE (store-owned), like
  *    every Mosaic root — the dimension's own value is; a disposable Selection
  *    would forget the clauses while the dimension remembers the range.
@@ -68,7 +77,6 @@ import { clauseInterval, clausePoints, Selection } from "@uwdata/mosaic-core";
 import type { ExprNode } from "@uwdata/mosaic-sql";
 import { column, gte, lte } from "@uwdata/mosaic-sql";
 import { createSignal } from "solid-js";
-import { type ActionSpec, action } from "./control";
 import { durable, durableSignal } from "./durable";
 import { mosaicProducerByName, mosaicProducers } from "./mosaic-registry";
 import type { Scope } from "./scope";
@@ -202,12 +210,45 @@ export interface SelectionDimSurfaceEntry {
   kind: "interval" | "point";
   scope?: string;
   description?: string;
+  /** How to use it (compiler-lifted from `@usage`), when declared. */
+  usage?: string;
   loc?: string;
   value: unknown;
   targets: { table?: string; field: string }[];
+  /** An interval's write bounds and unit, when declared. */
+  min?: number;
+  max?: number;
+  unit?: string;
+  /** A point dimension's legal values, when declared. */
+  options?: readonly (string | number | boolean)[];
 }
 
 const dims = new Map<string, SelectionDim<unknown>>();
+const specs = new Map<string, SelectionDimSpec>();
+const dimListeners = new Set<() => void>();
+
+function notifyDimsChanged(): void {
+  for (const l of [...dimListeners]) {
+    try {
+      l();
+    } catch {
+      // one consumer's error must not starve the others
+    }
+  }
+}
+
+/**
+ * Plain change subscription: fires after every `selectionDim()` declaration
+ * (and the test-only registry clear). The cross-filter tool re-renders its
+ * schema from it, so a dimension declared after the tool registered — or
+ * re-declared under HMR — shows up. Returns the unsubscribe.
+ */
+export function onSelectionDimsChange(listener: () => void): () => void {
+  dimListeners.add(listener);
+  return () => {
+    dimListeners.delete(listener);
+  };
+}
 
 const MISSING_NAME =
   "selectionDim() needs a name — either the aiui() Vite plugin " +
@@ -219,15 +260,6 @@ const MISSING_NAME =
 function targetLabel(t: SelectionDimTarget): { table?: string; field: string } {
   const field = typeof t.field === "string" ? t.field : String(t.field);
   return { ...(t.table !== undefined ? { table: t.table } : {}), field };
-}
-
-function targetsPhrase(targets: readonly SelectionDimTarget[]): string {
-  return targets
-    .map((t) => {
-      const l = targetLabel(t);
-      return l.table !== undefined ? `${l.table}.${l.field}` : l.field;
-    })
-    .join(", ");
 }
 
 /**
@@ -423,110 +455,38 @@ export function selectionDim(spec: SelectionDimSpec): SelectionDim<IntervalValue
     );
   }
   dims.set(name, dim);
-  registerDimAction(spec, dim, leaf);
+  specs.set(name, spec);
+  notifyDimsChanged();
   return dim;
-}
-
-/** The derived verb: one `set-<name>` action per dimension, so the standard
- * tools, the page-tools relay, and the oracle all get a real, schema'd tool
- * with zero app wiring. The spec is built as a VARIABLE and passed to
- * `action()` — never an inline options object: this module is compiled by the
- * consuming app's aiui plugin (workspace source-first), and an inline literal
- * with a computed `name` is a compile error there by design. The prebuilt-
- * object form is the sanctioned dynamic-registration path (the runtime name
- * guard is the backstop). */
-function registerDimAction(
-  spec: SelectionDimSpec,
-  dim: SelectionDim<IntervalValue | PointValue>,
-  leaf: string,
-): void {
-  const where = targetsPhrase(spec.targets);
-  const prefix = spec.description !== undefined ? `${spec.description} — ` : "";
-  const clearProp = { clear: { type: "boolean", description: "true removes this filter" } };
-  const docs = {
-    ...(spec.scope !== undefined ? { scope: spec.scope } : {}),
-    ...(spec.loc !== undefined ? { loc: spec.loc } : {}),
-    ...(spec.usage !== undefined ? { usage: spec.usage } : {}),
-    kind: "write" as const,
-  };
-  let actionSpec: ActionSpec;
-  if (spec.kind === "interval") {
-    const unit = spec.unit !== undefined ? ` (${spec.unit})` : "";
-    const bounds = {
-      ...(spec.min !== undefined ? { minimum: spec.min } : {}),
-      ...(spec.max !== undefined ? { maximum: spec.max } : {}),
-    };
-    actionSpec = {
-      name: `set-${leaf}`,
-      ...docs,
-      description:
-        `${prefix}Set the "${leaf}" cross-filter, an interval on ${where}${unit}: pass lo ` +
-        "and/or hi (one side alone gives an open-ended range); { clear: true } removes the " +
-        "filter. Every coordinated view updates. Returns { applied } — trust it over the " +
-        "request (bounds clamp). Counts refresh after a task boundary; re-read report() then.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          lo: { type: "number", description: "inclusive lower bound", ...bounds },
-          hi: { type: "number", description: "inclusive upper bound", ...bounds },
-          ...clearProp,
-        },
-        additionalProperties: false,
-      },
-      run: (args = {}) => {
-        if (args.clear === true) return { name: dim.name, applied: dim.clear() };
-        const lo = args.lo as number | undefined;
-        const hi = args.hi as number | undefined;
-        if (lo == null && hi == null) {
-          throw new Error(`set-${leaf}: pass lo and/or hi (numbers), or { clear: true }`);
-        }
-        return {
-          name: dim.name,
-          applied: dim.set({
-            ...(lo != null ? { lo } : {}),
-            ...(hi != null ? { hi } : {}),
-          }),
-        };
-      },
-    };
-  } else {
-    const pointSpec = spec;
-    actionSpec = {
-      name: `set-${leaf}`,
-      ...docs,
-      description:
-        `${prefix}Set the "${leaf}" cross-filter, a categorical pick on ${where}: pass values ` +
-        "(rows matching ANY of them pass); { clear: true } removes the filter. Every " +
-        "coordinated view updates. Returns { applied }. Counts refresh after a task boundary; " +
-        "re-read report() then.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          values: {
-            type: "array",
-            description: "values to select — rows matching any of them pass",
-            items: pointSpec.options !== undefined ? { enum: [...pointSpec.options] } : {},
-          },
-          ...clearProp,
-        },
-        additionalProperties: false,
-      },
-      run: (args = {}) => {
-        if (args.clear === true) return { name: dim.name, applied: dim.clear() };
-        const values = args.values as PointValue | undefined;
-        if (values == null) {
-          throw new Error(`set-${leaf}: pass values (an array), or { clear: true }`);
-        }
-        return { name: dim.name, applied: dim.set(values) };
-      },
-    };
-  }
-  action(actionSpec);
 }
 
 /** Look up a live dimension by (qualified) name. */
 export function selectionDimByName(name: string): SelectionDim<unknown> | undefined {
   return dims.get(name);
+}
+
+/**
+ * The declared dimensions' names and targets WITHOUT their values — safe to
+ * read in the same tick as a write (reading a dimension's box right after
+ * `set` trips the staged-write guard); the cross-filter tool and the view
+ * provider use it for "which tables do the dimensions name".
+ */
+export function selectionDimTargets(
+  scope?: Scope | string,
+): Array<{ name: string; scope?: string; targets: { table?: string; field: string }[] }> {
+  const scopeName = typeof scope === "string" ? scope : scope?.name;
+  const view = scopeName !== undefined ? surfaceViewFor(scopeName) : undefined;
+  const out: Array<{ name: string; scope?: string; targets: { table?: string; field: string }[] }> =
+    [];
+  for (const d of dims.values()) {
+    if (view !== undefined && !view.owns(d.name)) continue;
+    out.push({
+      name: d.name,
+      ...(d.scope !== undefined ? { scope: d.scope } : {}),
+      targets: d.targets.map(targetLabel),
+    });
+  }
+  return out;
 }
 
 /**
@@ -542,14 +502,20 @@ export function selectionDimSurface(scope?: Scope | string): SelectionDimSurface
   const out: SelectionDimSurfaceEntry[] = [];
   for (const d of dims.values()) {
     if (view !== undefined && !view.owns(d.name)) continue;
+    const spec = specs.get(d.name);
     out.push({
       name: d.name,
       kind: d.kind,
       ...(d.scope !== undefined ? { scope: d.scope } : {}),
       ...(d.description !== undefined ? { description: d.description } : {}),
+      ...(spec?.usage !== undefined ? { usage: spec.usage } : {}),
       ...(d.loc !== undefined ? { loc: d.loc } : {}),
       value: d.get(),
       targets: d.targets.map(targetLabel),
+      ...(spec?.kind === "interval" && spec.min !== undefined ? { min: spec.min } : {}),
+      ...(spec?.kind === "interval" && spec.max !== undefined ? { max: spec.max } : {}),
+      ...(spec?.kind === "interval" && spec.unit !== undefined ? { unit: spec.unit } : {}),
+      ...(spec?.kind === "point" && spec.options !== undefined ? { options: spec.options } : {}),
     });
   }
   return out;
@@ -567,7 +533,9 @@ export function selectionDimReport(scope?: Scope | string): Record<string, unkno
 /** Clear every dimension (of a scope's view, or all): the "reset filters"
  * verb, one retraction per (dimension, target). */
 export function clearAllSelectionDims(scope?: Scope | string): void {
-  for (const e of selectionDimSurface(scope)) {
+  // Names only: reading a dimension's value right after another's clear in
+  // the same tick trips the staged-write guard.
+  for (const e of selectionDimTargets(scope)) {
     dims.get(e.name)?.clear();
   }
 }
@@ -671,41 +639,10 @@ export function clearSelectionFor(name: string, scope?: Scope | string): Cleared
   const dimNames = selectionDimSurface(scope).map((e) => e.name);
   const producerNames = mosaicProducers(scope).map((e) => e.name);
   throw new Error(
-    `clear-selection: "${name}" matches no dimension or component. ` +
+    `cross-filter clear: "${name}" matches no dimension or component. ` +
       `Dimensions: ${dimNames.join(", ") || "(none)"}. ` +
       `Components: ${producerNames.join(", ") || "(none)"}.`,
   );
-}
-
-/**
- * Register the `clear-selection` action for a scope: the agent-facing verb
- * over {@link clearSelectionFor}, registered beside the app's other tools.
- * PREBUILT spec — the sanctioned dynamic-registration path (see
- * registerDimAction's note).
- */
-export function registerClearSelection(scope?: Scope): void {
-  const spec: ActionSpec = {
-    name: "clear-selection",
-    ...(scope !== undefined ? { scope } : {}),
-    kind: "write",
-    description:
-      'Clear ONE cross-filter by name, leaving the rest: a dimension ("mag") or an ' +
-      'on-screen component ("<scope>/map") — its clause retracts and its visual (brush ' +
-      "rectangle, menu pick, toggle highlight) resets. Name the COMPONENT to clear a " +
-      "multi-dimension producer (a 2-D map box) whole. report()'s filters section names " +
-      "what is active; capabilities names everything clearable. Counts refresh after a " +
-      "task boundary; re-read report() then.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        name: { type: "string", description: "a dimension or component name (qualified or leaf)" },
-      },
-      required: ["name"],
-      additionalProperties: false,
-    },
-    run: (args) => clearSelectionFor(String(args?.name ?? ""), scope),
-  };
-  action(spec);
 }
 
 /**
@@ -718,7 +655,7 @@ export function registerClearSelection(scope?: Scope): void {
  */
 export function resetSelectionDimTargets(scope?: Scope | string): void {
   const seen = new Set<object>();
-  for (const e of selectionDimSurface(scope)) {
+  for (const e of selectionDimTargets(scope)) {
     for (const t of dims.get(e.name)?.targets ?? []) {
       if (seen.has(t.selection)) continue;
       seen.add(t.selection);
@@ -741,6 +678,8 @@ export function clearSelectionDimRegistry(): { durableKeys: string[] } {
     }
   }
   dims.clear();
+  specs.clear();
+  notifyDimsChanged();
   return { durableKeys };
 }
 
