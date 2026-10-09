@@ -583,4 +583,24 @@ describe("schema views", () => {
     expect(execs[0]).toBe('CREATE SCHEMA IF NOT EXISTS "memory"."crossfilter"');
     expect(execs[1]).toContain('CREATE OR REPLACE VIEW "memory"."crossfilter"."quakes"');
   });
+
+  it("issues everything again when the epoch changes (the database was rebuilt)", async () => {
+    const { runner, execs } = viewRunner();
+    const { provider } = filterProvider({ predicate: "TRUE", offer: true });
+    const { kit, tools } = fakeKit();
+    let generation = 1;
+    registerSqlTools(kit, { runner, views: [provider], viewEpoch: () => generation });
+    await settle();
+    expect(execs).toHaveLength(2);
+    // Same epoch, same body: a call costs no DDL.
+    await tools.get("sql")?.run({ sql: "select count(*) from quakes" });
+    expect(execs).toHaveLength(2);
+    // A new generation holds none of it: schema and view come back, once.
+    generation = 2;
+    await tools.get("sql")?.run({ sql: "select count(*) from quakes" });
+    expect(execs).toHaveLength(4);
+    expect(execs.slice(2)).toEqual(execs.slice(0, 2));
+    await tools.get("sql")?.run({ sql: "select count(*) from quakes" });
+    expect(execs).toHaveLength(4);
+  });
 });

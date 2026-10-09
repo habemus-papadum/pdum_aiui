@@ -23,7 +23,7 @@
  * legitimate. Stage-3 facet adoption will consume the same grouping.
  */
 import type { JSX } from "@solidjs/web";
-import { For, Show } from "solid-js";
+import { createMemo, For, Show } from "solid-js";
 import { type MosaicProducerEntry, mosaicProducers } from "./mosaic-registry";
 import {
   clearSelectionFor,
@@ -192,13 +192,22 @@ export function formatInspectorValue(v: unknown): string {
  * `inspector-clear` (the button) inside; `inspector-where`;
  * `inspector-capability` rows (`data-active` on live members) with
  * `capability-fields` / `capability-member`.
+ *
+ * Every list is keyed by what NAMES its rows — a clause by its origin and
+ * producer, a capability by its column set, a member by its name — so an
+ * update (a brush moving, a dimension changing) rewrites a row's text in
+ * place. The model hands out fresh objects on every read; keyed by identity,
+ * Solid would rebuild every row's DOM per update (its UNSTABLE_LIST_IDENTITY
+ * diagnostic). A duplicate key (one dimension, two targets) pairs by order.
  */
 export function SelectionInspector(props: {
   signal: SelectionSignal;
   scope?: Scope | string;
   class?: string;
 }): JSX.Element {
-  const model = () => selectionInspectorModel({ signal: props.signal, scope: props.scope });
+  const model = createMemo(() =>
+    selectionInspectorModel({ signal: props.signal, scope: props.scope }),
+  );
   return (
     <div class={props.class ? `selection-inspector ${props.class}` : "selection-inspector"}>
       <div class="inspector-clauses">
@@ -206,21 +215,21 @@ export function SelectionInspector(props: {
           when={model().clauses.length > 0}
           fallback={<div class="inspector-empty">no active filters</div>}
         >
-          <For each={model().clauses}>
+          <For each={model().clauses} keyed={(row) => `${row.origin}:${row.producer}`}>
             {(row) => (
-              <div class="inspector-clause" data-origin={row.origin}>
-                <span class="inspector-producer">{row.producer}</span>
-                <span class="inspector-fields">{row.fields.join(", ")}</span>
-                <span class="inspector-value">{formatInspectorValue(row.value)}</span>
-                <code class="inspector-sql">{row.sql}</code>
-                <Show when={row.origin !== "unknown"}>
+              <div class="inspector-clause" data-origin={row().origin}>
+                <span class="inspector-producer">{row().producer}</span>
+                <span class="inspector-fields">{row().fields.join(", ")}</span>
+                <span class="inspector-value">{formatInspectorValue(row().value)}</span>
+                <code class="inspector-sql">{row().sql}</code>
+                <Show when={row().origin !== "unknown"}>
                   <button
                     type="button"
                     class="inspector-clear"
-                    title={`clear ${row.producer}`}
+                    title={`clear ${row().producer}`}
                     onClick={() => {
                       try {
-                        clearSelectionFor(row.producer, props.scope);
+                        clearSelectionFor(row().producer, props.scope);
                       } catch (err) {
                         console.warn("selection-inspector: clear failed", err);
                       }
@@ -238,29 +247,29 @@ export function SelectionInspector(props: {
         <code class="inspector-where">{model().where}</code>
       </Show>
       <div class="inspector-capabilities">
-        <For each={model().capabilities}>
+        <For each={model().capabilities} keyed={(cap) => cap.fields.join("+")}>
           {(cap) => (
             <div class="inspector-capability">
-              <span class="capability-fields">{cap.fields.join(", ")}</span>
-              <For each={cap.dims}>
+              <span class="capability-fields">{cap().fields.join(", ")}</span>
+              <For each={cap().dims} keyed={(d) => d.name}>
                 {(d) => (
                   <span
                     class="capability-member"
                     data-kind="dim"
-                    data-active={d.value !== null ? "" : undefined}
+                    data-active={d().value !== null ? "" : undefined}
                   >
-                    {d.name}
+                    {d().name}
                   </span>
                 )}
               </For>
-              <For each={cap.producers}>
+              <For each={cap().producers} keyed={(p) => `${p.host}:${p.name}`}>
                 {(p) => (
                   <span
                     class="capability-member"
-                    data-kind={p.host}
-                    data-active={p.active ? "" : undefined}
+                    data-kind={p().host}
+                    data-active={p().active ? "" : undefined}
                   >
-                    {p.name}
+                    {p().name}
                   </span>
                 )}
               </For>

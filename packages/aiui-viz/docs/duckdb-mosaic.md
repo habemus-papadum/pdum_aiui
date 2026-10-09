@@ -424,11 +424,14 @@ events above the completeness magnitude, driven by the `mc` control and owing Mo
 Two rules learned live: a view body must name its base table schema-qualified
 (`"main"."quakes"` — a bare name inside `crossfilter.quakes` binds to the view itself, and
 DuckDB reports infinite recursion), and only a runner whose database can hold catalog state,
-and may receive it, implements `exec`: `duckdbRunner` does; a fresh-session connector cannot
-and a remote database (MotherDuck) must not be written to, so there `schema` reports each
-view's body text as `sql` with `materialized: false` and the agent inlines it. `viewCatalog`
-puts the views in a named catalog (`memory`) beside a remote database, unverified on that
-client as of 2026-10-09.
+and may receive it, implements `exec`: `duckdbRunner` does, and so does `motherDuckRunner` —
+there `viewCatalog: "memory"` puts the views in the tab's own catalog, so a cloud database
+never receives DDL, and `viewEpoch` (the engine's generation) has them created again after a
+rebuild, which starts that catalog empty. A fresh-session connector cannot hold a view, so
+there `schema` reports each view's body text as `sql` with `materialized: false` and the agent
+inlines it. The catalog-qualified DDL over a local view of an attached catalog is verified on
+DuckDB 1.5.5 (an in-memory database with a second catalog attached, 2026-10-09); the MotherDuck
+client itself awaits a run with a token.
 
 The table list is the one fact the `sql` tool's usage should carry and the app should not
 have to type: omitted, it is **introspected once the runner resolves** and the tool is
@@ -478,7 +481,13 @@ const engine = standardMotherDuckEngine({
 });
 const { db, connect, connection } = await engine.ready();
 coordinator.databaseConnector(duckdbConnector({ duckdb: db, connection: await connect() })); // Mosaic: raw
-registerSqlTools(kit, { runner: motherDuckRunner(connection) });                          // the agent: the client's
+registerCrossfilterTools(kit, { scope, selection: brush });   // the tools over the routed brush
+registerSqlTools(kit, {
+  runner: motherDuckRunner(connection),                       // the agent: the client's connection
+  views: [crossfilterViews({ selection: brush, scope })],
+  viewCatalog: "memory",                                      // the tab's catalog, never the cloud's
+  viewEpoch: () => engine.generation,                         // a rebuild starts it empty
+});
 ```
 
 **Measured 2026-09-24 (headless Chrome, a service account's Standard flock), the rules:**

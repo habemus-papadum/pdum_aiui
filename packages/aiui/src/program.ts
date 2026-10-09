@@ -1,3 +1,4 @@
+import { VENDOR_KEYS } from "@habemus-papadum/aiui-util";
 import { Command } from "commander";
 import { type OpenOptions, runOpen } from "./commands/browser";
 import { type ChannelsListOptions, runChannelsList } from "./commands/channels";
@@ -228,6 +229,7 @@ export function buildProgram(): Command {
     .argument("<key>", 'dotted key, e.g. "claude.args"')
     .action((key: string) => runConfigUnset(key));
 
+  const PROVIDERS = VENDOR_KEYS.map((k) => k.provider).join(" | ");
   // Vendor API keys: secrets in the OS vault, decisions in the user config
   // (`keys.*`), one resolver everywhere (aiui-util/vendor-keys.ts). `set`
   // reads the value masked at a TTY or from one stdin line — never argv.
@@ -246,12 +248,12 @@ export function buildProgram(): Command {
   keys
     .command("set")
     .description("store one provider's key in the OS vault (masked prompt, or piped stdin)")
-    .argument("<provider>", "openai | gemini | elevenlabs")
+    .argument("<provider>", PROVIDERS)
     .action((provider: string) => runKeysSet(provider));
   keys
     .command("unset")
     .description("remove a provider's key from the OS vault and mark it skipped")
-    .argument("<provider>", "openai | gemini | elevenlabs")
+    .argument("<provider>", PROVIDERS)
     .action((provider: string) => runKeysUnset(provider));
 
   // `aiui mcp <args...>` forwards to the aiui-claude-channel CLI, so the

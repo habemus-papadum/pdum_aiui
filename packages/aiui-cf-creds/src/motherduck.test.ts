@@ -151,8 +151,10 @@ describe("motherDuckRunner", () => {
   it("answers columnar with DuckDB's own type names, values rendered plain", async () => {
     const { motherDuckRunner } = await import("./motherduck");
     const ts = { toString: () => "2026-09-24 10:00:00" };
+    const statements: string[] = [];
     const connection = {
       evaluateQuery: async (sql: string) => ({
+        _run: statements.push(sql),
         data: {
           deduplicatedColumnNames: () => ["n", "when", "big", "tag"],
           columnType: (i: number) => ({
@@ -174,5 +176,9 @@ describe("motherDuckRunner", () => {
       [7, null, 1, "y"],
     ]);
     expect(runner.cancel).toBeUndefined();
+
+    // DDL for the schema views rides the same sequenced connection, for its effect only.
+    await runner.exec?.('CREATE SCHEMA IF NOT EXISTS "memory"."crossfilter"');
+    expect(statements).toEqual(["SELECT …", 'CREATE SCHEMA IF NOT EXISTS "memory"."crossfilter"']);
   });
 });

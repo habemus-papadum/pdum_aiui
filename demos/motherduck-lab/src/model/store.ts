@@ -44,13 +44,14 @@ import {
   type SignalBox,
   scope,
 } from "@habemus-papadum/aiui-viz";
+import { crossfilter } from "@habemus-papadum/aiui-viz/crossfilter";
 import {
   duckdbAssetsLocation,
   type SqlResult,
   type SqlRunner,
 } from "@habemus-papadum/aiui-viz/duckdb";
 import { duckdbConnector } from "@habemus-papadum/aiui-viz/mosaic-connector";
-import { Coordinator, Selection } from "@uwdata/mosaic-core";
+import { Coordinator, type Selection } from "@uwdata/mosaic-core";
 import { type Accessor, createSignal } from "solid-js";
 import type { TableRef } from "./catalog";
 
@@ -64,7 +65,9 @@ export const BROKER_KEY = "motherduck-lab";
 export interface LabStore {
   engine: MotherDuckEngine;
   coordinator: Coordinator;
-  /** The one crossfilter selection both histograms brush and filter by. */
+  /** The one cross-filter both histograms brush and filter by — aiui-viz's
+   * routed one: a clause reaches a client only when its table has the
+   * clause's columns, so a second table on the page needs no care. */
   brush: Selection;
   /** The engine generation the coordinator is wired to (0 until the first build). */
   generation: Accessor<number>;
@@ -109,7 +112,7 @@ export const store: LabStore = appScope.durable("store", () => {
     },
   });
   const coordinator = new Coordinator();
-  const brush = Selection.crossfilter();
+  const brush = crossfilter();
   const [generation, setGeneration] = createSignal(0);
   const [localVersion, setLocalVersion] = createSignal(0);
   const bumpLocal = (): void => {

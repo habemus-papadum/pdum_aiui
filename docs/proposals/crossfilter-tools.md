@@ -65,9 +65,11 @@ and attach a used view's provenance to a `sql` answer. `schemaOf` now names a ta
 `main` as `schema.name`. The cross-filter's provider (`crossfilterViews`) offers
 `crossfilter.<table>` per covered table and teaches the router the columns; seismos adds
 `complete.quakes` from the `mc` control — a provider owing Mosaic nothing, which is the point.
-Without `exec` (a fresh-session connector; a remote database that must not be written) the
-views are reported by body text, `materialized: false`. `viewCatalog` targets a named catalog
-for the MotherDuck case, unverified on that client.
+Without `exec` (a fresh-session connector) the views are reported by body text,
+`materialized: false`. For the MotherDuck engine, `motherDuckRunner` implements `exec`,
+`viewCatalog: "memory"` keeps the views in the tab's catalog, and `viewEpoch` (the engine's
+generation) has them created again after a rebuild (added 2026-10-09, later the same day;
+motherduck-lab is the consumer).
 
 **`group`** on every tool, carried by the toolkit, the registry, the intent client's relays,
 the channel's descriptors, the oracle and live projections, and the brief (sub-headings inside
@@ -92,10 +94,13 @@ staged-write guard — found live).
   `PreAggregator.request` are the three consumers of a Selection's resolution; `remove(source)`
   clones with the resolver; `queueFilter` coalesces queued emits by source.
 
-## 4. Follow-ups, not taken
+## 4. Follow-ups
 
-- motherduck-lab still builds its brush with `Selection.crossfilter()` and registers no views;
-  the `viewCatalog: "memory"` path needs a run against the MotherDuck client.
-- The SelectionInspector's `<For>` rows are fresh objects on every update (Solid's
-  `UNSTABLE_LIST_IDENTITY` warning, pre-existing); key them.
+- TAKEN 2026-10-09 (later the same day): motherduck-lab builds its brush with `crossfilter()`,
+  registers the cross-filter tools and `memory.crossfilter.<view>` — verified by the unit tests
+  and a DuckDB 1.5.5 probe of the catalog-qualified DDL over a local view of an attached
+  catalog. NOT yet run against the MotherDuck client: that needs a stored read-scaling token
+  (`aiui keys set motherduck`).
+- TAKEN 2026-10-09: the SelectionInspector's lists are keyed (origin + producer, the column
+  set, the member name), so a brush moving rewrites rows in place.
 - The published gallery runs the previous surface until the next release's site publish.

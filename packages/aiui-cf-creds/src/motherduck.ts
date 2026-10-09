@@ -114,6 +114,11 @@ function plain(value: unknown): unknown {
  * client, safe for `md_*` catalog functions (see the module doc), and typed
  * by DuckDB itself (`columnType`). Hand it to aiui-viz's `registerSqlTools`.
  * No `cancel`: the client cancels queued queries only, not `evaluateQuery`.
+ * `exec` runs the schema views' DDL on the same connection: pair it with
+ * `registerSqlTools`' `viewCatalog: "memory"`, so the views land in the
+ * tab's own catalog and never in a cloud database (which a read-scaling
+ * token could not write anyway), and with `viewEpoch: () => engine.generation`,
+ * since a rebuild starts that catalog empty.
  */
 export function motherDuckRunner(connection: MotherDuckEngineHandle["connection"]): SqlRunner {
   return {
@@ -123,6 +128,9 @@ export function motherDuckRunner(connection: MotherDuckEngineHandle["connection"
       const types = columns.map((_, i) => String(data.columnType(i)));
       const rows = data.toRows().map((row) => columns.map((c) => plain(row[c])));
       return { columns, types, rows };
+    },
+    async exec(sql): Promise<void> {
+      await connection.evaluateQuery(sql);
     },
   };
 }

@@ -578,6 +578,12 @@ interface SchemaViewsOptions {
   /** Prefix the views' schemas with this catalog (`memory` beside a remote
    * database), so a cloud database never receives them. */
   catalog?: string;
+  /**
+   * Read before every refresh: when the value differs from the last one,
+   * everything materialized is forgotten and issued again — the database
+   * was rebuilt (an engine generation, say) and holds none of it any more.
+   */
+  epoch?: () => unknown;
 }
 
 /**
@@ -594,6 +600,8 @@ export class SchemaViews {
   /** `schema.name` → the body last materialized. */
   private readonly bodies = new Map<string, string>();
   private readonly schemasMade = new Set<string>();
+  private readonly epoch: (() => unknown) | undefined;
+  private lastEpoch: unknown;
   private current: Array<{ view: SchemaView; status: SchemaViewStatus }> = [];
   private readonly onNames = new Set<(names: string[]) => void>();
   private names: string[] = [];
@@ -601,6 +609,7 @@ export class SchemaViews {
   constructor(options: SchemaViewsOptions) {
     this.providers = options.providers;
     this.catalog = options.catalog;
+    this.epoch = options.epoch;
     for (const p of this.providers) {
       p.subscribe?.(() => {
         this.dirty = true;
@@ -642,6 +651,16 @@ export class SchemaViews {
    * reported with its error and the user's statement still runs.
    */
   async refresh(runner: SqlRunner | Promise<SqlRunner>): Promise<void> {
+    if (this.epoch !== undefined) {
+      const epoch = this.epoch();
+      if (epoch !== this.lastEpoch) {
+        // A rebuilt database holds nothing of what was materialized.
+        this.lastEpoch = epoch;
+        this.bodies.clear();
+        this.schemasMade.clear();
+        this.dirty = true;
+      }
+    }
     const always = this.providers.some((p) => p.subscribe === undefined);
     if (!this.dirty && !always) return;
     this.dirty = false;
@@ -749,6 +768,12 @@ export interface SqlToolsOptions {
   views?: readonly SchemaViewProvider[];
   /** Put the views in this catalog (`memory` beside a remote database). */
   viewCatalog?: string;
+  /**
+   * Read before every call: when it changes, the views are re-created at
+   * that call — for a database that gets rebuilt under the tools (the
+   * MotherDuck engine's generation, whose tab catalog starts empty).
+   */
+  viewEpoch?: () => unknown;
 }
 
 /**
@@ -767,6 +792,7 @@ export function registerSqlTools(kit: AgentToolkit, options: SqlToolsOptions): v
       ? new SchemaViews({
           providers: options.views,
           ...(options.viewCatalog !== undefined ? { catalog: options.viewCatalog } : {}),
+          ...(options.viewEpoch !== undefined ? { epoch: options.viewEpoch } : {}),
         })
       : undefined;
   let knownTables: string[] | undefined = options.tables;

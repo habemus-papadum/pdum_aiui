@@ -7,9 +7,13 @@
  * new generation, the tables cell still lists the cloud tables, and the local
  * cell reports the sample gone.
  *
- * The agent surface: the standard tools, the library's `sql` + `schema` over
- * the same runner (the table list introspected across EVERY attached catalog
- * — cloud and local alike), and four verbs: pick-table, pick-column,
+ * The agent surface: the standard tools; the cross-filter's (`cross-filter`,
+ * `reset-cross-filters`, the `crossfilter` report section — no dimension is
+ * declared, the columns being picked at run time, so the tool clears by
+ * component: `first`, `second`); the library's `sql` + `schema` over the same
+ * runner (the table list introspected across EVERY attached catalog — cloud
+ * and local alike) with the cross-filter's filtered twin of the bridged view
+ * as `memory.crossfilter.<view>`; and four verbs: pick-table, pick-column,
  * materialize, rebuild-engine.
  */
 import {
@@ -19,6 +23,7 @@ import {
   hotCellGraph,
   registerStandardTools,
 } from "@habemus-papadum/aiui-viz";
+import { crossfilterViews, registerCrossfilterTools } from "@habemus-papadum/aiui-viz/crossfilter";
 import { registerSqlTools, type SqlResult } from "@habemus-papadum/aiui-viz/duckdb";
 import {
   createViewSql,
@@ -169,7 +174,16 @@ export type AppGraph = ReturnType<typeof graph>;
 
 const kit = agentToolkit(appScope.name);
 registerStandardTools(kit);
-registerSqlTools(kit, { runner: store.sqlRunner });
+registerCrossfilterTools(kit, { scope: appScope, selection: store.brush });
+// The schema views live in the tab's own catalog (`memory`), never in a cloud
+// database — and a rebuild starts that catalog empty, so the engine's
+// generation is the epoch that has them created again.
+registerSqlTools(kit, {
+  runner: store.sqlRunner,
+  views: [crossfilterViews({ selection: store.brush, scope: appScope })],
+  viewCatalog: "memory",
+  viewEpoch: () => store.engine.generation,
+});
 
 /** Choose the table the histograms and the sample come from (`catalog.schema.table`). */
 action({

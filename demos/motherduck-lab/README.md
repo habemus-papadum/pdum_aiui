@@ -24,11 +24,18 @@ What it exercises, end to end, in one page:
   question (cloud rows inside the sample's range: the small side goes up, two numbers come down).
 - **Rebuild.** The engine's terminate + create with the source's current token: the local sample
   is gone, the cloud tables are not, the coordinator and the tools follow the new generation.
+- **The cross-filter, and its view in the tab's catalog.** The brush is aiui-viz's routed
+  `crossfilter()`; the `schema` tool lists its filtered twin of the bridged view as
+  `memory.crossfilter.<view>` (`viewCatalog: "memory"` — a cloud database never receives
+  DDL), created through the client's own connection and created again after a rebuild
+  (`viewEpoch`: the engine generation).
 
 ```sh
 aiui keys set motherduck      # once: paste a read-scaling token
 pnpm dev                      # then open the page; pick a table and a numeric column
 ```
 
-Agent tools install at `window.__motherduck-lab`: the standard set, `sql`/`schema`, and
-`pick-table`, `pick-column`, `materialize`, `rebuild-engine`.
+Agent tools install at `window.__motherduck-lab`: the standard set, `cross-filter` /
+`reset-cross-filters` (no dimension is declared — the columns are picked at run time — so the
+tool clears by component, `first` and `second`), `sql`/`schema`, and `pick-table`,
+`pick-column`, `materialize`, `rebuild-engine`.
