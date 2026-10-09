@@ -10,10 +10,14 @@
  * output items plus our `function_call_output`s). `store: false` throughout.
  */
 
-import { renderToolBrief } from "@habemus-papadum/aiui-viz/tool-brief";
+import { renderToolBrief, toolSnapshot } from "@habemus-papadum/aiui-viz/tool-brief";
+import { requestMessage } from "./messages";
+
+export { requestMessage } from "./messages";
+
 import { backendPrompt } from "../prompt.ts";
 import type { ReasoningEffort } from "../protocol.ts";
-import { backendToolFor, type DelegationRequest, type Delegator, runTool } from "../types.ts";
+import { backendToolFor, type Delegator, runTool } from "../types.ts";
 
 export interface ResponsesDelegatorOptions {
   /** The key, or a getter (evaluated per request so a paste takes effect). */
@@ -66,14 +70,17 @@ export function responsesDelegator(options: ResponsesDelegatorOptions): Delegato
       // The task prompt, then the app's tools as a document (the brief, each
       // tool's usage, read/write classes) — the same section every consumer
       // renders, computed from the very tool array sent below.
-      const toolBrief = renderToolBrief([{ ns: "app", brief: req.brief, tools: req.tools }]);
+      const snapshot = toolSnapshot([{ ns: "app", brief: req.brief, tools: req.tools }]);
+      const toolBrief = renderToolBrief(snapshot);
       const instructions = [options.instructions ?? backendPrompt({ app: options.app }), toolBrief]
         .filter((part) => part !== "")
         .join("\n\n");
       const tools = req.tools.map(backendToolFor);
-      const input: unknown[] = [
-        { role: "user", content: requestMessage(req, options.contextUtterances ?? 8) },
-      ];
+      const message = requestMessage(req, options.contextUtterances ?? 8);
+      const toolsRecord = { fingerprint: snapshot.fingerprint, count: req.tools.length };
+      req.record?.({ what: "instructions", text: instructions, tools: toolsRecord });
+      req.record?.({ what: "message", text: message });
+      const input: unknown[] = [{ role: "user", content: message }];
       const maxRounds = options.maxRounds ?? 6;
       for (let round = 0; round < maxRounds; round++) {
         const t0 = Date.now();
@@ -135,24 +142,4 @@ export function responsesDelegator(options: ResponsesDelegatorOptions): Delegato
       throw new Error(`gave up after ${maxRounds} tool rounds`);
     },
   };
-}
-
-/** The user message for one delegation: recent context, then the request. */
-export function requestMessage(req: DelegationRequest, contextUtterances: number): string {
-  const recent = [
-    ...req.transcript.user.map((u) => ({ role: "user", ...u })),
-    ...req.transcript.assistant.map((u) => ({ role: "assistant", ...u })),
-  ]
-    .sort((a, b) => a.startMs - b.startMs)
-    .slice(-contextUtterances)
-    .map((u) => `${u.role}: ${u.text}`)
-    .join("\n");
-  return [
-    recent === ""
-      ? ""
-      : `Recent conversation (transcribed speech, may contain errors):\n${recent}\n`,
-    `Request (delegation ${req.id}): ${req.text === "" ? "(the transcript has not arrived yet; use the recent conversation)" : req.text}`,
-  ]
-    .filter((part) => part !== "")
-    .join("\n");
 }

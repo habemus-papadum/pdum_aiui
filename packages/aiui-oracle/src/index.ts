@@ -5,11 +5,18 @@
  * git history).
  */
 
-export type { ControlSurfaceToolsOptions, RegistryToolsOptions } from "./aiui-tools";
+export type {
+  ControlSurfaceToolsOptions,
+  PageToolExecute,
+  PageToolRegistration,
+  RegistryToolsOptions,
+} from "./aiui-tools";
 export {
   briefFromAiuiRegistry,
+  briefOfRegistrations,
   controlValueSchema,
   onControlSurfaceChange,
+  projectPageTools,
   toolsFromAiuiRegistry,
   toolsFromControlSurface,
 } from "./aiui-tools";

@@ -1,0 +1,65 @@
+[
+  {
+    "name": "set_corpus_freq",
+    "description": "Set oscillation frequency — range 0.5–8 Hz. Returns the value actually applied (snapped and clamped).",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 8,
+          "multipleOf": 0.5
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "set_corpus_wave",
+    "description": "Set waveform. Returns the value actually applied (snapped and clamped).",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "enum": [
+            "sine",
+            "square"
+          ]
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "set_corpus_grid",
+    "description": "Set show the grid. Returns the value actually applied (snapped and clamped).",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "report",
+    "description": "Read the app's current state: every control's value and bounds. Call before answering questions about how the app is set.",
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  }
+]

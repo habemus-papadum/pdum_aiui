@@ -286,6 +286,83 @@ function selectRegistrations<T extends { ns: string; active?: boolean }>(
 }
 
 /**
+ * One page-tool registration as the projections take it — the shape of the
+ * page registry's own `list()` entries AND of the registrations the intent
+ * client relays from a tab, so one projection serves both hosts (the panel
+ * once kept a copy that drifted: it dropped `group`).
+ */
+export interface PageToolRegistration {
+  ns: string;
+  brief?: string;
+  /** false = the app parked it (off-route); withheld unless `includeParked`. */
+  active?: boolean;
+  tools: ReadonlyArray<{
+    name: string;
+    description: string;
+    usage?: string;
+    kind?: "read" | "write";
+    group?: string;
+    inputSchema?: Record<string, unknown>;
+  }>;
+}
+
+/** How a projected tool reaches its page: the registry's `call` in-page, a transport's from the panel. */
+export type PageToolExecute = (
+  ns: string,
+  name: string,
+  args: Record<string, unknown>,
+  context: Parameters<OracleTool["execute"]>[1],
+) => Promise<unknown>;
+
+/**
+ * THE projection of page-tool registrations into oracle tools: the named
+ * namespaces minus the parked ones, the group filters, an `ns_` prefix when
+ * more than one namespace is listed, the vendor's name alphabet, the schema
+ * default, and the description/usage/kind/group carried through unchanged —
+ * every consumer of a page's tools (the dock, the live demo, the panel's
+ * oracle lane) renders the same surface from this one function.
+ */
+export function projectPageTools(
+  registrations: readonly PageToolRegistration[],
+  execute: PageToolExecute,
+  options: RegistryToolsOptions = {},
+): OracleTool[] {
+  const selected = selectRegistrations(registrations, options);
+  const prefix = selected.length > 1;
+  const tools: OracleTool[] = [];
+  for (const registration of selected) {
+    for (const tool of registration.tools) {
+      if (!keepGroup(tool.group, options)) continue;
+      tools.push({
+        name: toolName(prefix ? `${registration.ns}_` : "", tool.name),
+        description: tool.description,
+        ...(tool.usage !== undefined ? { usage: tool.usage } : {}),
+        ...(tool.kind !== undefined ? { kind: tool.kind } : {}),
+        ...(tool.group !== undefined ? { group: tool.group } : {}),
+        parameters: tool.inputSchema ?? {
+          type: "object",
+          properties: {},
+          additionalProperties: true,
+        },
+        execute: (args, context) => execute(registration.ns, tool.name, args, context),
+      });
+    }
+  }
+  return tools;
+}
+
+/** The selected registrations' briefs, joined — the same selection as {@link projectPageTools}. */
+export function briefOfRegistrations(
+  registrations: readonly PageToolRegistration[],
+  options: RegistryToolsOptions = {},
+): string | undefined {
+  const briefs = selectRegistrations(registrations, options)
+    .map((r) => r.brief?.trim())
+    .filter((b): b is string => b !== undefined && b !== "");
+  return briefs.length > 0 ? briefs.join("\n\n") : undefined;
+}
+
+/**
  * The kits' briefs, joined — the text a session renders above its tool list
  * (`session.setTools(tools, { brief })`). Same selection as
  * {@link toolsFromAiuiRegistry}, so the brief and the tools describe one
@@ -296,10 +373,7 @@ export function briefFromAiuiRegistry(options: RegistryToolsOptions = {}): strin
   if (registry === undefined) {
     return undefined;
   }
-  const briefs = selectRegistrations(registry.list(), options)
-    .map((r) => r.brief?.trim())
-    .filter((b): b is string => b !== undefined && b !== "");
-  return briefs.length > 0 ? briefs.join("\n\n") : undefined;
+  return briefOfRegistrations(registry.list(), options);
 }
 
 /**
@@ -315,30 +389,13 @@ export function toolsFromAiuiRegistry(
   if (registry === undefined) {
     return undefined;
   }
-  const registrations = selectRegistrations(registry.list(), options);
-  const prefix = registrations.length > 1;
-  const tools: OracleTool[] = [];
-  for (const registration of registrations) {
-    for (const tool of registration.tools) {
-      if (!keepGroup(tool.group, options)) continue;
-      tools.push({
-        name: toolName(prefix ? `${registration.ns}_` : "", tool.name),
-        description: tool.description,
-        ...(tool.usage !== undefined ? { usage: tool.usage } : {}),
-        ...(tool.kind !== undefined ? { kind: tool.kind } : {}),
-        ...(tool.group !== undefined ? { group: tool.group } : {}),
-        parameters: tool.inputSchema ?? {
-          type: "object",
-          properties: {},
-          additionalProperties: true,
-        },
-        execute: (args, context) =>
-          registry.call(registration.ns, tool.name, args, {
-            caller: context?.caller ?? "oracle",
-            ...(context?.ref !== undefined ? { ref: context.ref } : {}),
-          }),
-      });
-    }
-  }
-  return tools;
+  return projectPageTools(
+    registry.list(),
+    (ns, name, args, context) =>
+      registry.call(ns, name, args, {
+        caller: context?.caller ?? "oracle",
+        ...(context?.ref !== undefined ? { ref: context.ref } : {}),
+      }),
+    options,
+  );
 }

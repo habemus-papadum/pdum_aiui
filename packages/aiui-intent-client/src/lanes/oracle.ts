@@ -21,11 +21,13 @@
 
 import { renderTabRecord } from "@habemus-papadum/aiui-lowering-pipeline";
 import {
+  briefOfRegistrations,
   chainKeySource,
   mintingKeySource,
   OracleSession,
   type OracleTool,
   pasteKeySource,
+  projectPageTools,
   webRtcTransport,
 } from "@habemus-papadum/aiui-oracle";
 import { type Accessor, createEffect, createRoot, createSignal, untrack } from "solid-js";
@@ -52,7 +54,7 @@ import type { LaneContext } from "./types";
  */
 const TAB_CONTEXT_TIMEOUT_MS = 750;
 
-const PANEL_BLURB =
+export const PANEL_BLURB =
   "You are embedded in the aiui intent panel — the control surface a developer uses to " +
   "brief a coding agent about the web app they are building. When the developer's app is " +
   "in view and exposes tools, they are the app's own controls: use them to inspect and " +
@@ -80,10 +82,6 @@ function shortUrl(url: string | undefined): string | undefined {
  * this is the same rule applied to descriptors that arrived over the page
  * transport instead.
  */
-function vendorToolName(prefix: string, name: string): string {
-  return `${prefix}${name}`.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
-}
-
 /**
  * WHICH tab's tools the oracle holds — the tab in view when it has any,
  * otherwise the last tab that did and still does (owner, 2026-07-30,
@@ -127,9 +125,10 @@ export function resolveToolTab(
 }
 
 /** Project the tab's registered descriptors into oracle tools that CALL back
- * through the page transport. Pure over its inputs — the registry and the tab
- * are the only state. Parked namespaces are withheld (see
- * {@link activeNamespaces}). */
+ * through the page transport — aiui-oracle's one projection (`projectPageTools`,
+ * the same the dock and the live demo use in-page), fed the tab's active
+ * namespaces. Pure over its inputs — the registry and the tab are the only
+ * state. Parked namespaces are withheld (see {@link activeNamespaces}). */
 export function oracleToolsForTab(
   registry: PageToolsRegistry,
   tab: number | undefined,
@@ -137,27 +136,12 @@ export function oracleToolsForTab(
   if (tab === undefined) {
     return [];
   }
-  const namespaces = activeNamespaces(registry, tab);
-  const prefixed = namespaces.length > 1;
-  return namespaces.flatMap((registration) =>
-    registration.tools.map((tool) => ({
-      name: vendorToolName(prefixed ? `${registration.ns}_` : "", tool.name),
-      description: tool.description,
-      ...(tool.usage !== undefined ? { usage: tool.usage } : {}),
-      ...(tool.kind !== undefined ? { kind: tool.kind } : {}),
-      ...(tool.group !== undefined ? { group: tool.group } : {}),
-      parameters: tool.inputSchema ?? {
-        type: "object",
-        properties: {},
-        additionalProperties: true,
-      },
-      // The call goes to the tab the projection was built FOR, not to whatever
-      // tab is in view when the model finally calls: a tool the oracle was
-      // handed for one page must never fire into another (a switch re-projects
-      // and the stale tool goes away with it).
-      execute: (args: Record<string, unknown>) =>
-        registry.call(tab, registration.ns, tool.name, args),
-    })),
+  // The call goes to the tab the projection was built FOR, not to whatever
+  // tab is in view when the model finally calls: a tool the oracle was
+  // handed for one page must never fire into another (a switch re-projects
+  // and the stale tool goes away with it).
+  return projectPageTools(activeNamespaces(registry, tab), (ns, name, args) =>
+    registry.call(tab, ns, name, args),
   );
 }
 
@@ -171,10 +155,7 @@ export function oracleBriefForTab(
   if (tab === undefined) {
     return undefined;
   }
-  const briefs = activeNamespaces(registry, tab)
-    .map((registration) => registration.brief?.trim())
-    .filter((brief): brief is string => brief !== undefined && brief !== "");
-  return briefs.length > 0 ? briefs.join("\n\n") : undefined;
+  return briefOfRegistrations(activeNamespaces(registry, tab));
 }
 
 /**

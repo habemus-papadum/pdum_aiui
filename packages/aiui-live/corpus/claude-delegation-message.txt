@@ -1,0 +1,26 @@
+<delegation id="d_7">
+Recent conversation (transcribed speech, may contain errors):
+user: hello there
+assistant: Hi. What would you like?
+user: set the frequency to five hertz
+
+Request (delegation d_7): set the frequency to five hertz
+
+App tools available through app_call:
+Tools:
+An earthquake catalog: a map, a magnitude histogram and a depth histogram, cross-filtered. Brush any view and the others follow.
+Read tools (call freely once the intent is clear; no confirmation needed):
+app:
+- report: One bounded snapshot of the page's state. Call it first. Re-read after a write.
+sql:
+- sql: Run one read-only SQL statement against the catalog. Tables: `quakes`. Aggregate in SQL rather than fetching rows.
+Write tools (they change the app; the result is the value actually applied):
+app:
+- set: Set one control by name. Returns the value actually applied. Trust the value returned over the one you sent.
+If a tool fails, say what failed in a few words and do not repeat the same call unchanged.
+
+app_call arguments by tool (app_list has the full schemas):
+- report(format?)
+- set(name, value)
+- sql(sql, limit?)
+</delegation>

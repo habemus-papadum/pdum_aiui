@@ -236,6 +236,8 @@ export type LedgerKind =
   | "session"
   | "transcript"
   | "delegation"
+  /** A prompt a delegator built for its backend, whole (`DelegationPromptRecord` as the event). */
+  | "prompt"
   | "append"
   | "ack"
   | "usage"
@@ -312,6 +314,22 @@ export interface DelegationRequest {
   steer(text: string): Promise<void>;
   /** A progress line for the UI, never spoken. */
   log(line: string): void;
+  /**
+   * A prompt the delegator built for its backend, recorded WHOLE — the
+   * Responses instructions and input message, the Claude delegation
+   * message — so what the backend read is in the ledger, not only its log
+   * lines. Optional: a request from a host without a ledger has none.
+   */
+  record?(entry: DelegationPromptRecord): void;
+}
+
+/** One prompt a delegator built for its backend (see `DelegationRequest.record`). */
+export interface DelegationPromptRecord {
+  /** `instructions` — the system/instructions text; `message` — the per-delegation user message. */
+  what: "instructions" | "message";
+  text: string;
+  /** The tool document the text was rendered from (aiui-viz `toolSnapshot`), when it carried one. */
+  tools?: { fingerprint: string; count: number };
 }
 
 export interface Delegator {

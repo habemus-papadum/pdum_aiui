@@ -9,6 +9,8 @@ import { action, control, ensureAiuiGlobal } from "@habemus-papadum/aiui-viz";
 import { describe, expect, it } from "vitest";
 import {
   briefFromAiuiRegistry,
+  briefOfRegistrations,
+  projectPageTools,
   toolsFromAiuiRegistry,
   toolsFromControlSurface,
 } from "./aiui-tools";
@@ -197,5 +199,68 @@ describe("toolsFromAiuiRegistry", () => {
       "live kit\n\nparked kit",
     );
     registry.setActive("orparked", true);
+  });
+});
+
+describe("projectPageTools — the one projection both hosts use", () => {
+  const registrations = [
+    {
+      ns: "app",
+      brief: "One damped oscillator.",
+      tools: [
+        {
+          name: "kick",
+          description: "Kick it.",
+          usage: "Once.",
+          kind: "write" as const,
+          group: "app",
+        },
+        {
+          name: "selection",
+          description: "What is selected.",
+          kind: "read" as const,
+          group: "page",
+        },
+        { name: "odd name!", description: "A name the vendor must sanitize." },
+      ],
+    },
+    { ns: "parked", active: false, brief: "Off-route.", tools: [{ name: "x", description: "x" }] },
+  ];
+
+  it("carries description, usage, kind and group through, defaults the schema, and sanitizes names", () => {
+    const calls: unknown[] = [];
+    const tools = projectPageTools(registrations, async (ns, name, args) => {
+      calls.push([ns, name, args]);
+      return "ok";
+    });
+    expect(tools.map((t) => t.name)).toEqual(["kick", "selection", "odd_name_"]);
+    expect(tools[0]).toMatchObject({ usage: "Once.", kind: "write", group: "app" });
+    expect(tools[2]?.parameters).toEqual({
+      type: "object",
+      properties: {},
+      additionalProperties: true,
+    });
+    void tools[0]?.execute({ force: 3 });
+    expect(calls).toEqual([["app", "kick", { force: 3 }]]);
+    expect(briefOfRegistrations(registrations)).toBe("One damped oscillator.");
+  });
+
+  it("prefixes with the namespace only when several are listed, and filters by group", () => {
+    const both = projectPageTools(registrations, async () => undefined, { includeParked: true });
+    expect(both.map((t) => t.name)).toEqual([
+      "app_kick",
+      "app_selection",
+      "app_odd_name_",
+      "parked_x",
+    ]);
+    expect(briefOfRegistrations(registrations, { includeParked: true })).toBe(
+      "One damped oscillator.\n\nOff-route.",
+    );
+    const reads = projectPageTools(registrations, async () => undefined, { groups: ["page"] });
+    expect(reads.map((t) => t.name)).toEqual(["selection"]);
+    const noPage = projectPageTools(registrations, async () => undefined, {
+      excludeGroups: ["page"],
+    });
+    expect(noPage.map((t) => t.name)).toEqual(["kick", "odd_name_"]);
   });
 });

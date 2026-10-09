@@ -61,7 +61,7 @@ The infrastructure that makes lowering *deliverable* is a **custom Claude Code c
    *running, interactive* session over the channel — the transcript you're already watching.
    What each captured item (screenshot, selection, navigation boundary, the context preamble)
    actually renders to is cataloged, with real outputs, in the
-   [Prompt Rendering Reference](/packages/aiui-claude-channel/prompt-rendering).
+   [prompt vocabulary](/packages/aiui-claude-channel/prompt-vocabulary).
 
 Utilities like `aiui mcp quick` (send a prompt to a chosen session) and the registry/selector
 library exist so tools — and test harnesses — can find and address the right session. See the
@@ -123,7 +123,7 @@ were secret would be an odd artifact. The live prompts today, and where each is 
 - **The injection label grammar** — `[image shot_N]`, `[selection sel_N: "…" — …]`
   (`updated` / `retracted` variants), `[transcript seg_N: "…"]` — built in `live-resolve.ts`
   and the linter sidecar, cataloged in the
-  [Prompt Rendering Reference](/packages/aiui-claude-channel/prompt-rendering).
+  [prompt vocabulary](/packages/aiui-claude-channel/prompt-vocabulary).
 - **The turn summarizer** — each sent turn is glossed for the trace list by `gpt-4o-mini`
   under exactly: *"Summarize this request to a coding agent in one line, ≤ 12 words, no
   quotes."* (`SUMMARY_SYSTEM_PROMPT`, `summarize.ts`; screenshots are stripped and the body

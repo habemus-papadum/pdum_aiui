@@ -21,7 +21,7 @@
  * what to say (the delegator's), or know which side of a wire it is on.
  */
 
-import { renderToolBrief } from "@habemus-papadum/aiui-viz/tool-brief";
+import { renderToolBrief, toolSnapshot } from "@habemus-papadum/aiui-viz/tool-brief";
 import { backendToolsFromTools, livePrompt } from "./prompt";
 import {
   APPENDED_EVENT,
@@ -516,7 +516,9 @@ export class LiveSession {
       // The session manages the hosted backend's tool config: the tool array,
       // and the tool DOCUMENT (brief + usage, the same Tools: section every
       // consumer renders) appended to its instructions.
-      const toolBrief = renderToolBrief([{ ns: "app", brief: this.toolBrief, tools: this.tools }]);
+      const toolBrief = renderToolBrief(
+        toolSnapshot([{ ns: "app", brief: this.toolBrief, tools: this.tools }]),
+      );
       const base = delegation.responses.instructions;
       const withBrief = [base, toolBrief].filter((p) => p !== undefined && p !== "").join("\n\n");
       delegation = {
@@ -955,6 +957,15 @@ export class LiveSession {
         task.log.push({ t: this.now(), line });
         this.record("local", "backend", line, undefined, task.id);
         this.touchTask(task);
+      },
+      record: (entry) => {
+        this.record(
+          "local",
+          "prompt",
+          `${entry.what}: ${entry.text.length} chars${entry.tools !== undefined ? `, tools ${entry.tools.fingerprint} (${entry.tools.count})` : ""}`,
+          { ...entry },
+          task.id,
+        );
       },
     };
     this.record(

@@ -1,0 +1,5 @@
+[screenshot shot_1 located at MISSING]
+<screenshot-metadata marker="shot_1">
+  <element name="SpectrumPlot" source="workbench/src/scenery.ts:20"/>
+  <element name="AppShell" source="workbench/src/scenery.ts:12"/>
+</screenshot-metadata>

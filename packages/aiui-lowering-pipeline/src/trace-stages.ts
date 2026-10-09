@@ -69,6 +69,7 @@ export type ParsedStage =
   | { t: "composed-intent" }
   | { t: "conditioned" }
   | { t: "lowered-prompt" }
+  | { t: "summary-input" }
   // ── conditioning + attachments ──
   | { t: "condition"; id: string; kind: "silenceTrim" | "imageDownscale" }
   | { t: "attachment"; id: string; media: "shot" | "seg" }
@@ -191,6 +192,7 @@ export const stageLabel = {
   composedIntent: () => "composed intent" as const,
   conditioned: () => "conditioned" as const,
   loweredPrompt: () => "lowered prompt" as const,
+  summaryInput: () => "summary input" as const,
   condition: (id: string, kind: "silenceTrim" | "imageDownscale") =>
     `condition ${id} (${kind})` as const,
   attachment: (id: string) => `attachment ${id}` as const,
@@ -243,6 +245,7 @@ const EXACT: Record<string, StageTag> = {
   "composed intent": "composed-intent",
   conditioned: "conditioned",
   "lowered prompt": "lowered-prompt",
+  "summary input": "summary-input",
   "stt config-mismatch": "stt-config-mismatch",
   "stt orphan-result": "stt-orphan-result",
   "stt config-echo": "stt-config-echo",

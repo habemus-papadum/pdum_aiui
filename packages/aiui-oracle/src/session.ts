@@ -17,7 +17,7 @@
  *  - unrecognized vendor events land in the ledger as `raw`, never dropped.
  */
 
-import { renderToolBrief } from "@habemus-papadum/aiui-viz";
+import { renderToolBrief, toolSnapshot } from "@habemus-papadum/aiui-viz";
 import { priceRealtimeUsage, usageFromRealtimeResponse } from "./cost";
 import { pruneTurnDetection, setPath, TURN_DETECTION_TYPE } from "./params";
 import { weaveInstructions } from "./prompt";
@@ -138,6 +138,8 @@ export class OracleSession {
   private instructionsText = "";
   /** The app's brief, rendered above the tools in the `Tools:` section. */
   private toolBrief: string | undefined;
+  /** The tool document the last `Tools:` section was rendered from (aiui-viz `toolSnapshot`). */
+  private toolsFingerprint: string | undefined;
   /**
    * The greeting for THIS session, resolved once at start.
    *
@@ -451,7 +453,9 @@ export class OracleSession {
       ...(tool.kind !== undefined ? { kind: tool.kind } : {}),
       ...(tool.group !== undefined ? { group: tool.group } : {}),
     }));
-    return renderToolBrief([{ ns: "app", brief: this.toolBrief, tools }]);
+    const snapshot = toolSnapshot([{ ns: "app", brief: this.toolBrief, tools }]);
+    this.toolsFingerprint = snapshot.fingerprint;
+    return renderToolBrief(snapshot);
   }
 
   /** Run a {@link Resolved} value, handing a resolver the session's own facts.
@@ -912,6 +916,9 @@ export class OracleSession {
           ...(sent !== undefined ? { sent } : {}),
           effective,
           ...(sent !== undefined ? { drift: configDrift(sent, effective) } : {}),
+          ...(this.toolsFingerprint !== undefined
+            ? { tools: { fingerprint: this.toolsFingerprint, count: this.toolsByName.size } }
+            : {}),
         });
         return;
       }

@@ -1,0 +1,9 @@
+Summarize this request to a coding agent in one line, ≤ 12 words, no quotes.
+
+---
+
+make the baseline curve a bit thicker and color it amber
+
+[screenshot]
+
+the legend overlaps the plot on narrow screens can you move it below

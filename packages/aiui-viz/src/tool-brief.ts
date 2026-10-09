@@ -39,6 +39,53 @@ export interface KitDoc {
   tools: ToolDoc[];
 }
 
+/**
+ * A fingerprinted tool document — the kits every consumer renders from,
+ * named so a ledger can record WHICH document a rendering came from, and a
+ * refresh can tell "nothing changed" without comparing rendered text. The
+ * fingerprint covers exactly what the brief renders (names, descriptions,
+ * usage, kind, group, the briefs); `origin` says where the document was taken
+ * from (a page registry namespace, a tab). The first step toward the prompt
+ * toolkit's tool snapshot (docs/proposals/structured-prompts-review.md).
+ */
+export interface ToolSnapshot {
+  kits: KitDoc[];
+  /** A stable 64-bit FNV-1a hash of the document, as 16 hex digits. */
+  fingerprint: string;
+  origin?: string;
+}
+
+/** FNV-1a over UTF-16 code units — small, synchronous, the same in a page and in Node. */
+function fnv1a64(text: string): string {
+  let hash = 0xcbf29ce484222325n;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= BigInt(text.charCodeAt(i));
+    hash = (hash * 0x100000001b3n) & 0xffffffffffffffffn;
+  }
+  return hash.toString(16).padStart(16, "0");
+}
+
+/** The fingerprint of a tool document: equal documents share it, any rendered field moves it. */
+export function toolFingerprint(kits: ReadonlyArray<KitDoc>): string {
+  const canonical = JSON.stringify(
+    kits.map((k) => [
+      k.ns,
+      k.brief ?? "",
+      k.tools.map((t) => [t.name, t.description, t.usage ?? "", t.kind ?? "", t.group ?? ""]),
+    ]),
+  );
+  return fnv1a64(canonical);
+}
+
+/** Take a snapshot of a tool document. */
+export function toolSnapshot(kits: KitDoc[], origin?: string): ToolSnapshot {
+  return {
+    kits,
+    fingerprint: toolFingerprint(kits),
+    ...(origin !== undefined ? { origin } : {}),
+  };
+}
+
 export interface RenderToolBriefOptions {
   /**
    * Soft budget in characters. Over budget, usage lines are dropped (longest
@@ -72,8 +119,12 @@ function line(tool: ToolDoc, name: string, withUsage: boolean): string {
  * across sessions and a refresh that changes nothing sends nothing.
  * Returns "" when there are no tools at all.
  */
-export function renderToolBrief(kits: KitDoc[], options: RenderToolBriefOptions = {}): string {
-  const live = kits.filter((k) => k.tools.length > 0 || (k.brief !== undefined && k.brief !== ""));
+export function renderToolBrief(
+  kits: KitDoc[] | ToolSnapshot,
+  options: RenderToolBriefOptions = {},
+): string {
+  const docs = Array.isArray(kits) ? kits : kits.kits;
+  const live = docs.filter((k) => k.tools.length > 0 || (k.brief !== undefined && k.brief !== ""));
   if (live.length === 0) return "";
   const qualify = options.qualify ?? false;
 

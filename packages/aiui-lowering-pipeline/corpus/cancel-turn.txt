@@ -1,0 +1,1 @@
+make the baseline curve a bit thicker and color it amber

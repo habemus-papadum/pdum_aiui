@@ -11,6 +11,7 @@
  * preamble/spans → lowered-prompt push → sendPrompt → speakAck → detached
  * summarize → close. Move nothing across those boundaries.
  */
+
 import {
   type ComposedIntent,
   type ComposeOptions,
@@ -26,6 +27,7 @@ import type { IntentTurn } from "./intent-turn";
 import { TRANSCRIPTION_NOTE, wrapWithContextParts } from "./prompt-context";
 import type { Speaker } from "./speak";
 import type { Summarizer } from "./summarize";
+import { SUMMARY_SYSTEM_PROMPT, summaryPromptInput } from "./summarize";
 import type { TraceHandle } from "./trace";
 
 /**
@@ -90,6 +92,14 @@ export async function finishTurn(
       return;
     }
     try {
+      // What the summarizer reads — the one consumer that re-parses rendered
+      // text — recorded before the call (best-effort: no-op once the trace
+      // has ended), so the gloss can be judged against its input.
+      trace?.record({
+        kind: "info",
+        label: stageLabel.summaryInput(),
+        data: { system: SUMMARY_SYSTEM_PROMPT, input: summaryPromptInput(body) },
+      });
       const result = await summarizer.summarize(body);
       trace?.setSummary(result.text);
       // The trace has ended by now, so no `cost:` stage lands (record no-ops

@@ -1,0 +1,6 @@
+Recent conversation (transcribed speech, may contain errors):
+user: hello there
+assistant: Hi. What would you like?
+user: set the frequency to five hertz
+
+Request (delegation d_7): set the frequency to five hertz

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type KitDoc, renderToolBrief } from "./tool-brief";
+import { type KitDoc, renderToolBrief, toolFingerprint, toolSnapshot } from "./tool-brief";
 
 const seismos: KitDoc = {
   ns: "seismos",
@@ -96,6 +96,48 @@ describe("renderToolBrief — groups", () => {
         "- cross-filter: Filter.",
         "If a tool fails, say what failed in a few words and do not repeat the same call unchanged.",
       ].join("\n"),
+    );
+  });
+});
+
+describe("toolSnapshot", () => {
+  const kits = [
+    {
+      ns: "app",
+      brief: "A lab.",
+      tools: [
+        { name: "report", description: "Read the state.", kind: "read" as const, group: "app" },
+        {
+          name: "set",
+          description: "Write a value.",
+          usage: "Trust the result.",
+          kind: "write" as const,
+        },
+      ],
+    },
+  ];
+
+  it("fingerprints the document stably, and moves when any rendered field moves", () => {
+    const a = toolFingerprint(kits);
+    expect(a).toMatch(/^[0-9a-f]{16}$/);
+    expect(toolFingerprint(structuredClone(kits))).toBe(a);
+    const usage = structuredClone(kits);
+    (usage[0] as { tools: { usage?: string }[] }).tools[1].usage = "Trust nothing.";
+    expect(toolFingerprint(usage)).not.toBe(a);
+    const group = structuredClone(kits);
+    (group[0] as { tools: { group?: string }[] }).tools[0].group = "page";
+    expect(toolFingerprint(group)).not.toBe(a);
+    const brief = structuredClone(kits);
+    (brief[0] as { brief?: string }).brief = "Another lab.";
+    expect(toolFingerprint(brief)).not.toBe(a);
+  });
+
+  it("renders the same text from a snapshot as from its kits, and carries the origin", () => {
+    const snapshot = toolSnapshot(kits, "page registry: app");
+    expect(snapshot.origin).toBe("page registry: app");
+    expect(renderToolBrief(snapshot)).toBe(renderToolBrief(kits));
+    expect(renderToolBrief(snapshot, { maxChars: 10 })).toBe(
+      renderToolBrief(kits, { maxChars: 10 }),
     );
   });
 });

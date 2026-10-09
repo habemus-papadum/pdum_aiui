@@ -1,0 +1,9 @@
+make the baseline curve a bit thicker and color it amber
+
+[screenshot shot_1 located at MISSING]
+<screenshot-metadata marker="shot_1">
+  <element name="AppShell" source="workbench/src/scenery.ts:12"/>
+  <element name="SampleTable" source="workbench/src/scenery.ts:39"/>
+</screenshot-metadata>
+
+the legend overlaps the plot on narrow screens can you move it below

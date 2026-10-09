@@ -20,7 +20,7 @@ export interface ChannelServerOptions {
   reload?: ChannelReload;
 }
 
-/** Exported for the render-audit harness, which quotes it verbatim. */
+/** Exported for the corpus and vocabulary tests, which quote it verbatim. */
 export const INSTRUCTIONS = [
   [
     "This is the aiui channel, a one-way event feed into your session.",

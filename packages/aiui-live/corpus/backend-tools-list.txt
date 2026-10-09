@@ -1,0 +1,4 @@
+- App: An earthquake catalog: a map, a magnitude histogram and a depth histogram, cross-filtered.
+- report: One bounded snapshot of the page's state.
+- set: Set one control by name.
+- sql: Run one read-only SQL statement against the catalog.

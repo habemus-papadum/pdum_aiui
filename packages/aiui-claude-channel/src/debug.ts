@@ -156,6 +156,9 @@ export interface DebugHooks {
    * page-side and channel-side disagree (the page-tools proposal, git history).
    */
   pageTools?: () => unknown;
+  /** The last things pushed into the session, whole — notices and raw prompts
+   * no trace covers (sent-record.ts) — for GET /debug/api/sent. */
+  sent?: () => unknown;
 }
 
 /** Mount the debug tool's routes onto the backend's express app. */
@@ -186,6 +189,7 @@ export function registerDebugRoutes(
         "/debug/api/info",
         "/debug/api/channels",
         "/debug/api/page-tools",
+        "/debug/api/sent",
         "/debug/api/traces",
         "/debug/api/traces/:id",
         "/debug/api/traces/:id/live",
@@ -205,6 +209,16 @@ export function registerDebugRoutes(
       return;
     }
     res.json({ registrations: hooks.pageTools() });
+  });
+
+  // What the session was sent, whole: the startup/stale/error notices and raw
+  // /prompt text that no lowering trace records, with their kind and meta.
+  app.get("/debug/api/sent", (_req, res) => {
+    if (hooks.sent === undefined) {
+      res.status(404).json({ error: "this server keeps no sent record" });
+      return;
+    }
+    res.json({ sent: hooks.sent() });
   });
 
   // Every channel this machine is running — how a connected debug viewer

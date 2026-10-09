@@ -78,7 +78,7 @@ keeps working. It may call one tool, `read_file` (project-rooted, 32 KB cap) to 
 suspicion before flagging; every call and byte is in the trace. Every prompt this project sends
 is documented — the persona is `LINTER_INSTRUCTIONS` in
 `packages/aiui-claude-channel/src/live-session.ts`, and the rendered forms are in the
-[prompt rendering reference](/packages/aiui-claude-channel/prompt-rendering). Cost model: each
+[prompt vocabulary](/packages/aiui-claude-channel/prompt-vocabulary). Cost model: each
 lint re-reads the accumulated session, so on-demand linting, smart-mode sampling, the terse
 persona, and the `read_file` cap are all the same lever — the trace's 💰 cards show per-response
 spend.

@@ -170,8 +170,8 @@ export type { ThrottledBox } from "./throttle";
 export { throttled } from "./throttle";
 // tool-brief.ts — the tool surface rendered as a document for a model: one pure
 // function every consumer calls in the same breath as it sets its tool array.
-export type { KitDoc, RenderToolBriefOptions, ToolDoc, ToolKind } from "./tool-brief";
-export { renderToolBrief } from "./tool-brief";
+export type { KitDoc, RenderToolBriefOptions, ToolDoc, ToolKind, ToolSnapshot } from "./tool-brief";
+export { renderToolBrief, toolFingerprint, toolSnapshot } from "./tool-brief";
 export type { WorkerCancel, WorkerReply, WorkerRequest, WorkerRun } from "./worker-stream";
 // worker-stream.ts — cancellable request/stream protocol for Web Workers.
 export { fromWorker, workerStream } from "./worker-stream";

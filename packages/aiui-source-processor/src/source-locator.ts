@@ -297,6 +297,9 @@ export function sourceLocatorBabel(
     visitor: {
       Program(programPath: NodePath<BabelTypes.Program>, state: PluginPass) {
         const file = state.file.opts.filename ?? "";
+        // Prompt JSX is a data language owned by aiui-prompts, not DOM or
+        // reactive app declarations. Its compiler owns source attribution.
+        if (/\.prompt\.tsx(?:\?.*)?$/.test(file)) return;
         const rel = `${locPrefix}${relativizeFile(root, file)}`;
         const visitor: Visitor = {
           JSXOpeningElement(path) {
@@ -522,7 +525,9 @@ function buildSniff(factories: FactorySpec[], stampJsx: boolean): RegExp | undef
  * out of the stamps deliberately.
  *
  * Scope of processing: `node_modules` is always skipped (published deps carry
- * their identity from their own build, or write explicit names). Files under
+ * their identity from their own build, or write explicit names). `.prompt.tsx`
+ * is also skipped: its JSX is semantic prompt data owned by aiui-prompts,
+ * which has its own source-attribution contract. Files under
  * the app root get both halves. Files OUTSIDE the root but not in
  * node_modules — workspace-linked package sources consumed source-first — get
  * the factory-identity half only, with dotdot-relative locs
@@ -580,6 +585,7 @@ export function sourceLocatorVite(options: SourceLocatorViteOptions = {}): Plugi
     async transform(code, id) {
       const file = id.replace(/\?.*$/, "");
       if (!/\.[mc]?[tj]sx?$/.test(file)) return null;
+      if (file.endsWith(".prompt.tsx")) return null;
       if (file.includes("node_modules")) return null;
       // Files OUTSIDE the app root — workspace-linked package sources the app
       // consumes source-first — get FACTORY IDENTITY only (a shared slice's

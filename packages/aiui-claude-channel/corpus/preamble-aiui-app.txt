@@ -1,0 +1,9 @@
+This prompt was sent from the aiui intent tool attached to a web app under development.
+
+[current tab: <tab url="http://localhost:5173/seismos" title="seismos — aiui demo app" aiui-app="true" chrome-tab-id="42" window-id="1" tab-index="3"/>]
+
+Relative paths in this prompt are relative to: /Users/someone/src/app
+
+The app may expose page tools: call page_tools_list for this tab and read each namespace's brief before driving it.
+
+Browser tooling: the Chrome DevTools MCP attached to this session sees the SAME browser the user is viewing — its page list, screenshots, and evaluations reflect what they see.

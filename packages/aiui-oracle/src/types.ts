@@ -612,6 +612,10 @@ export type LedgerBody =
       sent?: Record<string, unknown>;
       effective?: Record<string, unknown>;
       drift?: string[];
+      /** The tool document the `Tools:` section in `sent.instructions` was
+       * rendered from (aiui-viz `toolSnapshot`): equal fingerprints, equal
+       * documents — the record of WHICH tools the prompt described. */
+      tools?: { fingerprint: string; count: number };
     }
   | { kind: "speech"; phase: "started" | "stopped" }
   /**

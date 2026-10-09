@@ -419,6 +419,12 @@ function classifyParsed(parsed: ParsedStage, stage: TraceStageLike): StageClass 
     case "user-text":
       return genericFallback(stage);
 
+    case "summary-input":
+      // What the summarizer (the row gloss, off the hot path) READ: its system
+      // prompt and the shot-stripped body — an internal config-ish card, so
+      // the gloss can be judged against its input.
+      return norm("internal", "config", "📝", "summary input");
+
     case "unknown":
       return genericFallback(stage);
     default: {

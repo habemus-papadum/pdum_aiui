@@ -338,6 +338,23 @@ describe("sourceLocatorVite — plugin surface", () => {
     expect(await t("body { color: red }", "/app/src/styles.css")).toBeNull();
   });
 
+  it("leaves prompt TSX to its own compiler, including queried and workspace IDs", async () => {
+    const code = "const p = <section/>; export const tool = control({ value: 1 });";
+    const t = transformOf(sourceLocatorVite({ root: "/app" }));
+    for (const id of [
+      "/app/src/greeting.prompt.tsx",
+      "/app/src/greeting.prompt.tsx?t=123",
+      "/app/src/greeting.prompt.tsx?raw",
+      "/workspace/shared/greeting.prompt.tsx",
+    ]) {
+      expect(await t(code, id)).toBeNull();
+    }
+    // The independently usable Babel pass observes the same language boundary.
+    const out = await run(code, "src/greeting.prompt.tsx");
+    expect(out).not.toContain("data-source-loc");
+    expect(out).not.toContain('name: "tool"');
+  });
+
   it("stamps through the full transform, relative to the resolved root", async () => {
     const p = sourceLocatorVite();
     (p.configResolved as (c: object) => void)({ root: "/app", command: "serve" });

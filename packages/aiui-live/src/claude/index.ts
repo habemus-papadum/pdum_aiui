@@ -31,9 +31,8 @@ import {
   type SDKUserMessage,
   tool,
 } from "@anthropic-ai/claude-agent-sdk";
-import { renderToolBrief } from "@habemus-papadum/aiui-viz/tool-brief";
 import { z } from "zod";
-import { requestMessage } from "../delegators/responses.ts";
+import { delegationMessage } from "../delegators/messages";
 import { type DelegationRequest, type Delegator, runTool } from "../types.ts";
 
 export interface ClaudeDelegatorOptions {
@@ -61,16 +60,9 @@ export interface ClaudeDelegatorOptions {
 
 export const DEFAULT_CLAUDE_TOOLS = ["Read", "Grep", "Glob", "Bash", "WebFetch"];
 
-export const CLAUDE_LIVE_BRIEF = `You are the reasoning backend of a live voice assistant ("the oracle") embedded in a scientific visualization app.
-The user is TALKING to a voice model. That model delegated their request to you and is holding the conversation while you work. The user cannot see any text you write — they hear ONLY what you pass to the \`say\` tool.
-Each delegation arrives as a user message tagged <delegation id="…">. Always pass that id to say/note/steer.
-Rules:
-- Answer with \`say\`: one or two spoken sentences, plain words, no markdown, no lists, rounded numbers.
-- For anything that will take more than about ten seconds, \`say\` a short progress line first (what you are checking), then work, then \`say\` the result.
-- Use \`note\` for quiet facts the voice model may need later; use \`steer\` only for directives to the voice model (rarely).
-- Use \`app_call\` for the app's live tools (listed in the delegation) whenever the request is about the app's state or asks to change it. Read before you change. Never guess a value you could have read.
-- When the question is about how the app behaves, read the code in the working directory and answer from it.
-- If you cannot finish, \`say\` so plainly.`;
+import { CLAUDE_LIVE_BRIEF } from "./brief";
+
+export { CLAUDE_LIVE_BRIEF } from "./brief";
 
 interface Turn {
   req: DelegationRequest;
@@ -79,16 +71,7 @@ interface Turn {
   reject(error: Error): void;
 }
 
-/** `sql, limit?, format?` — the argument names a JSON-schema object declares,
- * required ones bare, optional ones marked. Exported for its test. */
-export function parameterList(parameters: Record<string, unknown>): string {
-  const props = parameters.properties;
-  const names = props !== null && typeof props === "object" ? Object.keys(props as object) : [];
-  const required = new Set(
-    Array.isArray(parameters.required) ? (parameters.required as unknown[]).map(String) : [],
-  );
-  return names.map((name) => (required.has(name) ? name : `${name}?`)).join(", ");
-}
+export { parameterList } from "../delegators/messages";
 
 export function claudeDelegator(options: ClaudeDelegatorOptions = {}): Delegator {
   const log = options.log ?? (() => {});
@@ -354,23 +337,15 @@ export function claudeDelegator(options: ClaudeDelegatorOptions = {}): Delegator
         { once: true },
       );
       // The app's tools as a DOCUMENT — the same Tools: section the oracle
-      // and the Responses backend render (aiui-viz's renderToolBrief), so
-      // every consumer reads one text: the brief, then each tool with its
-      // usage, grouped read/write.
-      const brief = renderToolBrief([{ ns: "app", brief: req.brief, tools: req.tools }]);
-      const tools = brief === "" ? "(none)" : brief;
-      // The argument names, from the same tool array: the document says what
-      // each tool is for, not what it takes, and a guessed name costs a turn
-      // (`sql({ query })` for `sql({ sql })`, found live 2026-10-08).
-      // `app_list` still has the full JSON schemas.
-      const signatures = req.tools.map((t) => `- ${t.name}(${parameterList(t.parameters)})`);
-      const arguments_ =
-        signatures.length === 0
-          ? ""
-          : `\n\napp_call arguments by tool (app_list has the full schemas):\n${signatures.join("\n")}`;
-      push(
-        `<delegation id="${req.id}">\n${requestMessage(req, 10)}\n\nApp tools available through app_call:\n${tools}${arguments_}\n</delegation>`,
-      );
+      // and the Responses backend render — plus the argument names, from the
+      // same tool array (messages.ts); recorded whole for the ledger.
+      const message = delegationMessage(req, 10);
+      req.record?.({
+        what: "message",
+        text: message.text,
+        tools: { fingerprint: message.tools.fingerprint, count: req.tools.length },
+      });
+      push(message.text);
     });
 
   return {

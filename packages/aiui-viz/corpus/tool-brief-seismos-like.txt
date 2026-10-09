@@ -1,0 +1,24 @@
+Tools:
+An earthquake catalog (USGS, 1970–2025): a world map, a magnitude histogram and a depth histogram, cross-filtered — brush any view and the others follow. The Gutenberg–Richter fit updates with the filter.
+Read tools (call freely once the intent is clear; no confirmation needed):
+app:
+- report: One bounded snapshot of the page's state. Call first; re-read after a write.
+- locate: Element → source and cell stamps.
+- suggest-mc: The data-driven completeness magnitude.
+page:
+- read-page: The page as text.
+- selection: What the user selected on the page. Call when the user says 'this'.
+sql:
+- sql: Run one read-only SQL statement against the catalog. Tables: `quakes`. Views: `crossfilter.quakes`, `complete.quakes`. Aggregate in SQL rather than fetching rows.
+- schema: Tables and columns with types.
+Write tools (they change the app; the result is the value actually applied):
+app:
+- set: Set one control by name. Trust the value returned over the one you sent.
+crossfilter:
+- cross-filter: Set or clear the page's cross-filter dimensions. Dimensions: mag (interval 0–10); depth (interval 0–700 km); year (interval 1970–2025). Set several in one call.
+- reset-cross-filters: Remove every cross-filter clause.
+views:
+- save-view: Save the current dimension state under a name.
+Other tools:
+- legacy: A tool without a class.
+If a tool fails, say what failed in a few words and do not repeat the same call unchanged.

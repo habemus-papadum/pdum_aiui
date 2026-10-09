@@ -104,7 +104,7 @@ shots and selections over CDP reads), or no browser at all. Believe that sentenc
 computed per launch, not boilerplate. The other injection markers (`[screenshot located at
 <path>]`, `[selected text: …]`, `[current tab changed: <tab …/>]`, …) are cataloged with real
 outputs in the
-[Prompt Rendering Reference](../../packages/aiui-claude-channel/docs/prompt-rendering.md).
+[prompt vocabulary](../../packages/aiui-claude-channel/docs/prompt-vocabulary.md).
 
 There are **two consumers** of a tab reference, and the marker's ids serve them differently:
 

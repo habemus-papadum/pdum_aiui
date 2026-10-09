@@ -7,6 +7,7 @@ import { STALE_NOTICE } from "../hot";
 import { type LaunchInfo, parseLaunchInfo } from "../launch-info";
 import { PageToolDirectory } from "../page-tools";
 import { registerServer } from "../registry";
+import { createSentRecord } from "../sent-record";
 import { createChannelServer } from "../server";
 import { projectCacheDir } from "../trace";
 import { resolveAndStashVendorKeys } from "../vendor-key-stash";
@@ -88,15 +89,20 @@ export async function runMcp(options: McpOptions = {}): Promise<void> {
   // Push text into the Claude Code session over the one-way channel. Extra meta
   // (the intent-v1 lowering's Option-C attachment paths) rides as additional
   // `<channel>` attributes next to the body tokens that reference them.
+  // Everything pushed is also kept, whole, in a bounded record the debug API
+  // serves (sent-record.ts): the notices and raw prompts no trace covers.
+  const sentRecord = createSentRecord();
   const pushToSession = (
     text: string,
     kind = "prompt",
     extraMeta?: Record<string, string>,
-  ): Promise<void> =>
-    mcp.notification({
+  ): Promise<void> => {
+    sentRecord.push(kind, text, extraMeta);
+    return mcp.notification({
       method: "notifications/claude/channel",
       params: { content: text, meta: { kind, ...extraMeta } },
     });
+  };
 
   // Connect stdio first: the handshake must complete before we open the backend
   // or advertise ourselves, so nothing can push a prompt before the channel is
@@ -135,6 +141,7 @@ export async function runMcp(options: McpOptions = {}): Promise<void> {
       launchInfo,
       sidecars,
       pageTools,
+      sentRecord: () => sentRecord.list(),
       frameSink: channelLog.frameSink,
       ...commonWebOptions(options),
     });

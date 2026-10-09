@@ -78,6 +78,8 @@ export interface WebServerOptions {
    * is created (and returned on the handle).
    */
   pageTools?: PageToolDirectory;
+  /** The last things pushed into the session, whole (sent-record.ts), for GET /debug/api/sent. */
+  sentRecord?: () => unknown;
   /**
    * The session bus the `/session` websocket feeds — shared arming + prompt
    * preview + contributions across a session's tabs (see {@link SessionHub}).
@@ -296,6 +298,7 @@ export async function startWebServer(options: WebServerOptions): Promise<WebServ
       ...(traceStore?.session !== undefined ? { session: traceStore.session } : {}),
       ...(options.debug === true ? { debug: true } : {}),
       pageTools: () => pageTools.list(),
+      ...(options.sentRecord !== undefined ? { sent: options.sentRecord } : {}),
     });
   }
 
