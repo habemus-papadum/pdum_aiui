@@ -16,11 +16,11 @@ import {
   renderPrompt,
   toolSnapshot,
 } from "@habemus-papadum/aiui-viz/tool-brief";
-import { requestMessage } from "./messages.ts";
+import { requestContext, requestMessageValue } from "./messages.ts";
 
 export { requestMessage } from "./messages.ts";
 
-import { backendPrompt } from "../prompt.ts";
+import { backendPromptValue } from "../prompt.ts";
 import type { ReasoningEffort } from "../protocol.ts";
 import { backendToolFor, type Delegator, runTool } from "../types.ts";
 
@@ -77,23 +77,21 @@ export function responsesDelegator(options: ResponsesDelegatorOptions): Delegato
       // projects, from the very tool array sent below; compiled as one prompt
       // whose record goes to the ledger beside the text.
       const snapshot = toolSnapshot([{ ns: "app", brief: req.brief, tools: req.tools }]);
-      const rendered = renderPrompt(
-        instructionsWithToolBrief(
-          importText({
-            text: options.instructions ?? backendPrompt({ app: options.app }),
-            origin: {
-              site:
-                options.instructions !== undefined
-                  ? "aiui-live responses.instructions"
-                  : "aiui-live backendPrompt",
-            },
-          }),
-          snapshot,
-        ),
-      );
+      const preface =
+        options.instructions !== undefined
+          ? importText({
+              text: options.instructions,
+              origin: { site: "aiui-live ResponsesDelegatorOptions.instructions" },
+            })
+          : backendPromptValue({ app: options.app });
+      const rendered = renderPrompt(instructionsWithToolBrief(preface, snapshot));
       const instructions = rendered.text;
       const tools = req.tools.map(backendToolFor);
-      const message = requestMessage(req, options.contextUtterances ?? 8);
+      const contextUtterances = options.contextUtterances ?? 8;
+      const composed = renderPrompt(requestMessageValue(req, contextUtterances), {
+        context: requestContext(req, contextUtterances),
+      });
+      const message = composed.text;
       const toolsRecord = { fingerprint: snapshot.fingerprint, count: req.tools.length };
       req.record?.({
         what: "instructions",
@@ -101,7 +99,7 @@ export function responsesDelegator(options: ResponsesDelegatorOptions): Delegato
         tools: toolsRecord,
         prompt: rendered.record,
       });
-      req.record?.({ what: "message", text: message });
+      req.record?.({ what: "message", text: message, prompt: composed.record });
       const input: unknown[] = [{ role: "user", content: message }];
       const maxRounds = options.maxRounds ?? 6;
       for (let round = 0; round < maxRounds; round++) {

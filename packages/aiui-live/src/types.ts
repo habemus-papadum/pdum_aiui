@@ -11,6 +11,7 @@
  */
 
 import type { SemanticRecord } from "@habemus-papadum/aiui-prompts";
+import type { OperationRecord, WireRecord } from "@habemus-papadum/aiui-prompts/operations";
 import type { AppendKind, LiveBackendTool, LiveEvent, LiveSessionConfig } from "./protocol";
 
 // ── tools ────────────────────────────────────────────────────────────────────
@@ -259,6 +260,9 @@ export interface LedgerEntry {
   summary: string;
   delegationId?: string;
   event?: Record<string, unknown>;
+  /** The toolkit's records behind this entry (an append's operation and
+   * captured wire, for one). A `prompt` entry carries them in its event. */
+  records?: PromptRecords;
 }
 
 // ── the transport seam ───────────────────────────────────────────────────────
@@ -324,10 +328,25 @@ export interface DelegationRequest {
   record?(entry: DelegationPromptRecord): void;
 }
 
-/** One prompt a delegator built for its backend (see `DelegationRequest.record`). */
+/**
+ * The prompt toolkit's records behind one ledger entry: the semantic record
+ * a text was compiled from, the operation it was delivered as, and the wire
+ * payload captured where it left — parsed JSON, as the ledger stores them.
+ * `verifyWire(operation, wire, [LIVE_SESSION_ADAPTER])` re-derives the
+ * payload from the operation alone and compares.
+ */
+export interface PromptRecords {
+  prompt?: SemanticRecord;
+  operation?: OperationRecord;
+  wire?: WireRecord;
+}
+
+/** One prompt a delegator (or the session) built for a backend (see `DelegationRequest.record`). */
 export interface DelegationPromptRecord {
-  /** `instructions` — the system/instructions text; `message` — the per-delegation user message. */
-  what: "instructions" | "message";
+  /** `instructions` — the session's own instructions; `backend-instructions`
+   * — a hosted or delegated backend's instructions; `message` — the
+   * per-delegation user message. */
+  what: "instructions" | "backend-instructions" | "message";
   text: string;
   /** The tool document the text was projected from (the prompt toolkit's
    * `ToolSnapshot`), when it carried one. */
@@ -335,6 +354,10 @@ export interface DelegationPromptRecord {
   /** The semantic record `text` was compiled from (the prompt toolkit), when
    * the delegator composed one: rehydrate it and the text comes back. */
   prompt?: SemanticRecord;
+  /** The operation the text was delivered as, when it was one. */
+  operation?: OperationRecord;
+  /** The payload captured where it left, when the delivery was one. */
+  wire?: WireRecord;
 }
 
 export interface Delegator {

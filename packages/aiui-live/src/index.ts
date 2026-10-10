@@ -10,6 +10,15 @@
  * Contract of record: docs/proposals/oracle-live.md.
  */
 
+// adapter.ts — the session's connect config as a consumer-owned adapter for
+// the prompt toolkit (`aiui-live/session@1`): what a ledger's connect
+// operation is verified with.
+export type { LiveConnectParams } from "./adapter";
+export {
+  LIVE_CONNECT_BINDINGS,
+  LIVE_SESSION_ADAPTER,
+  LIVE_SESSION_ADAPTER_IDENTITY,
+} from "./adapter";
 export type {
   DirectBrokerOptions,
   ServerBrokerOptions,
@@ -31,6 +40,14 @@ export {
 export { formatSeconds, formatUsd, LIVE_USD_PER_MINUTE, priceLiveSeconds } from "./cost";
 export type { ScriptedDelegatorOptions } from "./delegators/fake";
 export { echoDelegator, scriptedDelegator } from "./delegators/fake";
+// delegators/messages.ts — the delegation messages as prompt values.
+export {
+  delegationMessage,
+  delegationMessageValue,
+  REQUEST_NOT_YET_TRANSCRIBED,
+  requestContext,
+  requestMessageValue,
+} from "./delegators/messages";
 export type { RelayClientFrame, RelayServerFrame } from "./delegators/relay-protocol";
 export { decodeFrame, encodeFrame } from "./delegators/relay-protocol";
 export type { RemoteDelegatorOptions } from "./delegators/remote";
@@ -40,8 +57,12 @@ export { requestMessage, responsesDelegator } from "./delegators/responses";
 export type { BackendPromptOptions, LivePromptOptions } from "./prompt";
 export {
   backendPrompt,
+  backendPromptValue,
   backendToolsFromTools,
+  backendToolsList,
   DEFAULT_BACKCHANNEL_POLICY,
+  DEFAULT_BACKEND_RETURN_FORMAT,
+  DEFAULT_BACKEND_TASK,
   DEFAULT_BACKEND_TOOLS,
   DEFAULT_DELEGATE_WHEN,
   DEFAULT_DONT_DELEGATE_WHEN,
@@ -49,6 +70,7 @@ export {
   DELEGATION_CLOSING,
   LIVE_BASE_PERSONA,
   livePrompt,
+  livePromptValue,
 } from "./prompt";
 export type {
   AppendEvent,
@@ -104,7 +126,9 @@ export {
   DEFAULT_PROGRESS_AFTER_MS,
   DEFAULT_PROGRESS_TEXT,
   LiveSession,
+  RESEED_PREFACE,
   RESEED_TOKEN_BUDGET,
+  reseedPrefaceValue,
 } from "./session";
 export { approxTokens, chunkForAppend } from "./tokens";
 export {

@@ -344,6 +344,7 @@ export function claudeDelegator(options: ClaudeDelegatorOptions = {}): Delegator
         what: "message",
         text: message.text,
         tools: { fingerprint: message.tools.fingerprint, count: req.tools.length },
+        prompt: message.record,
       });
       push(message.text);
     });

@@ -91,11 +91,13 @@ function Row(props: { entry: LedgerEntry; open: boolean; onToggle(): void }) {
   // A `prompt` entry carries the semantic record its text was compiled from
   // (`event.prompt`); opening the row previews it through the prompt
   // toolkit's inspector, and the JSON below shows the rest of the event.
-  const prompt = () => (props.entry.kind === "prompt" ? props.entry.event?.prompt : undefined);
+  const prompt = () =>
+    props.entry.kind === "prompt" ? props.entry.event?.prompt : props.entry.records?.prompt;
   const detail = () => {
     const event = props.entry.event;
     if (event === undefined || prompt() === undefined) return event;
-    const { prompt: _record, ...rest } = event;
+    // The records are the preview above and verification material, not JSON to read.
+    const { prompt: _record, operation: _operation, wire: _wire, ...rest } = event;
     return rest;
   };
   return (
@@ -103,7 +105,7 @@ function Row(props: { entry: LedgerEntry; open: boolean; onToggle(): void }) {
       <button
         type="button"
         class="aiui-live-row-line"
-        disabled={props.entry.event === undefined}
+        disabled={props.entry.event === undefined && prompt() === undefined}
         onClick={props.onToggle}
       >
         <span class="aiui-live-row-t">{stamp(props.entry.t)}</span>

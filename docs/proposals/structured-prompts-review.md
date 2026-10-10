@@ -263,6 +263,22 @@ Each stage is byte-identical first (the corpus), then improved with recorded dif
   `<tab …/>` record versus a prose sentence); unifying them changes the dock's bytes, so it waits
   for a reviewed diff. No oracle-internal `Case` exists yet because nothing in the oracle's own
   text branches on a fact — the facts are recorded so an app's resolver can.
+  **Live half done 2026-10-10** (a forked agent, reconciled). `livePromptValue` is the composer as
+  keyed nodes with the capability list as the toolkit's `CapabilityList` projection;
+  `backendPromptValue` keeps its `##` headings as authored lines (a root `Section` renders `#`);
+  `requestMessageValue` and `delegationMessageValue` are prompts whose facts (an empty transcript,
+  no tools, no recent lines) are recorded `Case`s, and the `<delegation>` element is an `Xml`
+  node — escaping once, which the corpus never exercised, so no diff; the connect config is a
+  `connect` operation of `aiui-live/session@1` (instructions, hosted-backend instructions and the
+  re-seed preface bound; model, audio, delegation, hosted tool schemas and the seed history as
+  parameters) whose payload IS the object the transport receives; each append is a
+  `sessionOperation` under `live-session/1`. Three deliberate departures from the plan: the re-seed
+  is NOT an `Elide` (the toolkit keeps the first N, the re-seed keeps the newest lines within a
+  token budget the toolkit cannot count — the cut is recorded in the operation's parameters);
+  append chunking stays host-side, one operation per chunk; the Responses HTTP request is not an
+  operation (the `openai-responses/1` utility omits `tool_choice`, `reasoning` and `store`, so it
+  would need its own adapter — later). Questions for the toolkit: a keep-the-last-N elision mode,
+  and parameters on `sessionOperation` (a chunk index).
 - **Stage 3 — the lowering pipeline and the channel.** `ComposedItem[]` becomes the semantic
   input: shots as markers with asset-reference policies and sidecars, selections as text plus
   XML, navigation and tab switches as markers, corrections as `Case`. The contributions map

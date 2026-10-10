@@ -21,17 +21,39 @@
  * what to say (the delegator's), or know which side of a wire it is on.
  */
 
-import { importText } from "@habemus-papadum/aiui-prompts";
+import {
+  Case,
+  importText,
+  type JsonObject,
+  type JsonValue,
+  type PromptNode,
+  Text,
+} from "@habemus-papadum/aiui-prompts";
+import {
+  captureWire,
+  consumerOperation,
+  lowerOperation,
+  type OperationRecord,
+  type PreparedDelivery,
+  sessionOperation,
+} from "@habemus-papadum/aiui-prompts/operations";
 import {
   instructionsWithToolBrief,
+  type RenderedPrompt,
   renderPrompt,
   toolSnapshot,
 } from "@habemus-papadum/aiui-viz/tool-brief";
-import { backendToolsFromTools, livePrompt } from "./prompt";
+import {
+  LIVE_CONNECT_BINDINGS,
+  LIVE_SESSION_ADAPTER,
+  LIVE_SESSION_ADAPTER_IDENTITY,
+  type LiveConnectParams,
+} from "./adapter";
+import { backendToolsList, livePromptValue } from "./prompt";
 import {
   APPENDED_EVENT,
+  type AppendEvent,
   type AppendKind,
-  appendEvent,
   appendKindOfAck,
   DEFAULT_LIVE_VOICE,
   type DelegationCreatedEvent,
@@ -67,6 +89,7 @@ import {
   type LiveTask,
   type LiveTool,
   type LiveTransport,
+  type PromptRecords,
   runTool,
   type TranscriptSnapshot,
   type TransportHandle,
@@ -124,6 +147,38 @@ export const DEFAULT_IDLE_CLOSE_SECONDS = 120;
 export const DEFAULT_FAILURE_TEXT = "I couldn't finish that one.";
 /** Re-seed budget: the vendor caps `input` at 8,192 tokens; leave headroom. */
 export const RESEED_TOKEN_BUDGET = 6000;
+/** The developer message that prefaces a re-seeded transcript. */
+export const RESEED_PREFACE =
+  "The conversation below happened moments ago in this same session, before a pause. Continue naturally; do not greet again.";
+
+/**
+ * The re-seed preface as a prompt VALUE: a `Case` on the session fact
+ * `session.reseed` — the message when the start re-seeds the last
+ * transcript, nothing otherwise — so the record keeps the branch and the
+ * fact that decided it.
+ */
+export function reseedPrefaceValue(): PromptNode {
+  return Case({
+    name: "reseed",
+    branches: [
+      {
+        when: { op: "eq", path: "session.reseed", value: true },
+        value: Text({ value: RESEED_PREFACE, origin: { site: "aiui-live RESEED_PREFACE" } }),
+      },
+    ],
+    fallback: null,
+  });
+}
+
+/** What `composeWire` hands `start`: the wire config, derived by the adapter
+ * from the operation, and the records behind it. */
+interface ComposedConnect {
+  session: LiveSessionConfig;
+  prepared: PreparedDelivery;
+  operation: OperationRecord;
+  instructions: RenderedPrompt;
+  backend?: { rendered: RenderedPrompt; fingerprint: string };
+}
 
 interface PendingAppend {
   settle(receipt: AppendReceipt): void;
@@ -266,8 +321,38 @@ export class LiveSession {
     this.s.error = undefined;
     this.s.closeReason = undefined;
     this.bump();
-    const session = this.composeWire();
+    const composed = this.composeWire();
+    const session = composed.session;
     this.wire = session;
+    // The payload captured is the very object the transport receives.
+    const wire = captureWire(composed.prepared, session as unknown as JsonValue, {
+      capturedAt: this.capturedAt(),
+    });
+    this.record(
+      "out",
+      "prompt",
+      `instructions: ${composed.instructions.text.length} chars (connect ${composed.operation.fingerprint})`,
+      {
+        what: "instructions",
+        text: composed.instructions.text,
+        prompt: composed.instructions.record,
+        operation: composed.operation,
+        wire,
+      },
+    );
+    if (composed.backend !== undefined) {
+      this.record(
+        "local",
+        "prompt",
+        `responses instructions: ${composed.backend.rendered.text.length} chars, tools ${composed.backend.fingerprint} (${this.tools.length})`,
+        {
+          what: "backend-instructions",
+          text: composed.backend.rendered.text,
+          tools: { fingerprint: composed.backend.fingerprint, count: this.tools.length },
+          prompt: composed.backend.rendered.record,
+        },
+      );
+    }
     this.record("out", "session", `connect via ${this.transport.name}`, { session });
     const startTimeout = this.options.startTimeoutMs ?? 20000;
     try {
@@ -458,6 +543,25 @@ export class LiveSession {
 
   /** The `input` a re-seeded start would send, from the last session's transcript. */
   reseedInput(): LiveInputMessage[] | undefined {
+    const lines = this.reseedLines();
+    if (lines === undefined) {
+      return undefined;
+    }
+    return [
+      { role: "developer", content: [{ type: "input_text", text: RESEED_PREFACE }] },
+      ...lines.kept,
+    ];
+  }
+
+  /**
+   * The last transcript's lines that fit the re-seed budget — the newest
+   * kept, the oldest dropped — and the decision taken, for the record: the
+   * toolkit counts no tokens, so the cut is the host's, recorded in the
+   * connect operation's params rather than as an elision in the content.
+   */
+  private reseedLines():
+    | { kept: LiveInputMessage[]; decision: NonNullable<LiveConnectParams["reseed"]> }
+    | undefined {
     const snapshot = this.reseed;
     if (snapshot === undefined) {
       return undefined;
@@ -465,6 +569,7 @@ export class LiveSession {
     const script = interleave(snapshot.user, snapshot.assistant);
     const kept: LiveInputMessage[] = [];
     let budget = RESEED_TOKEN_BUDGET;
+    let dropped = 0;
     for (let i = script.length - 1; i >= 0; i--) {
       const line = script[i];
       if (line === undefined) {
@@ -472,6 +577,7 @@ export class LiveSession {
       }
       budget -= approxTokens(line.text);
       if (budget < 0) {
+        dropped = i + 1;
         break;
       }
       kept.unshift(
@@ -483,77 +589,91 @@ export class LiveSession {
     if (kept.length === 0) {
       return undefined;
     }
-    return [
-      {
-        role: "developer",
-        content: [
-          {
-            type: "input_text",
-            text: "The conversation below happened moments ago in this same session, before a pause. Continue naturally; do not greet again.",
-          },
-        ],
+    return {
+      kept,
+      decision: {
+        tokenBudget: RESEED_TOKEN_BUDGET,
+        estimator: "chars/3.5",
+        kept: kept.length,
+        dropped,
       },
-      ...kept,
-    ];
+    };
   }
 
   // ── internals: wiring ──────────────────────────────────────────────────────
 
-  private composeWire(): LiveSessionConfig {
+  /**
+   * The wire config as a CONNECT OPERATION of the prompt toolkit, lowered by
+   * this package's own adapter (`aiui-live/session@1`, adapter.ts): the
+   * instructions, the hosted backend's instructions and the re-seed preface
+   * are semantic records compiled under the session's facts; everything else
+   * (model, audio, delegation, the hosted tool schemas, the seed history) is
+   * recorded as the operation's params. The `session` object the transport
+   * receives IS the adapter's payload, so the stored operation re-derives it.
+   */
+  private composeWire(): ComposedConnect {
     const config = this.options.config ?? {};
     // The voice model's capability list. An authored `backendTools` slot is a
     // PREFACE — what the backend can do beyond the page's tools ("read the
     // app's source code") — and the list derived from the tool array always
     // follows it, from the same array in the same call (the sync rule); with
-    // no slot the derived list stands alone (see backendToolsFromTools).
-    const slots = typeof config.instructions === "string" ? undefined : (config.instructions ?? {});
-    const derived =
-      slots !== undefined ? backendToolsFromTools(this.tools, this.toolBrief) : undefined;
-    const backendTools = [slots?.backendTools?.trim(), derived]
-      .filter((part): part is string => part !== undefined && part !== "")
-      .join("\n");
-    const instructions =
+    // no slot the derived list stands alone (see backendToolsList).
+    const derivable = this.tools.length > 0 || (this.toolBrief?.trim() ?? "") !== "";
+    const instructionsValue =
       typeof config.instructions === "string"
-        ? config.instructions
-        : livePrompt(backendTools !== "" ? { ...slots, backendTools } : slots);
-    let delegation: LiveDelegationConfig = config.delegation ?? { type: "client" };
-    if (delegation.type === "responses" && delegation.responses.tools === undefined) {
+        ? importText({
+            text: config.instructions,
+            origin: { site: "aiui-live LiveConfig.instructions" },
+          })
+        : livePromptValue(
+            config.instructions ?? {},
+            derivable ? { backendToolsList: backendToolsList(this.tools, this.toolBrief) } : {},
+          );
+    // The seed: an explicit `config.input` as given, else the last transcript
+    // within the budget when the idle re-seed is on. The preface is a Case on
+    // the re-seed fact, so an explicit seed carries none.
+    const idle = this.options.idle;
+    const reseed =
+      config.input === undefined && !(idle === false || idle?.reseed === false)
+        ? this.reseedLines()
+        : undefined;
+    const history = config.input ?? reseed?.kept;
+    const context: JsonObject = {
+      session: {
+        starts: this.s.starts,
+        reseed: reseed !== undefined,
+        seedMessages: history?.length ?? 0,
+      },
+    };
+    const instructions = renderPrompt(instructionsValue, { context });
+    const preface = renderPrompt(reseedPrefaceValue(), { context });
+    const delegation: LiveDelegationConfig = config.delegation ?? { type: "client" };
+    const managed = delegation.type === "responses" && delegation.responses.tools === undefined;
+    let backend: ComposedConnect["backend"];
+    let authored: LiveDelegationConfig = delegation;
+    if (delegation.type === "responses" && managed) {
       // The session manages the hosted backend's tool config: the tool array,
       // and the tool DOCUMENT (brief + usage, the same ToolBrief every
-      // consumer projects) after its instructions — compiled as one prompt,
-      // recorded in the ledger (`prompt`) with the semantic record it came from.
+      // consumer projects) after its instructions — compiled as one prompt
+      // bound into the connect operation.
       const snapshot = toolSnapshot([{ ns: "app", brief: this.toolBrief, tools: this.tools }]);
-      const base = delegation.responses.instructions;
-      const rendered = renderPrompt(
-        instructionsWithToolBrief(
-          base === undefined
-            ? null
-            : importText({
-                text: base,
-                origin: { site: "aiui-live delegation.responses.instructions" },
-              }),
-          snapshot,
+      const { instructions: base, ...rest } = delegation.responses;
+      backend = {
+        rendered: renderPrompt(
+          instructionsWithToolBrief(
+            base === undefined
+              ? null
+              : importText({
+                  text: base,
+                  origin: { site: "aiui-live delegation.responses.instructions" },
+                }),
+            snapshot,
+          ),
+          { context },
         ),
-      );
-      this.record(
-        "local",
-        "prompt",
-        `responses instructions: ${rendered.text.length} chars, tools ${snapshot.fingerprint} (${this.tools.length})`,
-        {
-          what: "instructions",
-          text: rendered.text,
-          tools: { fingerprint: snapshot.fingerprint, count: this.tools.length },
-          prompt: rendered.record,
-        },
-      );
-      delegation = {
-        type: "responses",
-        responses: {
-          ...delegation.responses,
-          tools: this.tools.map(backendToolFor),
-          ...(rendered.text !== "" ? { instructions: rendered.text } : {}),
-        },
+        fingerprint: snapshot.fingerprint,
       };
+      authored = { type: "responses", responses: rest };
     }
     const audio: LiveAudioConfig = {
       ...config.audio,
@@ -562,17 +682,46 @@ export class LiveSession {
         voice: config.voice ?? config.audio?.output?.voice ?? DEFAULT_LIVE_VOICE,
       },
     };
-    const idle = this.options.idle;
-    const input =
-      config.input ?? (idle === false || idle?.reseed === false ? undefined : this.reseedInput());
-    return {
+    const params: LiveConnectParams = {
       model: config.model ?? LIVE_MODEL,
-      instructions,
       audio,
-      delegation,
+      delegation: authored,
+      ...(managed ? { backendTools: this.tools.map(backendToolFor) } : {}),
       ...(config.store !== undefined ? { store: config.store } : {}),
-      ...(input !== undefined ? { input } : {}),
+      ...(history !== undefined ? { history } : {}),
+      ...(reseed !== undefined ? { reseed: reseed.decision } : {}),
     };
+    const operation = consumerOperation({
+      adapter: LIVE_SESSION_ADAPTER_IDENTITY,
+      action: "connect",
+      bindings: [
+        { key: LIVE_CONNECT_BINDINGS.instructions, content: instructions.record },
+        ...(backend !== undefined
+          ? [{ key: LIVE_CONNECT_BINDINGS.backendInstructions, content: backend.rendered.record }]
+          : []),
+        { key: LIVE_CONNECT_BINDINGS.reseedPreface, content: preface.record },
+      ],
+      // Plain JSON: a config written with an explicit `undefined` drops it here.
+      params: JSON.parse(JSON.stringify(params)) as JsonObject,
+    });
+    const prepared = lowerOperation(
+      operation,
+      { kind: "custom", adapter: LIVE_SESSION_ADAPTER_IDENTITY, options: {} },
+      {},
+      [LIVE_SESSION_ADAPTER],
+    );
+    return {
+      session: prepared.payload as unknown as LiveSessionConfig,
+      prepared,
+      operation,
+      instructions,
+      ...(backend !== undefined ? { backend } : {}),
+    };
+  }
+
+  /** The ISO timestamp a wire capture is stamped with (the session's clock). */
+  private capturedAt(): string {
+    return new Date((this.options.now ?? Date.now)()).toISOString();
   }
 
   private resetForStart(): void {
@@ -1101,7 +1250,31 @@ export class LiveSession {
   ): Promise<AppendReceipt> {
     const eventId = this.nextEventId();
     const t = this.now();
-    const event = appendEvent(kind, eventId, wireId, content);
+    // The append as a session operation of the prompt toolkit, lowered by its
+    // `live-session/1` profile: the event sent IS the derivation, and the
+    // ledger keeps the record, the operation and the captured wire beside it.
+    const rendered = renderPrompt(
+      Text({
+        value: content,
+        origin: {
+          site: `aiui-live append ${kind}`,
+          ...(wireId === null ? {} : { delegation: wireId }),
+        },
+      }),
+    );
+    const operation = sessionOperation(rendered.record, {
+      action: `append-${kind}`,
+      sessionId: this.s.sessionId ?? "live",
+      eventId,
+      delegationId: wireId,
+    });
+    const prepared = lowerOperation(operation, { kind: "live-session/1" });
+    const event = prepared.payload as unknown as AppendEvent;
+    const records: PromptRecords = {
+      prompt: rendered.record,
+      operation,
+      wire: captureWire(prepared, prepared.payload, { capturedAt: this.capturedAt() }),
+    };
     if (task !== undefined) {
       task.appends.push({ kind, content, eventId, t });
       if (task.firstAppendT === undefined) {
@@ -1115,6 +1288,7 @@ export class LiveSession {
       `${kind}${wireId === null ? "" : ` ${wireId}`}: ${content}`,
       event,
       task?.id,
+      records,
     );
     this.armIdle();
     return new Promise<AppendReceipt>((resolve) => {
@@ -1168,6 +1342,7 @@ export class LiveSession {
     summary: string,
     event?: LiveEvent | Record<string, unknown>,
     delegationId?: string,
+    records?: PromptRecords,
   ): void {
     const entry: LedgerEntry = {
       seq: this.entries.length,
@@ -1178,6 +1353,7 @@ export class LiveSession {
       summary,
       ...(delegationId !== undefined ? { delegationId } : {}),
       ...(event !== undefined ? { event: event as Record<string, unknown> } : {}),
+      ...(records !== undefined ? { records } : {}),
     };
     this.entries.push(entry);
     for (const listener of this.ledgerListeners) {

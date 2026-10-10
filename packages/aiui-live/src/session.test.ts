@@ -5,8 +5,11 @@
  * close and re-seed — pinned without a network.
  */
 
+import { rehydrate } from "@habemus-papadum/aiui-prompts";
+import { verifyWire } from "@habemus-papadum/aiui-prompts/operations";
 import { afterEach, describe, expect, it } from "vitest";
-import { LiveSession, type LiveSessionOptions } from "./session";
+import { LIVE_SESSION_ADAPTER } from "./adapter";
+import { LiveSession, type LiveSessionOptions, RESEED_PREFACE } from "./session";
 import type {
   DelegationRequest,
   Delegator,
@@ -134,6 +137,23 @@ describe("LiveSession lifecycle", () => {
         .ledger()
         .some((entry) => entry.kind === "session" && entry.summary.startsWith("started")),
     ).toBe(true);
+    // The ledger holds the instructions' record, the connect operation it was
+    // delivered as, and the config captured at the transport: the record
+    // alone gives back the text, the operation alone gives back the config.
+    const entry = live.ledger().find((e) => e.kind === "prompt")?.event as
+      | { what: string; text: string; prompt: never; operation: never; wire: never }
+      | undefined;
+    expect(entry?.what).toBe("instructions");
+    expect(entry?.text).toBe(live.sessionConfig()?.instructions);
+    const compiled = rehydrate(entry?.prompt as never);
+    expect(compiled.parts.map((p) => (p.type === "text" ? p.text : "")).join("")).toBe(entry?.text);
+    // The slots are keyed placements: the app slot is addressable in the record.
+    expect(compiled.occurrences.some((o) => o.key === "app")).toBe(true);
+    const verified = verifyWire(entry?.operation as never, entry?.wire as never, [
+      LIVE_SESSION_ADAPTER,
+    ]);
+    expect(verified.equal).toBe(true);
+    expect(verified.actual).toEqual(live.sessionConfig());
   });
 
   it("derives the voice model's Backend tools list from the tools and the brief", async () => {
@@ -351,6 +371,30 @@ describe("appends", () => {
     expect(bad.error).toContain("too long");
   });
 
+  it("sends each append as a session operation whose record and captured wire verify", async () => {
+    const fake = fakeTransport();
+    const live = session(fake);
+    sessions.push(live);
+    await startLive(fake, live);
+    await live.note("the trace is jagged", { delegationId: null });
+    const entry = live.ledger().find((e) => e.kind === "append");
+    expect(entry?.event).toEqual({
+      type: "session.thinking.append",
+      event_id: entry?.event?.event_id,
+      delegation_id: null,
+      content: "the trace is jagged",
+    });
+    expect(entry?.records?.operation?.operation).toMatchObject({
+      kind: "session",
+      action: "append-thinking",
+      sessionId: "live_fake",
+      delegationId: null,
+    });
+    const verified = verifyWire(entry?.records?.operation as never, entry?.records?.wire as never);
+    expect(verified.equal).toBe(true);
+    expect(verified.actual).toEqual(fake.sent.find((e) => e.type === "session.thinking.append"));
+  });
+
   it("chunks long text into several appends in order", async () => {
     const fake = fakeTransport();
     const live = session(fake);
@@ -400,11 +444,23 @@ describe("hosted Responses delegation", () => {
     // ledger holds what was composed with the record it compiles from.
     const hosted = wire?.delegation as { responses?: { instructions?: string } } | undefined;
     expect(hosted?.responses?.instructions).toContain("- set_freq: set");
-    const prompt = live.ledger().find((e) => e.kind === "prompt");
+    const prompt = live
+      .ledger()
+      .find((e) => e.kind === "prompt" && e.event?.what === "backend-instructions");
     expect(prompt?.summary).toMatch(/^responses instructions: \d+ chars, tools sha256:/);
     const recorded = prompt?.event as { text?: string; prompt?: unknown } | undefined;
     expect(recorded?.text).toBe(hosted?.responses?.instructions);
     expect(recorded?.prompt).toMatchObject({ kind: "aiui.prompt", schemaVersion: 1 });
+    // The connect operation re-derives the whole wire config, hosted tools and all.
+    const connect = live
+      .ledger()
+      .find((e) => e.kind === "prompt" && e.event?.what === "instructions")?.event as
+      | { operation?: never; wire?: never }
+      | undefined;
+    expect(connect?.operation).toMatchObject({ operation: { action: "connect" } });
+    expect(
+      verifyWire(connect?.operation as never, connect?.wire as never, [LIVE_SESSION_ADAPTER]),
+    ).toMatchObject({ equal: true });
     fake.userSays("five hertz please", 0);
     fake.serve({
       type: "session.delegation.created",
@@ -523,6 +579,38 @@ describe("progress, idle, re-seed", () => {
     await starting;
     expect(live.sessionConfig()?.input?.length).toBe(3);
     expect(live.state().starts).toBe(2);
+    // The re-seed is a recorded decision: the preface's Case on `session.reseed`,
+    // the cut (budget, kept, dropped) in the connect operation's params, and
+    // the operation re-derives the seeded config exactly.
+    const entry = live
+      .ledger()
+      .filter((e) => e.kind === "prompt" && e.event?.what === "instructions")
+      .at(-1)?.event as { operation: never; wire: never } | undefined;
+    const operation = entry?.operation as unknown as {
+      records: Record<string, { context: unknown; decisions: unknown[] }>;
+      operation: { params: { reseed?: unknown; history?: unknown[] } };
+    };
+    expect(operation.operation.params.reseed).toEqual({
+      tokenBudget: 6000,
+      estimator: "chars/3.5",
+      kept: 2,
+      dropped: 0,
+    });
+    expect(operation.operation.params.history).toHaveLength(2);
+    const preface = Object.values(operation.records).find((r) =>
+      r.decisions.some((d) => (d as { name?: string }).name === "reseed"),
+    );
+    expect(preface?.context).toMatchObject({ session: { starts: 2, reseed: true } });
+    expect(preface?.decisions).toContainEqual(
+      expect.objectContaining({ kind: "case", name: "reseed", selected: "0" }),
+    );
+    expect(live.sessionConfig()?.input?.[0]).toEqual({
+      role: "developer",
+      content: [{ type: "input_text", text: RESEED_PREFACE }],
+    });
+    expect(
+      verifyWire(entry?.operation as never, entry?.wire as never, [LIVE_SESSION_ADAPTER]),
+    ).toMatchObject({ equal: true });
     await live.close();
     void again;
   });
