@@ -52,10 +52,11 @@ function useLedger(session: OracleSession): () => readonly LedgerEntry[] {
 function EntryRow(props: { entry: LedgerEntry }) {
   const [open, setOpen] = createSignal(false);
   const detail = entryDetail(props.entry);
-  // A config entry that carried instructions holds the semantic record they
-  // were compiled from; opening the entry previews it through the prompt
-  // toolkit's inspector (loaded on demand), above the usual JSON.
-  const prompt = props.entry.kind === "config" ? props.entry.prompt : undefined;
+  // An entry that carries a semantic record — a config ack with its
+  // instructions, the greeting it sent, the baked config it went live with —
+  // previews it through the prompt toolkit's inspector (loaded on demand),
+  // above the usual JSON.
+  const prompt = "prompt" in props.entry ? props.entry.prompt : undefined;
   return (
     <div class="aiui-oracle-entry" data-kind={props.entry.kind}>
       <button

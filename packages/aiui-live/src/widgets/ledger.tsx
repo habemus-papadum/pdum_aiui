@@ -13,6 +13,7 @@ import { stamp, useLedger } from "./state";
 
 export const ALL_KINDS: LedgerKind[] = [
   "session",
+  "prompt",
   "delegation",
   "append",
   "ack",
