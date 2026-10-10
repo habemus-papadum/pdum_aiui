@@ -198,9 +198,9 @@ function validateDefinition(input: unknown) {
       break;
     }
     case "elide":
-      add("children", "unit", "limit", "marker");
+      add("children", "unit", "limit", "marker", "keep");
       if (
-        !["characters", "lines", "items"].includes(value.unit as string) ||
+        !["characters", "lines", "items", "tokens"].includes(value.unit as string) ||
         !Number.isSafeInteger(value.limit) ||
         (value.limit as number) < 0
       )
@@ -209,6 +209,8 @@ function validateDefinition(input: unknown) {
           "Elision needs a supported unit and nonnegative safe integer limit.",
         );
       string(value.marker, "elision marker");
+      if (value.keep !== "first" && value.keep !== "last")
+        throw new PromptError("INVALID_RECORD", "Elision keeps first or last.");
       break;
     case "tools": {
       add("toolSnapshot", "projection");

@@ -25,12 +25,11 @@ proposal also describes future work. Before adding `.prompt.tsx` to a Solid appl
 [routing configuration](jsx-routing.md). UI theming, inline preview behavior, and cost badges are
 independent of the stored records and do not block this migration.
 
-Small fixes from consumers are welcome. Include a focused regression test for the reported input.
-If a change affects retained meaning, decision derivation, or emitted output, check the static v1
-fixtures and decide explicitly whether it needs a new compiler version. Retained records must
-continue to use the implementation matching their recorded version. Do not update a compatibility
-fixture merely to make a changed derivation pass. Ordinary
-UI fixes can evolve without a semantic schema change.
+Changes from consumers are welcome, with a focused regression test for the reported input.
+Everything is pre-alpha (the owner's stance, 2026-10-10): a change that cleans the design may alter
+retained meaning, decision derivation, emitted output, actions or adapter identities without a
+compatibility path — update the static fixtures when the change is intended, never to make an
+accidental change pass, and say in the commit what moved. Consumers adapt their own stored records.
 
 ## Package split and native Solid refactoring
 

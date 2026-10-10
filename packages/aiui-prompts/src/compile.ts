@@ -18,8 +18,17 @@ import {
   type SemanticRegion,
 } from "./model.ts";
 import { occurrenceId, parseRecord, snapshot, withRecordOptions } from "./record.ts";
-
+import { CONSERVATIVE_ESTIMATOR, estimateParts, type TokenEstimator } from "./tokens.ts";
 import { projectTools } from "./tools-data.ts";
+
+/**
+ * What a compile needs beyond the record: the token estimator a `tokens`
+ * elision counts with. The built-in conservative estimator is the default, so
+ * a record compiled without one replays with nothing supplied; a host that
+ * supplied its own must supply the same one again (its identity is in the
+ * decision).
+ */
+export type CompileServices = Readonly<{ estimator?: TokenEstimator }>;
 
 type TextAtom = {
   type: "text";
@@ -61,7 +70,8 @@ const attribute = (text: string) =>
     .replaceAll("\n", "&#10;")
     .replaceAll("\r", "&#13;");
 
-function compile(record: SemanticRecord): CompiledPrompt {
+function compile(record: SemanticRecord, services: CompileServices = {}): CompiledPrompt {
+  const estimator = services.estimator ?? CONSERVATIVE_ESTIMATOR;
   const definitions = new Map(record.definitions.map((definition) => [definition.id, definition]));
   const recorded = new Map(record.decisions.map((decision) => [decision.occurrence, decision]));
   const decisions: Decision[] = [...record.decisions];
@@ -246,18 +256,66 @@ function compile(record: SemanticRecord): CompiledPrompt {
       }
       case "elide": {
         const groups = children();
+        const keepLast = def.keep === "last";
+        const marker = text(def.marker, id, "generated", undefined, env.xml);
+        const framed = (kept: Atom[], omitted: number): Atom[] =>
+          omitted === 0 ? kept : keepLast ? [marker, ...kept] : [...kept, marker];
         if (def.unit === "items") {
           const omitted = globalThis.Math.max(0, groups.length - def.limit);
           decisions.push({
             occurrence: id,
             kind: "elide",
             selected: omitted ? "clipped" : "full",
-            detail: { unit: def.unit, limit: def.limit, original: groups.length, omitted },
+            detail: {
+              unit: def.unit,
+              limit: def.limit,
+              keep: def.keep,
+              original: groups.length,
+              omitted,
+            },
           });
-          return [
-            ...groups.slice(0, def.limit).flat(),
-            ...(omitted ? [text(def.marker, id, "generated", undefined, env.xml)] : []),
-          ];
+          const kept = keepLast
+            ? groups.slice(groups.length - def.limit)
+            : groups.slice(0, def.limit);
+          return framed(kept.flat(), omitted);
+        }
+        if (def.unit === "tokens") {
+          // Whole children, as many as fit the budget from the kept end,
+          // counted under the compile's estimator (pre-XML-escaping text).
+          const counts = groups.map((group) => {
+            const parts: ({ type: "text"; text: string } | { type: "image"; asset: Asset })[] = [];
+            for (const atom of group) {
+              if (atom.type === "text") parts.push({ type: "text", text: atom.text });
+              else if (atom.type === "image") parts.push({ type: "image", asset: atom.asset });
+            }
+            return estimateParts(parts, estimator);
+          });
+          const order = [...groups.keys()];
+          if (keepLast) order.reverse();
+          const kept = new Set<number>();
+          let used = 0;
+          for (const index of order) {
+            if (used + counts[index] > def.limit) break;
+            used += counts[index];
+            kept.add(index);
+          }
+          const omitted = groups.length - kept.size;
+          decisions.push({
+            occurrence: id,
+            kind: "elide",
+            selected: omitted ? "clipped" : "full",
+            detail: {
+              unit: def.unit,
+              limit: def.limit,
+              keep: def.keep,
+              estimator: estimator.identity,
+              original: groups.length,
+              omitted,
+              tokens: { original: counts.reduce((sum, n) => sum + n, 0), kept: used },
+              ...(env.xml ? { scope: "content-before-xml-text-escaping" } : {}),
+            },
+          });
+          return framed(groups.filter((_, index) => kept.has(index)).flat(), omitted);
         }
         const atoms = groups.flat();
         if (atoms.some((atom) => atom.type === "image"))
@@ -282,48 +340,58 @@ function compile(record: SemanticRecord): CompiledPrompt {
           detail: {
             unit: def.unit,
             limit: def.limit,
+            keep: def.keep,
             original,
             omitted,
             ...(env.xml ? { scope: "content-before-xml-text-escaping" } : {}),
           },
         });
         if (!omitted) return atoms;
-        const retainedText = units.slice(0, def.limit).join(def.unit === "characters" ? "" : "\n");
-        let remaining = retainedText.length;
-        const retained: Atom[] = [];
-        const active = new Set<string>();
+        const separator = def.unit === "characters" ? "" : "\n";
+        const retainedText = (
+          keepLast ? units.slice(original - def.limit) : units.slice(0, def.limit)
+        ).join(separator);
+        // The kept window in source coordinates: a head keeps [0, n), a tail
+        // keeps [length - n, length). Text is clipped at the window's edges;
+        // a math/XML/marker scope must lie wholly inside or wholly outside.
+        const windowStart = keepLast ? source.length - retainedText.length : 0;
+        const windowEnd = windowStart + retainedText.length;
+        const spans = new Map<string, { start: number; end: number }>();
+        let cursor = 0;
         for (const atom of atoms) {
-          if (atom.type === "open") {
-            if (remaining > 0) {
-              active.add(atom.region.id);
-              retained.push(atom);
-            }
-          } else if (atom.type === "close") {
-            if (active.has(atom.region.id)) {
-              active.delete(atom.region.id);
-              retained.push(atom);
-            }
-          } else if (atom.type === "text") {
-            if (remaining === 0) {
-              if (active.size && atom.text.length)
-                throw new PromptError(
-                  "ATOMIC_ELISION",
-                  "Elision would cut a math/XML/marker scope; choose an authored alternative.",
-                  id,
-                );
-              continue;
-            }
-            if (atom.text.length > remaining && active.size)
-              throw new PromptError(
-                "ATOMIC_ELISION",
-                "Elision would cut a math/XML/marker scope; choose an authored alternative.",
-                id,
-              );
-            retained.push({ ...atom, text: atom.text.slice(0, remaining) });
-            remaining = globalThis.Math.max(0, remaining - atom.text.length);
-          }
+          if (atom.type === "open") spans.set(atom.region.id, { start: cursor, end: cursor });
+          else if (atom.type === "close") {
+            const span = spans.get(atom.region.id);
+            if (span) span.end = cursor;
+          } else if (atom.type === "text") cursor += atom.text.length;
         }
-        return [...retained, text(def.marker, id, "generated", undefined, env.xml)];
+        const inside = (span: { start: number; end: number }) =>
+          span.start >= windowStart && span.end <= windowEnd;
+        const outside = (span: { start: number; end: number }) =>
+          span.end <= windowStart || span.start >= windowEnd;
+        for (const span of spans.values())
+          if (span.end > span.start && !inside(span) && !outside(span))
+            throw new PromptError(
+              "ATOMIC_ELISION",
+              "Elision would cut a math/XML/marker scope; choose an authored alternative.",
+              id,
+            );
+        const retained: Atom[] = [];
+        cursor = 0;
+        for (const atom of atoms) {
+          if (atom.type === "open" || atom.type === "close") {
+            const span = spans.get(atom.region.id);
+            if (span && span.end > span.start && inside(span)) retained.push(atom);
+            continue;
+          }
+          if (atom.type !== "text") continue;
+          const start = globalThis.Math.max(cursor, windowStart);
+          const end = globalThis.Math.min(cursor + atom.text.length, windowEnd);
+          if (end > start)
+            retained.push({ ...atom, text: atom.text.slice(start - cursor, end - cursor) });
+          cursor += atom.text.length;
+        }
+        return framed(retained, omitted);
       }
     }
   }
@@ -410,6 +478,7 @@ function compile(record: SemanticRecord): CompiledPrompt {
 export function compilePrompt(
   value: SemanticRecord | PromptValue,
   options?: CompileOptions,
+  services?: CompileServices,
 ): CompiledPrompt {
   const isRecord =
     value !== null &&
@@ -422,9 +491,10 @@ export function compilePrompt(
       ? withRecordOptions(value as SemanticRecord, options)
       : parseRecord(value)
     : snapshot(value as PromptValue, options);
-  return compile(record);
+  return compile(record, services);
 }
-/** Exact re-derivation only: an unavailable compiler or changed record is a typed error. */
-export function rehydrate(record: SemanticRecord): CompiledPrompt {
-  return compile(parseRecord(record));
+/** Exact re-derivation only: an unavailable compiler or changed record is a typed error.
+ * A record whose `tokens` elisions were counted under a host estimator needs that estimator again. */
+export function rehydrate(record: SemanticRecord, services?: CompileServices): CompiledPrompt {
+  return compile(parseRecord(record), services);
 }

@@ -107,7 +107,7 @@ import { mappingIndex, measurePrompt, optimizePrompt } from "@habemus-papadum/ai
 
 const saved = parseRecord(storedJson);
 const compiled = rehydrate(saved); // exact recorded compiler, or an explicit diagnostic
-const costs = measurePrompt(compiled); // exact text units, images; tokens unknown without an estimator
+const costs = measurePrompt(compiled); // exact text units, images; tokens estimated (conservative default)
 const mappings = mappingIndex(compiled);
 
 const shorter = withRecordOptions(saved, { selection: { background: "short" } });

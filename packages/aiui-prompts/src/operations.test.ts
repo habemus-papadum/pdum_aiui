@@ -49,7 +49,7 @@ describe("semantic operation storage", () => {
   it("JSON round-trips each consumer kind without emitted content and deduplicates reused records", () => {
     const value = instruction();
     const operations = [
-      sessionOperation(value, { action: "replace-instructions", sessionId: "s1", eventId: "e1" }),
+      sessionOperation(value, { action: "update", sessionId: "s1", eventId: "e1" }),
       channelPush(value),
       responseOperation({
         instructions: value,
@@ -198,7 +198,7 @@ describe("semantic operation storage", () => {
 describe("session consumers", () => {
   it("lowers Realtime instruction replacement, per-response instructions, and multimodal input separately", () => {
     const replace = sessionOperation(instruction(), {
-      action: "replace-instructions",
+      action: "update",
       sessionId: "s",
       eventId: "e1",
     });
@@ -252,7 +252,7 @@ describe("session consumers", () => {
       () =>
         lowerOperation(
           sessionOperation(instruction(), {
-            action: "replace-instructions",
+            action: "update",
             sessionId: "s",
             eventId: "e",
           }),
@@ -264,7 +264,7 @@ describe("session consumers", () => {
       () =>
         lowerOperation(
           sessionOperation(media(), {
-            action: "replace-instructions",
+            action: "update",
             sessionId: "s",
             eventId: "e",
           }),

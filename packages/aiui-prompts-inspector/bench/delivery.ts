@@ -51,7 +51,7 @@ export function prepareExampleDelivery(record: SemanticRecord, consumer: Example
         : sessionOperation(record, {
             action:
               consumer === "replace"
-                ? "replace-instructions"
+                ? "update"
                 : consumer === "append"
                   ? "append-commentary"
                   : "input",

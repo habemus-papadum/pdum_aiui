@@ -22,7 +22,14 @@ describe("mapped analysis and comparison", () => {
       measured.codeUnits,
     );
     expect(Object.values(measured.exclusive).reduce((n, x) => n + x.images, 0)).toBe(1);
-    expect(measured.tokens).toEqual({ certainty: "unknown", value: null });
+    // Tokens are always an estimate now, under the built-in conservative
+    // estimator unless a host supplies its own; the identity says which.
+    expect(measured.tokens).toEqual({
+      certainty: "estimated",
+      value: expect.any(Number),
+      estimator: { name: "aiui-prompts/conservative", version: "1" },
+    });
+    expect(measured.tokens.value).toBeGreaterThan(0);
     const image = compiled.parts.find((part) => part.type === "image");
     if (!image) throw new Error("Expected an image part");
     expect(mappingIndex(compiled).explain(image.id)).toHaveLength(1);

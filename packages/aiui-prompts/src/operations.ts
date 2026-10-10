@@ -27,8 +27,18 @@ export type History =
         readonly id: string;
       };
     };
+/**
+ * Session actions. `update` is a Realtime `session.update`: the instructions
+ * when bound, plus the host's own session block (`session`: audio, tools,
+ * limits — plain JSON the host holds at send time) merged in. `connect` is
+ * the baked session config a Realtime session is minted and connected with:
+ * the same block plus model and voice, with no event envelope. The appends
+ * are the repository's live-session protocol; `input` and `respond` are the
+ * Realtime conversation item and per-response instructions.
+ */
 export type SessionAction =
-  | "replace-instructions"
+  | "update"
+  | "connect"
   | "append-instructions"
   | "append-thinking"
   | "append-commentary"
@@ -48,10 +58,14 @@ type Body =
   | {
       readonly kind: "session";
       readonly action: SessionAction;
-      readonly content: string;
+      /** The bound record; `update` and `connect` may carry none (a tools-only update). */
+      readonly content: string | null;
       readonly sessionId: string;
-      readonly eventId: string;
+      /** The client event id the host stamped; `connect` sends no event. */
+      readonly eventId: string | null;
       readonly delegationId: string | null;
+      /** The host's session block for `update` / `connect` — never instructions. */
+      readonly session?: JsonObject;
     }
   | {
       readonly kind: "channel";
@@ -70,6 +84,10 @@ type Body =
       readonly tools?: ToolSnapshot;
       readonly qualifyTools: boolean;
       readonly outputSchema?: JsonObject;
+      /** Request fields the host chooses per call; absent means the API's default. */
+      readonly toolChoice?: JsonValue;
+      readonly reasoning?: JsonObject;
+      readonly store?: boolean;
     };
 export type OperationRecord = Readonly<{
   kind: "aiui.prompt.operation";
@@ -316,31 +334,52 @@ export function consumerOperation(options: {
   );
 }
 export function sessionOperation(
-  content: SemanticRecord,
+  content: SemanticRecord | null,
   options: {
     action: SessionAction;
     sessionId: string;
-    eventId: string;
+    eventId?: string;
     delegationId?: string | null;
+    session?: JsonObject;
   },
 ): OperationRecord {
-  const record = parseRecord(content);
+  const record = content === null ? null : parseRecord(content);
   const value = object(
     readJson(options, "SESSION_OPERATION"),
     "SESSION_OPERATION",
     "Session options",
   );
-  fields(value, ["action", "sessionId", "eventId", "delegationId"], "SESSION_OPERATION");
+  fields(value, ["action", "sessionId", "eventId", "delegationId", "session"], "SESSION_OPERATION");
+  const action = value.action as SessionAction;
+  const block = action === "update" || action === "connect";
+  if (record === null && !block)
+    fail("SESSION_OPERATION", `A ${String(action)} operation binds a semantic record.`);
+  if ("session" in value && !block)
+    fail("SESSION_OPERATION", "Only update and connect carry a session block.");
+  if (
+    "session" in value &&
+    "instructions" in object(value.session, "SESSION_OPERATION", "Session block")
+  )
+    fail(
+      "SESSION_OPERATION",
+      "Instructions travel as the bound record, never in the session block.",
+    );
+  if (action !== "connect" && typeof value.eventId !== "string")
+    fail(
+      "SESSION_OPERATION",
+      "Every session event needs the host's eventId; only connect has none.",
+    );
   return makeOperation(
     {
       kind: "session",
-      action: value.action,
-      content: record.fingerprint,
+      action,
+      content: record === null ? null : record.fingerprint,
       sessionId: value.sessionId,
-      eventId: value.eventId,
+      eventId: typeof value.eventId === "string" ? value.eventId : null,
       delegationId: value.delegationId ?? null,
+      ...("session" in value ? { session: value.session } : {}),
     } as Body,
-    [record],
+    record === null ? [] : [record],
   );
 }
 export function channelPush(
@@ -361,19 +400,42 @@ export function responseOperation(options: {
   tools?: ToolSnapshot;
   qualifyTools?: boolean;
   outputSchema?: JsonObject;
+  toolChoice?: JsonValue;
+  reasoning?: JsonObject;
+  store?: boolean;
 }): OperationRecord {
   const value = object(readJson(options, "MESSAGES"), "MESSAGES", "Response options");
   fields(
     value,
-    ["input", "messages", "instructions", "history", "tools", "qualifyTools", "outputSchema"],
+    [
+      "input",
+      "messages",
+      "instructions",
+      "history",
+      "tools",
+      "qualifyTools",
+      "outputSchema",
+      "toolChoice",
+      "reasoning",
+      "store",
+    ],
     "MESSAGES",
   );
+  if ("reasoning" in value) object(value.reasoning, "MESSAGES", "Reasoning options");
+  if ("store" in value && typeof value.store !== "boolean")
+    fail("MESSAGES", "store must be boolean.");
   if ("input" in value === "messages" in value)
     fail("MESSAGES", "Provide input or ordered current messages, exclusively.");
   const raw =
     "messages" in value ? value.messages : [{ key: "input", role: "user", content: value.input }];
-  if (!Array.isArray(raw) || !raw.length)
-    fail("MESSAGES", "A response needs at least one current message.");
+  if (!Array.isArray(raw)) return fail("MESSAGES", "Current messages must be an array.");
+  // A continuation round (tool outputs answered) has no new message: its
+  // input is the provider items alone.
+  if (!raw.length && (value.history as { kind?: string } | undefined)?.kind !== "provider-items")
+    return fail(
+      "MESSAGES",
+      "A response needs a current message unless it continues provider items.",
+    );
   const records: SemanticRecord[] = [];
   const messages = (raw as unknown[]).map((input) => {
     const message = object(input, "MESSAGES", "Current message");
@@ -396,6 +458,9 @@ export function responseOperation(options: {
       qualifyTools: "qualifyTools" in value ? value.qualifyTools : false,
       ...("tools" in value ? { tools: value.tools } : {}),
       ...("outputSchema" in value ? { outputSchema: value.outputSchema } : {}),
+      ...("toolChoice" in value ? { toolChoice: value.toolChoice } : {}),
+      ...("reasoning" in value ? { reasoning: value.reasoning } : {}),
+      ...("store" in value ? { store: value.store } : {}),
     } as Body,
     records,
   );
@@ -437,25 +502,41 @@ export function parseOperation(input: unknown): OperationRecord {
   } else if (body.kind === "session") {
     fields(
       body,
-      ["kind", "action", "content", "sessionId", "eventId", "delegationId"],
+      ["kind", "action", "content", "sessionId", "eventId", "delegationId", "session"],
       "SESSION_OPERATION",
     );
+    const action = body.action as string;
     if (
       ![
-        "replace-instructions",
+        "update",
+        "connect",
         "append-instructions",
         "append-thinking",
         "append-commentary",
         "input",
         "respond",
-      ].includes(body.action as string)
+      ].includes(action)
     )
       fail("SESSION_OPERATION", "Unsupported session action.");
+    const block = action === "update" || action === "connect";
     nonempty(body.sessionId, "SESSION_OPERATION", "Session ID");
-    nonempty(body.eventId, "SESSION_OPERATION", "Event ID");
+    if (body.eventId === null) {
+      if (action !== "connect") fail("SESSION_OPERATION", "Only connect sends no event.");
+    } else nonempty(body.eventId, "SESSION_OPERATION", "Event ID");
     if (body.delegationId !== null)
       nonempty(body.delegationId, "SESSION_OPERATION", "Delegation ID");
-    refs.push(nonempty(body.content, "RECORD_REFERENCE", "Session content reference"));
+    if ("session" in body) {
+      if (!block) fail("SESSION_OPERATION", "Only update and connect carry a session block.");
+      const session = object(body.session, "SESSION_OPERATION", "Session block");
+      if ("instructions" in session)
+        fail(
+          "SESSION_OPERATION",
+          "Instructions travel as the bound record, never in the session block.",
+        );
+    }
+    if (body.content === null) {
+      if (!block) fail("RECORD_REFERENCE", `A ${action} operation binds a semantic record.`);
+    } else refs.push(nonempty(body.content, "RECORD_REFERENCE", "Session content reference"));
   } else if (body.kind === "channel") {
     fields(body, ["kind", "content", "meta"], "CHANNEL_META");
     const meta = object(body.meta, "CHANNEL_META", "Channel metadata");
@@ -465,13 +546,35 @@ export function parseOperation(input: unknown): OperationRecord {
   } else if (body.kind === "response") {
     fields(
       body,
-      ["kind", "instructions", "messages", "history", "tools", "qualifyTools", "outputSchema"],
+      [
+        "kind",
+        "instructions",
+        "messages",
+        "history",
+        "tools",
+        "qualifyTools",
+        "outputSchema",
+        "toolChoice",
+        "reasoning",
+        "store",
+      ],
       "MESSAGES",
     );
-    if (!Array.isArray(body.messages) || !body.messages.length)
-      fail("MESSAGES", "A response needs a nonempty current message array.");
+    if ("reasoning" in body) object(body.reasoning, "MESSAGES", "Reasoning options");
+    if ("store" in body && typeof body.store !== "boolean")
+      fail("MESSAGES", "store must be boolean.");
+    const messages = body.messages;
+    if (!Array.isArray(messages)) return fail("MESSAGES", "Current messages must be an array.");
+    if (
+      !messages.length &&
+      (body.history as { kind?: string } | undefined)?.kind !== "provider-items"
+    )
+      return fail(
+        "MESSAGES",
+        "A response needs a current message unless it continues provider items.",
+      );
     const keys = new Set<string>();
-    for (const input of body.messages as unknown[]) {
+    for (const input of messages as unknown[]) {
       const message = object(input, "MESSAGES", "Current message");
       fields(message, ["key", "role", "content"], "MESSAGES");
       const key = nonempty(message.key, "MESSAGES", "Message key");
@@ -806,22 +909,29 @@ export function lowerOperation(
     if (target.kind !== "openai-realtime/1" && target.kind !== "live-session/1")
       return fail("TARGET_KIND", "Session operations require a session target.");
     const path =
-      body.action === "replace-instructions"
+      body.action === "update"
         ? ["session", "instructions"]
-        : body.action === "respond"
-          ? ["response", "instructions"]
-          : ["content"];
-    if (body.action === "replace-instructions") {
+        : body.action === "connect"
+          ? ["instructions"]
+          : body.action === "respond"
+            ? ["response", "instructions"]
+            : ["content"];
+    if (body.action === "update" || body.action === "connect") {
       if (target.kind === "live-session/1")
         return fail(
           "SESSION_CAPABILITY",
-          "The live session profile is append-only; replacing instructions is not supported.",
+          "The live session profile is append-only; its session config is the consumer's own operation.",
         );
-      payload = {
-        type: "session.update",
-        event_id: body.eventId,
-        session: { type: "realtime", instructions: text(body.content, body.action, path) },
+      // The host's block as captured, the instructions derived from the record.
+      const block: JsonObject = {
+        type: "realtime",
+        ...(body.session ?? {}),
+        ...(body.content !== null ? { instructions: text(body.content, body.action, path) } : {}),
       };
+      payload =
+        body.action === "update"
+          ? { type: "session.update", event_id: body.eventId, session: block }
+          : block;
     } else if (body.action.startsWith("append-")) {
       if (target.kind !== "live-session/1")
         return fail(
@@ -832,13 +942,13 @@ export function lowerOperation(
         type: `session.${body.action.slice(7)}.append`,
         event_id: body.eventId,
         delegation_id: body.delegationId,
-        content: text(body.content, body.action, path),
+        content: text(body.content as string, body.action, path),
       };
     } else if (body.action === "respond") {
       payload = {
         type: "response.create",
         event_id: body.eventId,
-        response: { instructions: text(body.content, body.action, path) },
+        response: { instructions: text(body.content as string, body.action, path) },
       };
     } else {
       if (target.kind !== "openai-realtime/1")
@@ -852,7 +962,7 @@ export function lowerOperation(
         item: {
           type: "message",
           role: "user",
-          content: content(body.content, "input", ["item", "content"], "user", true),
+          content: content(body.content as string, "input", ["item", "content"], "user", true),
         },
       };
     }
@@ -911,6 +1021,9 @@ export function lowerOperation(
       extra.text = {
         format: { type: "json_schema", name: "response", strict: false, schema: body.outputSchema },
       };
+    if (body.toolChoice !== undefined) extra.tool_choice = body.toolChoice;
+    if (body.reasoning !== undefined) extra.reasoning = body.reasoning;
+    if (body.store !== undefined) extra.store = body.store;
     payload = { model: target.model, input, ...extra };
   }
   return freeze({

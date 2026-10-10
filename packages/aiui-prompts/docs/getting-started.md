@@ -60,7 +60,7 @@ const compiled = rehydrate(saved);
 const parts = compiled.parts; // Ordered { type: "text", text } / { type: "image", asset } values.
 const contributions = compiled.contributions; // Exact output owners, including generated framing.
 const mappings = mappingIndex(compiled);
-const costs = measurePrompt(compiled); // Text units and images; no guessed model token count.
+const costs = measurePrompt(compiled); // Text units and images; tokens under the conservative estimator (labelled estimated, no model count.
 ```
 
 Replay executes the recorded compiler, never the original author functions. Unknown schemas or

@@ -20,6 +20,13 @@ export type Asset = Readonly<{
   metadata?: JsonObject;
 }>;
 export type Selection = Readonly<Record<string, "full" | "short" | "omit">>;
+/**
+ * What an elision counts. `characters` and `lines` cut text; `items` keeps
+ * whole children; `tokens` keeps whole children too, as many as fit a token
+ * budget under the compile's estimator (the built-in conservative one unless
+ * a host supplies its own) — the unit a transcript tail wants.
+ */
+export type ElisionUnit = "characters" | "lines" | "items" | "tokens";
 export type Predicate =
   | { readonly op: "eq" | "ne"; readonly path: string; readonly value: JsonValue }
   | { readonly op: "gt" | "gte" | "lt" | "lte"; readonly path: string; readonly value: number }
@@ -70,9 +77,10 @@ type Spec<C> = Base &
       }
     | {
         readonly kind: "elide";
-        readonly unit: "characters" | "lines" | "items";
+        readonly unit: ElisionUnit;
         readonly limit: number;
         readonly marker: string;
+        readonly keep: "first" | "last";
         readonly children: readonly C[];
       }
     | {
@@ -132,9 +140,10 @@ export type PromptNode = Base &
       }
     | {
         readonly kind: "elide";
-        readonly unit: "characters" | "lines" | "items";
+        readonly unit: ElisionUnit;
         readonly limit: number;
         readonly marker: string;
+        readonly keep: "first" | "last";
         readonly children: readonly PromptValue[];
       }
     | {
@@ -344,8 +353,13 @@ export const Case = (
     ),
     fallback: Group({ children: props.fallback ?? null }),
   });
+/**
+ * Keep the first `limit` units (the default) or the last — `keep: "last"` is
+ * a transcript tail, the newest lines within a budget. The marker stands at
+ * the cut: after the kept head, before the kept tail.
+ */
 export const Elide = (
-  props: Props & { unit: "characters" | "lines" | "items"; limit: number; marker?: string },
+  props: Props & { unit: ElisionUnit; limit: number; marker?: string; keep?: "first" | "last" },
 ): PromptNode =>
   Object.freeze({
     ...base(props),
@@ -353,6 +367,7 @@ export const Elide = (
     unit: props.unit,
     limit: props.limit,
     marker: props.marker ?? "…",
+    keep: props.keep ?? "first",
     children: children(props),
   });
 export const Marker = (props: Props & { name: string; fields?: JsonObject }): PromptNode =>

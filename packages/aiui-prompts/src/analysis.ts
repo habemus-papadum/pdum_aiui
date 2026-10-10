@@ -8,6 +8,7 @@ import {
   type SemanticRecord,
 } from "./model.ts";
 import { parseRecord, withRecordOptions } from "./record.ts";
+import { CONSERVATIVE_ESTIMATOR, estimateParts, type TokenEstimator } from "./tokens.ts";
 
 /** Query exact emitted intervals; source ownership may remain coarse. */
 export function mappingIndex(compiled: CompiledPrompt) {
@@ -86,7 +87,11 @@ export function mappingIndex(compiled: CompiledPrompt) {
     },
   };
 }
-export function measurePrompt(compiled: CompiledPrompt) {
+export function measurePrompt(
+  compiled: CompiledPrompt,
+  options: { estimator?: TokenEstimator } = {},
+) {
+  const estimator = options.estimator ?? CONSERVATIVE_ESTIMATOR;
   const exclusive: Record<string, { codeUnits: number; images: number }> = {};
   for (const part of compiled.contributions) {
     const counts = exclusive[part.occurrence] ?? { codeUnits: 0, images: 0 };
@@ -107,7 +112,13 @@ export function measurePrompt(compiled: CompiledPrompt) {
       0,
     ),
     images: compiled.parts.filter((part) => part.type === "image").length,
-    tokens: { certainty: "unknown" as const, value: null },
+    // Always an estimate: the built-in conservative estimator unless the host
+    // supplied its own; the identity says which.
+    tokens: {
+      certainty: "estimated" as const,
+      value: estimateParts(compiled.parts, estimator),
+      estimator: estimator.identity,
+    },
     exclusive,
   });
 }
@@ -217,6 +228,8 @@ export function optimizePrompt(
     maxCandidates?: number;
     choices?: Readonly<Record<string, readonly ("full" | "short" | "omit")[]>>;
     measure?: (compiled: CompiledPrompt, record: SemanticRecord) => Measurement;
+    /** For `unit: "tokens"` without a custom `measure`: the estimator to budget under. */
+    estimator?: TokenEstimator;
   },
 ) {
   const record = parseRecord(input);
@@ -267,15 +280,24 @@ export function optimizePrompt(
   }
   const results: CandidateResult[] = [];
   const positions = entries.map(() => 0);
+  const estimator = options.estimator ?? CONSERVATIVE_ESTIMATOR;
   const measure =
     options.measure ??
-    ((compiled: CompiledPrompt): Measurement => ({
-      value: measurePrompt(compiled).codeUnits,
-      unit: "utf16-code-units",
-      certainty: "exact",
-      scope: "current-content",
-      method: "utf16/1",
-    }));
+    (unit === "tokens"
+      ? (compiled: CompiledPrompt): Measurement => ({
+          value: estimateParts(compiled.parts, estimator),
+          unit: "tokens",
+          certainty: "estimated",
+          scope: "current-content",
+          method: `${estimator.identity.name}@${estimator.identity.version}`,
+        })
+      : (compiled: CompiledPrompt): Measurement => ({
+          value: measurePrompt(compiled).codeUnits,
+          unit: "utf16-code-units",
+          certainty: "exact",
+          scope: "current-content",
+          method: "utf16/1",
+        }));
   let finished = false;
   let unknown = false;
   let fit:

@@ -49,10 +49,10 @@ function bindings(operation: OperationRecord): readonly InspectionBinding[] {
     Object.freeze({ key, label, record: operation.records[id] });
   if (body.kind === "custom")
     return body.bindings.map((item) => binding(item.key, item.key, item.content));
-  if (body.kind === "session" || body.kind === "channel")
-    return [
-      binding("content", body.kind === "session" ? body.action : "Channel content", body.content),
-    ];
+  if (body.kind === "channel") return [binding("content", "Channel content", body.content)];
+  if (body.kind === "session")
+    // A tools-only update or a connect may bind no record at all.
+    return body.content === null ? [] : [binding("content", body.action, body.content)];
   return [
     ...(body.instructions ? [binding("instructions", "Instructions", body.instructions)] : []),
     ...body.messages.map((item) =>

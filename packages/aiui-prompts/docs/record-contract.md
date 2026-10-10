@@ -59,13 +59,14 @@ alone does not mean every selected composition can render. A URL's bytes are out
 reproducing an asset descriptor is not verifying its bytes.
 
 Unknown schemas or compiler/lowerer versions fail explicitly. They are never interpreted using
-latest behavior. Only version 1 is installed; there is no fake migration from an older production
-format and no conversion of spike fixture data. Future changes must either preserve the version-1
-semantics and compatibility fixtures, or introduce a separately versioned implementation/read path.
-Keep old readers/compiler implementations available for retained ledger records. A migration must
-be explicit, retain the original fingerprint, and test both old and migrated derivations. Dependency
-updates affecting emitted prompt text need the same compatibility review as compiler changes;
-preview-only changes do not change semantic compilation.
+latest behavior: a record names the compiler that made it, and that check stays as a correctness
+device. **Everything here is pre-alpha** (the owner's standing stance, 2026-10-10): schemas, node
+fields, actions, adapter identities and APIs change whenever that makes the design cleaner, no
+old implementation is kept beside a new one, and no migration path is promised. Nothing persists
+these records across versions yet; when something does, the consumer that stored them is the one
+that adapts. The static fixtures pin the current behavior and are updated when it changes on
+purpose, never to make an accidental change pass. Preview-only changes do not change semantic
+compilation.
 
 `serializeRecord` and `serializeOperation` validate before returning canonical JSON. Wire capture is
 an explicit host action; a prepared payload is never proof of sending. `verifyWire` validates its
@@ -137,9 +138,12 @@ second pass that searches emitted strings to guess where they came from.
   content allows a structured XML tab record inside brackets while preserving its own contributions.
   Atomic media cannot be hidden inside a textual marker. App-specific vocabulary remains ordinary
   components over markers/XML/Text; the foundation does not hard-code the old bracket grammar.
-- Elide records unit, limit, marker, and original content. Supported units are Unicode code points,
-  logical lines, and authored items. It does not bisect atomic math/XML/image content. Its derived
-  selection/counts and generated marker ownership are visible in the compiled artifact.
+- Elide records unit, limit, marker, which end is kept, and original content. Units are Unicode
+  code points, logical lines, authored items, and tokens — a token budget keeps whole children, as
+  many as fit, counted under the compile's estimator (below). `keep: "last"` keeps the tail, with
+  the marker before it: a transcript's newest lines within a budget. It does not bisect atomic
+  math/XML/image content. Its derived selection/counts, the estimator's identity, and the generated
+  marker's ownership are visible in the compiled artifact.
 
 Tool declarations are immutable `ToolSnapshot` JSON: namespace/kit brief plus each tool's name,
 description, usage, kind, group, and optional input schema. Execution callbacks remain with the host.
@@ -161,8 +165,20 @@ from retained declarations and policies; the semantic record stores neither dupl
 strings nor derived character counts. Namespace collisions require explicit qualification.
 
 Graph depth and expanded occurrences have explicit bounds. Compilation is synchronous and pure;
-asynchronous acquisition happens before capture. Streaming, arbitrary renderer extensions, and
-provider tokenization are not hidden behind these primitives.
+asynchronous acquisition happens before capture. Streaming and arbitrary renderer extensions are
+not hidden behind these primitives.
+
+## Token estimation
+
+An estimator is a named pair of pure functions, text and image, with an identity (`name`,
+`version`). The built-in default, `aiui-prompts/conservative@1`, is generic and a little
+conservative: one token per 3.5 characters of text; an image at the larger of OpenAI's tile rule
+and Anthropic's pixels-per-750 rule after OpenAI's scaling, with an unknown size taken as 1024
+by 1024. It is part of the compiler, so a record whose `tokens` elisions were counted under it
+replays with nothing supplied; `measurePrompt` and `optimizePrompt` use it unless a host passes
+its own, and every decision or measurement that used an estimator names it. A host estimator
+(a real tokenizer) is passed as a compile service, like an adapter, and must be passed again at
+replay. Estimates are always labelled estimated; nothing here claims a model's exact count.
 
 ## Mappings and provenance
 
@@ -206,12 +222,13 @@ not load the operations module. Analysis similarly lives at `@habemus-papadum/ai
 
 | Operation / target | Derived delivery |
 | --- | --- |
-| Session replace / `openai-realtime/1` | `session.update` with complete instruction replacement |
+| Session update / `openai-realtime/1` | `session.update`: the host's session block (audio, tools, limits — captured parameters) merged with the bound instructions, or the block alone for a tools-only update |
+| Session connect / `openai-realtime/1` | the baked session config a session is minted and connected with: the block plus model and voice, no event envelope |
 | Session input / `openai-realtime/1` | `conversation.item.create`, ordered input text/images |
 | Session respond / `openai-realtime/1` | `response.create` with per-response instructions |
 | Session append / `live-session/1` | Repository extensions for instructions, thinking, and commentary append |
 | Channel push / `claude-channel/1` | `notifications/claude/channel`, text content plus string metadata |
-| Response / `openai-responses/1` | Instructions, current messages, history, tools, and optional output schema |
+| Response / `openai-responses/1` | Instructions, current messages, history, tools, optional output schema, and the request's `tool_choice`, `reasoning` and `store` when the host sets them |
 
 Targets reject unsupported combinations. Public Realtime is not assigned the repository's custom
 append protocol. Text instruction fields reject undeclared media coercion. Channel assets require
