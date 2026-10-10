@@ -8,7 +8,9 @@
 import {
   chainKeySource,
   devKeySource,
+  type LedgerEntry,
   mintingKeySource,
+  ORACLE_REALTIME_ADAPTERS,
   OracleSession,
   type OracleTool,
   onControlSurfaceChange,
@@ -27,7 +29,8 @@ import {
   OracleWebRtcParams,
 } from "@habemus-papadum/aiui-oracle/widgets";
 import { ControlSlider, ControlToggle } from "@habemus-papadum/aiui-viz";
-import { createEffect, createSignal, For, onCleanup, untrack } from "solid-js";
+import { PromptRecordView } from "@habemus-papadum/aiui-viz/site/prompt-record";
+import { createEffect, createSignal, For, onCleanup, Show, untrack } from "solid-js";
 import { amplitude, damping, freq, grid, kick, labScope, waveform } from "../model/store";
 import { Wave } from "./Wave";
 
@@ -35,6 +38,40 @@ const APP_BLURB =
   "A standing-wave visualizer. One animated wave; controls for frequency (Hz), " +
   "amplitude, damping, waveform family, and a reference grid; a kick action that " +
   "sends a decaying ripple through the wave.";
+
+/**
+ * The instructions as the session last SENT them: the semantic record (the
+ * persona and the slots, each attributed), the operation the oracle's adapter
+ * lowered it with, and the wire that left — verified by the inspector
+ * against a fresh derivation. The textarea above is what you type; this is
+ * what the model got.
+ */
+function SentInstructions(props: { session: OracleSession }) {
+  const [entries, setEntries] = createSignal<readonly LedgerEntry[]>(props.session.ledger());
+  props.session.onLedger(() => setEntries([...props.session.ledger()]));
+  const latest = () =>
+    entries()
+      .filter(
+        (entry): entry is Extract<LedgerEntry, { kind: "config" }> =>
+          entry.kind === "config" && entry.prompt !== undefined,
+      )
+      .at(-1);
+  return (
+    <Show
+      when={latest()}
+      fallback={<p class="lab-note">(start to see the instructions as sent)</p>}
+    >
+      {(entry) => (
+        <PromptRecordView
+          record={entry().prompt}
+          operation={entry().operation}
+          wire={entry().wire}
+          adapters={ORACLE_REALTIME_ADAPTERS}
+        />
+      )}
+    </Show>
+  );
+}
 
 export function App() {
   // The projection is a deliberate SNAPSHOT of the surface (values feed the
@@ -176,6 +213,9 @@ export function App() {
           <button type="button" onClick={() => session.setInstructions(instructions())}>
             apply
           </button>
+          <div class="lab-sent">
+            <SentInstructions session={session} />
+          </div>
         </details>
         {/* The bench's reason for existing, now: turn the knobs against a real
             session and read what the vendor and the browser actually held, so

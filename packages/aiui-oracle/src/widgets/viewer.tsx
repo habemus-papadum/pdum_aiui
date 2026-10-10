@@ -17,6 +17,7 @@
 import { JsonView } from "@habemus-papadum/aiui-viz/site/json-view";
 import { PromptRecordView } from "@habemus-papadum/aiui-viz/site/prompt-record";
 import { createMemo, createSignal, For, Show } from "solid-js";
+import { ORACLE_REALTIME_ADAPTERS } from "../realtime-adapter";
 import type { OracleSession } from "../session";
 import type { LedgerEntry } from "../types";
 import { useOracleState } from "./control";
@@ -57,6 +58,8 @@ function EntryRow(props: { entry: LedgerEntry }) {
   // previews it through the prompt toolkit's inspector (loaded on demand),
   // above the usual JSON.
   const prompt = "prompt" in props.entry ? props.entry.prompt : undefined;
+  const operation = "operation" in props.entry ? props.entry.operation : undefined;
+  const wire = "wire" in props.entry ? props.entry.wire : undefined;
   return (
     <div class="aiui-oracle-entry" data-kind={props.entry.kind}>
       <button
@@ -70,7 +73,12 @@ function EntryRow(props: { entry: LedgerEntry }) {
       </button>
       <Show when={open() && prompt !== undefined}>
         <div class="aiui-oracle-entry-prompt">
-          <PromptRecordView record={prompt} />
+          <PromptRecordView
+            record={prompt}
+            operation={operation}
+            wire={wire}
+            adapters={ORACLE_REALTIME_ADAPTERS}
+          />
         </div>
       </Show>
       <Show when={open() && detail !== undefined}>

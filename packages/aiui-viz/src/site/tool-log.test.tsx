@@ -26,6 +26,13 @@ afterEach(() => {
 });
 
 const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
+const until = async (ok: () => boolean, ms = 8000): Promise<void> => {
+  const started = Date.now();
+  while (!ok()) {
+    if (Date.now() - started > ms) throw new Error("timed out waiting for the preview");
+    await tick();
+  }
+};
 
 describe("ToolLog", () => {
   it("renders nothing until opened, then lists calls with their caller", async () => {
@@ -68,17 +75,13 @@ describe("ToolLog", () => {
     const tabs = [...document.querySelectorAll<HTMLButtonElement>(".aiui-toollog-tab")];
     tabs.find((b) => b.textContent === "as rendered")?.click();
     await tick();
-    // Markdown by default; the raw text — the fact — behind the toggle.
-    expect(document.querySelector(".aiui-toollog-brief .aiui-md")).not.toBeNull();
-    const toggle = document.querySelector<HTMLInputElement>(
-      ".aiui-toollog-brief .aiui-text-toggle input",
+    // The inspector's compact preview, on the brief's record; the raw text —
+    // the fact — is its text view, loaded on demand.
+    await until(() => document.querySelector(".aiui-toollog-brief .prompt-inspector") !== null);
+    await until(
+      () => (document.querySelector(".aiui-toollog-brief .prompt-raw")?.textContent ?? "") !== "",
     );
-    if (toggle) {
-      toggle.checked = false;
-      toggle.dispatchEvent(new Event("change", { bubbles: true }));
-    }
-    await tick();
-    const brief = document.querySelector(".aiui-toollog-brief .aiui-text-raw")?.textContent;
+    const brief = document.querySelector(".aiui-toollog-brief .prompt-raw")?.textContent;
     const expected = renderToolBrief([
       {
         ns: "lab",

@@ -19,6 +19,7 @@
  * snapshot or the imported text it came from.
  */
 
+import type { ConsumerAdapter } from "@habemus-papadum/aiui-prompts/operations";
 import type { PromptPreviewProps } from "@habemus-papadum/aiui-prompts-inspector";
 import type { JSX } from "@solidjs/web";
 import { createMemo, createSignal } from "solid-js";
@@ -53,8 +54,20 @@ function loadPreview(): Promise<Preview> {
 }
 
 export interface PromptRecordViewProps {
-  /** The stored record, as the ledger holds it (plain JSON). */
+  /** The stored semantic record, as the ledger holds it (plain JSON). */
   record: unknown;
+  /**
+   * The operation the record was delivered as and the wire captured when it
+   * left, when the ledger has them. With both, the inspector loads the WIRE:
+   * it shows the captured payload beside a fresh derivation from the
+   * operation and says whether the two are equal — `verifyWire`, in the UI.
+   */
+  operation?: unknown;
+  wire?: unknown;
+  /** The consumer-owned adapters the operation may name (exact versions);
+   * the toolkit's own profiles need none. Missing ones leave the payload
+   * inspectable and the verification "unavailable", with the reason. */
+  adapters?: readonly ConsumerAdapter[];
   /** Start on the rendered Markdown (the default) or on the exact text. */
   initialView?: "markdown" | "text";
 }
@@ -84,8 +97,17 @@ export function PromptRecordView(props: PromptRecordViewProps) {
       );
     }
     return Component({
+      // The wire when the ledger has one: that is what the inspector verifies.
       get record() {
-        return props.record;
+        return props.wire !== undefined && props.operation !== undefined
+          ? props.wire
+          : props.record;
+      },
+      get operation() {
+        return props.wire !== undefined ? props.operation : undefined;
+      },
+      get adapters() {
+        return props.adapters;
       },
       get initialView() {
         return props.initialView;

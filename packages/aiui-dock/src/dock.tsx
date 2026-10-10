@@ -37,6 +37,7 @@ import {
   browserKey,
   type Delegator,
   devKey,
+  LIVE_SESSION_ADAPTER,
   LiveSession,
   type LiveTool,
   webRtcTransport as liveWebRtcTransport,
@@ -50,9 +51,11 @@ import {
   LiveControl,
   LiveKey,
   LiveTasks,
+  useLedger,
   useLiveState,
 } from "@habemus-papadum/aiui-live/widgets";
 import {
+  ORACLE_REALTIME_ADAPTERS,
   OracleSession,
   webRtcTransport as oracleWebRtcTransport,
   standardKeySources,
@@ -67,6 +70,7 @@ import {
 import { ensureAiuiGlobal, sourcesMode } from "@habemus-papadum/aiui-viz";
 import { JsonView } from "@habemus-papadum/aiui-viz/site/json-view";
 import { TextView } from "@habemus-papadum/aiui-viz/site/markdown";
+import { PromptRecordView } from "@habemus-papadum/aiui-viz/site/prompt-record";
 import { ToolLog, toggleToolLog } from "@habemus-papadum/aiui-viz/site/tool-log";
 import type { JSX } from "@solidjs/web";
 import { createEffect, createSignal, For, onCleanup, Show, untrack } from "solid-js";
@@ -192,6 +196,15 @@ function createLive(id: DockBackendId, surface: DockSurface, serverUrl: string):
 /** The live session's composed config, re-read as its state moves. */
 function LiveConfigFold(props: { session: LiveSession }): JSX.Element {
   const state = useLiveState(props.session);
+  const entries = useLedger(props.session);
+  // The connect config as the record it was lowered from — the instructions'
+  // semantic record, the connect operation, the wire that left — which the
+  // inspector verifies against a fresh derivation. The JSON is the same
+  // config as data.
+  const connect = () =>
+    entries()
+      .filter((entry) => entry.kind === "prompt" && entry.event?.what === "instructions")
+      .at(-1)?.event;
   return (
     <details>
       <summary>session config (as sent)</summary>
@@ -199,6 +212,16 @@ function LiveConfigFold(props: { session: LiveSession }): JSX.Element {
         when={state().status !== "idle"}
         fallback={<p class="aiui-dock-note">(connect to see the composed config)</p>}
       >
+        <Show when={connect()}>
+          {(event) => (
+            <PromptRecordView
+              record={event().prompt}
+              operation={event().operation}
+              wire={event().wire}
+              adapters={[LIVE_SESSION_ADAPTER]}
+            />
+          )}
+        </Show>
         <JsonView value={props.session.sessionConfig()} depth={2} />
       </Show>
     </details>
@@ -237,6 +260,11 @@ export function VoiceDock(props: VoiceDockProps): JSX.Element {
   const [oracle, setOracle] = createSignal<OracleSession | undefined>(undefined);
   const [oracleStatus, setOracleStatus] = createSignal("idle");
   const [oraclePrompt, setOraclePrompt] = createSignal("");
+  // The instructions as last sent, as RECORDS: the semantic record, the
+  // operation the oracle's adapter lowered it with, and the wire that left.
+  const [oracleRecord, setOracleRecord] = createSignal<
+    { prompt: unknown; operation?: unknown; wire?: unknown } | undefined
+  >(undefined);
   const ensureOracle = (): OracleSession => {
     if (oracleNow !== undefined) return oracleNow;
     const session = createOracle(untrack(surface), props.mintUrl);
@@ -244,6 +272,9 @@ export function VoiceDock(props: VoiceDockProps): JSX.Element {
     session.onLedger((entry) => {
       if (entry.kind === "config" && typeof entry.sent?.instructions === "string") {
         setOraclePrompt(entry.sent.instructions);
+        if (entry.prompt !== undefined) {
+          setOracleRecord({ prompt: entry.prompt, operation: entry.operation, wire: entry.wire });
+        }
       }
     });
     oracleNow = session;
@@ -335,10 +366,26 @@ export function VoiceDock(props: VoiceDockProps): JSX.Element {
                 <details>
                   <summary>prompt (as sent)</summary>
                   <Show
-                    when={oraclePrompt() !== ""}
-                    fallback={<p class="aiui-dock-note">(connect to see the woven instructions)</p>}
+                    when={oracleRecord()}
+                    fallback={
+                      <Show
+                        when={oraclePrompt() !== ""}
+                        fallback={
+                          <p class="aiui-dock-note">(connect to see the woven instructions)</p>
+                        }
+                      >
+                        <TextView text={oraclePrompt()} />
+                      </Show>
+                    }
                   >
-                    <TextView text={oraclePrompt()} />
+                    {(sent) => (
+                      <PromptRecordView
+                        record={sent().prompt}
+                        operation={sent().operation}
+                        wire={sent().wire}
+                        adapters={ORACLE_REALTIME_ADAPTERS}
+                      />
+                    )}
                   </Show>
                 </details>
                 <p class="aiui-dock-note">

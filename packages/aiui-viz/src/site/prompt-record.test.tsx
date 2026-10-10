@@ -5,6 +5,11 @@
  * a tool brief, the oracle's shape), through JSON, into the mounted preview.
  */
 import { Prompt, snapshot, Text } from "@habemus-papadum/aiui-prompts";
+import {
+  captureWire,
+  lowerOperation,
+  sessionOperation,
+} from "@habemus-papadum/aiui-prompts/operations";
 import { render } from "@solidjs/web";
 import { afterEach, describe, expect, it } from "vitest";
 import { toolBrief } from "../tool-brief";
@@ -63,5 +68,52 @@ describe("PromptRecordView", () => {
     expect(labels).toContain("Markdown");
     expect(labels).toContain("Text");
     expect(labels).toContain("Open full inspector");
+  });
+
+  it("loads a wire with its operation and shows whether the captured payload verifies", async () => {
+    const record = snapshot("Say hello.");
+    const operation = sessionOperation(record, {
+      action: "respond",
+      sessionId: "s",
+      eventId: "e1",
+    });
+    const prepared = lowerOperation(operation, { kind: "openai-realtime/1" });
+    const stamp = { capturedAt: "2026-10-10T00:00:00.000Z" };
+    const wire = captureWire(prepared, prepared.payload, stamp);
+    const stored = (value: unknown): unknown => JSON.parse(JSON.stringify(value));
+    dispose = render(
+      () => (
+        <PromptRecordView
+          record={stored(record)}
+          operation={stored(operation)}
+          wire={stored(wire)}
+          initialView="text"
+        />
+      ),
+      document.body,
+    );
+    await until(() => (document.body.textContent ?? "").includes("verification:"));
+    expect(document.body.textContent).toContain("verification: equal");
+    dispose();
+    document.body.innerHTML = "";
+
+    const tampered = captureWire(
+      prepared,
+      { ...(prepared.payload as Record<string, unknown>), response: { instructions: "Say bye." } },
+      stamp,
+    );
+    dispose = render(
+      () => (
+        <PromptRecordView
+          record={stored(record)}
+          operation={stored(operation)}
+          wire={stored(tampered)}
+          initialView="text"
+        />
+      ),
+      document.body,
+    );
+    await until(() => (document.body.textContent ?? "").includes("verification:"));
+    expect(document.body.textContent).toContain("verification: different");
   });
 });

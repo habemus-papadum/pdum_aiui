@@ -8,7 +8,12 @@
  * delegator; either way the page sees one `session()` accessor.
  */
 
-import { LIVE_VOICES, type LiveSession, type LiveState } from "@habemus-papadum/aiui-live";
+import {
+  LIVE_SESSION_ADAPTER,
+  LIVE_VOICES,
+  type LiveSession,
+  type LiveState,
+} from "@habemus-papadum/aiui-live";
 import {
   LIVE_WIDGET_STYLES,
   LiveCaptions,
@@ -17,7 +22,9 @@ import {
   LiveKey,
   LiveLedger,
   LiveTasks,
+  useLedger,
 } from "@habemus-papadum/aiui-live/widgets";
+import { PromptRecordView } from "@habemus-papadum/aiui-viz/site/prompt-record";
 import { createEffect, createSignal, For, onCleanup, Show, untrack } from "solid-js";
 import {
   BACKENDS,
@@ -26,6 +33,32 @@ import {
   createBenchSession,
   makeDelegator,
 } from "./setup";
+
+/**
+ * The connect config as the RECORD it was lowered from: the instructions'
+ * semantic record, the connect operation, and the wire captured as it left —
+ * which the inspector verifies against a fresh derivation (its "verification"
+ * line). The JSON below it is the same config as data.
+ */
+function ConnectRecord(props: { session: LiveSession }) {
+  const entries = useLedger(props.session);
+  const connect = () =>
+    entries()
+      .filter((entry) => entry.kind === "prompt" && entry.event?.what === "instructions")
+      .at(-1)?.event;
+  return (
+    <Show when={connect()}>
+      {(event) => (
+        <PromptRecordView
+          record={event().prompt}
+          operation={event().operation}
+          wire={event().wire}
+          adapters={[LIVE_SESSION_ADAPTER]}
+        />
+      )}
+    </Show>
+  );
+}
 
 export interface BenchProps {
   options: BenchOptions;
@@ -154,6 +187,9 @@ export function Bench(props: BenchProps) {
       </Show>
       <details class="bench-fold">
         <summary>session config (as sent)</summary>
+        <Show when={state().status !== "idle"}>
+          <ConnectRecord session={session()} />
+        </Show>
         <pre>
           {state().status === "idle"
             ? "(connect to see the composed config)"

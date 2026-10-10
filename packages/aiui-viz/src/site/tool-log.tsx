@@ -26,9 +26,9 @@
 import type { JSX } from "@solidjs/web";
 import { createEffect, createSignal, For, onCleanup, Show } from "solid-js";
 import { type AiuiToolCall, type AiuiToolsRegistry, ensureAiuiGlobal } from "../aiui-global";
-import { type KitDoc, renderToolBrief } from "../tool-brief";
+import { type KitDoc, renderPrompt, toolBrief } from "../tool-brief";
 import { JsonView } from "./json-view";
-import { TextView } from "./markdown";
+import { PromptRecordView } from "./prompt-record";
 
 /** The hash that opens the log on load (`…/page#aiui-tools`). */
 export const TOOL_LOG_HASH = "#aiui-tools";
@@ -355,7 +355,12 @@ export function ToolLog(props: ToolLogProps): JSX.Element {
 
         <Show when={view() === "rendered"}>
           <div class="aiui-toollog-section">the Tools: section, as a model reads it</div>
-          <TextView text={renderToolBrief(docs())} class="aiui-toollog-brief" />
+          {/* The brief as the record a consumer compiles — the inspector shows
+              the text and, behind "Open full inspector", which tool and field
+              every line came from. */}
+          <div class="aiui-toollog-brief">
+            <PromptRecordView record={renderPrompt(toolBrief(docs())).record} initialView="text" />
+          </div>
           <div class="aiui-toollog-section">the structured form (page_tools_list)</div>
           <JsonView value={listing(registry())} depth={2} class="aiui-toollog-listing" />
         </Show>
