@@ -45,9 +45,13 @@ Findings (the reasons the delegator is shaped the way it is):
 
 - `query()` authenticates through the CLI's own login (`apiKeySource: none`);
   no API key is needed. Init ≈ 2 s; a trivial haiku turn ≈ 4.5 s end to end.
-- In streaming-input mode a user message pushed WHILE a turn is running is not
+- ~~In streaming-input mode a user message pushed WHILE a turn is running is not
   interleaved — it was never answered — so delegations must be serialized:
-  push the next only after the previous turn's `result`.
+  push the next only after the previous turn's `result`.~~ SUPERSEDED by the
+  2026-10-10 mid-turn spike below: the message IS folded into the running turn
+  at the next tool boundary. (This script's `interrupt()` at +25 s cut the turn
+  before the model got to the folded d2; re-run, d2 was answered right after the
+  interrupt, in the next turn.)
 - `interrupt()` aborts the running turn (`result/error_during_execution`) and
   the query stays alive for the next message. That is the cancel path.
 - MCP tools are deferred behind ToolSearch by default; the first `say` cost a
@@ -60,3 +64,38 @@ Findings (the reasons the delegator is shaped the way it is):
   11.9.0 under Node 24.5.0 and 24.11.1 installs it in under a second. The
   repo requires Node ≥ 24.5 for this reason (`.nvmrc`, `engines`), and the
   SDK spawns its own bundled, version-matched CLI by default.
+
+## The mid-turn input spike (2026-10-10)
+
+```sh
+npm run claude:midturn -- A        # append   — "also tell me 17 + 25", pushed at +7 s
+npm run claude:midturn -- B        # redirect — "stop after step 3 and reply STOPPED"
+npm run claude:midturn -- C        # interrupt() then the redirect
+npm run claude:midturn -- Dnow     # redirect with priority "now" (also Dnext, Dlater)
+SDK_DIR=/dir/whose/node_modules/has/the/sdk npm run claude:midturn -- B   # another SDK
+```
+
+Knobs: `AT` (seconds after the first push), `MSG=append|redirect`, `SLEEP` (the
+per-step Bash sleep), `ORIGIN=human` (stamps `origin.kind` on the pushed
+message), `TAG` (log-name suffix). Logs land in
+`out/claude-midturn-<variant>[-tag]-<sdk>.jsonl`, each ending in a `summary`.
+
+Findings, identical on SDK 0.3.272 (CLI 2.1.272) and 0.3.296 (CLI 2.1.296):
+
+- A user message pushed while a turn runs is **folded into the running turn**
+  at the next tool boundary: its `command_lifecycle` goes `queued` → `started`
+  right after the next tool_result, and the single `result` lists both uuids in
+  `user_message_uuids`. The model sees it before the turn ends — the append was
+  answered in the same reply ("DONE / 17 + 25 = 42"), the redirect stopped the
+  loop after step 3.
+- The choice is `SDKUserMessage.priority` (typed but undocumented; the CLI
+  defaults to `"next"`): `"next"` folds in mid-turn; `"later"` waits for the
+  turn to end and then runs as its own turn; `"now"` ends the running turn
+  (`result/success` with empty text, lifecycle `cancelled`) and starts a new
+  turn with the message. On 2.1.296 a `"now"` stamped `origin: {kind: "human"}`
+  instead backgrounds a long-running tool and joins the running turn (one
+  result); an un-stamped `"now"` lets an in-flight tool finish, then cuts.
+- `interrupt()` still ends the turn with `error_during_execution`; a message
+  pushed right after it runs as the next turn.
+- A message pushed before the turn's first output (+1 s, +2.6 s) was folded the
+  same way; no `turn_preempted` frame was observed.

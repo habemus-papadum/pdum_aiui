@@ -86,6 +86,8 @@ class Probe {
   private pumpTimer: ReturnType<typeof setInterval> | undefined;
   /** ms of input audio sent so far — approximates the session timeline. */
   sentMs = 0;
+  /** Observers of every incoming event (the hosted loop hangs off this). */
+  hooks: Array<(ev: Ev, t: number) => void> = [];
   private logFile: string;
   private eventSeq = 0;
 
@@ -139,6 +141,9 @@ class Probe {
           appendFileSync(this.logFile, `${JSON.stringify({ t, dir: "in", ev })}\n`);
         }
         this.onEvent(ev);
+        for (const hook of this.hooks) {
+          hook(ev, t);
+        }
         if (ev.type === "session.started") {
           clearTimeout(timer);
           this.started = true;
@@ -797,6 +802,617 @@ async function scenarioSideband(): Promise<void> {
   side.ws.close();
 }
 
+// ── hosted overlap probes (2026-10-10) ───────────────────────────────────────
+//
+// What happens in Responses (hosted) delegation when the user speaks AGAIN
+// while a long hosted task is still waiting on a slow function result.
+// `overlap`  — a quick arithmetic question inside a 20 s lookup
+// `redirect` — "change that: look up X instead" inside the lookup
+// `typed`    — the documented typed-update pair (response.item.create user
+//              message + response.create) inside the lookup, no speech
+// `models6`  — which gpt-6* backends session.start accepts
+//
+// Backend model: PROBE_BACKEND (default gpt-6-sol). Slow tool: PROBE_SLOW_MS.
+
+const BACKEND = process.env.PROBE_BACKEND ?? "gpt-6-sol";
+const SLOW_MS = Number(process.env.PROBE_SLOW_MS ?? 20000);
+const TIMEBOX_MS = 90000;
+
+const LOOKUP_LIVE_PROMPT = `You are a calm, brief voice assistant for a mathematics reference desk.
+Speak plainly and briefly. No lists, no preamble.
+
+Backchannel policy: Use light backchannels. Acknowledge naturally without competing with the main response.
+
+Interruption policy: Stop speaking when the user interrupts. Listen to what they say.
+
+Delegation policy:
+Backend tools:
+- Reference lookup: look a topic up in the reference library; this is slow (about twenty seconds).
+- Arithmetic: add numbers.
+
+Delegate to the backend when:
+- The user asks to look something up, or asks for a definition or a fact about a mathematical object.
+- The user asks for arithmetic.
+
+Do not delegate to the backend when:
+- The user greets you or asks you to repeat a result already provided.
+
+Delegate before giving an answer that depends on backend work.
+Do not guess the result while waiting. If the backend is still working, tell the user briefly and wait.`;
+
+const LOOKUP_BACKEND_PROMPT = `## Voice conversation context
+You are helping an assistant in a live voice conversation at a mathematics reference desk. Transcripts can contain mistakes. Use the latest context.
+
+## Task instructions
+Use the tools. slow_lookup(topic) looks a topic up in the reference library; it is slow (about twenty seconds). add(a, b) adds two numbers. Always use the tools rather than answering from memory, even for simple arithmetic.
+
+## Return the result
+Answer briefly, in one or two short sentences, using what the tools returned. Do not invent a result.`;
+
+const slowLookupTool = {
+  type: "function",
+  name: "slow_lookup",
+  description:
+    "Look a topic up in the reference library. Slow: takes about twenty seconds. Returns a short summary.",
+  parameters: {
+    type: "object",
+    properties: { topic: { type: "string", description: "The topic to look up." } },
+    required: ["topic"],
+    additionalProperties: false,
+  },
+};
+
+const addTool = {
+  type: "function",
+  name: "add",
+  description: "Add two numbers. Instant.",
+  parameters: {
+    type: "object",
+    properties: { a: { type: "number" }, b: { type: "number" } },
+    required: ["a", "b"],
+    additionalProperties: false,
+  },
+};
+
+function lookupAnswer(topic: string): Ev {
+  const t = topic.toLowerCase();
+  if (t.includes("dirichlet")) {
+    return {
+      topic: "Dirichlet kernel",
+      summary:
+        "D_n(x) = sum_{k=-n}^{n} e^{ikx} = sin((n+1/2)x)/sin(x/2). Convolving with it gives the n-th partial sum of a Fourier series. It is not non-negative, and its L1 norm grows like log n, which is why partial sums can fail to converge.",
+    };
+  }
+  if (t.includes("fej")) {
+    return {
+      topic: "Fejér kernel",
+      summary:
+        "F_n(x) = (1/n) sum_{k=0}^{n-1} D_k(x) = (1/n) (sin(nx/2)/sin(x/2))^2. It is non-negative with integral 1, so its convolutions (the Cesàro means) converge uniformly for every continuous function — Fejér's theorem.",
+    };
+  }
+  if (t.includes("poisson")) {
+    return {
+      topic: "Poisson kernel",
+      summary:
+        "P_r(x) = (1 - r^2) / (1 - 2 r cos x + r^2) for 0 <= r < 1. It is positive with integral 1, and convolving with it solves the Dirichlet problem on the unit disk; as r tends to 1 the Abel means converge for every continuous function.",
+    };
+  }
+  return { topic, summary: `No entry for "${topic}" in the reference library.` };
+}
+
+interface HostedCall {
+  callId: string;
+  name: string;
+  arguments: string;
+  responseId: string | undefined;
+  t: number;
+  answeredT?: number;
+}
+
+interface HostedDelegation {
+  id: string;
+  createdT: number;
+  /** response_id named on session.delegation.created */
+  announcedResponseId: string | undefined;
+  /** nested response.created ids, in arrival order */
+  responseIds: string[];
+  /** nested lifecycle events */
+  lifecycle: Array<{
+    t: number;
+    type: string;
+    responseId?: string;
+    status?: string;
+    reason?: string;
+  }>;
+  calls: HostedCall[];
+  pending: Map<string, HostedCall>;
+  text: string;
+  /** nested response ids that produced a function_call item */
+  callingResponses: Set<string>;
+}
+
+/**
+ * The hosted function-tool loop, keyed by the OUTER delegation_id, dispatched
+ * on the nested event type. Function calls are read from
+ * response.output_item.done items only. `slow_lookup` is answered after
+ * SLOW_MS of wall time; `add` immediately. After the last pending call of a
+ * delegation is answered, one `response.create` continues the backend.
+ */
+class HostedLoop {
+  delegations = new Map<string, HostedDelegation>();
+  errors: Array<{ t: number; ev: Ev }> = [];
+  private timers: Array<ReturnType<typeof setTimeout>> = [];
+  private seq = 0;
+
+  constructor(readonly p: Probe) {
+    p.hooks.push((ev, t) => this.handle(ev, t));
+  }
+
+  private delegation(id: string, t: number): HostedDelegation {
+    let d = this.delegations.get(id);
+    if (d === undefined) {
+      d = {
+        id,
+        createdT: t,
+        announcedResponseId: undefined,
+        responseIds: [],
+        lifecycle: [],
+        calls: [],
+        pending: new Map(),
+        text: "",
+        callingResponses: new Set(),
+      };
+      this.delegations.set(id, d);
+    }
+    return d;
+  }
+
+  private handle(ev: Ev, t: number): void {
+    if (ev.type === "error") {
+      this.errors.push({ t, ev });
+      return;
+    }
+    if (ev.type === "session.delegation.created") {
+      const d = this.delegation(ev.delegation.id, t);
+      d.announcedResponseId = ev.delegation.response_id;
+      this.p.log(
+        `DELEGATION #${this.delegations.size} ${d.id} target=${ev.delegation.target} response_id=${ev.delegation.response_id} offset_ms=${ev.offset_ms}`,
+      );
+      return;
+    }
+    if (ev.type !== "response.event") {
+      return;
+    }
+    const d = this.delegation(ev.delegation_id, t);
+    const n: Ev = ev.event ?? {};
+    const short = d.id.slice(-6);
+    switch (n.type) {
+      case "response.created": {
+        const rid: string | undefined = n.response?.id;
+        if (rid !== undefined) {
+          d.responseIds.push(rid);
+        }
+        d.lifecycle.push({ t, type: n.type, responseId: rid, status: n.response?.status });
+        this.p.log(
+          `  [${short}] nested response.created ${rid} previous=${n.response?.previous_response_id ?? "-"}`,
+        );
+        return;
+      }
+      case "response.completed":
+      case "response.failed":
+      case "response.incomplete": {
+        const r = n.response ?? {};
+        const reason = r.incomplete_details?.reason ?? r.error?.message;
+        d.lifecycle.push({ t, type: n.type, responseId: r.id, status: r.status, reason });
+        this.p.log(
+          `  [${short}] nested ${n.type} ${r.id} status=${r.status}${reason !== undefined ? ` reason=${reason}` : ""} output=${JSON.stringify(r.output ?? null).slice(0, 80)} usage=${JSON.stringify(r.usage ?? null).slice(0, 120)}`,
+        );
+        return;
+      }
+      case "response.output_text.delta":
+        d.text += n.delta ?? "";
+        return;
+      case "response.output_item.done": {
+        const item = n.item ?? {};
+        if (item.type === "function_call") {
+          const rid = d.responseIds[d.responseIds.length - 1];
+          const call: HostedCall = {
+            callId: item.call_id,
+            name: item.name,
+            arguments: item.arguments ?? "{}",
+            responseId: rid,
+            t,
+          };
+          d.calls.push(call);
+          d.pending.set(call.callId, call);
+          if (rid !== undefined) {
+            d.callingResponses.add(rid);
+          }
+          this.p.log(
+            `  [${short}] FUNCTION CALL ${call.name}(${call.arguments}) call_id=${call.callId} in ${rid} — ${t - d.createdT}ms after delegation`,
+          );
+          this.dispatch(d, call);
+        } else if (item.type === "message") {
+          const text = (item.content ?? []).map((c: Ev) => c.text ?? "").join("");
+          this.p.log(`  [${short}] backend message: "${text}"`);
+        }
+        return;
+      }
+      default:
+        return;
+    }
+  }
+
+  private dispatch(d: HostedDelegation, call: HostedCall): void {
+    const answer = (output: Ev) => {
+      if (this.p.ws.readyState !== WebSocket.OPEN) {
+        return;
+      }
+      call.answeredT = this.p.now();
+      d.pending.delete(call.callId);
+      const id = `tool_${++this.seq}`;
+      this.p.send({
+        type: "response.item.create",
+        event_id: id,
+        item: {
+          type: "function_call_output",
+          call_id: call.callId,
+          output: JSON.stringify(output),
+        },
+      });
+      if (d.pending.size === 0) {
+        this.p.send({ type: "response.create", event_id: `${id}_go` });
+      } else {
+        this.p.log(
+          `  holding response.create for ${d.id.slice(-6)}: ${d.pending.size} call(s) still pending`,
+        );
+      }
+    };
+    let args: Ev = {};
+    try {
+      args = JSON.parse(call.arguments);
+    } catch {}
+    if (call.name === "slow_lookup") {
+      this.p.log(`  slow_lookup("${args.topic}") will be answered in ${SLOW_MS}ms`);
+      this.timers.push(setTimeout(() => answer(lookupAnswer(String(args.topic ?? ""))), SLOW_MS));
+    } else if (call.name === "add") {
+      answer({ sum: Number(args.a) + Number(args.b) });
+    } else {
+      answer({ error: `unknown tool ${call.name}` });
+    }
+  }
+
+  /** A delegation is terminal when nothing is pending and its latest nested
+   * response ended without asking for a tool (or failed / went incomplete). */
+  terminal(d: HostedDelegation): boolean {
+    if (d.pending.size > 0) {
+      return false;
+    }
+    const last = d.lifecycle[d.lifecycle.length - 1];
+    if (last === undefined || last.type === "response.created") {
+      return false;
+    }
+    if (last.type !== "response.completed") {
+      return true;
+    }
+    return last.responseId === undefined || !d.callingResponses.has(last.responseId);
+  }
+
+  allTerminal(): boolean {
+    return (
+      this.delegations.size > 0 && [...this.delegations.values()].every((d) => this.terminal(d))
+    );
+  }
+
+  stop(): void {
+    for (const timer of this.timers) {
+      clearTimeout(timer);
+    }
+  }
+
+  summary(): void {
+    let i = 0;
+    for (const d of this.delegations.values()) {
+      i++;
+      this.p.log(
+        `SUMMARY delegation #${i} ${d.id} created +${(d.createdT / 1000).toFixed(2)}s announced=${d.announcedResponseId} nested=[${d.responseIds.join(", ")}] terminal=${this.terminal(d)}`,
+      );
+      for (const c of d.calls) {
+        this.p.log(
+          `  call ${c.name}(${c.arguments}) in ${c.responseId} arrived +${(c.t / 1000).toFixed(2)}s answered ${c.answeredT === undefined ? "never" : `+${(c.answeredT / 1000).toFixed(2)}s`}`,
+        );
+      }
+      for (const l of d.lifecycle) {
+        this.p.log(
+          `  ${l.type} ${l.responseId ?? ""} +${(l.t / 1000).toFixed(2)}s${l.status !== undefined ? ` status=${l.status}` : ""}${l.reason !== undefined ? ` reason=${l.reason}` : ""}`,
+        );
+      }
+      if (d.text !== "") {
+        this.p.log(`  backend text: "${d.text}"`);
+      }
+    }
+    for (const e of this.errors) {
+      this.p.log(
+        `SUMMARY error +${(e.t / 1000).toFixed(2)}s ${JSON.stringify(e.ev.error ?? e.ev)}`,
+      );
+    }
+  }
+}
+
+async function connectHosted(label: string): Promise<{ p: Probe; loop: HostedLoop }> {
+  const p = new Probe(label);
+  const started = await p.connect({
+    model: "gpt-live-1",
+    instructions: LOOKUP_LIVE_PROMPT,
+    audio,
+    delegation: {
+      type: "responses",
+      responses: {
+        model: BACKEND,
+        instructions: LOOKUP_BACKEND_PROMPT,
+        tools: [slowLookupTool, addTool],
+        tool_choice: "auto",
+        reasoning: { effort: "low" },
+      },
+    },
+  });
+  p.log(
+    `session.started in ${p.now()}ms on backend ${BACKEND}; resolved delegation: ${JSON.stringify(started.session?.delegation)}`,
+  );
+  const loop = new HostedLoop(p);
+  p.startPump();
+  await sleep(800);
+  return { p, loop };
+}
+
+/** Wait until every delegation is terminal and the assistant has been silent
+ * for `quietMs`, or the timebox runs out. */
+async function settle(
+  p: Probe,
+  loop: HostedLoop,
+  minDelegations: number,
+  quietMs = 5000,
+): Promise<void> {
+  const deadline = TIMEBOX_MS;
+  for (;;) {
+    const now = p.now();
+    if (now > deadline) {
+      p.log(`⏱ timebox ${TIMEBOX_MS}ms reached`);
+      return;
+    }
+    const lastSpoken = p.outSegments[p.outSegments.length - 1]?.t ?? 0;
+    // quiet counts from the LATER of the last spoken word and the last backend
+    // lifecycle event, so a result that completed a moment ago gets its chance
+    // to be spoken (the voice model takes ~1–2 s to start on a fresh result)
+    let lastLifecycle = 0;
+    for (const d of loop.delegations.values()) {
+      for (const l of d.lifecycle) {
+        lastLifecycle = Math.max(lastLifecycle, l.t);
+      }
+    }
+    const lastActivity = Math.max(lastSpoken, lastLifecycle);
+    if (
+      loop.delegations.size >= minDelegations &&
+      loop.allTerminal() &&
+      now - lastActivity > quietMs
+    ) {
+      p.log(
+        `settled: ${loop.delegations.size} delegation(s) terminal, quiet ${now - lastActivity}ms`,
+      );
+      return;
+    }
+    await sleep(200);
+  }
+}
+
+async function firstDelegation(p: Probe): Promise<{ t: number; ev: Ev } | undefined> {
+  const said = await p.say(
+    "Please look up the Dirichlet kernel; it is fine if that takes about twenty seconds.",
+  );
+  const d1 = await p.waitFor((e) => e.type === "session.delegation.created", 15000, "delegation 1");
+  if (d1 !== undefined) {
+    p.log(`delegation 1 arrived ${d1.t - said.wallEnd}ms after the utterance finished sending`);
+  }
+  const call = await p.waitFor(
+    (e) =>
+      e.type === "response.event" &&
+      e.event?.type === "response.output_item.done" &&
+      e.event?.item?.type === "function_call",
+    20000,
+    "first function call",
+  );
+  if (call !== undefined && d1 !== undefined) {
+    p.log(`first function call ${call.t - d1.t}ms after delegation 1`);
+  }
+  return d1;
+}
+
+async function finishHosted(p: Probe, loop: HostedLoop): Promise<void> {
+  loop.summary();
+  loop.stop();
+  const closed = await p.close();
+  p.log(`closed: ${JSON.stringify(closed?.usage)} reason=${closed?.reason}`);
+}
+
+async function scenarioOverlap(): Promise<void> {
+  const { p, loop } = await connectHosted("overlap");
+  const d1 = await firstDelegation(p);
+  if (d1 === undefined) {
+    await sleep(4000);
+    await finishHosted(p, loop);
+    return;
+  }
+  await sleep(Math.max(0, d1.t + 6000 - p.now()));
+  const said2 = await p.say("While that runs, what is seventeen plus twenty-five?");
+  const d2 = await p.waitFor(
+    (e) => e.type === "session.delegation.created" && e.delegation?.id !== d1.ev.delegation.id,
+    15000,
+    "delegation 2",
+  );
+  p.log(
+    d2 === undefined
+      ? "NO second delegation within 15 s of utterance 2"
+      : `delegation 2 ${d2.ev.delegation.id} arrived ${d2.t - said2.wallEnd}ms after utterance 2 finished sending (task 1 still waiting on slow_lookup)`,
+  );
+  await settle(p, loop, d2 === undefined ? 1 : 2);
+  await finishHosted(p, loop);
+}
+
+async function scenarioRedirect(): Promise<void> {
+  // PROBE_REDIRECT_TOPIC swaps the redirect target (the synthesizer's "Fejér"
+  // was transcribed as "phasor" on 2026-10-10; "Poisson kernel" is unambiguous)
+  const topic = process.env.PROBE_REDIRECT_TOPIC ?? "Fejér kernel";
+  const label =
+    process.env.PROBE_REDIRECT_TOPIC === undefined
+      ? "redirect"
+      : `redirect-${topic.toLowerCase().replace(/[^a-z]+/g, "-")}`;
+  const { p, loop } = await connectHosted(label);
+  const d1 = await firstDelegation(p);
+  if (d1 === undefined) {
+    await sleep(4000);
+    await finishHosted(p, loop);
+    return;
+  }
+  await sleep(Math.max(0, d1.t + 6000 - p.now()));
+  const said2 = await p.say(`Actually, change that: look up the ${topic} instead.`);
+  const d2 = await p.waitFor(
+    (e) => e.type === "session.delegation.created" && e.delegation?.id !== d1.ev.delegation.id,
+    15000,
+    "delegation 2",
+  );
+  p.log(
+    d2 === undefined
+      ? "NO second delegation within 15 s of the redirect"
+      : `delegation 2 ${d2.ev.delegation.id} arrived ${d2.t - said2.wallEnd}ms after the redirect finished sending`,
+  );
+  await settle(p, loop, d2 === undefined ? 1 : 2);
+  await finishHosted(p, loop);
+}
+
+async function scenarioTyped(): Promise<void> {
+  const { p, loop } = await connectHosted("typed");
+  const d1 = await firstDelegation(p);
+  if (d1 === undefined) {
+    await sleep(4000);
+    await finishHosted(p, loop);
+    return;
+  }
+  await sleep(Math.max(0, d1.t + 6000 - p.now()));
+  const tTyped = p.now();
+  p.send({
+    type: "response.item.create",
+    event_id: "typed_q",
+    item: {
+      type: "message",
+      role: "user",
+      content: [{ type: "input_text", text: "Also tell me seventeen plus twenty-five." }],
+    },
+  });
+  p.send({ type: "response.create", event_id: "typed_go" });
+  const reaction = await p.waitFor(
+    (e, t) =>
+      t > tTyped &&
+      (e.type === "error" ||
+        e.type === "session.delegation.created" ||
+        (e.type === "response.event" && e.event?.type === "response.created")),
+    15000,
+    "reaction to the typed pair",
+  );
+  p.log(
+    reaction === undefined
+      ? "NO reaction to the typed pair within 15 s"
+      : `typed pair → ${reaction.ev.type} ${summarize(reaction.ev)} after ${reaction.t - tTyped}ms`,
+  );
+  await settle(p, loop, 1);
+  await finishHosted(p, loop);
+}
+
+/** Is the voice model frozen while a hosted function call is pending, or is
+ * only the user's next turn deferred? A commentary append with
+ * delegation_id: null at +6 s (the documented steering path), then a spoken
+ * question at +12 s. */
+async function scenarioHold(): Promise<void> {
+  const { p, loop } = await connectHosted("hold");
+  const d1 = await firstDelegation(p);
+  if (d1 === undefined) {
+    await sleep(4000);
+    await finishHosted(p, loop);
+    return;
+  }
+  await sleep(Math.max(0, d1.t + 6000 - p.now()));
+  const tAppend = p.now();
+  p.send({
+    type: "session.commentary.append",
+    event_id: "hold_note",
+    delegation_id: null,
+    content: "The lookup is still running; about fifteen more seconds.",
+  });
+  const ack = await p.waitFor(
+    (e) => e.client_event_id === "hold_note" || e.error?.client_event_id === "hold_note",
+    10000,
+    "hold_note ack",
+  );
+  p.log(
+    `hold_note → ${ack?.ev.type} after ${ack === undefined ? "?" : ack.t - tAppend}ms ${summarize(ack?.ev ?? {})}`,
+  );
+  const spoken = await p.waitFor(
+    (e, t) => e.type === "session.output_transcript.delta" && t >= tAppend,
+    6000,
+    "commentary spoken during the hold",
+  );
+  p.log(
+    spoken === undefined
+      ? "commentary NOT spoken within 6 s (voice held while the function call is pending)"
+      : `commentary spoken +${spoken.t - tAppend}ms after the append, while the function call is pending`,
+  );
+  await sleep(Math.max(0, d1.t + 12000 - p.now()));
+  const said2 = await p.say("While that runs, what is seventeen plus twenty-five?");
+  const d2 = await p.waitFor(
+    (e) => e.type === "session.delegation.created" && e.delegation?.id !== d1.ev.delegation.id,
+    25000,
+    "delegation 2",
+  );
+  p.log(
+    d2 === undefined
+      ? "NO second delegation within 25 s of utterance 2"
+      : `delegation 2 ${d2.ev.delegation.id} arrived ${d2.t - said2.wallEnd}ms after utterance 2 finished sending`,
+  );
+  await settle(p, loop, d2 === undefined ? 1 : 2);
+  await finishHosted(p, loop);
+}
+
+async function scenarioModels6(): Promise<void> {
+  for (const model of ["gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-6.1-sol"]) {
+    const p = new Probe(`models6-${model}`);
+    try {
+      const started = await p.connect({
+        model: "gpt-live-1",
+        instructions: LOOKUP_LIVE_PROMPT,
+        audio,
+        delegation: {
+          type: "responses",
+          responses: {
+            model,
+            instructions: LOOKUP_BACKEND_PROMPT,
+            tools: [slowLookupTool, addTool],
+            tool_choice: "auto",
+            reasoning: { effort: "low" },
+          },
+        },
+      });
+      p.log(
+        `ACCEPTED backend ${model}; resolved delegation: ${JSON.stringify(started.session?.delegation)}`,
+      );
+      await p.close();
+    } catch (err) {
+      p.log(`REJECTED backend ${model}: ${(err as Error).message}`);
+      try {
+        p.ws.close();
+      } catch {}
+    }
+  }
+}
+
 const scenarios: Record<string, () => Promise<void>> = {
   models: scenarioModels,
   context: scenarioContext,
@@ -804,6 +1420,11 @@ const scenarios: Record<string, () => Promise<void>> = {
   long: scenarioLong,
   responses: scenarioResponses,
   sideband: scenarioSideband,
+  models6: scenarioModels6,
+  overlap: scenarioOverlap,
+  redirect: scenarioRedirect,
+  typed: scenarioTyped,
+  hold: scenarioHold,
 };
 
 const wanted = process.argv.slice(2);

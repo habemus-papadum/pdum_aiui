@@ -6,7 +6,8 @@
   "scripts": {
     "probe": "tsx probe.mts",
     "claude:auth": "node claude-auth-spike.mjs",
-    "claude:stream": "node claude-stream-spike.mjs"
+    "claude:stream": "node claude-stream-spike.mjs",
+    "claude:midturn": "node claude-midturn-spike.mjs"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.272",
