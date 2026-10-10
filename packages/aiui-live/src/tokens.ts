@@ -1,16 +1,18 @@
 /**
- * tokens.ts — the 500-token append cap, handled. A conservative estimate
- * (no tokenizer in the browser) and a sentence-boundary chunker so a long
- * backend result becomes a short SEQUENCE of appends instead of an
- * `invalid_value` rejection.
+ * tokens.ts — the 500-token append cap, handled. The estimate is the prompt
+ * toolkit's conservative default (the one every recorded elision in this
+ * package is measured by, so a budget means the same thing everywhere), and a
+ * sentence-boundary chunker turns a long backend result into a short SEQUENCE
+ * of appends instead of an `invalid_value` rejection.
  */
 
+import { CONSERVATIVE_ESTIMATOR } from "@habemus-papadum/aiui-prompts";
 import { APPEND_TOKEN_LIMIT } from "./protocol";
 
-/** ~3.5 characters per token: conservative for English prose, safer for
- * numbers and code, which tokenize denser. */
+/** The toolkit's default text estimate: ~3.5 characters per token,
+ * conservative for English prose, safer for numbers and code. */
 export function approxTokens(text: string): number {
-  return Math.ceil(text.length / 3.5);
+  return CONSERVATIVE_ESTIMATOR.text(text);
 }
 
 /** Chunks of at most `maxTokens` (estimated), split at sentence ends, then
@@ -23,6 +25,7 @@ export function chunkForAppend(text: string, maxTokens = Math.floor(APPEND_TOKEN
   if (approxTokens(trimmed) <= maxTokens) {
     return [trimmed];
   }
+  // The hard cut needs a character budget: the estimator's rule, inverted.
   const maxChars = Math.floor(maxTokens * 3.5);
   const chunks: string[] = [];
   let current = "";
@@ -40,7 +43,7 @@ export function chunkForAppend(text: string, maxTokens = Math.floor(APPEND_TOKEN
       }
       continue;
     }
-    if ((current + (current === "" ? "" : " ") + sentence).length > maxChars) {
+    if (approxTokens(current + (current === "" ? "" : " ") + sentence) > maxTokens) {
       flush();
     }
     current = current === "" ? sentence : `${current} ${sentence}`;
