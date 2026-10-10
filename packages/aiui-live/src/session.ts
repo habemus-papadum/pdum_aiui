@@ -21,7 +21,12 @@
  * what to say (the delegator's), or know which side of a wire it is on.
  */
 
-import { renderToolBrief, toolSnapshot } from "@habemus-papadum/aiui-viz/tool-brief";
+import { importText } from "@habemus-papadum/aiui-prompts";
+import {
+  instructionsWithToolBrief,
+  renderPrompt,
+  toolSnapshot,
+} from "@habemus-papadum/aiui-viz/tool-brief";
 import { backendToolsFromTools, livePrompt } from "./prompt";
 import {
   APPENDED_EVENT,
@@ -514,19 +519,39 @@ export class LiveSession {
     let delegation: LiveDelegationConfig = config.delegation ?? { type: "client" };
     if (delegation.type === "responses" && delegation.responses.tools === undefined) {
       // The session manages the hosted backend's tool config: the tool array,
-      // and the tool DOCUMENT (brief + usage, the same Tools: section every
-      // consumer renders) appended to its instructions.
-      const toolBrief = renderToolBrief(
-        toolSnapshot([{ ns: "app", brief: this.toolBrief, tools: this.tools }]),
-      );
+      // and the tool DOCUMENT (brief + usage, the same ToolBrief every
+      // consumer projects) after its instructions — compiled as one prompt,
+      // recorded in the ledger (`prompt`) with the semantic record it came from.
+      const snapshot = toolSnapshot([{ ns: "app", brief: this.toolBrief, tools: this.tools }]);
       const base = delegation.responses.instructions;
-      const withBrief = [base, toolBrief].filter((p) => p !== undefined && p !== "").join("\n\n");
+      const rendered = renderPrompt(
+        instructionsWithToolBrief(
+          base === undefined
+            ? null
+            : importText({
+                text: base,
+                origin: { site: "aiui-live delegation.responses.instructions" },
+              }),
+          snapshot,
+        ),
+      );
+      this.record(
+        "local",
+        "prompt",
+        `responses instructions: ${rendered.text.length} chars, tools ${snapshot.fingerprint} (${this.tools.length})`,
+        {
+          what: "instructions",
+          text: rendered.text,
+          tools: { fingerprint: snapshot.fingerprint, count: this.tools.length },
+          prompt: rendered.record,
+        },
+      );
       delegation = {
         type: "responses",
         responses: {
           ...delegation.responses,
           tools: this.tools.map(backendToolFor),
-          ...(withBrief !== "" ? { instructions: withBrief } : {}),
+          ...(rendered.text !== "" ? { instructions: rendered.text } : {}),
         },
       };
     }

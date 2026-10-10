@@ -168,10 +168,26 @@ export type { ThrottledBox } from "./throttle";
 // throttle.ts — the imperative boundary's outbound valve: a write policy (at most
 // hz commits/sec, latest wins, the last value always lands) over any SignalBox.
 export { throttled } from "./throttle";
-// tool-brief.ts — the tool surface rendered as a document for a model: one pure
-// function every consumer calls in the same breath as it sets its tool array.
-export type { KitDoc, RenderToolBriefOptions, ToolDoc, ToolKind, ToolSnapshot } from "./tool-brief";
-export { renderToolBrief, toolFingerprint, toolSnapshot } from "./tool-brief";
+// tool-brief.ts — the tool surface rendered as a document for a model, by the prompt
+// toolkit: a snapshot, a ToolBrief node, and the text every consumer derives from it.
+export type {
+  KitDoc,
+  RenderedPrompt,
+  RenderToolBriefOptions,
+  ToolBriefOptions,
+  ToolDoc,
+  ToolDocument,
+  ToolKind,
+  ToolSnapshot,
+} from "./tool-brief";
+export {
+  instructionsWithToolBrief,
+  renderPrompt,
+  renderToolBrief,
+  toolBrief,
+  toolFingerprint,
+  toolSnapshot,
+} from "./tool-brief";
 export type { WorkerCancel, WorkerReply, WorkerRequest, WorkerRun } from "./worker-stream";
 // worker-stream.ts — cancellable request/stream protocol for Web Workers.
 export { fromWorker, workerStream } from "./worker-stream";

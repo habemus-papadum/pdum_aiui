@@ -254,7 +254,9 @@ The woven slots stay **generic about which tools exist** — the `tools` array i
 source of truth (a prompt naming an absent tool makes realtime models invent or pretend; the
 vendor documents this failure mode). The one place the prompt names tools is a **`Tools:`
 section the session appends itself**, rendered from its own tool array in the same breath as
-`setTools` (aiui-viz's `renderToolBrief`): the app's brief, then each tool with its usage,
+`setTools` (the prompt toolkit's `ToolBrief` projection of the session's tool snapshot, composed
+after the woven text by aiui-viz's `instructionsWithToolBrief` and compiled as one prompt — the
+`config` ledger entry keeps the semantic record beside the text it sent): the app's brief, then each tool with its usage,
 grouped into read tools (called freely once the intent is clear) and write tools (they change
 the app; the result is the value actually applied), each subdivided by `group`, and the one-line
 failure rule. Because the

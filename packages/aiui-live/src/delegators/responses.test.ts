@@ -1,5 +1,6 @@
+import { rehydrate, type SemanticRecord } from "@habemus-papadum/aiui-prompts";
 import { describe, expect, it } from "vitest";
-import type { DelegationRequest } from "../types";
+import type { DelegationPromptRecord, DelegationRequest } from "../types";
 import { requestMessage, responsesDelegator } from "./responses";
 
 function request(
@@ -104,5 +105,48 @@ describe("responsesDelegator", () => {
     expect(text).toContain("Recent conversation");
     expect(text).toContain("user: why is it jagged");
     expect(text).toContain("Request (delegation item_x): why is it jagged");
+  });
+
+  it("records the instructions it sent, with the semantic record they compile from", async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    const fetchImpl = (async (_url: string, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      return new Response(
+        JSON.stringify({
+          id: "resp",
+          output: [{ type: "message", content: [{ type: "output_text", text: "Done." }] }],
+          usage: { input_tokens: 1, output_tokens: 1 },
+        }),
+        { status: 200 },
+      );
+    }) as unknown as typeof fetch;
+    const records: DelegationPromptRecord[] = [];
+    const req = request("what is the frequency", [
+      {
+        name: "report",
+        description: "Read the app.",
+        usage: "Call it first.",
+        kind: "read",
+        parameters: { type: "object" },
+        execute: () => ({}),
+      },
+    ]);
+    req.brief = "One damped oscillator.";
+    req.record = (entry) => records.push(entry);
+    const delegator = responsesDelegator({ key: "sk-test", fetchImpl, app: "a wave app" });
+    await delegator.handle(req);
+    const instructions = records.find((r) => r.what === "instructions");
+    expect(instructions?.text).toBe(bodies[0]?.instructions);
+    expect(instructions?.text).toContain("Tools:\nOne damped oscillator.");
+    expect(instructions?.text).toContain("- report: Read the app. Call it first.");
+    expect(instructions?.tools).toEqual({
+      fingerprint: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+      count: 1,
+    });
+    // The record alone — no delegator code — gives back the text that was sent.
+    const compiled = rehydrate(instructions?.prompt as SemanticRecord);
+    expect(compiled.parts.map((p) => (p.type === "text" ? p.text : "")).join("")).toBe(
+      instructions?.text,
+    );
   });
 });

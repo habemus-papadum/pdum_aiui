@@ -10,6 +10,7 @@
  * and seconds instead of tokens.
  */
 
+import type { SemanticRecord } from "@habemus-papadum/aiui-prompts";
 import type { AppendKind, LiveBackendTool, LiveEvent, LiveSessionConfig } from "./protocol";
 
 // ── tools ────────────────────────────────────────────────────────────────────
@@ -328,8 +329,12 @@ export interface DelegationPromptRecord {
   /** `instructions` — the system/instructions text; `message` — the per-delegation user message. */
   what: "instructions" | "message";
   text: string;
-  /** The tool document the text was rendered from (aiui-viz `toolSnapshot`), when it carried one. */
+  /** The tool document the text was projected from (the prompt toolkit's
+   * `ToolSnapshot`), when it carried one. */
   tools?: { fingerprint: string; count: number };
+  /** The semantic record `text` was compiled from (the prompt toolkit), when
+   * the delegator composed one: rehydrate it and the text comes back. */
+  prompt?: SemanticRecord;
 }
 
 export interface Delegator {

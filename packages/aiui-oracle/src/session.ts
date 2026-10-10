@@ -17,7 +17,13 @@
  *  - unrecognized vendor events land in the ledger as `raw`, never dropped.
  */
 
-import { renderToolBrief, toolSnapshot } from "@habemus-papadum/aiui-viz";
+import { importText, type SemanticRecord } from "@habemus-papadum/aiui-prompts";
+import {
+  instructionsWithToolBrief,
+  renderPrompt,
+  type ToolSnapshot,
+  toolSnapshot,
+} from "@habemus-papadum/aiui-viz";
 import { priceRealtimeUsage, usageFromRealtimeResponse } from "./cost";
 import { pruneTurnDetection, setPath, TURN_DETECTION_TYPE } from "./params";
 import { weaveInstructions } from "./prompt";
@@ -136,9 +142,18 @@ export class OracleSession {
    * send reads this, so "what did we tell it" has exactly one answer.
    */
   private instructionsText = "";
+  /**
+   * The semantic record `instructionsText` was compiled from (the prompt
+   * toolkit, through aiui-viz's `renderPrompt`): the woven text as imported
+   * text, then the `ToolBrief` node over the tool snapshot. Stored on the
+   * `config` ledger entry beside what was sent; rehydrating it reproduces
+   * the text, and its decisions say what a budget dropped.
+   */
+  private instructionsRecord: SemanticRecord | undefined;
   /** The app's brief, rendered above the tools in the `Tools:` section. */
   private toolBrief: string | undefined;
-  /** The tool document the last `Tools:` section was rendered from (aiui-viz `toolSnapshot`). */
+  /** The tool document the last `Tools:` section was projected from (the
+   * prompt toolkit's `ToolSnapshot`, taken by aiui-viz's `toolSnapshot`). */
   private toolsFingerprint: string | undefined;
   /**
    * The greeting for THIS session, resolved once at start.
@@ -429,33 +444,43 @@ export class OracleSession {
   }
 
   /**
-   * Resolve the configured recipe into the text that goes on the wire. A
-   * woven recipe gets the `Tools:` section appended — rendered from THIS
-   * session's tool array and brief (the sync rule, prompt.ts). A plain-string
-   * prompt is the whole prompt, stated: an app that took the wheel keeps it.
+   * Resolve the configured recipe into the text that goes on the wire, as a
+   * PROMPT compiled late: a woven recipe is the woven text (imported as-is —
+   * the weave is still a string renderer; stage 2 of the migration) followed
+   * by the `ToolBrief` node over THIS session's tool array and brief (the
+   * sync rule, prompt.ts), a blank line between. A plain-string prompt is the
+   * whole prompt, stated: an app that took the wheel keeps it. Either way the
+   * semantic record is kept for the ledger, and the text is what goes out.
    */
   private async composeInstructions(reason: PromptContext["reason"]): Promise<string> {
     const resolved = await this.resolve(this.options.config.instructions, reason);
-    if (typeof resolved === "string") {
-      return resolved;
-    }
-    const woven = weaveInstructions(resolved);
-    const section = this.toolBriefSection();
-    return section === "" ? woven : `${woven}\n\n${section}`;
+    const prompt =
+      typeof resolved === "string"
+        ? instructionsWithToolBrief(
+            importText({ text: resolved, origin: { site: "aiui-oracle config.instructions" } }),
+            undefined,
+          )
+        : instructionsWithToolBrief(
+            importText({
+              text: weaveInstructions(resolved),
+              origin: { site: "aiui-oracle weaveInstructions" },
+            }),
+            this.toolDocument(),
+          );
+    const rendered = renderPrompt(prompt);
+    this.instructionsRecord = rendered.record;
+    return rendered.text;
   }
 
-  /** The `Tools:` section for the current tool array (empty with no tools). */
-  private toolBriefSection(): string {
-    const tools = [...this.toolsByName.values()].map((tool) => ({
-      name: tool.name,
-      description: tool.description,
-      ...(tool.usage !== undefined ? { usage: tool.usage } : {}),
-      ...(tool.kind !== undefined ? { kind: tool.kind } : {}),
-      ...(tool.group !== undefined ? { group: tool.group } : {}),
-    }));
-    const snapshot = toolSnapshot([{ ns: "app", brief: this.toolBrief, tools }]);
+  /** The tool document for the current tool array — what the `Tools:`
+   * section is projected from (the snapshot keeps the documented fields of
+   * each tool and drops its schema and executor). */
+  private toolDocument(): ToolSnapshot {
+    const snapshot = toolSnapshot([
+      { ns: "app", brief: this.toolBrief, tools: [...this.toolsByName.values()] },
+    ]);
     this.toolsFingerprint = snapshot.fingerprint;
-    return renderToolBrief(snapshot);
+    return snapshot;
   }
 
   /** Run a {@link Resolved} value, handing a resolver the session's own facts.
@@ -918,6 +943,10 @@ export class OracleSession {
           ...(sent !== undefined ? { drift: configDrift(sent, effective) } : {}),
           ...(this.toolsFingerprint !== undefined
             ? { tools: { fingerprint: this.toolsFingerprint, count: this.toolsByName.size } }
+            : {}),
+          // The record behind the instructions — on the updates that carried them.
+          ...(sent !== undefined && "instructions" in sent && this.instructionsRecord !== undefined
+            ? { prompt: this.instructionsRecord }
             : {}),
         });
         return;

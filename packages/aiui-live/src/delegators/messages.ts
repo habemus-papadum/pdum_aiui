@@ -2,8 +2,9 @@
  * messages.ts — the text a delegation hands its backend, as pure functions:
  * the Responses backend's per-delegation user message and the Claude
  * backend's `<delegation>` message, each built from the same request and
- * the same tool document (aiui-viz's `toolSnapshot`), so the corpus and the
- * ledger can hold exactly what a backend read.
+ * the same tool document (the prompt toolkit's `ToolSnapshot`, taken by
+ * aiui-viz's `toolSnapshot`), so the corpus and the ledger can hold exactly
+ * what a backend read.
  */
 import {
   renderToolBrief,

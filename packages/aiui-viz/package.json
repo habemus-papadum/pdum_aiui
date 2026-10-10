@@ -194,6 +194,9 @@
       "optional": true
     }
   },
+  "dependencies": {
+    "@habemus-papadum/aiui-prompts": "workspace:^"
+  },
   "devDependencies": {
     "@duckdb/duckdb-wasm": "catalog:",
     "@habemus-papadum/aiui-build-config": "workspace:^",

@@ -1,5 +1,15 @@
+import { projectTools, rehydrate } from "@habemus-papadum/aiui-prompts";
 import { describe, expect, it } from "vitest";
-import { type KitDoc, renderToolBrief, toolFingerprint, toolSnapshot } from "./tool-brief";
+import {
+  instructionsWithToolBrief,
+  type KitDoc,
+  renderPrompt,
+  renderToolBrief,
+  type ToolDoc,
+  toolBrief,
+  toolFingerprint,
+  toolSnapshot,
+} from "./tool-brief";
 
 const seismos: KitDoc = {
   ns: "seismos",
@@ -65,6 +75,17 @@ describe("renderToolBrief", () => {
     // Every tool is still named — the list always matches the array.
     for (const t of seismos.tools) expect(tight).toContain(`- ${t.name}:`);
   });
+
+  it("is the toolkit's brief projection of the same snapshot, byte for byte", () => {
+    const snapshot = toolSnapshot([seismos]);
+    const projected = (options: { maxChars?: number; qualify?: boolean }) =>
+      projectTools(snapshot, { style: "brief", ...options })
+        .segments.map((s) => s.text)
+        .join("");
+    expect(renderToolBrief(snapshot)).toBe(projected({}));
+    expect(renderToolBrief(snapshot, { maxChars: 120 })).toBe(projected({ maxChars: 120 }));
+    expect(renderToolBrief(snapshot, { qualify: true })).toBe(projected({ qualify: true }));
+  });
 });
 
 describe("renderToolBrief — groups", () => {
@@ -117,9 +138,9 @@ describe("toolSnapshot", () => {
     },
   ];
 
-  it("fingerprints the document stably, and moves when any rendered field moves", () => {
+  it("fingerprints the document stably, and moves when any declared field moves", () => {
     const a = toolFingerprint(kits);
-    expect(a).toMatch(/^[0-9a-f]{16}$/);
+    expect(a).toMatch(/^sha256:[0-9a-f]{64}$/);
     expect(toolFingerprint(structuredClone(kits))).toBe(a);
     const usage = structuredClone(kits);
     (usage[0] as { tools: { usage?: string }[] }).tools[1].usage = "Trust nothing.";
@@ -133,11 +154,76 @@ describe("toolSnapshot", () => {
   });
 
   it("renders the same text from a snapshot as from its kits, and carries the origin", () => {
-    const snapshot = toolSnapshot(kits, "page registry: app");
-    expect(snapshot.origin).toBe("page registry: app");
+    const snapshot = toolSnapshot(kits, { site: "page registry: app" });
+    expect(snapshot.origin).toEqual({ site: "page registry: app" });
+    expect(snapshot.kind).toBe("aiui.tools");
     expect(renderToolBrief(snapshot)).toBe(renderToolBrief(kits));
     expect(renderToolBrief(snapshot, { maxChars: 10 })).toBe(
       renderToolBrief(kits, { maxChars: 10 }),
     );
+  });
+
+  it("keeps the declared fields of a richer tool object and drops the rest (an executor never reaches the record)", () => {
+    const live = {
+      name: "sql",
+      description: "Run SQL.",
+      usage: undefined,
+      kind: "read" as const,
+      parameters: { type: "object" },
+      execute: () => "rows",
+    };
+    const snapshot = toolSnapshot([{ ns: "app", brief: undefined, tools: [live as ToolDoc] }]);
+    expect(snapshot.kits).toEqual([
+      { ns: "app", tools: [{ name: "sql", description: "Run SQL.", kind: "read" }] },
+    ]);
+    const withSchema = toolSnapshot([
+      { ns: "app", tools: [{ ...live, inputSchema: { type: "object" } } as ToolDoc] },
+    ]);
+    expect(withSchema.kits[0].tools[0].inputSchema).toEqual({ type: "object" });
+    expect(withSchema.fingerprint).not.toBe(snapshot.fingerprint);
+  });
+});
+
+describe("toolBrief, renderPrompt, instructionsWithToolBrief", () => {
+  it("the node compiles to the rendered text, and its record rehydrates to the same parts", () => {
+    const budget = renderToolBrief([seismos]).length - 1; // one usage line must go
+    const rendered = renderPrompt(toolBrief([seismos], { maxChars: budget }));
+    expect(rendered.text).toBe(renderToolBrief([seismos], { maxChars: budget }));
+    expect(rendered.compiled.parts).toEqual([{ id: "p0", type: "text", text: rendered.text }]);
+    expect(rehydrate(rendered.record).parts).toEqual(rendered.compiled.parts);
+    // The budget is a recorded decision, not a lost branch.
+    const decision = rendered.compiled.decisions.find((d) => d.kind === "tool-budget");
+    expect(decision?.selected).toBe("elided-usage");
+    expect(decision?.detail?.omittedUsage).toEqual(["seismos/set-mag"]);
+    // And the record is plain JSON a ledger can hold.
+    expect(JSON.parse(JSON.stringify(rendered.record))).toEqual(rendered.record);
+  });
+
+  it("instructions = preface, blank line, brief — and either half may be absent", () => {
+    const brief = renderToolBrief([seismos]);
+    expect(renderPrompt(instructionsWithToolBrief("You are the lab.", [seismos])).text).toBe(
+      `You are the lab.\n\n${brief}`,
+    );
+    expect(renderPrompt(instructionsWithToolBrief("You are the lab.", [])).text).toBe(
+      "You are the lab.",
+    );
+    expect(renderPrompt(instructionsWithToolBrief("", [seismos])).text).toBe(brief);
+    expect(renderPrompt(instructionsWithToolBrief("You are the lab.", undefined)).text).toBe(
+      "You are the lab.",
+    );
+    expect(renderPrompt(instructionsWithToolBrief(null, undefined)).text).toBe("");
+  });
+
+  it("the preface and the brief are separate contributions of the one text part", () => {
+    const rendered = renderPrompt(instructionsWithToolBrief("Persona.", [seismos]));
+    const owners = new Set(rendered.compiled.contributions.map((c) => c.occurrence));
+    expect(owners.size).toBeGreaterThanOrEqual(3); // the text, the prompt's separator, the brief
+    const brief = rendered.compiled.contributions.filter(
+      (c) => c.origin !== undefined && c.origin.kind === "tool-projection",
+    );
+    expect(brief.length).toBeGreaterThan(0);
+    for (const c of brief) {
+      expect(c.origin?.snapshot).toBe(toolFingerprint([seismos]));
+    }
   });
 });

@@ -227,6 +227,19 @@ Each stage is byte-identical first (the corpus), then improved with recorded dif
   elision. Its four callers consume compiled parts. The oracle ledger's `config` entry stores the
   semantic record beside what was sent. One site, four consumers, the largest coverage per line
   changed.
+  **Done 2026-10-09.** aiui-viz's `tool-brief.ts` is a layer over the toolkit: `toolSnapshot`
+  returns the toolkit's snapshot, `toolBrief` its `ToolBrief` node, `renderToolBrief` the node's
+  compiled text (the corpus is byte-identical, no `-u`), `instructionsWithToolBrief` the
+  `Prompt[preface, ToolBrief]` every consumer composes, and `renderPrompt` the snapshot → rehydrate
+  → text step that proves the stored record reproduces the wire. The oracle's woven text and the
+  live backends' task prompts enter as `importText` (opaque, with an origin — stage 2 replaces
+  them); the oracle `config` entry and the live `prompt` entries carry `prompt: SemanticRecord`.
+  The Claude delegation message still wraps the brief's text in its string template — its
+  `<delegation>` element is stage 2's `Xml`, where the once-only escaping is a reviewed diff.
+  Not yet: tool schemas in the snapshot (`inputSchema` is accepted but no consumer passes it, so
+  the fingerprint still covers exactly what the brief renders), and an `origin` on the consumers'
+  snapshots (the toolkit folds `origin` into the fingerprint, so two sites naming different
+  origins would not share one for the same document — raised with the toolkit).
 - **Stage 2 — the oracle, then live.** The persona and slot weaver (OR1–OR3), the resolver
   context as a context record with `Case` decisions (OR4), the greeting as a per-response session
   operation (OR5), the panel and dock recipes (IC1, DK2) as two compositions over one component.

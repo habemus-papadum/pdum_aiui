@@ -396,6 +396,15 @@ describe("hosted Responses delegation", () => {
       type: "responses",
       responses: { tools: [{ type: "function", name: "set_freq" }] },
     });
+    // The hosted backend's instructions carry the tool document, and the
+    // ledger holds what was composed with the record it compiles from.
+    const hosted = wire?.delegation as { responses?: { instructions?: string } } | undefined;
+    expect(hosted?.responses?.instructions).toContain("- set_freq: set");
+    const prompt = live.ledger().find((e) => e.kind === "prompt");
+    expect(prompt?.summary).toMatch(/^responses instructions: \d+ chars, tools sha256:/);
+    const recorded = prompt?.event as { text?: string; prompt?: unknown } | undefined;
+    expect(recorded?.text).toBe(hosted?.responses?.instructions);
+    expect(recorded?.prompt).toMatchObject({ kind: "aiui.prompt", schemaVersion: 1 });
     fake.userSays("five hertz please", 0);
     fake.serve({
       type: "session.delegation.created",

@@ -10,7 +10,12 @@
  * output items plus our `function_call_output`s). `store: false` throughout.
  */
 
-import { renderToolBrief, toolSnapshot } from "@habemus-papadum/aiui-viz/tool-brief";
+import { importText } from "@habemus-papadum/aiui-prompts";
+import {
+  instructionsWithToolBrief,
+  renderPrompt,
+  toolSnapshot,
+} from "@habemus-papadum/aiui-viz/tool-brief";
 import { requestMessage } from "./messages";
 
 export { requestMessage } from "./messages";
@@ -68,17 +73,34 @@ export function responsesDelegator(options: ResponsesDelegatorOptions): Delegato
       }
       const doFetch = options.fetchImpl ?? fetch;
       // The task prompt, then the app's tools as a document (the brief, each
-      // tool's usage, read/write classes) — the same section every consumer
-      // renders, computed from the very tool array sent below.
+      // tool's usage, read/write classes) — the same ToolBrief every consumer
+      // projects, from the very tool array sent below; compiled as one prompt
+      // whose record goes to the ledger beside the text.
       const snapshot = toolSnapshot([{ ns: "app", brief: req.brief, tools: req.tools }]);
-      const toolBrief = renderToolBrief(snapshot);
-      const instructions = [options.instructions ?? backendPrompt({ app: options.app }), toolBrief]
-        .filter((part) => part !== "")
-        .join("\n\n");
+      const rendered = renderPrompt(
+        instructionsWithToolBrief(
+          importText({
+            text: options.instructions ?? backendPrompt({ app: options.app }),
+            origin: {
+              site:
+                options.instructions !== undefined
+                  ? "aiui-live responses.instructions"
+                  : "aiui-live backendPrompt",
+            },
+          }),
+          snapshot,
+        ),
+      );
+      const instructions = rendered.text;
       const tools = req.tools.map(backendToolFor);
       const message = requestMessage(req, options.contextUtterances ?? 8);
       const toolsRecord = { fingerprint: snapshot.fingerprint, count: req.tools.length };
-      req.record?.({ what: "instructions", text: instructions, tools: toolsRecord });
+      req.record?.({
+        what: "instructions",
+        text: instructions,
+        tools: toolsRecord,
+        prompt: rendered.record,
+      });
       req.record?.({ what: "message", text: message });
       const input: unknown[] = [{ role: "user", content: message }];
       const maxRounds = options.maxRounds ?? 6;

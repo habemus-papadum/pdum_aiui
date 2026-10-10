@@ -11,6 +11,8 @@
  * `raw` ledger entries, never dropped (the trace-stages total-parse lesson).
  */
 
+import type { SemanticRecord } from "@habemus-papadum/aiui-prompts";
+
 /**
  * The prompt's structured modification points.
  *
@@ -613,9 +615,14 @@ export type LedgerBody =
       effective?: Record<string, unknown>;
       drift?: string[];
       /** The tool document the `Tools:` section in `sent.instructions` was
-       * rendered from (aiui-viz `toolSnapshot`): equal fingerprints, equal
-       * documents — the record of WHICH tools the prompt described. */
+       * projected from (the prompt toolkit's `ToolSnapshot`): equal
+       * fingerprints, equal documents — the record of WHICH tools the prompt
+       * described. */
       tools?: { fingerprint: string; count: number };
+      /** The semantic record `sent.instructions` was compiled from (the
+       * prompt toolkit): rehydrate it and the text comes back; its decisions
+       * say what a budget dropped. On the updates that carried instructions. */
+      prompt?: SemanticRecord;
     }
   | { kind: "speech"; phase: "started" | "stopped" }
   /**

@@ -5,6 +5,7 @@
  * live-surface reconciliation, park semantics, and the total ledger (unknown
  * vendor events retained as `raw`).
  */
+import { rehydrate, type SemanticRecord } from "@habemus-papadum/aiui-prompts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OracleSession } from "./session";
 import type {
@@ -349,6 +350,34 @@ describe("the Tools: section (the tool document in the prompt)", () => {
     const { session } = makeSession([kick]);
     await session.start();
     expect(session.sessionConfig().instructions).toBe("be helpful");
+  });
+
+  it("the config entry stores the semantic record the instructions were compiled from", async () => {
+    const rig = fakeTransport();
+    const session = new OracleSession({
+      config: { instructions: { app: "A wave app." }, tools: [kick] },
+      keySource: testKeys,
+      transport: rig.transport,
+    });
+    session.setTools([kick], { brief: "One damped oscillator." });
+    await session.start();
+    rig.emit({ type: "session.updated", session: {} }); // the opening ack
+    const config = session
+      .ledger()
+      .filter((e) => e.kind === "config")
+      .at(-1) as Extract<LedgerEntry, { kind: "config" }>;
+    expect(config.tools?.fingerprint).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect(config.prompt).toBeDefined();
+    // Rehydrating the record — the recorded compiler, no author code — gives
+    // back exactly what was sent.
+    const compiled = rehydrate(config.prompt as SemanticRecord);
+    const text = compiled.parts.map((p) => (p.type === "text" ? p.text : "")).join("");
+    expect(text).toBe(config.sent?.instructions);
+    expect(text).toBe(session.sessionConfig().instructions);
+    // The brief's lines are attributed to the tool snapshot the entry names.
+    expect(
+      compiled.contributions.some((c) => c.origin?.snapshot === config.tools?.fingerprint),
+    ).toBe(true);
   });
 });
 

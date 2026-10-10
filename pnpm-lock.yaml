@@ -1333,6 +1333,9 @@ importers:
 
   packages/aiui-live:
     dependencies:
+      '@habemus-papadum/aiui-prompts':
+        specifier: workspace:^
+        version: link:../aiui-prompts
       '@habemus-papadum/aiui-viz':
         specifier: workspace:^
         version: link:../aiui-viz
@@ -1383,6 +1386,9 @@ importers:
 
   packages/aiui-oracle:
     dependencies:
+      '@habemus-papadum/aiui-prompts':
+        specifier: workspace:^
+        version: link:../aiui-prompts
       '@habemus-papadum/aiui-viz':
         specifier: workspace:^
         version: link:../aiui-viz
@@ -1778,6 +1784,10 @@ importers:
         version: 8.3.3(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
 
   packages/aiui-viz:
+    dependencies:
+      '@habemus-papadum/aiui-prompts':
+        specifier: workspace:^
+        version: link:../aiui-prompts
     devDependencies:
       '@duckdb/duckdb-wasm':
         specifier: 1.33.1-dev64.0

@@ -274,6 +274,11 @@ the results.
   dropped longest-first; an optional `ns/` qualify that nothing uses. Pure and deterministic. All
   four production callers flatten to one kit `{ ns: "app" }`: `aiui-oracle/src/session.ts:454`,
   `aiui-live/src/session.ts:519`, `delegators/responses.ts:69`, `claude/index.ts:360`.
+  **Migrated 2026-10-09 (stage 1):** `tool-brief.ts` is now a layer over the prompt toolkit —
+  `toolSnapshot` takes the toolkit's `ToolSnapshot` (`sha256:` fingerprint), `toolBrief` is its
+  `ToolBrief` node, `renderToolBrief` the node's compiled text (byte-identical to the corpus), and
+  `instructionsWithToolBrief` + `renderPrompt` give the oracle and the live delegators one compiled
+  prompt whose semantic record rides the `config` / `prompt` ledger entries beside the text.
 - **VZ2 `AgentTool` / `forwardToRegistry`** — `src/agent-tools.ts:38-151`: the
   description/usage/kind/group/params contract; pushes a synthetic `report`; errors "no tool … —
   registered tools: …".

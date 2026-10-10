@@ -106,7 +106,7 @@ describe("corpus: the live prompt", () => {
   it("the Claude backend: its brief and its delegation message", async () => {
     await expect(CLAUDE_LIVE_BRIEF).toMatchFileSnapshot(corpus("claude-live-brief.txt"));
     const message = delegationMessage(request, 10);
-    expect(message.tools.fingerprint).toMatch(/^[0-9a-f]{16}$/);
+    expect(message.tools.fingerprint).toMatch(/^sha256:[0-9a-f]{64}$/);
     await expect(message.text).toMatchFileSnapshot(corpus("claude-delegation-message.txt"));
   });
 });
