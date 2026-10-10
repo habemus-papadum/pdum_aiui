@@ -173,6 +173,74 @@ check(
   createdAgain.stderr,
 );
 
+// aibr's bin and pinned MCP dependency must resolve from an installed tarball,
+// including paths with spaces. No browser or real agent is launched here.
+const aibrBin = join(scratch, "node_modules", ".bin", "aibr");
+const aibrHome = join(scratch, "aibr test data");
+const runAibr = (args) =>
+  spawnSync(aibrBin, args, {
+    cwd: scratch,
+    env: { ...env, AIBR_HOME: aibrHome },
+    encoding: "utf8",
+    timeout: 15_000,
+  });
+check("aibr bin exists", existsSync(aibrBin));
+const aibrHelp = runAibr(["--help"]);
+check(
+  "installed aibr bin runs",
+  aibrHelp.status === 0 && aibrHelp.stdout.includes("exec-based"),
+  aibrHelp.stderr,
+);
+const aibrYolo = runAibr(["config", "yolo", "on"]);
+check("installed aibr saves both agent defaults", aibrYolo.status === 0, aibrYolo.stderr);
+const aibrConfig = runAibr(["config", "show"]);
+const parsedAibr = aibrConfig.status === 0 ? JSON.parse(aibrConfig.stdout) : {};
+check(
+  "aibr defaults survive another process",
+  parsedAibr.agents?.claude.yolo === true && parsedAibr.agents?.codex.yolo === true,
+  aibrConfig.stderr,
+);
+const aibrProject = join(scratch, "aibr project");
+mkdirSync(aibrProject);
+const aibrProfile = runAibr([
+  "profile",
+  "create",
+  "packaging",
+  "--debug-port",
+  "0",
+  "--yes",
+  "--use-here",
+  aibrProject,
+]);
+check(
+  "installed aibr writes a YAML project stub",
+  aibrProfile.status === 0 && existsSync(join(aibrProject, ".aiui.yaml")),
+  aibrProfile.stderr,
+);
+const aibrDoctor = runAibr(["doctor", "--json", "--cwd", aibrProject]);
+const aibrReport = aibrDoctor.status === 0 ? JSON.parse(aibrDoctor.stdout) : {};
+check(
+  "installed aibr reads YAML and diagnoses a missing browser",
+  aibrReport.current?.value?.label === "packaging" &&
+    aibrReport.current?.value?.state === "missing browser",
+  aibrDoctor.stderr,
+);
+const mcpProbe = spawnSync(
+  process.execPath,
+  [
+    "--input-type=module",
+    "-e",
+    `
+  import { mcpEntry } from '@habemus-papadum/aibr';
+  import { existsSync } from 'node:fs';
+  const entry = await mcpEntry({endpoint:'http://127.0.0.1:9222',wsEndpoint:'ws://127.0.0.1:9222/devtools/browser/test',browserVersion:'test'});
+  if (!existsSync(entry.args[0])) process.exit(1);
+`,
+  ],
+  { cwd: scratch, env, encoding: "utf8", timeout: 15_000 },
+);
+check("installed aibr resolves its pinned MCP executable", mcpProbe.status === 0, mcpProbe.stderr);
+
 // -------------------------------------------------------------------- result
 if (keep) {
   console.log(`scratch kept at ${work}`);

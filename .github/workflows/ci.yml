@@ -11,6 +11,26 @@ permissions:
   contents: read
 
 jobs:
+  # Browser ownership, filesystem locks and exec semantics must work on both OSes.
+  # The lifecycle suite uses isolated browser-shaped processes, with no agent login.
+  aibr:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -C packages/aibr build
+      - run: pnpm -C packages/aibr typecheck
+      - run: pnpm -C packages/aibr test
+
   build:
     runs-on: ubuntu-latest
     steps:

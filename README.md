@@ -48,6 +48,7 @@ opt-in and never part of a build. A built page takes a pasted key instead.
 | [`aiui-design`](./packages/aiui-design/README.md) | The design system: tokens, fonts, a skin for every stable aiui-viz class, the notebook chrome. `DESIGN.md` is the language. |
 | [`aiui-slides`](./packages/aiui-slides/README.md) | A deck of viewport slides as an ordinary aiui app: current slide as a control, HUD overview, URL binding, the Lens component. |
 | [`create-aiui`](./packages/create-aiui/README.md) | `pnpm create @habemus-papadum/aiui` — scaffolds a starter app with the dual page + card shape. |
+| [`aibr`](./packages/aibr/README.md) | Persistent shared browsers and an exec-based launcher for Claude Code and Codex, with per-project selection and pluggable remote discovery. |
 | [`aiui-prompts`](./packages/aiui-prompts/README.md) | Structured prompt records: deterministic compilation, provenance, delivery operations, for Node and browsers. |
 | [`aiui-prompts-inspector`](./packages/aiui-prompts-inspector/README.md) | Native Solid inspection and compact previews of stored prompt records. |
 | [`aiui-prompts-vite`](./packages/aiui-prompts-vite/README.md) | Vite routing and optional source provenance for prompt JSX. |

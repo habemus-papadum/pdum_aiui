@@ -1,0 +1,66 @@
+{
+  "name": "@habemus-papadum/aibr",
+  "version": "0.21.0+dev",
+  "description": "Persistent shared browsers and exec-based Claude Code / Codex launchers.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "",
+    "directory": "packages/aibr"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
+  "bin": {
+    "aibr": "./dist/cli.js"
+  },
+  "engines": {
+    "node": ">=24.5.0"
+  },
+  "os": [
+    "darwin",
+    "linux"
+  ],
+  "files": [
+    "dist",
+    "src",
+    "docs"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@puppeteer/browsers": "3.2.4",
+    "chrome-devtools-mcp": "1.10.1",
+    "commander": "catalog:",
+    "proper-lockfile": "^4.1.2",
+    "yaml": "^2.9.0",
+    "yauzl": "^3.4.0"
+  },
+  "devDependencies": {
+    "@types/ws": "catalog:",
+    "ws": "catalog:",
+    "@types/proper-lockfile": "^4.1.4",
+    "@habemus-papadum/aiui-build-config": "workspace:^"
+  }
+}
