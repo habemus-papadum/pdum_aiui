@@ -297,6 +297,15 @@ Each stage is byte-identical first (the corpus), then improved with recorded dif
   where it was taken (`site`, the page's URL for the registry, the delegation id for a backend)
   and carries input schemas, so brief, schemas and fingerprint are one document. Append chunking
   stays host-side (unchanged).
+  **Two more closed, same day.** The panel and the dock now author `context` as the same thing: a
+  `TabRecord` (`{ url, title? }`) the oracle's weaver renders through the lowering pipeline's one
+  `renderTabRecord`, recorded with `form: "tab"` — the panel's bytes are unchanged (its corpus
+  sample passes the record and matches the string it used to pass), the dock's prose sentence
+  became the canonical `<tab …/>` element (the owner approved the byte change). And a hosted
+  delegator's prompt crosses the live relay as a `record` server frame, so the browser ledger holds
+  what the Claude Code backend read; the HTTP request to Anthropic stays the Agent SDK's, so the
+  capturable wire there is the message pushed into it. Chunking as a toolkit primitive is proposed
+  in `docs/proposals/prompt-chunks.md`.
 - **Stage 3 — the lowering pipeline and the channel.** `ComposedItem[]` becomes the semantic
   input: shots as markers with asset-reference policies and sidecars, selections as text plus
   XML, navigation and tab switches as markers, corrections as `Case`. The contributions map
