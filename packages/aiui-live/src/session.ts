@@ -23,11 +23,14 @@
 
 import {
   Case,
+  Elide,
+  Group,
   importText,
   type JsonObject,
   type JsonValue,
   type PromptNode,
   Text,
+  Use,
 } from "@habemus-papadum/aiui-prompts";
 import {
   captureWire,
@@ -48,6 +51,7 @@ import {
   LIVE_SESSION_ADAPTER,
   LIVE_SESSION_ADAPTER_IDENTITY,
   type LiveConnectParams,
+  seedMessages,
 } from "./adapter";
 import { backendToolsList, livePromptValue } from "./prompt";
 import {
@@ -75,7 +79,7 @@ import {
   type TranscriptDeltaEvent,
   typedInputEvents,
 } from "./protocol";
-import { approxTokens, chunkForAppend } from "./tokens";
+import { chunkForAppend } from "./tokens";
 import { interleave, TranscriptTrack } from "./transcript";
 import {
   backendToolFor,
@@ -167,6 +171,44 @@ export function reseedPrefaceValue(): PromptNode {
       },
     ],
     fallback: null,
+  });
+}
+
+/**
+ * The last transcript as a prompt VALUE: every line a keyed text (`line:N`)
+ * carrying its role, each after its own separator, under a tail elision by
+ * token budget — the newest lines that fit, counted by the toolkit's
+ * conservative estimator. Which lines made it is the record's decision; the
+ * messages a connect sends derive from the compiled record through its maps
+ * (`seedMessages`), never by parsing the text.
+ */
+export function seedValue(
+  lines: readonly { role: "user" | "assistant"; text: string; startMs?: number }[],
+): PromptNode {
+  return Elide({
+    unit: "tokens",
+    limit: RESEED_TOKEN_BUDGET,
+    keep: "last",
+    marker: "",
+    label: "seed",
+    children: lines.map((line, index) =>
+      Group({
+        children: [
+          Text({ value: "\n", origin: { site: "aiui-live seed separator" } }),
+          Use({
+            key: `line:${index}`,
+            value: Text({
+              value: line.text,
+              origin: {
+                kind: "utterance",
+                role: line.role,
+                ...(line.startMs !== undefined ? { startMs: line.startMs } : {}),
+              },
+            }),
+          }),
+        ],
+      }),
+    ),
   });
 }
 
@@ -541,63 +583,37 @@ export class LiveSession {
     this.armIdle();
   }
 
-  /** The `input` a re-seeded start would send, from the last session's transcript. */
+  /** The `input` a re-seeded start would send, from the last session's
+   * transcript — the seed record's messages, after the preface. */
   reseedInput(): LiveInputMessage[] | undefined {
-    const lines = this.reseedLines();
-    if (lines === undefined) {
+    const seed = this.seedRecord();
+    if (seed === undefined) {
       return undefined;
     }
     return [
       { role: "developer", content: [{ type: "input_text", text: RESEED_PREFACE }] },
-      ...lines.kept,
+      ...seedMessages(seed.compiled),
     ];
   }
 
-  /**
-   * The last transcript's lines that fit the re-seed budget — the newest
-   * kept, the oldest dropped — and the decision taken, for the record: the
-   * toolkit counts no tokens, so the cut is the host's, recorded in the
-   * connect operation's params rather than as an elision in the content.
-   */
-  private reseedLines():
-    | { kept: LiveInputMessage[]; decision: NonNullable<LiveConnectParams["reseed"]> }
-    | undefined {
+  /** The last transcript as its seed record, compiled — undefined when there
+   * is no transcript, or nothing of it fits the budget. */
+  private seedRecord(): RenderedPrompt | undefined {
     const snapshot = this.reseed;
     if (snapshot === undefined) {
       return undefined;
     }
-    const script = interleave(snapshot.user, snapshot.assistant);
-    const kept: LiveInputMessage[] = [];
-    let budget = RESEED_TOKEN_BUDGET;
-    let dropped = 0;
-    for (let i = script.length - 1; i >= 0; i--) {
-      const line = script[i];
-      if (line === undefined) {
-        continue;
-      }
-      budget -= approxTokens(line.text);
-      if (budget < 0) {
-        dropped = i + 1;
-        break;
-      }
-      kept.unshift(
-        line.role === "user"
-          ? { role: "user", content: [{ type: "input_text", text: line.text }] }
-          : { role: "assistant", content: [{ type: "output_text", text: line.text }] },
-      );
-    }
-    if (kept.length === 0) {
+    const lines = interleave(snapshot.user, snapshot.assistant).map((line) => ({
+      role: line.role,
+      text: line.text,
+    }));
+    if (lines.length === 0) {
       return undefined;
     }
-    return {
-      kept,
-      decision: {
-        tokenBudget: RESEED_TOKEN_BUDGET,
-        estimator: "chars/3.5",
-        kept: kept.length,
-        dropped,
-      },
-    };
+    const seed = renderPrompt(seedValue(lines), {
+      context: { session: { starts: this.s.starts, reseed: true } },
+    });
+    return seedMessages(seed.compiled).length === 0 ? undefined : seed;
   }
 
   // ── internals: wiring ──────────────────────────────────────────────────────
@@ -633,16 +649,20 @@ export class LiveSession {
     // within the budget when the idle re-seed is on. The preface is a Case on
     // the re-seed fact, so an explicit seed carries none.
     const idle = this.options.idle;
-    const reseed =
+    // The seed: an explicit `config.input` as given (opaque history), else
+    // the last transcript as a RECORD when the idle re-seed is on — its
+    // tail elision is the cut. The preface is a Case on the re-seed fact.
+    const seed =
       config.input === undefined && !(idle === false || idle?.reseed === false)
-        ? this.reseedLines()
+        ? this.seedRecord()
         : undefined;
-    const history = config.input ?? reseed?.kept;
+    const history = config.input;
+    const seeded = seed === undefined ? 0 : seedMessages(seed.compiled).length;
     const context: JsonObject = {
       session: {
         starts: this.s.starts,
-        reseed: reseed !== undefined,
-        seedMessages: history?.length ?? 0,
+        reseed: seed !== undefined,
+        seedMessages: history?.length ?? seeded,
       },
     };
     const instructions = renderPrompt(instructionsValue, { context });
@@ -656,7 +676,16 @@ export class LiveSession {
       // and the tool DOCUMENT (brief + usage, the same ToolBrief every
       // consumer projects) after its instructions — compiled as one prompt
       // bound into the connect operation.
-      const snapshot = toolSnapshot([{ ns: "app", brief: this.toolBrief, tools: this.tools }]);
+      const snapshot = toolSnapshot(
+        [
+          {
+            ns: "app",
+            brief: this.toolBrief,
+            tools: this.tools.map((tool) => ({ ...tool, inputSchema: tool.parameters })),
+          },
+        ],
+        { site: "aiui-live session", from: "setTools" },
+      );
       const { instructions: base, ...rest } = delegation.responses;
       backend = {
         rendered: renderPrompt(
@@ -689,7 +718,6 @@ export class LiveSession {
       ...(managed ? { backendTools: this.tools.map(backendToolFor) } : {}),
       ...(config.store !== undefined ? { store: config.store } : {}),
       ...(history !== undefined ? { history } : {}),
-      ...(reseed !== undefined ? { reseed: reseed.decision } : {}),
     };
     const operation = consumerOperation({
       adapter: LIVE_SESSION_ADAPTER_IDENTITY,
@@ -700,6 +728,7 @@ export class LiveSession {
           ? [{ key: LIVE_CONNECT_BINDINGS.backendInstructions, content: backend.rendered.record }]
           : []),
         { key: LIVE_CONNECT_BINDINGS.reseedPreface, content: preface.record },
+        ...(seed !== undefined ? [{ key: LIVE_CONNECT_BINDINGS.seed, content: seed.record }] : []),
       ],
       // Plain JSON: a config written with an explicit `undefined` drops it here.
       params: JSON.parse(JSON.stringify(params)) as JsonObject,

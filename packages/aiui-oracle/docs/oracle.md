@@ -276,15 +276,14 @@ the toolkit's nodes (`instructionsPrompt`): the persona is one text with its own
 is placed under its own key with the weaver's heading and the app's value as separate
 contributions, and the session compiles it late with the tool brief, under the facts the resolver
 was handed (`reason`, `turns`, `starts`, `usage`) as the record's context. Every send that carries
-instructions is derived from that record by the oracle's own adapter of the toolkit
-(`aiui-oracle/realtime-session@1`: the instructions as the one binding, the audio block, the tool
-schemas and the limits as captured parameters), and the event that leaves is captured as the wire.
-The `config` ledger entry of each acked update therefore carries `prompt`, `operation` and `wire`,
-the `live` session entry carries the baked config the mint and the transport received the same way,
-and the greeting's `sent` entry carries its per-response `respond` operation (lowered by the
-toolkit's own Realtime profile). `verifyWire(operation, wire, ORACLE_REALTIME_ADAPTERS)` proves a
-stored record reproduces the event; `setInstructions` records its text as imported, naming the
-hand that wrote it. A plain-string `instructions`
+instructions is a session operation of the toolkit's Realtime profile — `update` for a
+`session.update` (the instructions bound, the audio block, the tool schemas and the limits as the
+captured session block), `connect` for the baked config the mint and the transport receive, and
+`respond` for the greeting — and the event that leaves is captured as the wire. The `config`
+ledger entry of each acked update, the `live` session entry and the greeting's `sent` entry carry
+`prompt`, `operation` and `wire`; `verifyWire(operation, wire)` proves a stored record reproduces
+the event, and the viewer shows that verdict when an entry is opened. `setInstructions` records
+its text as imported, naming the hand that wrote it. A plain-string `instructions`
 gets no section: a string is the whole prompt, stated.
 
 ## The lab

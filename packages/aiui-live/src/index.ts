@@ -129,6 +129,7 @@ export {
   RESEED_PREFACE,
   RESEED_TOKEN_BUDGET,
   reseedPrefaceValue,
+  seedValue,
 } from "./session";
 export { approxTokens, chunkForAppend } from "./tokens";
 export {

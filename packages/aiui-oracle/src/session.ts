@@ -20,7 +20,6 @@
 import { importText, type JsonObject, type SemanticRecord } from "@habemus-papadum/aiui-prompts";
 import {
   captureWire,
-  consumerOperation,
   lowerOperation,
   type OperationRecord,
   type PreparedDelivery,
@@ -37,7 +36,6 @@ import {
 import { priceRealtimeUsage, usageFromRealtimeResponse } from "./cost";
 import { pruneTurnDetection, setPath, TURN_DETECTION_TYPE } from "./params";
 import { greetingPrompt, instructionsPrompt } from "./prompt";
-import { ORACLE_REALTIME_ADAPTER_IDENTITY, ORACLE_REALTIME_ADAPTERS } from "./realtime-adapter";
 import type {
   Greeting,
   KeySource,
@@ -277,8 +275,9 @@ export class OracleSession {
       return;
     }
     const session = this.wireSession();
-    // The baked config as a `connect` operation of the oracle's adapter —
-    // what the mint and the transport receive, reproducible from the record.
+    // The baked config as a `connect` session operation (the toolkit's
+    // Realtime profile) — what the mint and the transport receive,
+    // reproducible from the record and the captured block.
     const connect = this.lowerSession("connect", session);
     let credential: Awaited<ReturnType<KeySource["credential"]>>;
     try {
@@ -561,13 +560,14 @@ export class OracleSession {
   }
 
   /**
-   * Derive a session block from records with the oracle's own adapter: the
-   * instructions as the composed record's binding, everything else as the
-   * captured parameters — and prepare the payload. A failure is a ledger
-   * error, never a lost send: the caller falls back to the plain object.
+   * Derive a session block from records with the toolkit's Realtime profile:
+   * the instructions as the composed record, everything else (the audio
+   * block, the tool schemas, the limits) as the captured session block — and
+   * prepare the payload. A failure is a ledger error, never a lost send: the
+   * caller falls back to the plain object.
    */
   private lowerSession(
-    action: "session.update" | "connect",
+    action: "update" | "connect",
     session: Record<string, unknown>,
     eventId?: string,
   ):
@@ -580,21 +580,13 @@ export class OracleSession {
       if (bound && (rendered === undefined || instructions !== rendered.text)) {
         throw new Error("the instructions on the wire are not the composed record's text");
       }
-      const operation = consumerOperation({
-        adapter: ORACLE_REALTIME_ADAPTER_IDENTITY,
+      const operation = sessionOperation(bound && rendered !== undefined ? rendered.record : null, {
         action,
-        bindings:
-          bound && rendered !== undefined
-            ? [{ key: "instructions", content: rendered.record }]
-            : [],
-        params: { session: rest as JsonObject, ...(eventId !== undefined ? { eventId } : {}) },
+        sessionId: this.handle?.callId ?? `start:${this.startCount}`,
+        ...(eventId !== undefined ? { eventId } : {}),
+        session: rest as JsonObject,
       });
-      const prepared = lowerOperation(
-        operation,
-        { kind: "custom", adapter: ORACLE_REALTIME_ADAPTER_IDENTITY, options: {} },
-        {},
-        ORACLE_REALTIME_ADAPTERS,
-      );
+      const prepared = lowerOperation(operation, { kind: "openai-realtime/1" });
       return {
         ...(bound && rendered !== undefined ? { prompt: rendered.record } : {}),
         operation,
@@ -623,9 +615,19 @@ export class OracleSession {
    * section is projected from (the snapshot keeps the documented fields of
    * each tool and drops its schema and executor). */
   private toolDocument(): ToolSnapshot {
-    const snapshot = toolSnapshot([
-      { ns: "app", brief: this.toolBrief, tools: [...this.toolsByName.values()] },
-    ]);
+    const snapshot = toolSnapshot(
+      [
+        {
+          ns: "app",
+          brief: this.toolBrief,
+          tools: [...this.toolsByName.values()].map((tool) => ({
+            ...tool,
+            inputSchema: tool.parameters,
+          })),
+        },
+      ],
+      { site: "aiui-oracle session", from: "setTools" },
+    );
     this.toolsFingerprint = snapshot.fingerprint;
     return snapshot;
   }
@@ -722,7 +724,7 @@ export class OracleSession {
   private sendSessionUpdate(session: Record<string, unknown>): void {
     const typed = { type: "realtime", ...session };
     const eventId = this.nextEventId();
-    const lowered = this.lowerSession("session.update", session, eventId);
+    const lowered = this.lowerSession("update", session, eventId);
     const payload =
       lowered !== undefined
         ? (lowered.prepared.payload as Record<string, unknown>)

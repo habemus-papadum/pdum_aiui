@@ -59,14 +59,6 @@ export {
   ORACLE_BASE_PERSONA,
   weaveInstructions,
 } from "./prompt";
-// realtime-adapter.ts — the oracle's own lowering to the Realtime wire (a consumer
-// adapter of the prompt toolkit); supply ORACLE_REALTIME_ADAPTERS to verifyWire.
-export type { OracleRealtimeAction } from "./realtime-adapter";
-export {
-  ORACLE_REALTIME_ADAPTER_IDENTITY,
-  ORACLE_REALTIME_ADAPTERS,
-  oracleRealtimeAdapter,
-} from "./realtime-adapter";
 export type { OracleSessionOptions, OracleState } from "./session";
 export { OracleSession } from "./session";
 export type {

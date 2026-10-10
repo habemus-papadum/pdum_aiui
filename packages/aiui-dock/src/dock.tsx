@@ -55,7 +55,6 @@ import {
   useLiveState,
 } from "@habemus-papadum/aiui-live/widgets";
 import {
-  ORACLE_REALTIME_ADAPTERS,
   OracleSession,
   webRtcTransport as oracleWebRtcTransport,
   standardKeySources,
@@ -383,7 +382,6 @@ export function VoiceDock(props: VoiceDockProps): JSX.Element {
                         record={sent().prompt}
                         operation={sent().operation}
                         wire={sent().wire}
-                        adapters={ORACLE_REALTIME_ADAPTERS}
                       />
                     )}
                   </Show>

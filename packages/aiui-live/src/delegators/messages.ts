@@ -10,6 +10,7 @@
  */
 import {
   Case,
+  Elide,
   Group,
   Join,
   type JsonObject,
@@ -51,20 +52,31 @@ export function requestContext(req: DelegationRequest, contextUtterances: number
   };
 }
 
-/** The last `contextUtterances` lines of the transcript, oldest first, as `role: text`. */
-function recentLines(req: DelegationRequest, contextUtterances: number): PromptNode[] {
-  return [
+/**
+ * The transcript's lines, oldest first, as `role: text` — every line, under
+ * a tail elision that keeps the last `contextUtterances`: the cut is the
+ * record's decision (which lines, how many dropped), not a slice the host
+ * took before the record existed. Each line carries its own newline, so any
+ * kept subset reads the same.
+ */
+function recentLines(req: DelegationRequest, contextUtterances: number): PromptNode {
+  const lines = [
     ...req.transcript.user.map((u) => ({ role: "user" as const, ...u })),
     ...req.transcript.assistant.map((u) => ({ role: "assistant" as const, ...u })),
-  ]
-    .sort((a, b) => a.startMs - b.startMs)
-    .slice(-contextUtterances)
-    .map((u) =>
+  ].sort((a, b) => a.startMs - b.startMs);
+  return Elide({
+    unit: "items",
+    limit: contextUtterances,
+    keep: "last",
+    marker: "",
+    label: "recent",
+    children: lines.map((u) =>
       Text({
-        value: `${u.role}: ${u.text}`,
+        value: `\n${u.role}: ${u.text}`,
         origin: { kind: "utterance", role: u.role, startMs: u.startMs, endMs: u.endMs },
       }),
-    );
+    ),
+  });
 }
 
 /**
@@ -83,14 +95,13 @@ export function requestMessageValue(req: DelegationRequest, contextUtterances: n
           branches: [
             { when: { op: "eq", path: "request.utterances.shown", value: 0 }, value: null },
           ],
-          fallback: Join({
-            separator: "\n",
+          fallback: Group({
             children: [
               Text({
                 value: "Recent conversation (transcribed speech, may contain errors):",
                 origin: site("label"),
               }),
-              ...recentLines(req, contextUtterances),
+              recentLines(req, contextUtterances),
             ],
           }),
         }),
@@ -218,7 +229,16 @@ export function delegationMessage(
   req: DelegationRequest,
   contextUtterances = 10,
 ): { text: string; tools: ToolSnapshot; record: SemanticRecord } {
-  const snapshot = toolSnapshot([{ ns: "app", brief: req.brief, tools: req.tools }]);
+  const snapshot = toolSnapshot(
+    [
+      {
+        ns: "app",
+        brief: req.brief,
+        tools: req.tools.map((tool) => ({ ...tool, inputSchema: tool.parameters })),
+      },
+    ],
+    { site: "aiui-live delegation", delegation: req.id },
+  );
   const rendered = renderPrompt(delegationMessageValue(req, contextUtterances, snapshot), {
     context: {
       ...requestContext(req, contextUtterances),

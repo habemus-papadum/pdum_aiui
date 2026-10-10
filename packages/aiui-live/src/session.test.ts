@@ -579,24 +579,38 @@ describe("progress, idle, re-seed", () => {
     await starting;
     expect(live.sessionConfig()?.input?.length).toBe(3);
     expect(live.state().starts).toBe(2);
-    // The re-seed is a recorded decision: the preface's Case on `session.reseed`,
-    // the cut (budget, kept, dropped) in the connect operation's params, and
-    // the operation re-derives the seeded config exactly.
+    // The re-seed is a recorded decision twice over: the preface's Case on
+    // `session.reseed`, and the seed itself a bound record whose tail
+    // elision by token budget is the cut — the connect operation carries no
+    // seed parameters at all, and re-derives the seeded config exactly.
     const entry = live
       .ledger()
       .filter((e) => e.kind === "prompt" && e.event?.what === "instructions")
       .at(-1)?.event as { operation: never; wire: never } | undefined;
     const operation = entry?.operation as unknown as {
       records: Record<string, { context: unknown; decisions: unknown[] }>;
-      operation: { params: { reseed?: unknown; history?: unknown[] } };
+      operation: { params: { history?: unknown[] }; bindings: { key: string; content: string }[] };
     };
-    expect(operation.operation.params.reseed).toEqual({
-      tokenBudget: 6000,
-      estimator: "chars/3.5",
-      kept: 2,
-      dropped: 0,
-    });
-    expect(operation.operation.params.history).toHaveLength(2);
+    expect(operation.operation.params.history).toBeUndefined();
+    const seedBinding = operation.operation.bindings.find((b) => b.key === "seed");
+    expect(seedBinding).toBeDefined();
+    const seedRecord = operation.records[seedBinding?.content ?? ""];
+    expect(seedRecord?.context).toMatchObject({ session: { starts: 2, reseed: true } });
+    const seedCompiled = rehydrate(seedRecord as never);
+    expect(seedCompiled.decisions).toContainEqual(
+      expect.objectContaining({
+        kind: "elide",
+        selected: "full",
+        detail: expect.objectContaining({
+          unit: "tokens",
+          limit: 6000,
+          keep: "last",
+          estimator: { name: "aiui-prompts/conservative", version: "1" },
+          original: 2,
+          omitted: 0,
+        }),
+      }),
+    );
     const preface = Object.values(operation.records).find((r) =>
       r.decisions.some((d) => (d as { name?: string }).name === "reseed"),
     );

@@ -16,6 +16,7 @@ import {
   LIVE_CONNECT_BINDINGS,
   LIVE_SESSION_ADAPTER,
   LIVE_SESSION_ADAPTER_IDENTITY,
+  seedMessages,
 } from "./adapter";
 import {
   delegationMessage,
@@ -33,7 +34,7 @@ import {
   livePrompt,
   livePromptValue,
 } from "./prompt";
-import { reseedPrefaceValue } from "./session";
+import { reseedPrefaceValue, seedValue } from "./session";
 import type { DelegationRequest, LiveTool } from "./types";
 
 /** Every text part joined — what a wire carries. */
@@ -163,6 +164,15 @@ describe("the prompts as records", () => {
     const seeded = renderPrompt(reseedPrefaceValue(), {
       context: { session: { reseed: true } },
     });
+    // The seed: the last transcript as a record under a token-budget tail
+    // elision; its messages derive through the maps, in order, with roles.
+    const seed = renderPrompt(
+      seedValue([
+        { role: "user", text: "hello" },
+        { role: "assistant", text: "hi there" },
+      ]),
+      { context: { session: { reseed: true } } },
+    );
     const operation = consumerOperation({
       adapter: LIVE_SESSION_ADAPTER_IDENTITY,
       action: "connect",
@@ -170,14 +180,13 @@ describe("the prompts as records", () => {
         { key: LIVE_CONNECT_BINDINGS.instructions, content: instructions.record },
         { key: LIVE_CONNECT_BINDINGS.backendInstructions, content: backend.record },
         { key: LIVE_CONNECT_BINDINGS.reseedPreface, content: seeded.record },
+        { key: LIVE_CONNECT_BINDINGS.seed, content: seed.record },
       ],
       params: {
         model: "gpt-live-1",
         audio: { output: { voice: "marin" } },
         delegation: { type: "responses", responses: { model: "m" } },
         backendTools: [{ type: "function", name: "report", description: "d", parameters: {} }],
-        history: [{ role: "user", content: [{ type: "input_text", text: "hello" }] }],
-        reseed: { tokenBudget: 6000, estimator: "chars/3.5", kept: 1, dropped: 0 },
       },
     });
     const prepared = lowerOperation(
@@ -201,18 +210,26 @@ describe("the prompts as records", () => {
       input: [
         { role: "developer", content: [{ type: "input_text", text: seeded.text }] },
         { role: "user", content: [{ type: "input_text", text: "hello" }] },
+        { role: "assistant", content: [{ type: "output_text", text: "hi there" }] },
       ],
     });
     expect(prepared.mappings.map((m) => [m.binding, m.path.join(".")])).toEqual([
       ["instructions", "instructions"],
       ["backend-instructions", "delegation.responses.instructions"],
       ["reseed-preface", "input.0.content.0.text"],
+      ["seed", "input.1.content.0.text"],
+      ["seed", "input.2.content.0.text"],
     ]);
     expect(prepared.decisions[0]).toMatchObject({
       kind: "live-session/connect",
       hostedTools: 1,
-      seedMessages: 2,
+      seedMessages: 3,
+      seed: expect.objectContaining({ unit: "tokens", keep: "last", original: 2, omitted: 0 }),
     });
+    expect(seedMessages(seed.compiled)).toEqual([
+      { role: "user", content: [{ type: "input_text", text: "hello" }] },
+      { role: "assistant", content: [{ type: "output_text", text: "hi there" }] },
+    ]);
     // Not re-seeding: the preface compiles to nothing and no developer message appears.
     const plain = consumerOperation({
       adapter: LIVE_SESSION_ADAPTER_IDENTITY,

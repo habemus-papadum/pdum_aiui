@@ -633,10 +633,10 @@ export type LedgerBody =
        * prompt toolkit): rehydrate it and the text comes back; its decisions
        * say what a budget dropped. On the updates that carried instructions. */
       prompt?: SemanticRecord;
-      /** The operation the update was lowered from (the oracle's own Realtime
-       * adapter: the instructions bound, everything else as parameters) and
-       * the wire as it left — `verifyWire(operation, wire, adapters)` proves
-       * the record reproduces the event. */
+      /** The operation the update was lowered from (the toolkit's Realtime
+       * profile: the instructions bound, the session block captured) and the
+       * wire as it left — `verifyWire(operation, wire)` proves the record
+       * reproduces the event. */
       operation?: OperationRecord;
       wire?: WireRecord;
     }

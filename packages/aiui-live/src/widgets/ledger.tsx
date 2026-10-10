@@ -102,9 +102,13 @@ function Row(props: { entry: LedgerEntry; open: boolean; onToggle(): void }) {
         }
       : (props.entry.records ?? {});
   const prompt = () => records().prompt;
+  // An entry previews when it carries a record, or an operation with its
+  // wire (a delegated request: the whole body is the operation's own).
+  const inspectable = () =>
+    prompt() !== undefined || (records().operation !== undefined && records().wire !== undefined);
   const detail = () => {
     const event = props.entry.event;
-    if (event === undefined || prompt() === undefined) return event;
+    if (event === undefined || !inspectable()) return event;
     // The records are the preview above and verification material, not JSON to read.
     const { prompt: _record, operation: _operation, wire: _wire, ...rest } = event;
     return rest;
@@ -114,7 +118,7 @@ function Row(props: { entry: LedgerEntry; open: boolean; onToggle(): void }) {
       <button
         type="button"
         class="aiui-live-row-line"
-        disabled={props.entry.event === undefined && prompt() === undefined}
+        disabled={props.entry.event === undefined && !inspectable()}
         onClick={props.onToggle}
       >
         <span class="aiui-live-row-t">{stamp(props.entry.t)}</span>
@@ -122,7 +126,7 @@ function Row(props: { entry: LedgerEntry; open: boolean; onToggle(): void }) {
         <span class="aiui-live-row-kind">{props.entry.kind}</span>
         <span class="aiui-live-row-summary">{props.entry.summary}</span>
       </button>
-      <Show when={props.open && prompt() !== undefined}>
+      <Show when={props.open && inspectable()}>
         <div class="aiui-live-row-prompt">
           <PromptRecordView
             record={prompt()}

@@ -345,9 +345,12 @@ export interface PromptRecords {
 export interface DelegationPromptRecord {
   /** `instructions` — the session's own instructions; `backend-instructions`
    * — a hosted or delegated backend's instructions; `message` — the
-   * per-delegation user message. */
-  what: "instructions" | "backend-instructions" | "message";
+   * per-delegation user message; `request` — one HTTP round of a delegated
+   * backend, the whole request body as an operation and its captured wire. */
+  what: "instructions" | "backend-instructions" | "message" | "request";
   text: string;
+  /** For `request`: which round of the tool loop (0 is the first). */
+  round?: number;
   /** The tool document the text was projected from (the prompt toolkit's
    * `ToolSnapshot`), when it carried one. */
   tools?: { fingerprint: string; count: number };

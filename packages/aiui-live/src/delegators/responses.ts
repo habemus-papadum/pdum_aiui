@@ -10,7 +10,12 @@
  * output items plus our `function_call_output`s). `store: false` throughout.
  */
 
-import { importText } from "@habemus-papadum/aiui-prompts";
+import { importText, type JsonValue } from "@habemus-papadum/aiui-prompts";
+import {
+  captureWire,
+  lowerOperation,
+  responseOperation,
+} from "@habemus-papadum/aiui-prompts/operations";
 import {
   instructionsWithToolBrief,
   renderPrompt,
@@ -22,7 +27,7 @@ export { requestMessage } from "./messages.ts";
 
 import { backendPromptValue } from "../prompt.ts";
 import type { ReasoningEffort } from "../protocol.ts";
-import { backendToolFor, type Delegator, runTool } from "../types.ts";
+import { type Delegator, runTool } from "../types.ts";
 
 export interface ResponsesDelegatorOptions {
   /** The key, or a getter (evaluated per request so a paste takes effect). */
@@ -76,7 +81,19 @@ export function responsesDelegator(options: ResponsesDelegatorOptions): Delegato
       // tool's usage, read/write classes) — the same ToolBrief every consumer
       // projects, from the very tool array sent below; compiled as one prompt
       // whose record goes to the ledger beside the text.
-      const snapshot = toolSnapshot([{ ns: "app", brief: req.brief, tools: req.tools }]);
+      // The snapshot carries the schemas too: the request's tool list is the
+      // toolkit's projection of it, so brief, schemas and fingerprint are one
+      // document (the projection writes the API's default `strict: false`).
+      const snapshot = toolSnapshot(
+        [
+          {
+            ns: "app",
+            brief: req.brief,
+            tools: req.tools.map((tool) => ({ ...tool, inputSchema: tool.parameters })),
+          },
+        ],
+        { site: "aiui-live responses delegator", delegation: req.id },
+      );
       const preface =
         options.instructions !== undefined
           ? importText({
@@ -86,7 +103,6 @@ export function responsesDelegator(options: ResponsesDelegatorOptions): Delegato
           : backendPromptValue({ app: options.app });
       const rendered = renderPrompt(instructionsWithToolBrief(preface, snapshot));
       const instructions = rendered.text;
-      const tools = req.tools.map(backendToolFor);
       const contextUtterances = options.contextUtterances ?? 8;
       const composed = renderPrompt(requestMessageValue(req, contextUtterances), {
         context: requestContext(req, contextUtterances),
@@ -100,24 +116,50 @@ export function responsesDelegator(options: ResponsesDelegatorOptions): Delegato
         prompt: rendered.record,
       });
       req.record?.({ what: "message", text: message, prompt: composed.record });
-      const input: unknown[] = [{ role: "user", content: message }];
+      // Every round is a response operation of the toolkit's Responses
+      // profile: the first binds the instructions and the message; a
+      // continuation carries the items so far (the message, the model's
+      // output, our tool outputs) as opaque provider history. The body sent
+      // IS the lowered payload, captured as the wire beside the operation.
+      const items: JsonValue[] = [];
+      const target = { kind: "openai-responses/1" as const, model };
+      const request = {
+        ...(req.tools.length > 0 ? { tools: snapshot, toolChoice: "auto" as const } : {}),
+        ...(options.effort !== undefined ? { reasoning: { effort: options.effort } } : {}),
+        store: false,
+      };
       const maxRounds = options.maxRounds ?? 6;
       for (let round = 0; round < maxRounds; round++) {
         const t0 = Date.now();
+        const operation =
+          round === 0
+            ? responseOperation({
+                instructions: rendered.record,
+                messages: [{ key: "request", role: "user", content: composed.record }],
+                ...request,
+              })
+            : responseOperation({
+                instructions: rendered.record,
+                messages: [],
+                history: { kind: "provider-items", protocol: "openai-responses/1", items },
+                ...request,
+              });
+        const prepared = lowerOperation(operation, target);
+        const body = prepared.payload as { input: JsonValue[] } & Record<string, JsonValue>;
+        if (round === 0) items.push(...body.input);
+        req.record?.({
+          what: "request",
+          text: round === 0 ? message : "",
+          round,
+          operation,
+          wire: captureWire(prepared, body, { capturedAt: new Date().toISOString() }),
+        });
         const response = await doFetch(
           `${options.baseUrl ?? "https://api.openai.com"}/v1/responses`,
           {
             method: "POST",
             headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-            body: JSON.stringify({
-              model,
-              instructions,
-              input,
-              tools,
-              tool_choice: tools.length > 0 ? "auto" : undefined,
-              reasoning: options.effort !== undefined ? { effort: options.effort } : undefined,
-              store: false,
-            }),
+            body: JSON.stringify(body),
             signal: req.signal,
           },
         );
@@ -142,7 +184,7 @@ export function responsesDelegator(options: ResponsesDelegatorOptions): Delegato
             .trim();
           return text === "" ? "The backend finished without a spoken result." : text;
         }
-        input.push(...output);
+        items.push(...(output as JsonValue[]));
         for (const call of calls) {
           const name = call.name ?? "?";
           req.log(`call ${name}(${call.arguments ?? ""})`);
@@ -152,9 +194,9 @@ export function responsesDelegator(options: ResponsesDelegatorOptions): Delegato
             ref: req.id,
           });
           req.log(`${name} → ${JSON.stringify(value).slice(0, 200)}`);
-          input.push({
+          items.push({
             type: "function_call_output",
-            call_id: call.call_id,
+            ...(call.call_id !== undefined ? { call_id: call.call_id } : {}),
             output: typeof value === "string" ? value : JSON.stringify(value),
           });
         }

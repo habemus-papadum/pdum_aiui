@@ -15,7 +15,7 @@
  * `aiui-live/session@1` operation can only be verified by this very code.
  */
 
-import type { JsonObject, JsonValue } from "@habemus-papadum/aiui-prompts";
+import type { CompiledPrompt, JsonObject, JsonValue } from "@habemus-papadum/aiui-prompts";
 import type {
   ConsumerAdapter,
   ConsumerAdapterInput,
@@ -44,7 +44,49 @@ export const LIVE_CONNECT_BINDINGS = Object.freeze({
   /** The developer message that prefaces a re-seeded transcript; compiles to
    * nothing when the session is not re-seeding. */
   reseedPreface: "reseed-preface",
+  /** The re-seeded transcript itself: every line a keyed text with its role,
+   * under a tail elision by token budget — which lines made it is the
+   * record's decision, and the messages derive through its maps. */
+  seed: "seed",
 });
+
+/** A line of the seed record: its message role rides on the text's origin. */
+const ROLE = { user: "user", assistant: "assistant" } as const;
+
+/**
+ * The seed's messages, derived from the compiled record through its maps —
+ * never by parsing text: each occurrence keyed `line:N` is one line, its
+ * contribution the exact range in the text part, its definition origin the
+ * role. Used by the adapter to build `input`, and by the session to say what
+ * a re-seeded start would send.
+ */
+export function seedMessages(compiled: CompiledPrompt): LiveInputMessage[] {
+  const lines: { start: number; message: LiveInputMessage; occurrence: string }[] = [];
+  for (const occurrence of compiled.occurrences) {
+    if (occurrence.key === undefined || !occurrence.key.startsWith("line:")) continue;
+    const contribution = compiled.contributions.find(
+      (item) => item.occurrence === occurrence.id && item.start !== undefined,
+    );
+    const part = compiled.parts.find((item) => item.id === contribution?.part);
+    if (
+      contribution?.start === undefined ||
+      contribution.end === undefined ||
+      part?.type !== "text"
+    )
+      continue;
+    const role = occurrence.definitionOrigin?.role;
+    const text = part.text.slice(contribution.start, contribution.end);
+    lines.push({
+      start: contribution.start,
+      occurrence: occurrence.id,
+      message:
+        role === ROLE.assistant
+          ? { role: "assistant", content: [{ type: "output_text", text }] }
+          : { role: "user", content: [{ type: "input_text", text }] },
+    });
+  }
+  return lines.sort((a, b) => a.start - b.start).map((line) => line.message);
+}
 
 /** The `connect` action's recorded parameters — everything in the wire
  * config that is not prompt content. Plain JSON acquired by the host. */
@@ -58,13 +100,10 @@ export interface LiveConnectParams {
   /** The hosted backend's function tools, when the session manages them. */
   backendTools?: LiveBackendTool[];
   store?: boolean;
-  /** The seed messages (opaque history: prior utterances, or an explicit
-   * `config.input`), in order; the re-seed preface, when any, goes first. */
+  /** An explicit `config.input`: opaque seed messages the host supplied, in
+   * order, after any re-seeded lines. A re-seeded transcript is not here —
+   * it is the `seed` binding, a record. */
   history?: LiveInputMessage[];
-  /** How the re-seed was cut: the host's token budget and estimator, what it
-   * kept and what it dropped. The toolkit counts no tokens; this records the
-   * decision the host took. */
-  reseed?: { tokenBudget: number; estimator: string; kept: number; dropped: number };
 }
 
 /** The recorded parameters, read back (the adapter never re-validates
@@ -130,20 +169,47 @@ export const LIVE_SESSION_ADAPTER: ConsumerAdapter = {
       };
     }
     const preface = text(LIVE_CONNECT_BINDINGS.reseedPreface, ["input", 0, "content", 0, "text"]);
+    const prefaced: LiveInputMessage[] =
+      preface === ""
+        ? []
+        : [{ role: "developer", content: [{ type: "input_text", text: preface }] }];
+    // The re-seeded lines, each mapped to the message it became. A copy map
+    // must cover a whole text part, so a line (a range of the seed's one
+    // part) is a generated field that names its occurrence.
+    const seed = bound.get(LIVE_CONNECT_BINDINGS.seed);
+    const seeded = seed === undefined ? [] : seedMessages(seed.compiled);
+    if (seed !== undefined) {
+      const part = seed.compiled.parts.find((item) => item.type === "text");
+      let index = prefaced.length;
+      for (const occurrence of seed.compiled.occurrences) {
+        if (occurrence.key === undefined || !occurrence.key.startsWith("line:")) continue;
+        const contribution = seed.compiled.contributions.find(
+          (item) => item.occurrence === occurrence.id && item.start !== undefined,
+        );
+        if (contribution === undefined || part === undefined) continue;
+        // Bounds are the addressed field's (the whole message text); where
+        // the line sits in the seed's text part rides on the origin.
+        mappings.push({
+          path: ["input", index, "content", 0, "text"],
+          binding: LIVE_CONNECT_BINDINGS.seed,
+          record: seed.record,
+          part: part.id,
+          start: 0,
+          end: (contribution.end ?? 0) - (contribution.start ?? 0),
+          relation: "generated",
+          origin: {
+            occurrence: occurrence.id,
+            start: contribution.start ?? 0,
+            end: contribution.end ?? 0,
+          },
+        });
+        index++;
+      }
+    }
     const input_: LiveInputMessage[] | undefined =
-      p.history === undefined
+      seeded.length === 0 && p.history === undefined
         ? undefined
-        : [
-            ...(preface === ""
-              ? []
-              : [
-                  {
-                    role: "developer" as const,
-                    content: [{ type: "input_text" as const, text: preface }],
-                  },
-                ]),
-            ...p.history,
-          ];
+        : [...prefaced, ...seeded, ...(p.history ?? [])];
     const payload: LiveSessionConfig = {
       model: p.model,
       instructions,
@@ -160,7 +226,13 @@ export const LIVE_SESSION_ADAPTER: ConsumerAdapter = {
         kind: "live-session/connect",
         hostedTools: p.backendTools?.length ?? 0,
         seedMessages: input_?.length ?? 0,
-        ...(p.reseed !== undefined ? { reseed: p.reseed } : {}),
+        // The seed's own cut (the tail elision's decision), as the record made it.
+        ...(seed !== undefined
+          ? {
+              seed: (seed.compiled.decisions.find((d) => d.kind === "elide")?.detail ??
+                {}) as JsonObject,
+            }
+          : {}),
       },
     ];
     return { payload: payload as unknown as JsonValue, mappings: present, decisions };

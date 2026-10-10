@@ -10,7 +10,6 @@ import {
   devKeySource,
   type LedgerEntry,
   mintingKeySource,
-  ORACLE_REALTIME_ADAPTERS,
   OracleSession,
   type OracleTool,
   onControlSurfaceChange,
@@ -66,7 +65,6 @@ function SentInstructions(props: { session: OracleSession }) {
           record={entry().prompt}
           operation={entry().operation}
           wire={entry().wire}
-          adapters={ORACLE_REALTIME_ADAPTERS}
         />
       )}
     </Show>

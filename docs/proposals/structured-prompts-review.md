@@ -279,6 +279,24 @@ Each stage is byte-identical first (the corpus), then improved with recorded dif
   operation (the `openai-responses/1` utility omits `tool_choice`, `reasoning` and `store`, so it
   would need its own adapter — later). Questions for the toolkit: a keep-the-last-N elision mode,
   and parameters on `sessionOperation` (a chunk index).
+  **Closed 2026-10-10, in the toolkit and the consumers** (the owner's stance: everything is
+  pre-alpha, no compatibility paths). The Realtime profile gained `update` (the host's session
+  block merged with the bound instructions, or alone for a tools-only update) and `connect` (the
+  baked config, no envelope); the oracle's own adapter is deleted and its sends are session
+  operations. Token estimation lives in the core: a `TokenEstimator` with the built-in
+  `aiui-prompts/conservative@1` (3.5 characters a token; images by the larger of two published
+  rules after OpenAI's scaling), used by `measurePrompt`, `optimizePrompt` and the new `tokens`
+  elision. `Elide` keeps first or last, and a `tokens` unit keeps whole children within a budget.
+  The live delegation message's recent lines are a tail elision; the re-seed is a bound `seed`
+  record whose token-budget tail elision is the cut, its messages derived through the maps
+  (`seedMessages`), the separate `reseed` parameter gone. The Responses profile carries
+  `tool_choice`, `reasoning` and `store`, a continuation round may carry provider items alone,
+  and every HTTP round of the in-browser Responses delegator is a response operation captured at
+  the fetch (`what: "request"` entries), its tools projected from the snapshot — the one wire diff
+  of the jump: `strict: false` on each tool, the API's default. Stage 4: every snapshot names
+  where it was taken (`site`, the page's URL for the registry, the delegation id for a backend)
+  and carries input schemas, so brief, schemas and fingerprint are one document. Append chunking
+  stays host-side (unchanged).
 - **Stage 3 — the lowering pipeline and the channel.** `ComposedItem[]` becomes the semantic
   input: shots as markers with asset-reference policies and sidecars, selections as text plus
   XML, navigation and tab switches as markers, corrections as `Case`. The contributions map

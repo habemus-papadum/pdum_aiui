@@ -12,7 +12,6 @@ import {
   type WireRecord,
 } from "@habemus-papadum/aiui-prompts/operations";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ORACLE_REALTIME_ADAPTERS } from "./realtime-adapter";
 import { OracleSession } from "./session";
 import type {
   KeySource,
@@ -1588,10 +1587,10 @@ describe("the records behind every send (stage 2 of the structured-prompts migra
     const config = entryOf(session, "config");
     expect(config.prompt).toBeDefined();
     expect(config.operation?.operation).toMatchObject({
-      kind: "custom",
-      adapter: { name: "aiui-oracle/realtime-session", version: "1" },
-      action: "session.update",
-      bindings: [{ key: "instructions" }],
+      kind: "session",
+      action: "update",
+      content: expect.any(String),
+      session: expect.objectContaining({ tools: expect.any(Array), audio: expect.any(Object) }),
     });
     // The wire IS the event the transport received — not a reconstruction.
     const update = rig.sent.find((m) => m.type === "session.update");
@@ -1600,13 +1599,9 @@ describe("the records behind every send (stage 2 of the structured-prompts migra
     expect(config.wire?.capturedAt).toBe("2025-10-09T08:53:20.000Z");
     expect(config.wire?.transportId).toBe("rtc_test");
     // The stored operation + wire + the oracle's adapter reproduce it exactly.
-    expect(
-      verifyWire(
-        config.operation as OperationRecord,
-        config.wire as WireRecord,
-        ORACLE_REALTIME_ADAPTERS,
-      ).equal,
-    ).toBe(true);
+    expect(verifyWire(config.operation as OperationRecord, config.wire as WireRecord).equal).toBe(
+      true,
+    );
     // And the record's context carries the facts the resolver was handed.
     expect(config.prompt?.context).toEqual({
       session: { reason: "start", turns: 0, starts: 1, usage: expect.any(Object) },
@@ -1625,13 +1620,7 @@ describe("the records behind every send (stage 2 of the structured-prompts migra
     expect(live.phase).toBe("live");
     expect(live.operation?.operation).toMatchObject({ action: "connect" });
     expect(live.wire?.payload).toEqual(session.sessionConfig());
-    expect(
-      verifyWire(
-        live.operation as OperationRecord,
-        live.wire as WireRecord,
-        ORACLE_REALTIME_ADAPTERS,
-      ).equal,
-    ).toBe(true);
+    expect(verifyWire(live.operation as OperationRecord, live.wire as WireRecord).equal).toBe(true);
 
     const greeting = session
       .ledger()
@@ -1664,12 +1653,8 @@ describe("the records behind every send (stage 2 of the structured-prompts migra
     expect((config.sent as { instructions?: string }).instructions).toBe("stated by hand");
     const origins = config.prompt?.definitions.map((d) => d.origin?.site).filter(Boolean);
     expect(origins).toContain("aiui-oracle setInstructions");
-    expect(
-      verifyWire(
-        config.operation as OperationRecord,
-        config.wire as WireRecord,
-        ORACLE_REALTIME_ADAPTERS,
-      ).equal,
-    ).toBe(true);
+    expect(verifyWire(config.operation as OperationRecord, config.wire as WireRecord).equal).toBe(
+      true,
+    );
   });
 });

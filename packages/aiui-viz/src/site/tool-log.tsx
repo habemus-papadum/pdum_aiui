@@ -26,7 +26,7 @@
 import type { JSX } from "@solidjs/web";
 import { createEffect, createSignal, For, onCleanup, Show } from "solid-js";
 import { type AiuiToolCall, type AiuiToolsRegistry, ensureAiuiGlobal } from "../aiui-global";
-import { type KitDoc, renderPrompt, toolBrief } from "../tool-brief";
+import { type KitDoc, renderPrompt, toolBrief, toolSnapshot } from "../tool-brief";
 import { JsonView } from "./json-view";
 import { PromptRecordView } from "./prompt-record";
 
@@ -55,8 +55,17 @@ function kitDocs(registry: AiuiToolsRegistry | undefined): KitDoc[] {
       ...(t.usage !== undefined ? { usage: t.usage } : {}),
       ...(t.kind !== undefined ? { kind: t.kind } : {}),
       ...(t.group !== undefined ? { group: t.group } : {}),
+      ...(t.inputSchema !== undefined ? { inputSchema: t.inputSchema } : {}),
     })),
   }));
+}
+
+/** The registry's document as a snapshot: the kits with their schemas, taken on this page. */
+function registrySnapshot(registry: AiuiToolsRegistry | undefined) {
+  return toolSnapshot(kitDocs(registry), {
+    site: "page registry",
+    ...(typeof location !== "undefined" ? { url: location.href } : {}),
+  });
 }
 
 /** The `page_tools_list` shape (descriptors only — never functions). */
@@ -359,7 +368,10 @@ export function ToolLog(props: ToolLogProps): JSX.Element {
               the text and, behind "Open full inspector", which tool and field
               every line came from. */}
           <div class="aiui-toollog-brief">
-            <PromptRecordView record={renderPrompt(toolBrief(docs())).record} initialView="text" />
+            <PromptRecordView
+              record={renderPrompt(toolBrief(registrySnapshot(registry()))).record}
+              initialView="text"
+            />
           </div>
           <div class="aiui-toollog-section">the structured form (page_tools_list)</div>
           <JsonView value={listing(registry())} depth={2} class="aiui-toollog-listing" />
