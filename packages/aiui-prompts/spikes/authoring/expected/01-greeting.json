@@ -1,0 +1,342 @@
+{
+  "authored": {
+    "kind": "prompt",
+    "children": [
+      {
+        "kind": "paragraph",
+        "children": [
+          {
+            "kind": "text",
+            "children": [],
+            "value": "Hello, "
+          },
+          {
+            "kind": "text",
+            "children": [],
+            "source": {
+              "label": "name argument",
+              "origin": "caller"
+            },
+            "value": "Ada"
+          },
+          {
+            "kind": "text",
+            "children": [],
+            "value": "!"
+          }
+        ]
+      },
+      {
+        "kind": "paragraph",
+        "children": [
+          {
+            "kind": "text",
+            "children": [],
+            "value": "Keep your answer concise."
+          }
+        ]
+      }
+    ],
+    "label": "greeting"
+  },
+  "compiled": {
+    "schema": "authoring-spike/1",
+    "definitions": [
+      {
+        "id": "d3",
+        "kind": "text",
+        "value": "Hello, ",
+        "children": []
+      },
+      {
+        "id": "d4",
+        "kind": "text",
+        "source": {
+          "label": "name argument",
+          "origin": "caller"
+        },
+        "value": "Ada",
+        "children": []
+      },
+      {
+        "id": "d5",
+        "kind": "text",
+        "value": "!",
+        "children": []
+      },
+      {
+        "id": "d2",
+        "kind": "paragraph",
+        "children": ["d3", "d4", "d5"]
+      },
+      {
+        "id": "d7",
+        "kind": "text",
+        "value": "Keep your answer concise.",
+        "children": []
+      },
+      {
+        "id": "d6",
+        "kind": "paragraph",
+        "children": ["d7"]
+      },
+      {
+        "id": "d1",
+        "kind": "prompt",
+        "label": "greeting",
+        "children": ["d2", "d6"]
+      }
+    ],
+    "occurrences": [
+      {
+        "id": "root",
+        "definition": "d1"
+      },
+      {
+        "id": "root/children/0",
+        "definition": "d2",
+        "parent": "root"
+      },
+      {
+        "id": "root/children/0/children/0",
+        "definition": "d3",
+        "parent": "root/children/0"
+      },
+      {
+        "id": "root/children/0/children/1",
+        "definition": "d4",
+        "parent": "root/children/0"
+      },
+      {
+        "id": "root/children/0/children/2",
+        "definition": "d5",
+        "parent": "root/children/0"
+      },
+      {
+        "id": "root/children/1",
+        "definition": "d6",
+        "parent": "root"
+      },
+      {
+        "id": "root/children/1/children/0",
+        "definition": "d7",
+        "parent": "root/children/1"
+      }
+    ],
+    "selection": {},
+    "parts": [
+      {
+        "type": "text",
+        "text": "Hello, Ada!\n\nKeep your answer concise."
+      }
+    ],
+    "outputMap": [
+      {
+        "occurrence": "root/children/0/children/0",
+        "part": 0,
+        "start": 0,
+        "end": 7,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/0/children/1",
+        "part": 0,
+        "start": 7,
+        "end": 10,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/0/children/2",
+        "part": 0,
+        "start": 10,
+        "end": 11,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root",
+        "part": 0,
+        "start": 11,
+        "end": 13,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/1/children/0",
+        "part": 0,
+        "start": 13,
+        "end": 38,
+        "relation": "authored"
+      }
+    ],
+    "metrics": {
+      "textCodeUnits": 38,
+      "images": 0,
+      "tokenCount": null
+    }
+  },
+  "turn": {
+    "messages": [
+      {
+        "role": "user",
+        "prompt": {
+          "schema": "authoring-spike/1",
+          "definitions": [
+            {
+              "id": "d3",
+              "kind": "text",
+              "value": "Hello, ",
+              "children": []
+            },
+            {
+              "id": "d4",
+              "kind": "text",
+              "source": {
+                "label": "name argument",
+                "origin": "caller"
+              },
+              "value": "Ada",
+              "children": []
+            },
+            {
+              "id": "d5",
+              "kind": "text",
+              "value": "!",
+              "children": []
+            },
+            {
+              "id": "d2",
+              "kind": "paragraph",
+              "children": ["d3", "d4", "d5"]
+            },
+            {
+              "id": "d7",
+              "kind": "text",
+              "value": "Keep your answer concise.",
+              "children": []
+            },
+            {
+              "id": "d6",
+              "kind": "paragraph",
+              "children": ["d7"]
+            },
+            {
+              "id": "d1",
+              "kind": "prompt",
+              "label": "greeting",
+              "children": ["d2", "d6"]
+            }
+          ],
+          "occurrences": [
+            {
+              "id": "root",
+              "definition": "d1"
+            },
+            {
+              "id": "root/children/0",
+              "definition": "d2",
+              "parent": "root"
+            },
+            {
+              "id": "root/children/0/children/0",
+              "definition": "d3",
+              "parent": "root/children/0"
+            },
+            {
+              "id": "root/children/0/children/1",
+              "definition": "d4",
+              "parent": "root/children/0"
+            },
+            {
+              "id": "root/children/0/children/2",
+              "definition": "d5",
+              "parent": "root/children/0"
+            },
+            {
+              "id": "root/children/1",
+              "definition": "d6",
+              "parent": "root"
+            },
+            {
+              "id": "root/children/1/children/0",
+              "definition": "d7",
+              "parent": "root/children/1"
+            }
+          ],
+          "selection": {},
+          "parts": [
+            {
+              "type": "text",
+              "text": "Hello, Ada!\n\nKeep your answer concise."
+            }
+          ],
+          "outputMap": [
+            {
+              "occurrence": "root/children/0/children/0",
+              "part": 0,
+              "start": 0,
+              "end": 7,
+              "relation": "authored"
+            },
+            {
+              "occurrence": "root/children/0/children/1",
+              "part": 0,
+              "start": 7,
+              "end": 10,
+              "relation": "authored"
+            },
+            {
+              "occurrence": "root/children/0/children/2",
+              "part": 0,
+              "start": 10,
+              "end": 11,
+              "relation": "authored"
+            },
+            {
+              "occurrence": "root",
+              "part": 0,
+              "start": 11,
+              "end": 13,
+              "relation": "generated"
+            },
+            {
+              "occurrence": "root/children/1/children/0",
+              "part": 0,
+              "start": 13,
+              "end": 38,
+              "relation": "authored"
+            }
+          ],
+          "metrics": {
+            "textCodeUnits": 38,
+            "images": 0,
+            "tokenCount": null
+          }
+        }
+      }
+    ]
+  },
+  "prepared": {
+    "schema": "request-envelope-spike/1",
+    "status": "prepared-not-sent",
+    "current": {
+      "messages": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "type": "text",
+              "text": "Hello, Ada!\n\nKeep your answer concise."
+            }
+          ]
+        }
+      ]
+    },
+    "history": {
+      "kind": "none"
+    },
+    "accounting": {
+      "currentTextCodeUnits": 38,
+      "history": "none",
+      "requestTokens": null
+    }
+  }
+}

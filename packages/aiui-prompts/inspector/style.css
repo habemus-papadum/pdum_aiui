@@ -1,0 +1,278 @@
+/* Neutral defaults consume public tokens rather than declaring them. A host
+ * ancestor's --prompt-* value must remain effective. All selectors have zero
+ * specificity and are scoped to mounted inspector/comparison roots.
+ * KaTeX owns its descendant fonts; do not add a universal font reset. */
+:where(.prompt-inspector) {
+  color: var(--prompt-ink, #30343b);
+  background: var(--prompt-surface, #fff);
+  font-family: var(--prompt-font-ui, system-ui, sans-serif);
+  font-size: var(--prompt-font-size, 0.875rem);
+  line-height: var(--prompt-line-height, 1.5);
+  color-scheme: var(--prompt-color-scheme, light);
+}
+:where(.prompt-inspector button, .prompt-inspector summary) {
+  cursor: pointer;
+}
+:where(.prompt-inspector button) {
+  background: transparent;
+  color: inherit;
+  border: 1px solid var(--prompt-rule, #ccd0d5);
+  border-radius: var(--prompt-radius, 0);
+  padding: var(--prompt-control-padding, 0.2rem 0.4rem);
+  font: inherit;
+}
+:where(.prompt-inspector button:disabled) {
+  cursor: default;
+  opacity: 0.6;
+}
+:where(.prompt-inspector :focus-visible) {
+  outline: 2px solid var(--prompt-accent, #2457a7);
+  outline-offset: 2px;
+}
+:where(.prompt-inspector .prompt-toolbar) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--prompt-control-gap, 0.5rem);
+  margin-block: var(--prompt-space, 1rem);
+}
+:where(.prompt-inspector h3) {
+  font-size: var(--prompt-heading-size, 1.1rem);
+  margin-block: 0 var(--prompt-space-small, 0.6rem);
+}
+:where(
+  .prompt-inspector .prompt-record-meta,
+  .prompt-inspector .prompt-note,
+  .prompt-inspector .prompt-partial-fold,
+  .prompt-inspector .prompt-cost-legend
+) {
+  color: var(--prompt-muted, #626973);
+  font-size: var(--prompt-font-size-small, 0.8rem);
+}
+:where(.prompt-inspector .prompt-fingerprint) {
+  overflow-wrap: anywhere;
+  font-family: var(--prompt-font-mono, ui-monospace, SFMono-Regular, Consolas, monospace);
+  font-size: var(--prompt-font-size-small, 0.8rem);
+}
+:where(.prompt-inspector .prompt-panels) {
+  display: grid;
+  grid-template-columns: var(
+      --prompt-panel-columns,
+      minmax(12rem, 0.7fr) minmax(0, 1.1fr) minmax(0, 1fr)
+    );
+  gap: var(--prompt-panel-gap, 1rem);
+  margin-block: var(--prompt-section-gap, 1.5rem);
+  border-block: 1px solid var(--prompt-rule, #ccd0d5);
+  padding-block: var(--prompt-space, 1rem);
+}
+:where(.prompt-inspector .prompt-panels > section) {
+  min-width: 0;
+}
+:where(.prompt-inspector .prompt-tree) {
+  overflow: auto;
+  max-height: var(--prompt-tree-max-height, 42rem);
+}
+:where(.prompt-inspector .prompt-tree-children) {
+  margin-inline-start: var(--prompt-tree-indent, 0.7rem);
+  border-inline-start: 1px solid var(--prompt-rule, #ccd0d5);
+  padding-inline-start: 0.3rem;
+}
+:where(.prompt-inspector .prompt-tree-row) {
+  display: flex;
+  align-items: baseline;
+  gap: 0.15rem;
+  margin-block: var(--prompt-row-gap, 0.2rem);
+}
+:where(.prompt-inspector .prompt-tree-row button) {
+  text-align: start;
+  border: none;
+  font-size: var(--prompt-font-size-small, 0.8rem);
+}
+:where(.prompt-inspector .prompt-tree-row button:last-child) {
+  margin-inline-start: auto;
+  color: var(--prompt-muted, #626973);
+}
+:where(.prompt-inspector .prompt-tree-cost) {
+  margin-inline-start: auto;
+  color: var(--prompt-muted, #626973);
+  font-family: var(--prompt-font-numeric, inherit);
+  font-size: var(--prompt-font-size-small, 0.8rem);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+:where(
+  .prompt-inspector .prompt-tree-row[data-selected="true"],
+  .prompt-inspector .prompt-raw-span[data-selected="true"],
+  .prompt-inspector .prompt-preview [data-selected="true"]
+) {
+  outline: 1px solid var(--prompt-accent, #2457a7);
+  outline-offset: 1px;
+}
+:where(.prompt-inspector .prompt-raw pre, .prompt-inspector .prompt-json pre) {
+  font-family: var(--prompt-font-mono, ui-monospace, SFMono-Regular, Consolas, monospace);
+  font-size: var(--prompt-font-size-mono, 0.8rem);
+  line-height: var(--prompt-code-line-height, 1.55);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  tab-size: 2;
+}
+:where(.prompt-inspector .prompt-raw-span) {
+  cursor: pointer;
+}
+:where(
+  .prompt-inspector .prompt-raw-span:hover,
+  .prompt-inspector .prompt-preview [data-precision]:hover
+) {
+  text-decoration: underline dotted var(--prompt-accent, #2457a7);
+}
+:where(.prompt-inspector .prompt-preview) {
+  font-family: var(--prompt-font-reading, Georgia, serif);
+  font-size: var(--prompt-font-size-reading, 1rem);
+  line-height: var(--prompt-reading-line-height, 1.55);
+}
+:where(
+  .prompt-inspector .prompt-preview h1,
+  .prompt-inspector .prompt-preview h2,
+  .prompt-inspector .prompt-preview h3,
+  .prompt-inspector .prompt-preview h4,
+  .prompt-inspector .prompt-preview h5,
+  .prompt-inspector .prompt-preview h6
+) {
+  font-family: inherit;
+  line-height: 1.25;
+}
+:where(.prompt-inspector .prompt-preview h1) {
+  font-size: 1.5em;
+}
+:where(.prompt-inspector .prompt-preview h2) {
+  font-size: 1.3em;
+}
+:where(.prompt-inspector .prompt-preview h3) {
+  font-size: 1.1em;
+}
+:where(.prompt-inspector .prompt-preview pre, .prompt-inspector .prompt-preview code) {
+  font-family: var(--prompt-font-mono, ui-monospace, SFMono-Regular, Consolas, monospace);
+  font-size: var(--prompt-font-size-mono, 0.8rem);
+  line-height: var(--prompt-code-line-height, 1.55);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+:where(.prompt-inspector .prompt-preview-block) {
+  margin-block: var(--prompt-space-small, 0.6rem);
+}
+:where(.prompt-inspector .prompt-preview table) {
+  width: 100%;
+  border-collapse: collapse;
+}
+:where(.prompt-inspector .prompt-preview td, .prompt-inspector .prompt-preview th) {
+  padding: 0.3rem;
+  border-bottom: 1px solid var(--prompt-rule, #ccd0d5);
+}
+:where(.prompt-inspector .prompt-preview tr:first-child) {
+  font-weight: bold;
+}
+:where(.prompt-inspector .prompt-equation) {
+  overflow-x: auto;
+}
+:where(.prompt-inspector .prompt-partial-fold) {
+  display: block;
+  border-inline-start: 2px solid var(--prompt-accent, #2457a7);
+  padding-inline-start: 0.4rem;
+}
+:where(.prompt-inspector .prompt-provenance) {
+  margin-block: var(--prompt-section-gap, 1.5rem);
+}
+:where(.prompt-inspector .prompt-json) {
+  margin-block: var(--prompt-space-small, 0.6rem);
+}
+:where(.prompt-inspector .prompt-json pre) {
+  max-height: var(--prompt-json-max-height, 28rem);
+  overflow: auto;
+  border-inline-start: 1px solid var(--prompt-rule, #ccd0d5);
+  padding-inline-start: var(--prompt-space-small, 0.6rem);
+}
+:where(.prompt-inspector .prompt-error) {
+  color: var(--prompt-error, #9b3b2a);
+  border: 1px solid var(--prompt-error, #9b3b2a);
+  padding: var(--prompt-space, 1rem);
+}
+:where(.prompt-inspector .prompt-image) {
+  display: block;
+  margin-block: var(--prompt-space-small, 0.6rem);
+}
+:where(.prompt-inspector .prompt-inline-image) {
+  max-width: 100%;
+  margin: var(--prompt-space-small, 0.6rem) 0;
+}
+:where(.prompt-inspector .prompt-inline-image-frame) {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+:where(.prompt-inspector .prompt-inline-image img) {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: var(--prompt-image-max-height, 24rem);
+  object-fit: contain;
+}
+:where(.prompt-inspector .prompt-inline-image figcaption) {
+  margin-block-start: var(--prompt-control-gap, 0.5rem);
+  color: var(--prompt-muted, #626973);
+  font-family: var(--prompt-font-ui, system-ui, sans-serif);
+  font-size: var(--prompt-font-size-small, 0.8rem);
+}
+:where(.prompt-inspector .prompt-image-popup) {
+  position: fixed;
+  z-index: var(--prompt-popup-z-index, 1000);
+  inset-inline-end: var(--prompt-popup-inset, 1rem);
+  inset-block-end: var(--prompt-popup-inset, 1rem);
+  width: min(var(--prompt-popup-width, 28rem), calc(100vw - 4rem));
+  max-height: var(--prompt-popup-max-height, 70vh);
+  overflow: auto;
+  padding: var(--prompt-space, 1rem);
+  border: 1px solid var(--prompt-rule, #ccd0d5);
+  border-radius: var(--prompt-radius, 0);
+  color: var(--prompt-ink, #30343b);
+  background: var(--prompt-surface, #fff);
+}
+:where(.prompt-inspector .prompt-image-popup img) {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: var(--prompt-popup-image-max-height, 45vh);
+  object-fit: contain;
+}
+:where(.prompt-inspector .prompt-image-popup code) {
+  display: block;
+  overflow-wrap: anywhere;
+  margin-block: var(--prompt-control-gap, 0.5rem);
+  font-family: var(--prompt-font-mono, ui-monospace, SFMono-Regular, Consolas, monospace);
+}
+:where(.prompt-comparison) {
+  color: var(--prompt-ink, #30343b);
+  background: var(--prompt-surface, #fff);
+  font-family: var(--prompt-font-ui, system-ui, sans-serif);
+  display: grid;
+  grid-template-columns: var(--prompt-comparison-columns, minmax(0, 1fr) minmax(0, 1fr));
+  gap: var(--prompt-section-gap, 1.5rem);
+}
+:where(.prompt-comparison .prompt-comparison-summary) {
+  grid-column: 1 / -1;
+}
+:where(.prompt-comparison .prompt-panels) {
+  grid-template-columns: var(--prompt-comparison-panel-columns, minmax(0, 1fr) minmax(0, 1fr));
+}
+:where(.prompt-comparison .prompt-tree) {
+  grid-column: 1 / -1;
+  max-height: var(--prompt-comparison-tree-max-height, 15rem);
+}
+@media (max-width: 1000px) {
+  :where(.prompt-inspector .prompt-panels, .prompt-comparison, .prompt-comparison .prompt-panels) {
+    grid-template-columns: var(--prompt-narrow-columns, minmax(0, 1fr));
+  }
+}

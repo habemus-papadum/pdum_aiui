@@ -1,0 +1,827 @@
+{
+  "authored": {
+    "kind": "prompt",
+    "children": [
+      {
+        "kind": "section",
+        "children": [
+          {
+            "kind": "paragraph",
+            "children": [
+              {
+                "kind": "text",
+                "children": [],
+                "value": "The observed value is 4.500 eV."
+              }
+            ]
+          }
+        ],
+        "source": {
+          "label": "reusable evidence",
+          "file": "02-reuse-and-selection.prompt.tsx"
+        },
+        "title": "Evidence"
+      },
+      {
+        "kind": "section",
+        "children": [
+          {
+            "kind": "section",
+            "children": [
+              {
+                "kind": "paragraph",
+                "children": [
+                  {
+                    "kind": "text",
+                    "children": [],
+                    "value": "The observed value is 4.500 eV."
+                  }
+                ]
+              }
+            ],
+            "source": {
+              "label": "reusable evidence",
+              "file": "02-reuse-and-selection.prompt.tsx"
+            },
+            "title": "Evidence"
+          }
+        ],
+        "title": "Independent check"
+      },
+      {
+        "kind": "choice",
+        "children": [
+          {
+            "kind": "section",
+            "children": [
+              {
+                "kind": "paragraph",
+                "children": [
+                  {
+                    "kind": "text",
+                    "children": [],
+                    "value": "The Morse model captures anharmonic vibration and a dissociation limit."
+                  }
+                ]
+              }
+            ],
+            "title": "Background"
+          }
+        ],
+        "choice": "background",
+        "short": [
+          {
+            "kind": "paragraph",
+            "children": [
+              {
+                "kind": "text",
+                "children": [],
+                "value": "Use the Morse model."
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "full": {
+    "schema": "authoring-spike/1",
+    "definitions": [
+      {
+        "id": "d4",
+        "kind": "text",
+        "value": "The observed value is 4.500 eV.",
+        "children": []
+      },
+      {
+        "id": "d3",
+        "kind": "paragraph",
+        "children": ["d4"]
+      },
+      {
+        "id": "d2",
+        "kind": "section",
+        "source": {
+          "label": "reusable evidence",
+          "file": "02-reuse-and-selection.prompt.tsx"
+        },
+        "title": "Evidence",
+        "children": ["d3"]
+      },
+      {
+        "id": "d5",
+        "kind": "section",
+        "title": "Independent check",
+        "children": ["d2"]
+      },
+      {
+        "id": "d9",
+        "kind": "text",
+        "value": "The Morse model captures anharmonic vibration and a dissociation limit.",
+        "children": []
+      },
+      {
+        "id": "d8",
+        "kind": "paragraph",
+        "children": ["d9"]
+      },
+      {
+        "id": "d7",
+        "kind": "section",
+        "title": "Background",
+        "children": ["d8"]
+      },
+      {
+        "id": "d11",
+        "kind": "text",
+        "value": "Use the Morse model.",
+        "children": []
+      },
+      {
+        "id": "d10",
+        "kind": "paragraph",
+        "children": ["d11"]
+      },
+      {
+        "id": "d6",
+        "kind": "choice",
+        "choice": "background",
+        "children": ["d7"],
+        "short": ["d10"]
+      },
+      {
+        "id": "d1",
+        "kind": "prompt",
+        "children": ["d2", "d5", "d6"]
+      }
+    ],
+    "occurrences": [
+      {
+        "id": "root",
+        "definition": "d1"
+      },
+      {
+        "id": "root/children/0",
+        "definition": "d2",
+        "parent": "root",
+        "headingLevel": 1
+      },
+      {
+        "id": "root/children/0/children/0",
+        "definition": "d3",
+        "parent": "root/children/0"
+      },
+      {
+        "id": "root/children/0/children/0/children/0",
+        "definition": "d4",
+        "parent": "root/children/0/children/0"
+      },
+      {
+        "id": "root/children/1",
+        "definition": "d5",
+        "parent": "root",
+        "headingLevel": 1
+      },
+      {
+        "id": "root/children/1/children/0",
+        "definition": "d2",
+        "parent": "root/children/1",
+        "headingLevel": 2
+      },
+      {
+        "id": "root/children/1/children/0/children/0",
+        "definition": "d3",
+        "parent": "root/children/1/children/0"
+      },
+      {
+        "id": "root/children/1/children/0/children/0/children/0",
+        "definition": "d4",
+        "parent": "root/children/1/children/0/children/0"
+      },
+      {
+        "id": "root/children/2",
+        "definition": "d6",
+        "parent": "root",
+        "selected": "full"
+      },
+      {
+        "id": "root/children/2/full/0",
+        "definition": "d7",
+        "parent": "root/children/2",
+        "headingLevel": 1
+      },
+      {
+        "id": "root/children/2/full/0/children/0",
+        "definition": "d8",
+        "parent": "root/children/2/full/0"
+      },
+      {
+        "id": "root/children/2/full/0/children/0/children/0",
+        "definition": "d9",
+        "parent": "root/children/2/full/0/children/0"
+      }
+    ],
+    "selection": {},
+    "parts": [
+      {
+        "type": "text",
+        "text": "# Evidence\n\nThe observed value is 4.500 eV.\n\n# Independent check\n\n## Evidence\n\nThe observed value is 4.500 eV.\n\n# Background\n\nThe Morse model captures anharmonic vibration and a dissociation limit."
+      }
+    ],
+    "outputMap": [
+      {
+        "occurrence": "root/children/0",
+        "part": 0,
+        "start": 0,
+        "end": 2,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0",
+        "part": 0,
+        "start": 2,
+        "end": 10,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/0",
+        "part": 0,
+        "start": 10,
+        "end": 12,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0/children/0/children/0",
+        "part": 0,
+        "start": 12,
+        "end": 43,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root",
+        "part": 0,
+        "start": 43,
+        "end": 45,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/1",
+        "part": 0,
+        "start": 45,
+        "end": 47,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/1",
+        "part": 0,
+        "start": 47,
+        "end": 64,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/1",
+        "part": 0,
+        "start": 64,
+        "end": 66,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/1/children/0",
+        "part": 0,
+        "start": 66,
+        "end": 69,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/1/children/0",
+        "part": 0,
+        "start": 69,
+        "end": 77,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/1/children/0",
+        "part": 0,
+        "start": 77,
+        "end": 79,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/1/children/0/children/0/children/0",
+        "part": 0,
+        "start": 79,
+        "end": 110,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root",
+        "part": 0,
+        "start": 110,
+        "end": 112,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/2/full/0",
+        "part": 0,
+        "start": 112,
+        "end": 114,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/2/full/0",
+        "part": 0,
+        "start": 114,
+        "end": 124,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/2/full/0",
+        "part": 0,
+        "start": 124,
+        "end": 126,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/2/full/0/children/0/children/0",
+        "part": 0,
+        "start": 126,
+        "end": 197,
+        "relation": "authored"
+      }
+    ],
+    "metrics": {
+      "textCodeUnits": 197,
+      "images": 0,
+      "tokenCount": null
+    }
+  },
+  "short": {
+    "schema": "authoring-spike/1",
+    "definitions": [
+      {
+        "id": "d4",
+        "kind": "text",
+        "value": "The observed value is 4.500 eV.",
+        "children": []
+      },
+      {
+        "id": "d3",
+        "kind": "paragraph",
+        "children": ["d4"]
+      },
+      {
+        "id": "d2",
+        "kind": "section",
+        "source": {
+          "label": "reusable evidence",
+          "file": "02-reuse-and-selection.prompt.tsx"
+        },
+        "title": "Evidence",
+        "children": ["d3"]
+      },
+      {
+        "id": "d5",
+        "kind": "section",
+        "title": "Independent check",
+        "children": ["d2"]
+      },
+      {
+        "id": "d9",
+        "kind": "text",
+        "value": "The Morse model captures anharmonic vibration and a dissociation limit.",
+        "children": []
+      },
+      {
+        "id": "d8",
+        "kind": "paragraph",
+        "children": ["d9"]
+      },
+      {
+        "id": "d7",
+        "kind": "section",
+        "title": "Background",
+        "children": ["d8"]
+      },
+      {
+        "id": "d11",
+        "kind": "text",
+        "value": "Use the Morse model.",
+        "children": []
+      },
+      {
+        "id": "d10",
+        "kind": "paragraph",
+        "children": ["d11"]
+      },
+      {
+        "id": "d6",
+        "kind": "choice",
+        "choice": "background",
+        "children": ["d7"],
+        "short": ["d10"]
+      },
+      {
+        "id": "d1",
+        "kind": "prompt",
+        "children": ["d2", "d5", "d6"]
+      }
+    ],
+    "occurrences": [
+      {
+        "id": "root",
+        "definition": "d1"
+      },
+      {
+        "id": "root/children/0",
+        "definition": "d2",
+        "parent": "root",
+        "headingLevel": 1
+      },
+      {
+        "id": "root/children/0/children/0",
+        "definition": "d3",
+        "parent": "root/children/0"
+      },
+      {
+        "id": "root/children/0/children/0/children/0",
+        "definition": "d4",
+        "parent": "root/children/0/children/0"
+      },
+      {
+        "id": "root/children/1",
+        "definition": "d5",
+        "parent": "root",
+        "headingLevel": 1
+      },
+      {
+        "id": "root/children/1/children/0",
+        "definition": "d2",
+        "parent": "root/children/1",
+        "headingLevel": 2
+      },
+      {
+        "id": "root/children/1/children/0/children/0",
+        "definition": "d3",
+        "parent": "root/children/1/children/0"
+      },
+      {
+        "id": "root/children/1/children/0/children/0/children/0",
+        "definition": "d4",
+        "parent": "root/children/1/children/0/children/0"
+      },
+      {
+        "id": "root/children/2",
+        "definition": "d6",
+        "parent": "root",
+        "selected": "short"
+      },
+      {
+        "id": "root/children/2/short/0",
+        "definition": "d10",
+        "parent": "root/children/2"
+      },
+      {
+        "id": "root/children/2/short/0/children/0",
+        "definition": "d11",
+        "parent": "root/children/2/short/0"
+      }
+    ],
+    "selection": {
+      "background": "short"
+    },
+    "parts": [
+      {
+        "type": "text",
+        "text": "# Evidence\n\nThe observed value is 4.500 eV.\n\n# Independent check\n\n## Evidence\n\nThe observed value is 4.500 eV.\n\nUse the Morse model."
+      }
+    ],
+    "outputMap": [
+      {
+        "occurrence": "root/children/0",
+        "part": 0,
+        "start": 0,
+        "end": 2,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0",
+        "part": 0,
+        "start": 2,
+        "end": 10,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/0",
+        "part": 0,
+        "start": 10,
+        "end": 12,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0/children/0/children/0",
+        "part": 0,
+        "start": 12,
+        "end": 43,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root",
+        "part": 0,
+        "start": 43,
+        "end": 45,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/1",
+        "part": 0,
+        "start": 45,
+        "end": 47,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/1",
+        "part": 0,
+        "start": 47,
+        "end": 64,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/1",
+        "part": 0,
+        "start": 64,
+        "end": 66,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/1/children/0",
+        "part": 0,
+        "start": 66,
+        "end": 69,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/1/children/0",
+        "part": 0,
+        "start": 69,
+        "end": 77,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/1/children/0",
+        "part": 0,
+        "start": 77,
+        "end": 79,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/1/children/0/children/0/children/0",
+        "part": 0,
+        "start": 79,
+        "end": 110,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root",
+        "part": 0,
+        "start": 110,
+        "end": 112,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/2/short/0/children/0",
+        "part": 0,
+        "start": 112,
+        "end": 132,
+        "relation": "authored"
+      }
+    ],
+    "metrics": {
+      "textCodeUnits": 132,
+      "images": 0,
+      "tokenCount": null
+    }
+  },
+  "omitted": {
+    "schema": "authoring-spike/1",
+    "definitions": [
+      {
+        "id": "d4",
+        "kind": "text",
+        "value": "The observed value is 4.500 eV.",
+        "children": []
+      },
+      {
+        "id": "d3",
+        "kind": "paragraph",
+        "children": ["d4"]
+      },
+      {
+        "id": "d2",
+        "kind": "section",
+        "source": {
+          "label": "reusable evidence",
+          "file": "02-reuse-and-selection.prompt.tsx"
+        },
+        "title": "Evidence",
+        "children": ["d3"]
+      },
+      {
+        "id": "d5",
+        "kind": "section",
+        "title": "Independent check",
+        "children": ["d2"]
+      },
+      {
+        "id": "d9",
+        "kind": "text",
+        "value": "The Morse model captures anharmonic vibration and a dissociation limit.",
+        "children": []
+      },
+      {
+        "id": "d8",
+        "kind": "paragraph",
+        "children": ["d9"]
+      },
+      {
+        "id": "d7",
+        "kind": "section",
+        "title": "Background",
+        "children": ["d8"]
+      },
+      {
+        "id": "d11",
+        "kind": "text",
+        "value": "Use the Morse model.",
+        "children": []
+      },
+      {
+        "id": "d10",
+        "kind": "paragraph",
+        "children": ["d11"]
+      },
+      {
+        "id": "d6",
+        "kind": "choice",
+        "choice": "background",
+        "children": ["d7"],
+        "short": ["d10"]
+      },
+      {
+        "id": "d1",
+        "kind": "prompt",
+        "children": ["d2", "d5", "d6"]
+      }
+    ],
+    "occurrences": [
+      {
+        "id": "root",
+        "definition": "d1"
+      },
+      {
+        "id": "root/children/0",
+        "definition": "d2",
+        "parent": "root",
+        "headingLevel": 1
+      },
+      {
+        "id": "root/children/0/children/0",
+        "definition": "d3",
+        "parent": "root/children/0"
+      },
+      {
+        "id": "root/children/0/children/0/children/0",
+        "definition": "d4",
+        "parent": "root/children/0/children/0"
+      },
+      {
+        "id": "root/children/1",
+        "definition": "d5",
+        "parent": "root",
+        "headingLevel": 1
+      },
+      {
+        "id": "root/children/1/children/0",
+        "definition": "d2",
+        "parent": "root/children/1",
+        "headingLevel": 2
+      },
+      {
+        "id": "root/children/1/children/0/children/0",
+        "definition": "d3",
+        "parent": "root/children/1/children/0"
+      },
+      {
+        "id": "root/children/1/children/0/children/0/children/0",
+        "definition": "d4",
+        "parent": "root/children/1/children/0/children/0"
+      },
+      {
+        "id": "root/children/2",
+        "definition": "d6",
+        "parent": "root",
+        "selected": "omit"
+      }
+    ],
+    "selection": {
+      "background": "omit"
+    },
+    "parts": [
+      {
+        "type": "text",
+        "text": "# Evidence\n\nThe observed value is 4.500 eV.\n\n# Independent check\n\n## Evidence\n\nThe observed value is 4.500 eV."
+      }
+    ],
+    "outputMap": [
+      {
+        "occurrence": "root/children/0",
+        "part": 0,
+        "start": 0,
+        "end": 2,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0",
+        "part": 0,
+        "start": 2,
+        "end": 10,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/0",
+        "part": 0,
+        "start": 10,
+        "end": 12,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0/children/0/children/0",
+        "part": 0,
+        "start": 12,
+        "end": 43,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root",
+        "part": 0,
+        "start": 43,
+        "end": 45,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/1",
+        "part": 0,
+        "start": 45,
+        "end": 47,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/1",
+        "part": 0,
+        "start": 47,
+        "end": 64,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/1",
+        "part": 0,
+        "start": 64,
+        "end": 66,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/1/children/0",
+        "part": 0,
+        "start": 66,
+        "end": 69,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/1/children/0",
+        "part": 0,
+        "start": 69,
+        "end": 77,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/1/children/0",
+        "part": 0,
+        "start": 77,
+        "end": 79,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/1/children/0/children/0/children/0",
+        "part": 0,
+        "start": 79,
+        "end": 110,
+        "relation": "authored"
+      }
+    ],
+    "metrics": {
+      "textCodeUnits": 110,
+      "images": 0,
+      "tokenCount": null
+    }
+  },
+  "note": "Authored alternatives, not an automatic optimizer. Choosing again never mutates the input."
+}

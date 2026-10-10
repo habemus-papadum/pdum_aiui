@@ -1,0 +1,615 @@
+{
+  "authored": {
+    "kind": "prompt",
+    "children": [
+      {
+        "kind": "section",
+        "children": [
+          {
+            "kind": "paragraph",
+            "children": [
+              {
+                "kind": "text",
+                "children": [],
+                "value": "Preserve the measured precision: D_e = "
+              },
+              {
+                "kind": "text",
+                "children": [],
+                "value": "4.500"
+              },
+              {
+                "kind": "text",
+                "children": [],
+                "value": " eV, a = "
+              },
+              {
+                "kind": "text",
+                "children": [],
+                "value": "1.900"
+              },
+              {
+                "kind": "text",
+                "children": [],
+                "value": " "
+              },
+              {
+                "kind": "text",
+                "children": [],
+                "value": "Å⁻¹, r_e = "
+              },
+              {
+                "kind": "text",
+                "children": [],
+                "value": "0.740"
+              },
+              {
+                "kind": "text",
+                "children": [],
+                "value": " Å."
+              }
+            ]
+          },
+          {
+            "kind": "math",
+            "children": [],
+            "source": {
+              "label": "Morse and Schrödinger equations",
+              "origin": "authored theory"
+            },
+            "value": "\\begin{aligned}\nV(r) &= D_e \\left(1 - e^{-a(r-r_e)}\\right)^2 \\\\\n\\hat{H}\\,\\psi(r) &= E\\,\\psi(r)\n\\end{aligned}",
+            "display": true
+          },
+          {
+            "kind": "xml",
+            "children": [
+              {
+                "kind": "text",
+                "children": [],
+                "source": {
+                  "label": "dissociation energy",
+                  "origin": "experiment/run-42"
+                },
+                "value": "4.500"
+              },
+              {
+                "kind": "xml",
+                "children": [
+                  {
+                    "kind": "text",
+                    "children": [],
+                    "value": "A & B < C"
+                  }
+                ],
+                "tag": "condition",
+                "attributes": {}
+              }
+            ],
+            "tag": "measurement",
+            "attributes": {
+              "unit": "eV",
+              "note": "precision & \"units\""
+            }
+          },
+          {
+            "kind": "paragraph",
+            "children": [
+              {
+                "kind": "text",
+                "children": [],
+                "value": "Inspect the illustrative potential curve:"
+              }
+            ]
+          },
+          {
+            "kind": "image",
+            "children": [],
+            "asset": {
+              "id": "morse-curve",
+              "revision": "fixture-v1",
+              "uri": "fixture:morse-curve",
+              "mimeType": "image/svg+xml",
+              "alt": "Illustrative Morse potential curve; no numerical result is implied.",
+              "width": 360,
+              "height": 160
+            }
+          },
+          {
+            "kind": "paragraph",
+            "children": [
+              {
+                "kind": "text",
+                "children": [],
+                "value": "Explain the dissociation limit and compare it with the measured energy."
+              }
+            ]
+          }
+        ],
+        "title": "Morse potential"
+      }
+    ],
+    "label": "morse-experiment"
+  },
+  "compiled": {
+    "schema": "authoring-spike/1",
+    "definitions": [
+      {
+        "id": "d4",
+        "kind": "text",
+        "value": "Preserve the measured precision: D_e = ",
+        "children": []
+      },
+      {
+        "id": "d5",
+        "kind": "text",
+        "value": "4.500",
+        "children": []
+      },
+      {
+        "id": "d6",
+        "kind": "text",
+        "value": " eV, a = ",
+        "children": []
+      },
+      {
+        "id": "d7",
+        "kind": "text",
+        "value": "1.900",
+        "children": []
+      },
+      {
+        "id": "d8",
+        "kind": "text",
+        "value": " ",
+        "children": []
+      },
+      {
+        "id": "d9",
+        "kind": "text",
+        "value": "Å⁻¹, r_e = ",
+        "children": []
+      },
+      {
+        "id": "d10",
+        "kind": "text",
+        "value": "0.740",
+        "children": []
+      },
+      {
+        "id": "d11",
+        "kind": "text",
+        "value": " Å.",
+        "children": []
+      },
+      {
+        "id": "d3",
+        "kind": "paragraph",
+        "children": ["d4", "d5", "d6", "d7", "d8", "d9", "d10", "d11"]
+      },
+      {
+        "id": "d12",
+        "kind": "math",
+        "source": {
+          "label": "Morse and Schrödinger equations",
+          "origin": "authored theory"
+        },
+        "value": "\\begin{aligned}\nV(r) &= D_e \\left(1 - e^{-a(r-r_e)}\\right)^2 \\\\\n\\hat{H}\\,\\psi(r) &= E\\,\\psi(r)\n\\end{aligned}",
+        "display": true,
+        "children": []
+      },
+      {
+        "id": "d14",
+        "kind": "text",
+        "source": {
+          "label": "dissociation energy",
+          "origin": "experiment/run-42"
+        },
+        "value": "4.500",
+        "children": []
+      },
+      {
+        "id": "d16",
+        "kind": "text",
+        "value": "A & B < C",
+        "children": []
+      },
+      {
+        "id": "d15",
+        "kind": "xml",
+        "tag": "condition",
+        "attributes": {},
+        "children": ["d16"]
+      },
+      {
+        "id": "d13",
+        "kind": "xml",
+        "tag": "measurement",
+        "attributes": {
+          "unit": "eV",
+          "note": "precision & \"units\""
+        },
+        "children": ["d14", "d15"]
+      },
+      {
+        "id": "d18",
+        "kind": "text",
+        "value": "Inspect the illustrative potential curve:",
+        "children": []
+      },
+      {
+        "id": "d17",
+        "kind": "paragraph",
+        "children": ["d18"]
+      },
+      {
+        "id": "d19",
+        "kind": "image",
+        "asset": {
+          "id": "morse-curve",
+          "revision": "fixture-v1",
+          "uri": "fixture:morse-curve",
+          "mimeType": "image/svg+xml",
+          "alt": "Illustrative Morse potential curve; no numerical result is implied.",
+          "width": 360,
+          "height": 160
+        },
+        "children": []
+      },
+      {
+        "id": "d21",
+        "kind": "text",
+        "value": "Explain the dissociation limit and compare it with the measured energy.",
+        "children": []
+      },
+      {
+        "id": "d20",
+        "kind": "paragraph",
+        "children": ["d21"]
+      },
+      {
+        "id": "d2",
+        "kind": "section",
+        "title": "Morse potential",
+        "children": ["d3", "d12", "d13", "d17", "d19", "d20"]
+      },
+      {
+        "id": "d1",
+        "kind": "prompt",
+        "label": "morse-experiment",
+        "children": ["d2"]
+      }
+    ],
+    "occurrences": [
+      {
+        "id": "root",
+        "definition": "d1"
+      },
+      {
+        "id": "root/children/0",
+        "definition": "d2",
+        "parent": "root",
+        "headingLevel": 1
+      },
+      {
+        "id": "root/children/0/children/0",
+        "definition": "d3",
+        "parent": "root/children/0"
+      },
+      {
+        "id": "root/children/0/children/0/children/0",
+        "definition": "d4",
+        "parent": "root/children/0/children/0"
+      },
+      {
+        "id": "root/children/0/children/0/children/1",
+        "definition": "d5",
+        "parent": "root/children/0/children/0"
+      },
+      {
+        "id": "root/children/0/children/0/children/2",
+        "definition": "d6",
+        "parent": "root/children/0/children/0"
+      },
+      {
+        "id": "root/children/0/children/0/children/3",
+        "definition": "d7",
+        "parent": "root/children/0/children/0"
+      },
+      {
+        "id": "root/children/0/children/0/children/4",
+        "definition": "d8",
+        "parent": "root/children/0/children/0"
+      },
+      {
+        "id": "root/children/0/children/0/children/5",
+        "definition": "d9",
+        "parent": "root/children/0/children/0"
+      },
+      {
+        "id": "root/children/0/children/0/children/6",
+        "definition": "d10",
+        "parent": "root/children/0/children/0"
+      },
+      {
+        "id": "root/children/0/children/0/children/7",
+        "definition": "d11",
+        "parent": "root/children/0/children/0"
+      },
+      {
+        "id": "root/children/0/children/1",
+        "definition": "d12",
+        "parent": "root/children/0"
+      },
+      {
+        "id": "root/children/0/children/2",
+        "definition": "d13",
+        "parent": "root/children/0"
+      },
+      {
+        "id": "root/children/0/children/2/children/0",
+        "definition": "d14",
+        "parent": "root/children/0/children/2"
+      },
+      {
+        "id": "root/children/0/children/2/children/1",
+        "definition": "d15",
+        "parent": "root/children/0/children/2"
+      },
+      {
+        "id": "root/children/0/children/2/children/1/children/0",
+        "definition": "d16",
+        "parent": "root/children/0/children/2/children/1"
+      },
+      {
+        "id": "root/children/0/children/3",
+        "definition": "d17",
+        "parent": "root/children/0"
+      },
+      {
+        "id": "root/children/0/children/3/children/0",
+        "definition": "d18",
+        "parent": "root/children/0/children/3"
+      },
+      {
+        "id": "root/children/0/children/4",
+        "definition": "d19",
+        "parent": "root/children/0"
+      },
+      {
+        "id": "root/children/0/children/5",
+        "definition": "d20",
+        "parent": "root/children/0"
+      },
+      {
+        "id": "root/children/0/children/5/children/0",
+        "definition": "d21",
+        "parent": "root/children/0/children/5"
+      }
+    ],
+    "selection": {},
+    "parts": [
+      {
+        "type": "text",
+        "text": "# Morse potential\n\nPreserve the measured precision: D_e = 4.500 eV, a = 1.900 Å⁻¹, r_e = 0.740 Å.\n\n$$\n\\begin{aligned}\nV(r) &= D_e \\left(1 - e^{-a(r-r_e)}\\right)^2 \\\\\n\\hat{H}\\,\\psi(r) &= E\\,\\psi(r)\n\\end{aligned}\n$$\n\n<measurement unit=\"eV\" note=\"precision &amp; &quot;units&quot;\">4.500<condition>A &amp; B &lt; C</condition></measurement>\n\nInspect the illustrative potential curve:\n\n"
+      },
+      {
+        "type": "image",
+        "asset": {
+          "id": "morse-curve",
+          "revision": "fixture-v1",
+          "uri": "fixture:morse-curve",
+          "mimeType": "image/svg+xml",
+          "alt": "Illustrative Morse potential curve; no numerical result is implied.",
+          "width": 360,
+          "height": 160
+        }
+      },
+      {
+        "type": "text",
+        "text": "\n\nExplain the dissociation limit and compare it with the measured energy."
+      }
+    ],
+    "outputMap": [
+      {
+        "occurrence": "root/children/0",
+        "part": 0,
+        "start": 0,
+        "end": 2,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0",
+        "part": 0,
+        "start": 2,
+        "end": 17,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/0",
+        "part": 0,
+        "start": 17,
+        "end": 19,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0/children/0/children/0",
+        "part": 0,
+        "start": 19,
+        "end": 58,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/0/children/0/children/1",
+        "part": 0,
+        "start": 58,
+        "end": 63,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/0/children/0/children/2",
+        "part": 0,
+        "start": 63,
+        "end": 72,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/0/children/0/children/3",
+        "part": 0,
+        "start": 72,
+        "end": 77,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/0/children/0/children/4",
+        "part": 0,
+        "start": 77,
+        "end": 78,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/0/children/0/children/5",
+        "part": 0,
+        "start": 78,
+        "end": 89,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/0/children/0/children/6",
+        "part": 0,
+        "start": 89,
+        "end": 94,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/0/children/0/children/7",
+        "part": 0,
+        "start": 94,
+        "end": 97,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/0",
+        "part": 0,
+        "start": 97,
+        "end": 99,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0/children/1",
+        "part": 0,
+        "start": 99,
+        "end": 102,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0/children/1",
+        "part": 0,
+        "start": 102,
+        "end": 210,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/0/children/1",
+        "part": 0,
+        "start": 210,
+        "end": 213,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0",
+        "part": 0,
+        "start": 213,
+        "end": 215,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0/children/2",
+        "part": 0,
+        "start": 215,
+        "end": 279,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0/children/2/children/0",
+        "part": 0,
+        "start": 279,
+        "end": 284,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/0/children/2/children/1",
+        "part": 0,
+        "start": 284,
+        "end": 295,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0/children/2/children/1/children/0",
+        "part": 0,
+        "start": 295,
+        "end": 311,
+        "relation": "escaped"
+      },
+      {
+        "occurrence": "root/children/0/children/2/children/1",
+        "part": 0,
+        "start": 311,
+        "end": 323,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0/children/2",
+        "part": 0,
+        "start": 323,
+        "end": 337,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0",
+        "part": 0,
+        "start": 337,
+        "end": 339,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0/children/3/children/0",
+        "part": 0,
+        "start": 339,
+        "end": 380,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/0",
+        "part": 0,
+        "start": 380,
+        "end": 382,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0/children/4",
+        "part": 1,
+        "relation": "asset"
+      },
+      {
+        "occurrence": "root/children/0",
+        "part": 2,
+        "start": 0,
+        "end": 2,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0/children/5/children/0",
+        "part": 2,
+        "start": 2,
+        "end": 73,
+        "relation": "authored"
+      }
+    ],
+    "metrics": {
+      "textCodeUnits": 455,
+      "images": 1,
+      "tokenCount": null
+    }
+  },
+  "note": "The asset descriptor is never fetched. SVG is an inspection fixture, not claimed provider support."
+}

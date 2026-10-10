@@ -1,0 +1,257 @@
+{
+  "turn": {
+    "instructions": {
+      "schema": "authoring-spike/1",
+      "definitions": [
+        {
+          "id": "d2",
+          "kind": "text",
+          "value": "Preserve units and lexical precision.",
+          "children": []
+        },
+        {
+          "id": "d1",
+          "kind": "paragraph",
+          "children": ["d2"]
+        }
+      ],
+      "occurrences": [
+        {
+          "id": "root",
+          "definition": "d1"
+        },
+        {
+          "id": "root/children/0",
+          "definition": "d2",
+          "parent": "root"
+        }
+      ],
+      "selection": {},
+      "parts": [
+        {
+          "type": "text",
+          "text": "Preserve units and lexical precision."
+        }
+      ],
+      "outputMap": [
+        {
+          "occurrence": "root/children/0",
+          "part": 0,
+          "start": 0,
+          "end": 37,
+          "relation": "authored"
+        }
+      ],
+      "metrics": {
+        "textCodeUnits": 37,
+        "images": 0,
+        "tokenCount": null
+      }
+    },
+    "messages": [
+      {
+        "role": "user",
+        "prompt": {
+          "schema": "authoring-spike/1",
+          "definitions": [
+            {
+              "id": "d2",
+              "kind": "text",
+              "value": "Reference example: 4.500 eV.",
+              "children": []
+            },
+            {
+              "id": "d1",
+              "kind": "paragraph",
+              "children": ["d2"]
+            }
+          ],
+          "occurrences": [
+            {
+              "id": "root",
+              "definition": "d1"
+            },
+            {
+              "id": "root/children/0",
+              "definition": "d2",
+              "parent": "root"
+            }
+          ],
+          "selection": {},
+          "parts": [
+            {
+              "type": "text",
+              "text": "Reference example: 4.500 eV."
+            }
+          ],
+          "outputMap": [
+            {
+              "occurrence": "root/children/0",
+              "part": 0,
+              "start": 0,
+              "end": 28,
+              "relation": "authored"
+            }
+          ],
+          "metrics": {
+            "textCodeUnits": 28,
+            "images": 0,
+            "tokenCount": null
+          }
+        }
+      },
+      {
+        "role": "assistant",
+        "prompt": {
+          "schema": "authoring-spike/1",
+          "definitions": [
+            {
+              "id": "d2",
+              "kind": "text",
+              "value": "Four significant digits; units are eV.",
+              "children": []
+            },
+            {
+              "id": "d1",
+              "kind": "paragraph",
+              "children": ["d2"]
+            }
+          ],
+          "occurrences": [
+            {
+              "id": "root",
+              "definition": "d1"
+            },
+            {
+              "id": "root/children/0",
+              "definition": "d2",
+              "parent": "root"
+            }
+          ],
+          "selection": {},
+          "parts": [
+            {
+              "type": "text",
+              "text": "Four significant digits; units are eV."
+            }
+          ],
+          "outputMap": [
+            {
+              "occurrence": "root/children/0",
+              "part": 0,
+              "start": 0,
+              "end": 38,
+              "relation": "authored"
+            }
+          ],
+          "metrics": {
+            "textCodeUnits": 38,
+            "images": 0,
+            "tokenCount": null
+          }
+        }
+      },
+      {
+        "role": "user",
+        "prompt": {
+          "schema": "authoring-spike/1",
+          "definitions": [
+            {
+              "id": "d2",
+              "kind": "text",
+              "value": "Now interpret 0.1180 eV.",
+              "children": []
+            },
+            {
+              "id": "d1",
+              "kind": "paragraph",
+              "children": ["d2"]
+            }
+          ],
+          "occurrences": [
+            {
+              "id": "root",
+              "definition": "d1"
+            },
+            {
+              "id": "root/children/0",
+              "definition": "d2",
+              "parent": "root"
+            }
+          ],
+          "selection": {},
+          "parts": [
+            {
+              "type": "text",
+              "text": "Now interpret 0.1180 eV."
+            }
+          ],
+          "outputMap": [
+            {
+              "occurrence": "root/children/0",
+              "part": 0,
+              "start": 0,
+              "end": 24,
+              "relation": "authored"
+            }
+          ],
+          "metrics": {
+            "textCodeUnits": 24,
+            "images": 0,
+            "tokenCount": null
+          }
+        }
+      }
+    ]
+  },
+  "prepared": {
+    "schema": "request-envelope-spike/1",
+    "status": "prepared-not-sent",
+    "current": {
+      "instructions": [
+        {
+          "type": "text",
+          "text": "Preserve units and lexical precision."
+        }
+      ],
+      "messages": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "type": "text",
+              "text": "Reference example: 4.500 eV."
+            }
+          ]
+        },
+        {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "text",
+              "text": "Four significant digits; units are eV."
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "parts": [
+            {
+              "type": "text",
+              "text": "Now interpret 0.1180 eV."
+            }
+          ]
+        }
+      ]
+    },
+    "history": {
+      "kind": "none"
+    },
+    "accounting": {
+      "currentTextCodeUnits": 127,
+      "history": "none",
+      "requestTokens": null
+    }
+  },
+  "note": "These few-shot messages are authored for THIS invocation, not replayed history. Order is beforeInput → input → afterInput. Instructions are a separate current contribution, with no implied provider role or server persistence policy."
+}

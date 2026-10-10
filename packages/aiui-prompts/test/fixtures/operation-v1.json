@@ -1,0 +1,195 @@
+{
+  "fingerprint": "sha256:d0c2274d90c394dec80190e87b0e2ad24a73758a028e213d2c69b55ff7b770d9",
+  "kind": "aiui.prompt.operation",
+  "operation": {
+    "content": "sha256:3c96835d43677196e0bcbefc488580aa215cd203db0543d17f496c119745a25c",
+    "kind": "channel",
+    "meta": {
+      "kind": "science-context"
+    }
+  },
+  "records": {
+    "sha256:3c96835d43677196e0bcbefc488580aa215cd203db0543d17f496c119745a25c": {
+      "compiler": {
+        "name": "aiui-prompts",
+        "version": "1.0.0"
+      },
+      "context": {
+        "reason": "start"
+      },
+      "decisions": [
+        {
+          "facts": [
+            {
+              "path": "reason",
+              "present": true,
+              "value": "start"
+            }
+          ],
+          "kind": "case",
+          "name": "session",
+          "occurrence": "o/0",
+          "selected": "0"
+        },
+        {
+          "kind": "choice",
+          "name": "background",
+          "occurrence": "o/1",
+          "selected": "short"
+        }
+      ],
+      "definitions": [
+        {
+          "children": [
+            {
+              "definition": "d1"
+            },
+            {
+              "definition": "d6"
+            },
+            {
+              "definition": "d11"
+            },
+            {
+              "definition": "d14"
+            }
+          ],
+          "id": "d0",
+          "kind": "prompt"
+        },
+        {
+          "branches": [
+            {
+              "label": "first start",
+              "value": {
+                "definition": "d2"
+              },
+              "when": {
+                "op": "eq",
+                "path": "reason",
+                "value": "start"
+              }
+            }
+          ],
+          "fallback": {
+            "definition": "d4"
+          },
+          "id": "d1",
+          "kind": "case",
+          "name": "session"
+        },
+        {
+          "children": [
+            {
+              "definition": "d3"
+            }
+          ],
+          "id": "d2",
+          "kind": "group"
+        },
+        {
+          "id": "d3",
+          "kind": "text",
+          "value": "Welcome."
+        },
+        {
+          "children": [
+            {
+              "definition": "d5"
+            }
+          ],
+          "id": "d4",
+          "kind": "group"
+        },
+        {
+          "id": "d5",
+          "kind": "text",
+          "value": "Continue."
+        },
+        {
+          "full": {
+            "definition": "d7"
+          },
+          "id": "d6",
+          "kind": "choice",
+          "name": "background",
+          "short": {
+            "definition": "d9"
+          }
+        },
+        {
+          "children": [
+            {
+              "definition": "d8"
+            }
+          ],
+          "id": "d7",
+          "kind": "group"
+        },
+        {
+          "id": "d8",
+          "kind": "text",
+          "value": "Long scientific background."
+        },
+        {
+          "children": [
+            {
+              "definition": "d10"
+            }
+          ],
+          "id": "d9",
+          "kind": "group"
+        },
+        {
+          "id": "d10",
+          "kind": "text",
+          "value": "Brief background."
+        },
+        {
+          "children": [
+            {
+              "definition": "d12"
+            },
+            {
+              "definition": "d13"
+            }
+          ],
+          "id": "d11",
+          "kind": "math",
+          "mode": "display"
+        },
+        {
+          "id": "d12",
+          "kind": "text",
+          "value": "\\hat{H}"
+        },
+        {
+          "id": "d13",
+          "kind": "text",
+          "value": "\\psi=E\\psi"
+        },
+        {
+          "asset": {
+            "alt": "Energy plot",
+            "digest": "sha256:plot-fixture-v1",
+            "id": "plot-1"
+          },
+          "id": "d14",
+          "kind": "image"
+        }
+      ],
+      "fingerprint": "sha256:3c96835d43677196e0bcbefc488580aa215cd203db0543d17f496c119745a25c",
+      "kind": "aiui.prompt",
+      "options": {
+        "selection": {
+          "background": "short"
+        }
+      },
+      "root": {
+        "definition": "d0"
+      },
+      "schemaVersion": 1
+    }
+  },
+  "schemaVersion": 1
+}

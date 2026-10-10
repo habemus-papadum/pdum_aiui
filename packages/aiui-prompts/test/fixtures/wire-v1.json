@@ -1,0 +1,29 @@
+{
+  "assets": {
+    "plot-1": {
+      "digest": "sha256:plot-fixture-v1",
+      "kind": "path",
+      "label": "plot",
+      "value": "./fixtures/energy-plot.png"
+    }
+  },
+  "capturedAt": "2026-10-09T12:00:00.000Z",
+  "kind": "aiui.prompt.wire",
+  "lowerer": "aiui-prompts-delivery/1.0.0",
+  "operation": "sha256:d0c2274d90c394dec80190e87b0e2ad24a73758a028e213d2c69b55ff7b770d9",
+  "payload": {
+    "method": "notifications/claude/channel",
+    "params": {
+      "content": "Welcome.\n\nBrief background.\n\n$$\n\\hat{H}\\psi=E\\psi\n$$\n\n[plot located at ./fixtures/energy-plot.png]",
+      "meta": {
+        "kind": "science-context"
+      }
+    }
+  },
+  "schemaVersion": 1,
+  "status": "captured",
+  "target": {
+    "kind": "claude-channel/1"
+  },
+  "transportId": "fixture-channel-1"
+}

@@ -1,0 +1,29 @@
+/* Independent host example, not a dark variant of the FAI Labs design system.
+ * An opt-in compact terminal palette using only public prompt tokens. */
+:where([data-prompt-theme="terminal"]) {
+  --prompt-color-scheme: dark;
+  --prompt-surface: #17191d;
+  --prompt-ink: #e6e9ef;
+  --prompt-muted: #a5aebb;
+  --prompt-rule: #535c6a;
+  --prompt-accent: #88bfff;
+  --prompt-error: #ffa99b;
+  --prompt-font-ui: system-ui, sans-serif;
+  --prompt-font-reading: system-ui, sans-serif;
+  --prompt-font-mono: ui-monospace, SFMono-Regular, Consolas, monospace;
+  --prompt-font-numeric: ui-monospace, SFMono-Regular, Consolas, monospace;
+  --prompt-font-size: 0.8rem;
+  --prompt-font-size-small: 0.7rem;
+  --prompt-font-size-reading: 0.9rem;
+  --prompt-font-size-mono: 0.75rem;
+  --prompt-line-height: 1.4;
+  --prompt-reading-line-height: 1.5;
+  --prompt-space: 0.65rem;
+  --prompt-space-small: 0.4rem;
+  --prompt-section-gap: 1rem;
+  --prompt-panel-gap: 0.7rem;
+  --prompt-control-gap: 0.35rem;
+  --prompt-control-padding: 0.15rem 0.3rem;
+  --prompt-row-gap: 0.1rem;
+  --prompt-image-max-height: 18rem;
+}

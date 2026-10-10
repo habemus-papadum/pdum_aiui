@@ -1,0 +1,162 @@
+{
+  "full": {
+    "schema": "request-envelope-spike/1",
+    "status": "prepared-not-sent",
+    "current": {
+      "messages": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "type": "text",
+              "text": "Explain the newly measured spectrum.\n\nRepeat the derivation of the Morse model before interpreting the new data."
+            }
+          ]
+        }
+      ]
+    },
+    "history": {
+      "kind": "messages",
+      "messages": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "type": "text",
+              "text": "Use a Morse potential with D_e = 4.500 eV."
+            }
+          ]
+        },
+        {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "text",
+              "text": "I will keep that parameter fixed."
+            }
+          ]
+        }
+      ]
+    },
+    "accounting": {
+      "currentTextCodeUnits": 112,
+      "history": "preserved-unmeasured",
+      "requestTokens": null
+    }
+  },
+  "selected": {
+    "schema": "request-envelope-spike/1",
+    "status": "prepared-not-sent",
+    "current": {
+      "messages": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "type": "text",
+              "text": "Explain the newly measured spectrum."
+            }
+          ]
+        }
+      ]
+    },
+    "history": {
+      "kind": "messages",
+      "messages": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "type": "text",
+              "text": "Use a Morse potential with D_e = 4.500 eV."
+            }
+          ]
+        },
+        {
+          "role": "assistant",
+          "parts": [
+            {
+              "type": "text",
+              "text": "I will keep that parameter fixed."
+            }
+          ]
+        }
+      ]
+    },
+    "accounting": {
+      "currentTextCodeUnits": 36,
+      "history": "preserved-unmeasured",
+      "requestTokens": null
+    }
+  },
+  "remote": {
+    "schema": "request-envelope-spike/1",
+    "status": "prepared-not-sent",
+    "current": {
+      "messages": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "type": "text",
+              "text": "Explain the newly measured spectrum."
+            }
+          ]
+        }
+      ]
+    },
+    "history": {
+      "kind": "remote",
+      "provider": "example-provider",
+      "reference": {
+        "kind": "conversation",
+        "id": "conversation-42"
+      }
+    },
+    "accounting": {
+      "currentTextCodeUnits": 36,
+      "history": "unknown-server-state",
+      "requestTokens": null
+    }
+  },
+  "providerReplay": {
+    "schema": "request-envelope-spike/1",
+    "status": "prepared-not-sent",
+    "current": {
+      "messages": [
+        {
+          "role": "user",
+          "parts": [
+            {
+              "type": "text",
+              "text": "Explain the newly measured spectrum."
+            }
+          ]
+        }
+      ]
+    },
+    "history": {
+      "kind": "provider-items",
+      "protocol": "example-provider/replay-v1",
+      "items": [
+        {
+          "type": "function_call",
+          "call_id": "call-1",
+          "name": "measure",
+          "arguments": "{}"
+        },
+        {
+          "type": "function_call_output",
+          "call_id": "call-1",
+          "output": "4.500 eV"
+        }
+      ]
+    },
+    "accounting": {
+      "currentTextCodeUnits": 36,
+      "history": "preserved-unmeasured",
+      "requestTokens": null
+    }
+  },
+  "note": "Only the current prompt is selected. Replay order and IDs remain unchanged; remote state stays opaque and its size unknown. A future provider adapter decides how this envelope becomes wire data."
+}

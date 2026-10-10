@@ -1,0 +1,42 @@
+{
+  "name": "@habemus-papadum/aiui-prompts-authoring-spike",
+  "version": "0.21.0+dev",
+  "description": "Native TSX syntax and prompt-turn-history workflow spike.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/habemus-papadum/pdum_aiui.git",
+    "directory": "packages/aiui-prompts/spikes/authoring"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./jsx-runtime": "./src/jsx-runtime.ts",
+    "./jsx-dev-runtime": "./src/jsx-dev-runtime.ts"
+  },
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "dev": "vite --config vite.playground.config.ts",
+    "build:playground": "vite build --config vite.playground.config.ts",
+    "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p playground/tsconfig.json",
+    "test": "vitest run",
+    "examples": "tsx --tsconfig tsconfig.json src/examples/run.ts",
+    "examples:write": "tsx --tsconfig tsconfig.json src/examples/run.ts --write && biome format --write expected",
+    "examples:check": "tsx --tsconfig tsconfig.json src/examples/run.ts --check",
+    "lint": "biome check ."
+  },
+  "devDependencies": {
+    "@habemus-papadum/aiui-design": "workspace:^",
+    "@habemus-papadum/aiui-build-config": "workspace:^",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "vite": "catalog:",
+    "@types/node": "^26.1.0"
+  },
+  "private": true
+}

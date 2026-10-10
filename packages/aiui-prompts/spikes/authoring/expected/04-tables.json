@@ -1,0 +1,567 @@
+{
+  "authored": {
+    "kind": "prompt",
+    "children": [
+      {
+        "kind": "section",
+        "children": [
+          {
+            "kind": "section",
+            "children": [
+              {
+                "kind": "join",
+                "children": [
+                  {
+                    "kind": "text",
+                    "children": [],
+                    "value": "| Metric | Value |"
+                  },
+                  {
+                    "kind": "text",
+                    "children": [],
+                    "value": "| --- | --- |"
+                  },
+                  {
+                    "kind": "text",
+                    "children": [],
+                    "value": "| Static | 100 |"
+                  },
+                  {
+                    "kind": "group",
+                    "children": [
+                      {
+                        "kind": "text",
+                        "children": [],
+                        "value": "| Dynamic | "
+                      },
+                      {
+                        "kind": "text",
+                        "children": [],
+                        "source": {
+                          "label": "dynamic cell",
+                          "origin": "run-42"
+                        },
+                        "value": "42"
+                      },
+                      {
+                        "kind": "text",
+                        "children": [],
+                        "value": " |"
+                      }
+                    ]
+                  }
+                ],
+                "separator": "\n"
+              }
+            ],
+            "title": "Dynamic cell"
+          },
+          {
+            "kind": "section",
+            "children": [
+              {
+                "kind": "join",
+                "children": [
+                  {
+                    "kind": "text",
+                    "children": [],
+                    "value": "| Segment | Trials | Conversions |"
+                  },
+                  {
+                    "kind": "text",
+                    "children": [],
+                    "value": "| --- | --- | --- |"
+                  },
+                  {
+                    "kind": "text",
+                    "children": [],
+                    "value": "| Organic | 52 | 21 |"
+                  },
+                  {
+                    "kind": "text",
+                    "children": [],
+                    "source": {
+                      "label": "Region A",
+                      "origin": "regional-summary"
+                    },
+                    "value": "| Region A | 45 | 18 |"
+                  },
+                  {
+                    "kind": "text",
+                    "children": [],
+                    "source": {
+                      "label": "Region B",
+                      "origin": "regional-summary"
+                    },
+                    "value": "| Region B | 38 | 22 |"
+                  },
+                  {
+                    "kind": "text",
+                    "children": [],
+                    "value": "| Paid | 61 | 28 |"
+                  }
+                ],
+                "separator": "\n"
+              }
+            ],
+            "title": "Multiple dynamic rows"
+          }
+        ],
+        "title": "Table fixtures"
+      }
+    ]
+  },
+  "compiled": {
+    "schema": "authoring-spike/1",
+    "definitions": [
+      {
+        "id": "d5",
+        "kind": "text",
+        "value": "| Metric | Value |",
+        "children": []
+      },
+      {
+        "id": "d6",
+        "kind": "text",
+        "value": "| --- | --- |",
+        "children": []
+      },
+      {
+        "id": "d7",
+        "kind": "text",
+        "value": "| Static | 100 |",
+        "children": []
+      },
+      {
+        "id": "d9",
+        "kind": "text",
+        "value": "| Dynamic | ",
+        "children": []
+      },
+      {
+        "id": "d10",
+        "kind": "text",
+        "source": {
+          "label": "dynamic cell",
+          "origin": "run-42"
+        },
+        "value": "42",
+        "children": []
+      },
+      {
+        "id": "d11",
+        "kind": "text",
+        "value": " |",
+        "children": []
+      },
+      {
+        "id": "d8",
+        "kind": "group",
+        "children": ["d9", "d10", "d11"]
+      },
+      {
+        "id": "d4",
+        "kind": "join",
+        "separator": "\n",
+        "children": ["d5", "d6", "d7", "d8"]
+      },
+      {
+        "id": "d3",
+        "kind": "section",
+        "title": "Dynamic cell",
+        "children": ["d4"]
+      },
+      {
+        "id": "d14",
+        "kind": "text",
+        "value": "| Segment | Trials | Conversions |",
+        "children": []
+      },
+      {
+        "id": "d15",
+        "kind": "text",
+        "value": "| --- | --- | --- |",
+        "children": []
+      },
+      {
+        "id": "d16",
+        "kind": "text",
+        "value": "| Organic | 52 | 21 |",
+        "children": []
+      },
+      {
+        "id": "d17",
+        "kind": "text",
+        "source": {
+          "label": "Region A",
+          "origin": "regional-summary"
+        },
+        "value": "| Region A | 45 | 18 |",
+        "children": []
+      },
+      {
+        "id": "d18",
+        "kind": "text",
+        "source": {
+          "label": "Region B",
+          "origin": "regional-summary"
+        },
+        "value": "| Region B | 38 | 22 |",
+        "children": []
+      },
+      {
+        "id": "d19",
+        "kind": "text",
+        "value": "| Paid | 61 | 28 |",
+        "children": []
+      },
+      {
+        "id": "d13",
+        "kind": "join",
+        "separator": "\n",
+        "children": ["d14", "d15", "d16", "d17", "d18", "d19"]
+      },
+      {
+        "id": "d12",
+        "kind": "section",
+        "title": "Multiple dynamic rows",
+        "children": ["d13"]
+      },
+      {
+        "id": "d2",
+        "kind": "section",
+        "title": "Table fixtures",
+        "children": ["d3", "d12"]
+      },
+      {
+        "id": "d1",
+        "kind": "prompt",
+        "children": ["d2"]
+      }
+    ],
+    "occurrences": [
+      {
+        "id": "root",
+        "definition": "d1"
+      },
+      {
+        "id": "root/children/0",
+        "definition": "d2",
+        "parent": "root",
+        "headingLevel": 1
+      },
+      {
+        "id": "root/children/0/children/0",
+        "definition": "d3",
+        "parent": "root/children/0",
+        "headingLevel": 2
+      },
+      {
+        "id": "root/children/0/children/0/children/0",
+        "definition": "d4",
+        "parent": "root/children/0/children/0"
+      },
+      {
+        "id": "root/children/0/children/0/children/0/children/0",
+        "definition": "d5",
+        "parent": "root/children/0/children/0/children/0"
+      },
+      {
+        "id": "root/children/0/children/0/children/0/children/1",
+        "definition": "d6",
+        "parent": "root/children/0/children/0/children/0"
+      },
+      {
+        "id": "root/children/0/children/0/children/0/children/2",
+        "definition": "d7",
+        "parent": "root/children/0/children/0/children/0"
+      },
+      {
+        "id": "root/children/0/children/0/children/0/children/3",
+        "definition": "d8",
+        "parent": "root/children/0/children/0/children/0"
+      },
+      {
+        "id": "root/children/0/children/0/children/0/children/3/children/0",
+        "definition": "d9",
+        "parent": "root/children/0/children/0/children/0/children/3"
+      },
+      {
+        "id": "root/children/0/children/0/children/0/children/3/children/1",
+        "definition": "d10",
+        "parent": "root/children/0/children/0/children/0/children/3"
+      },
+      {
+        "id": "root/children/0/children/0/children/0/children/3/children/2",
+        "definition": "d11",
+        "parent": "root/children/0/children/0/children/0/children/3"
+      },
+      {
+        "id": "root/children/0/children/1",
+        "definition": "d12",
+        "parent": "root/children/0",
+        "headingLevel": 2
+      },
+      {
+        "id": "root/children/0/children/1/children/0",
+        "definition": "d13",
+        "parent": "root/children/0/children/1"
+      },
+      {
+        "id": "root/children/0/children/1/children/0/children/0",
+        "definition": "d14",
+        "parent": "root/children/0/children/1/children/0"
+      },
+      {
+        "id": "root/children/0/children/1/children/0/children/1",
+        "definition": "d15",
+        "parent": "root/children/0/children/1/children/0"
+      },
+      {
+        "id": "root/children/0/children/1/children/0/children/2",
+        "definition": "d16",
+        "parent": "root/children/0/children/1/children/0"
+      },
+      {
+        "id": "root/children/0/children/1/children/0/children/3",
+        "definition": "d17",
+        "parent": "root/children/0/children/1/children/0"
+      },
+      {
+        "id": "root/children/0/children/1/children/0/children/4",
+        "definition": "d18",
+        "parent": "root/children/0/children/1/children/0"
+      },
+      {
+        "id": "root/children/0/children/1/children/0/children/5",
+        "definition": "d19",
+        "parent": "root/children/0/children/1/children/0"
+      }
+    ],
+    "selection": {},
+    "parts": [
+      {
+        "type": "text",
+        "text": "# Table fixtures\n\n## Dynamic cell\n\n| Metric | Value |\n| --- | --- |\n| Static | 100 |\n| Dynamic | 42 |\n\n## Multiple dynamic rows\n\n| Segment | Trials | Conversions |\n| --- | --- | --- |\n| Organic | 52 | 21 |\n| Region A | 45 | 18 |\n| Region B | 38 | 22 |\n| Paid | 61 | 28 |"
+      }
+    ],
+    "outputMap": [
+      {
+        "occurrence": "root/children/0",
+        "part": 0,
+        "start": 0,
+        "end": 2,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0",
+        "part": 0,
+        "start": 2,
+        "end": 16,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/0",
+        "part": 0,
+        "start": 16,
+        "end": 18,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0/children/0",
+        "part": 0,
+        "start": 18,
+        "end": 21,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0/children/0",
+        "part": 0,
+        "start": 21,
+        "end": 33,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/0/children/0",
+        "part": 0,
+        "start": 33,
+        "end": 35,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0/children/0/children/0/children/0",
+        "part": 0,
+        "start": 35,
+        "end": 53,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/0/children/0/children/0",
+        "part": 0,
+        "start": 53,
+        "end": 54,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0/children/0/children/0/children/1",
+        "part": 0,
+        "start": 54,
+        "end": 67,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/0/children/0/children/0",
+        "part": 0,
+        "start": 67,
+        "end": 68,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0/children/0/children/0/children/2",
+        "part": 0,
+        "start": 68,
+        "end": 84,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/0/children/0/children/0",
+        "part": 0,
+        "start": 84,
+        "end": 85,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0/children/0/children/0/children/3/children/0",
+        "part": 0,
+        "start": 85,
+        "end": 97,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/0/children/0/children/0/children/3/children/1",
+        "part": 0,
+        "start": 97,
+        "end": 99,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/0/children/0/children/0/children/3/children/2",
+        "part": 0,
+        "start": 99,
+        "end": 101,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/0",
+        "part": 0,
+        "start": 101,
+        "end": 103,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0/children/1",
+        "part": 0,
+        "start": 103,
+        "end": 106,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0/children/1",
+        "part": 0,
+        "start": 106,
+        "end": 127,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/0/children/1",
+        "part": 0,
+        "start": 127,
+        "end": 129,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0/children/1/children/0/children/0",
+        "part": 0,
+        "start": 129,
+        "end": 163,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/0/children/1/children/0",
+        "part": 0,
+        "start": 163,
+        "end": 164,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0/children/1/children/0/children/1",
+        "part": 0,
+        "start": 164,
+        "end": 183,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/0/children/1/children/0",
+        "part": 0,
+        "start": 183,
+        "end": 184,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0/children/1/children/0/children/2",
+        "part": 0,
+        "start": 184,
+        "end": 205,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/0/children/1/children/0",
+        "part": 0,
+        "start": 205,
+        "end": 206,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0/children/1/children/0/children/3",
+        "part": 0,
+        "start": 206,
+        "end": 228,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/0/children/1/children/0",
+        "part": 0,
+        "start": 228,
+        "end": 229,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0/children/1/children/0/children/4",
+        "part": 0,
+        "start": 229,
+        "end": 251,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/0/children/1/children/0",
+        "part": 0,
+        "start": 251,
+        "end": 252,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0/children/1/children/0/children/5",
+        "part": 0,
+        "start": 252,
+        "end": 270,
+        "relation": "authored"
+      }
+    ],
+    "metrics": {
+      "textCodeUnits": 270,
+      "images": 0,
+      "tokenCount": null
+    }
+  },
+  "note": "The preview must parse the whole assembled table. Dynamic-cell attribution survives text coalescing; table semantic types are future work."
+}

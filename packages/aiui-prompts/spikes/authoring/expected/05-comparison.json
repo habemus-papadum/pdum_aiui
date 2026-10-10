@@ -1,0 +1,281 @@
+{
+  "before": {
+    "schema": "authoring-spike/1",
+    "definitions": [
+      {
+        "id": "d4",
+        "kind": "text",
+        "value": "Report the energy.",
+        "children": []
+      },
+      {
+        "id": "d3",
+        "kind": "paragraph",
+        "children": ["d4"]
+      },
+      {
+        "id": "d5",
+        "kind": "image",
+        "asset": {
+          "id": "measurement-plot",
+          "revision": "pixels-a",
+          "uri": "fixture:measurement-plot",
+          "mimeType": "image/png",
+          "alt": "Measurement plot",
+          "width": 320,
+          "height": 200
+        },
+        "children": []
+      },
+      {
+        "id": "d2",
+        "kind": "section",
+        "source": {
+          "label": "analysis instruction"
+        },
+        "title": "Analysis",
+        "children": ["d3", "d5"]
+      },
+      {
+        "id": "d1",
+        "kind": "prompt",
+        "children": ["d2"]
+      }
+    ],
+    "occurrences": [
+      {
+        "id": "root",
+        "definition": "d1"
+      },
+      {
+        "id": "root/children/0",
+        "definition": "d2",
+        "parent": "root",
+        "headingLevel": 1
+      },
+      {
+        "id": "root/children/0/children/0",
+        "definition": "d3",
+        "parent": "root/children/0"
+      },
+      {
+        "id": "root/children/0/children/0/children/0",
+        "definition": "d4",
+        "parent": "root/children/0/children/0"
+      },
+      {
+        "id": "root/children/0/children/1",
+        "definition": "d5",
+        "parent": "root/children/0"
+      }
+    ],
+    "selection": {},
+    "parts": [
+      {
+        "type": "text",
+        "text": "# Analysis\n\nReport the energy.\n\n"
+      },
+      {
+        "type": "image",
+        "asset": {
+          "id": "measurement-plot",
+          "revision": "pixels-a",
+          "uri": "fixture:measurement-plot",
+          "mimeType": "image/png",
+          "alt": "Measurement plot",
+          "width": 320,
+          "height": 200
+        }
+      }
+    ],
+    "outputMap": [
+      {
+        "occurrence": "root/children/0",
+        "part": 0,
+        "start": 0,
+        "end": 2,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0",
+        "part": 0,
+        "start": 2,
+        "end": 10,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/0",
+        "part": 0,
+        "start": 10,
+        "end": 12,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0/children/0/children/0",
+        "part": 0,
+        "start": 12,
+        "end": 30,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/0",
+        "part": 0,
+        "start": 30,
+        "end": 32,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0/children/1",
+        "part": 1,
+        "relation": "asset"
+      }
+    ],
+    "metrics": {
+      "textCodeUnits": 32,
+      "images": 1,
+      "tokenCount": null
+    }
+  },
+  "after": {
+    "schema": "authoring-spike/1",
+    "definitions": [
+      {
+        "id": "d4",
+        "kind": "text",
+        "value": "Report energy in eV and preserve all four significant digits.",
+        "children": []
+      },
+      {
+        "id": "d3",
+        "kind": "paragraph",
+        "children": ["d4"]
+      },
+      {
+        "id": "d5",
+        "kind": "image",
+        "asset": {
+          "id": "measurement-plot",
+          "revision": "pixels-b",
+          "uri": "fixture:measurement-plot",
+          "mimeType": "image/png",
+          "alt": "Measurement plot",
+          "width": 320,
+          "height": 200
+        },
+        "children": []
+      },
+      {
+        "id": "d2",
+        "kind": "section",
+        "source": {
+          "label": "analysis instruction"
+        },
+        "title": "Analysis",
+        "children": ["d3", "d5"]
+      },
+      {
+        "id": "d1",
+        "kind": "prompt",
+        "children": ["d2"]
+      }
+    ],
+    "occurrences": [
+      {
+        "id": "root",
+        "definition": "d1"
+      },
+      {
+        "id": "root/children/0",
+        "definition": "d2",
+        "parent": "root",
+        "headingLevel": 1
+      },
+      {
+        "id": "root/children/0/children/0",
+        "definition": "d3",
+        "parent": "root/children/0"
+      },
+      {
+        "id": "root/children/0/children/0/children/0",
+        "definition": "d4",
+        "parent": "root/children/0/children/0"
+      },
+      {
+        "id": "root/children/0/children/1",
+        "definition": "d5",
+        "parent": "root/children/0"
+      }
+    ],
+    "selection": {},
+    "parts": [
+      {
+        "type": "text",
+        "text": "# Analysis\n\nReport energy in eV and preserve all four significant digits.\n\n"
+      },
+      {
+        "type": "image",
+        "asset": {
+          "id": "measurement-plot",
+          "revision": "pixels-b",
+          "uri": "fixture:measurement-plot",
+          "mimeType": "image/png",
+          "alt": "Measurement plot",
+          "width": 320,
+          "height": 200
+        }
+      }
+    ],
+    "outputMap": [
+      {
+        "occurrence": "root/children/0",
+        "part": 0,
+        "start": 0,
+        "end": 2,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0",
+        "part": 0,
+        "start": 2,
+        "end": 10,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/0",
+        "part": 0,
+        "start": 10,
+        "end": 12,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0/children/0/children/0",
+        "part": 0,
+        "start": 12,
+        "end": 73,
+        "relation": "authored"
+      },
+      {
+        "occurrence": "root/children/0",
+        "part": 0,
+        "start": 73,
+        "end": 75,
+        "relation": "generated"
+      },
+      {
+        "occurrence": "root/children/0/children/1",
+        "part": 1,
+        "relation": "asset"
+      }
+    ],
+    "metrics": {
+      "textCodeUnits": 75,
+      "images": 1,
+      "tokenCount": null
+    }
+  },
+  "expectedComparison": {
+    "text": "The instruction changed; its source label stayed the same.",
+    "image": "Asset revision changed despite equal dimensions, alt text, and URI.",
+    "implementation": "No diff algorithm in this spike. Both complete inputs are available to the independent UI fixture."
+  }
+}

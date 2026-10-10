@@ -1,5 +1,7 @@
 packages:
   - "packages/*"
+  # Private prompt experiments live with their future foundation package.
+  - "packages/aiui-prompts/spikes/*"
   # In-repo demo apps (`pnpm new-demo <name>`): never published, but full workspace
   # members so their `@habemus-papadum/*` deps resolve to source via `workspace:^`.
   # Note this also enrolls them in version lockstep — scripts/versioning.mjs reads
