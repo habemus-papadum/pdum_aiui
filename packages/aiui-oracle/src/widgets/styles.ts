@@ -89,6 +89,10 @@ export const ORACLE_WIDGET_STYLES = `
   .aiui-oracle-entry-json { margin: 2px 0 4px 7.1rem; padding: 5px; border-radius: var(--aiui-radius, 6px);
     background: color-mix(in srgb, currentColor 8%, transparent); font-size: 11px;
     overflow-x: auto; }
+  /* the stored prompt record, previewed by the toolkit's inspector (its own
+     tokens ride the aiui bridge; only the placement is ours) */
+  .aiui-oracle-entry-prompt { margin: 2px 0 4px 7.1rem; }
+  .aiui-prompt-record-loading { font-size: 11px; opacity: 0.6; }
 
   /* the park banner — for someone who walked away, not someone watching */
   .aiui-oracle-park { display: flex; align-items: center; gap: 8px; padding: 6px 10px;

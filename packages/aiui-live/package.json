@@ -1,7 +1,7 @@
 {
   "name": "@habemus-papadum/aiui-live",
   "version": "0.21.0+dev",
-  "description": "The live oracle — a full-duplex voice front (OpenAI GPT-Live over WebRTC/WebSocket) with pluggable delegation backends: local tools, hosted Responses, or Claude Code.",
+  "description": "The live oracle \u2014 a full-duplex voice front (OpenAI GPT-Live over WebRTC/WebSocket) with pluggable delegation backends: local tools, hosted Responses, or Claude Code.",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -64,6 +64,7 @@
   },
   "dependencies": {
     "@habemus-papadum/aiui-prompts": "workspace:^",
+    "@habemus-papadum/aiui-prompts-inspector": "workspace:^",
     "@habemus-papadum/aiui-viz": "workspace:^",
     "@solidjs/web": "catalog:solid",
     "solid-js": "catalog:solid",

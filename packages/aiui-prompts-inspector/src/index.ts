@@ -12,6 +12,7 @@ export {
   parsePreview,
 } from "./preview.ts";
 export { canonicalText, comparePrompts } from "./state.ts";
+export { INSPECTOR_STYLES } from "./styles.ts";
 export {
   type InspectorOptions,
   type MountedInspector,

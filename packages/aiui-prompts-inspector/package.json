@@ -54,7 +54,8 @@
     "test": "vitest run",
     "lint": "biome check src bench package.json tsconfig.json tsconfig.test.json vite.config.ts vite.bench.config.ts",
     "dev": "vite --config vite.bench.config.ts",
-    "build:bench": "vite build --config vite.bench.config.ts"
+    "build:bench": "vite build --config vite.bench.config.ts",
+    "gen:styles": "node scripts/gen-styles.mjs"
   },
   "devDependencies": {
     "@habemus-papadum/aiui-build-config": "workspace:^",

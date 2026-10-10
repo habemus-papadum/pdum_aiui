@@ -110,3 +110,20 @@ describe("activityLine", () => {
     expect(activityLine({ ...done, runningTool: "kick" }).text).toBe("doing: kick");
   });
 });
+
+describe("entryLine", () => {
+  it("says when a config ack carries the instructions' semantic record", () => {
+    const bare = entry({ kind: "config", effective: { tools: [] } });
+    expect(entryLine(bare)).toBe("session config acked (0 tools)");
+    const recorded = entry({
+      kind: "config",
+      sent: { instructions: "be helpful" },
+      effective: { tools: [{}] },
+      drift: ["tool not held: added"],
+      prompt: { kind: "aiui.prompt" } as never,
+    });
+    expect(entryLine(recorded)).toBe(
+      "session config acked (1 tools) · prompt recorded DRIFT: tool not held: added",
+    );
+  });
+});

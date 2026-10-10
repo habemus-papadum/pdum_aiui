@@ -32,7 +32,7 @@ import {
   tool,
 } from "@anthropic-ai/claude-agent-sdk";
 import { z } from "zod";
-import { delegationMessage } from "../delegators/messages";
+import { delegationMessage } from "../delegators/messages.ts";
 import { type DelegationRequest, type Delegator, runTool } from "../types.ts";
 
 export interface ClaudeDelegatorOptions {
@@ -60,9 +60,9 @@ export interface ClaudeDelegatorOptions {
 
 export const DEFAULT_CLAUDE_TOOLS = ["Read", "Grep", "Glob", "Bash", "WebFetch"];
 
-import { CLAUDE_LIVE_BRIEF } from "./brief";
+import { CLAUDE_LIVE_BRIEF } from "./brief.ts";
 
-export { CLAUDE_LIVE_BRIEF } from "./brief";
+export { CLAUDE_LIVE_BRIEF } from "./brief.ts";
 
 interface Turn {
   req: DelegationRequest;
@@ -71,7 +71,7 @@ interface Turn {
   reject(error: Error): void;
 }
 
-export { parameterList } from "../delegators/messages";
+export { parameterList } from "../delegators/messages.ts";
 
 export function claudeDelegator(options: ClaudeDelegatorOptions = {}): Delegator {
   const log = options.log ?? (() => {});

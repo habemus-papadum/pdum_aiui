@@ -30,6 +30,7 @@
     "./modal": "./src/modal/index.ts",
     "./testing": "./src/testing.ts",
     "./site/json-view": "./src/site/json-view.tsx",
+    "./site/prompt-record": "./src/site/prompt-record.tsx",
     "./site/markdown": "./src/site/markdown.tsx"
   },
   "main": "./src/index.ts",
@@ -140,6 +141,11 @@
         "import": "./dist/json-view.js",
         "default": "./dist/json-view.js"
       },
+      "./site/prompt-record": {
+        "types": "./dist/site/prompt-record.d.ts",
+        "import": "./dist/prompt-record.js",
+        "default": "./dist/prompt-record.js"
+      },
       "./site/markdown": {
         "types": "./dist/site/markdown.d.ts",
         "import": "./dist/markdown.js",
@@ -154,16 +160,17 @@
   },
   "peerDependencies": {
     "@duckdb/duckdb-wasm": ">=1.29",
+    "@habemus-papadum/aiui-prompts-inspector": "workspace:^",
     "@observablehq/plot": "^0.6",
     "@solidjs/web": ">=2.0.0-rc.13 <3",
+    "@uwdata/flechette": ">=2.5",
     "@uwdata/mosaic-core": ">=0.28",
     "@uwdata/mosaic-plot": ">=0.28",
     "@uwdata/mosaic-sql": ">=0.28",
-    "@uwdata/flechette": ">=2.5",
     "embedding-atlas": ">=0.24",
-    "solid-js": ">=2.0.0-rc.13 <3",
     "katex": "^0.16 || ^0.17",
-    "marked": "^16"
+    "marked": "^16",
+    "solid-js": ">=2.0.0-rc.13 <3"
   },
   "peerDependenciesMeta": {
     "@duckdb/duckdb-wasm": {
@@ -192,6 +199,9 @@
     },
     "marked": {
       "optional": true
+    },
+    "@habemus-papadum/aiui-prompts-inspector": {
+      "optional": true
     }
   },
   "dependencies": {
@@ -200,6 +210,7 @@
   "devDependencies": {
     "@duckdb/duckdb-wasm": "catalog:",
     "@habemus-papadum/aiui-build-config": "workspace:^",
+    "@habemus-papadum/aiui-prompts-inspector": "workspace:^",
     "@observablehq/plot": "catalog:",
     "@solidjs/web": "catalog:solid",
     "@uwdata/flechette": "^2.5.0",

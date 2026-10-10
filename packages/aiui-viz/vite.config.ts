@@ -61,6 +61,9 @@ export default defineConfig({
         lens: "src/site/lens.tsx",
         "tool-log": "src/site/tool-log.tsx",
         "json-view": "src/site/json-view.tsx",
+        // A stored prompt record previewed by the toolkit's inspector — an
+        // optional peer this subpath alone loads, on demand.
+        "prompt-record": "src/site/prompt-record.tsx",
         markdown: "src/site/markdown.tsx",
         // Framework-free like `./modal`, so node-side consumers (aiui-live's
         // delegators) render the same Tools: section the browser does.

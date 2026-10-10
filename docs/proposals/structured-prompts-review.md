@@ -240,6 +240,11 @@ Each stage is byte-identical first (the corpus), then improved with recorded dif
   the fingerprint still covers exactly what the brief renders), and an `origin` on the consumers'
   snapshots (the toolkit folds `origin` into the fingerprint, so two sites naming different
   origins would not share one for the same document — raised with the toolkit).
+  **2026-10-10:** the toolkit split into core, inspector and vite packages and took `origin` out
+  of the tool fingerprint. The stored records got their first reader: aiui-viz's
+  `site/prompt-record` mounts the inspector's `PromptPreview` (loaded on demand, its styles
+  injected from the inspector's string export) on the oracle's `config` entries and the live
+  ledger's `prompt` entries.
 - **Stage 2 — the oracle, then live.** The persona and slot weaver (OR1–OR3), the resolver
   context as a context record with `Case` decisions (OR4), the greeting as a per-response session
   operation (OR5), the panel and dock recipes (IC1, DK2) as two compositions over one component.

@@ -1336,6 +1336,9 @@ importers:
       '@habemus-papadum/aiui-prompts':
         specifier: workspace:^
         version: link:../aiui-prompts
+      '@habemus-papadum/aiui-prompts-inspector':
+        specifier: workspace:^
+        version: link:../aiui-prompts-inspector
       '@habemus-papadum/aiui-viz':
         specifier: workspace:^
         version: link:../aiui-viz
@@ -1389,6 +1392,9 @@ importers:
       '@habemus-papadum/aiui-prompts':
         specifier: workspace:^
         version: link:../aiui-prompts
+      '@habemus-papadum/aiui-prompts-inspector':
+        specifier: workspace:^
+        version: link:../aiui-prompts-inspector
       '@habemus-papadum/aiui-viz':
         specifier: workspace:^
         version: link:../aiui-viz
@@ -1847,6 +1853,9 @@ importers:
       '@habemus-papadum/aiui-build-config':
         specifier: workspace:^
         version: link:../aiui-build-config
+      '@habemus-papadum/aiui-prompts-inspector':
+        specifier: workspace:^
+        version: link:../aiui-prompts-inspector
       '@observablehq/plot':
         specifier: 'catalog:'
         version: 0.6.17

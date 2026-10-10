@@ -196,7 +196,10 @@ answered (`key: dev-key`).
 - **`OracleViewer`** — the debugging view: the session's ledger grouped into **turns** (an
   utterance and everything it caused) with progressive detail — one story line per turn,
   expandable to entries, expandable to an entry's JSON. Category chips
-  (`turn / tool / config / flow / error / raw`) keep the chatter off by default.
+  (`turn / tool / config / flow / error / raw`) keep the chatter off by default. A `config`
+  entry that carried instructions opens to the prompt toolkit's preview of the semantic record
+  they were compiled from (rendered Markdown, the exact text, the full inspector on demand) —
+  the inspector loads on first use, so a page that never opens one never ships it.
 
 **Park is free**: parking gates the mic and keeps the connection open — idle time bills
 nothing (cost accrues only when a response is generated); resume picks the conversation up

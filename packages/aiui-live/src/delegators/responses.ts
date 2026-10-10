@@ -16,9 +16,9 @@ import {
   renderPrompt,
   toolSnapshot,
 } from "@habemus-papadum/aiui-viz/tool-brief";
-import { requestMessage } from "./messages";
+import { requestMessage } from "./messages.ts";
 
-export { requestMessage } from "./messages";
+export { requestMessage } from "./messages.ts";
 
 import { backendPrompt } from "../prompt.ts";
 import type { ReasoningEffort } from "../protocol.ts";

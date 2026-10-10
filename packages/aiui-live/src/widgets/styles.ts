@@ -87,6 +87,9 @@ export const LIVE_WIDGET_STYLES = `
   .aiui-live-row-summary { white-space: pre-wrap; word-break: break-word; }
   .aiui-live-row-json { margin: 2px 0 6px 5.5rem; font-size: 10px; white-space: pre-wrap; opacity: 0.85;
     max-height: 240px; overflow: auto; }
+  /* the stored prompt record, previewed by the toolkit's inspector */
+  .aiui-live-row-prompt { margin: 2px 0 6px 5.5rem; }
+  .aiui-prompt-record-loading { font-size: 10px; opacity: 0.6; }
 
   .aiui-live-composer { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
   .aiui-live-composer select, .aiui-live-composer input { font: inherit; font-size: 12px; padding: 3px 6px;

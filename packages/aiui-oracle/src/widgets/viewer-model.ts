@@ -158,7 +158,8 @@ export function entryLine(entry: LedgerEntry): string {
         entry.drift !== undefined && entry.drift.length > 0
           ? ` DRIFT: ${entry.drift.join("; ")}`
           : "";
-      return `session config acked (${tools} tools)${drift}`;
+      const prompt = entry.prompt !== undefined ? " · prompt recorded" : "";
+      return `session config acked (${tools} tools)${prompt}${drift}`;
     }
     case "speech":
       return `speech ${entry.phase}`;

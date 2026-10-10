@@ -5,6 +5,7 @@
  */
 
 import { JsonView } from "@habemus-papadum/aiui-viz/site/json-view";
+import { PromptRecordView } from "@habemus-papadum/aiui-viz/site/prompt-record";
 import { createMemo, createSignal, For, Show } from "solid-js";
 import type { LiveSession } from "../session";
 import type { LedgerEntry, LedgerKind } from "../types";
@@ -87,6 +88,16 @@ export function LiveLedger(props: LiveLedgerProps) {
 
 function Row(props: { entry: LedgerEntry; open: boolean; onToggle(): void }) {
   const arrow = () => (props.entry.dir === "in" ? "←" : props.entry.dir === "out" ? "→" : "·");
+  // A `prompt` entry carries the semantic record its text was compiled from
+  // (`event.prompt`); opening the row previews it through the prompt
+  // toolkit's inspector, and the JSON below shows the rest of the event.
+  const prompt = () => (props.entry.kind === "prompt" ? props.entry.event?.prompt : undefined);
+  const detail = () => {
+    const event = props.entry.event;
+    if (event === undefined || prompt() === undefined) return event;
+    const { prompt: _record, ...rest } = event;
+    return rest;
+  };
   return (
     <div class="aiui-live-row" data-kind={props.entry.kind} data-dir={props.entry.dir}>
       <button
@@ -100,7 +111,12 @@ function Row(props: { entry: LedgerEntry; open: boolean; onToggle(): void }) {
         <span class="aiui-live-row-kind">{props.entry.kind}</span>
         <span class="aiui-live-row-summary">{props.entry.summary}</span>
       </button>
-      <Show when={props.open && props.entry.event}>
+      <Show when={props.open && prompt() !== undefined}>
+        <div class="aiui-live-row-prompt">
+          <PromptRecordView record={prompt()} />
+        </div>
+      </Show>
+      <Show when={props.open && detail()}>
         {(event) => (
           <div class="aiui-live-row-json">
             <JsonView value={event()} depth={2} />

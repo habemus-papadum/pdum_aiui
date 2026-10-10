@@ -15,6 +15,7 @@
  */
 
 import { JsonView } from "@habemus-papadum/aiui-viz/site/json-view";
+import { PromptRecordView } from "@habemus-papadum/aiui-viz/site/prompt-record";
 import { createMemo, createSignal, For, Show } from "solid-js";
 import type { OracleSession } from "../session";
 import type { LedgerEntry } from "../types";
@@ -51,17 +52,26 @@ function useLedger(session: OracleSession): () => readonly LedgerEntry[] {
 function EntryRow(props: { entry: LedgerEntry }) {
   const [open, setOpen] = createSignal(false);
   const detail = entryDetail(props.entry);
+  // A config entry that carried instructions holds the semantic record they
+  // were compiled from; opening the entry previews it through the prompt
+  // toolkit's inspector (loaded on demand), above the usual JSON.
+  const prompt = props.entry.kind === "config" ? props.entry.prompt : undefined;
   return (
     <div class="aiui-oracle-entry" data-kind={props.entry.kind}>
       <button
         type="button"
         class="aiui-oracle-entry-line"
-        disabled={detail === undefined}
+        disabled={detail === undefined && prompt === undefined}
         onClick={() => setOpen(!open())}
       >
         <span class="aiui-oracle-entry-kind">{props.entry.kind}</span>
         <span class="aiui-oracle-entry-body">{entryLine(props.entry)}</span>
       </button>
+      <Show when={open() && prompt !== undefined}>
+        <div class="aiui-oracle-entry-prompt">
+          <PromptRecordView record={prompt} />
+        </div>
+      </Show>
       <Show when={open() && detail !== undefined}>
         <div class="aiui-oracle-entry-json">
           <JsonView value={detail} depth={2} />
