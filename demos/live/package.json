@@ -30,6 +30,7 @@
     "@habemus-papadum/aiui-live": "workspace:^",
     "@habemus-papadum/aiui-oracle": "workspace:^",
     "@habemus-papadum/aiui-oscillator": "workspace:^",
+    "@habemus-papadum/aiui-prompts": "workspace:^",
     "@habemus-papadum/aiui-source-processor": "workspace:^",
     "@habemus-papadum/aiui-viz": "workspace:^",
     "@solidjs/web": "catalog:solid",

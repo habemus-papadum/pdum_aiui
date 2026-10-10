@@ -29,6 +29,7 @@ import {
   type JsonObject,
   type JsonValue,
   type PromptNode,
+  type SemanticRecord,
   Text,
   Use,
 } from "@habemus-papadum/aiui-prompts";
@@ -53,6 +54,7 @@ import {
   type LiveConnectParams,
   seedMessages,
 } from "./adapter";
+import { type AppendChunk, planAppends } from "./appends";
 import { backendToolsList, livePromptValue } from "./prompt";
 import {
   APPENDED_EVENT,
@@ -79,7 +81,6 @@ import {
   type TranscriptDeltaEvent,
   typedInputEvents,
 } from "./protocol";
-import { chunkForAppend } from "./tokens";
 import { interleave, TranscriptTrack } from "./transcript";
 import {
   backendToolFor,
@@ -1260,10 +1261,16 @@ export class LiveSession {
     if (task !== undefined && task.status === "cancelled") {
       return { eventId: "", acked: false, error: "task cancelled" };
     }
-    const chunks = chunkForAppend(text);
+    const trimmed = text.trim();
+    if (trimmed === "") {
+      return { eventId: "", acked: false, error: "empty text" };
+    }
+    // One record for the whole text, cut by the toolkit under the append cap;
+    // each chunk goes out as its own operation over that record.
+    const plan = planAppends(kind, trimmed, wireId);
     let last: AppendReceipt = { eventId: "", acked: false, error: "empty text" };
-    for (const chunk of chunks) {
-      last = await this.appendOne(kind, chunk, wireId, task);
+    for (const chunk of plan.chunks) {
+      last = await this.appendOne(kind, plan.record, chunk, wireId, task);
       if (last.error !== undefined) {
         break;
       }
@@ -1273,34 +1280,29 @@ export class LiveSession {
 
   private appendOne(
     kind: AppendKind,
-    content: string,
+    record: SemanticRecord,
+    chunk: AppendChunk,
     wireId: string | null,
     task: LiveTask | undefined,
   ): Promise<AppendReceipt> {
     const eventId = this.nextEventId();
     const t = this.now();
+    const content = chunk.text;
     // The append as a session operation of the prompt toolkit, lowered by its
     // `live-session/1` profile: the event sent IS the derivation, and the
     // ledger keeps the record, the operation and the captured wire beside it.
-    const rendered = renderPrompt(
-      Text({
-        value: content,
-        origin: {
-          site: `aiui-live append ${kind}`,
-          ...(wireId === null ? {} : { delegation: wireId }),
-        },
-      }),
-    );
-    const operation = sessionOperation(rendered.record, {
+    // A chunked text names its chunk; a whole one needs no reference.
+    const operation = sessionOperation(record, {
       action: `append-${kind}`,
       sessionId: this.s.sessionId ?? "live",
       eventId,
       delegationId: wireId,
+      ...(chunk.count > 1 ? { chunk: { index: chunk.index, count: chunk.count } } : {}),
     });
     const prepared = lowerOperation(operation, { kind: "live-session/1" });
     const event = prepared.payload as unknown as AppendEvent;
     const records: PromptRecords = {
-      prompt: rendered.record,
+      prompt: record,
       operation,
       wire: captureWire(prepared, prepared.payload, { capturedAt: this.capturedAt() }),
     };
@@ -1314,7 +1316,7 @@ export class LiveSession {
     this.record(
       "out",
       "append",
-      `${kind}${wireId === null ? "" : ` ${wireId}`}: ${content}`,
+      `${kind}${chunk.count > 1 ? ` ${chunk.index + 1}/${chunk.count}` : ""}${wireId === null ? "" : ` ${wireId}`}: ${content}`,
       event,
       task?.id,
       records,

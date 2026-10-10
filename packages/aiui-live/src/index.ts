@@ -19,6 +19,8 @@ export {
   LIVE_SESSION_ADAPTER,
   LIVE_SESSION_ADAPTER_IDENTITY,
 } from "./adapter";
+export type { AppendChunk, AppendPlan } from "./appends";
+export { APPEND_CHUNK_LIMIT, appendValue, planAppends } from "./appends";
 export type {
   DirectBrokerOptions,
   ServerBrokerOptions,
@@ -131,7 +133,6 @@ export {
   reseedPrefaceValue,
   seedValue,
 } from "./session";
-export { approxTokens, chunkForAppend } from "./tokens";
 export {
   DEFAULT_GAP_MS,
   groupUtterances,

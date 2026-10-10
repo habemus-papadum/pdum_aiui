@@ -5,10 +5,11 @@
  * close and re-seed — pinned without a network.
  */
 
-import { rehydrate } from "@habemus-papadum/aiui-prompts";
+import { CONSERVATIVE_ESTIMATOR, rehydrate } from "@habemus-papadum/aiui-prompts";
 import { verifyWire } from "@habemus-papadum/aiui-prompts/operations";
 import { afterEach, describe, expect, it } from "vitest";
 import { LIVE_SESSION_ADAPTER } from "./adapter";
+import { APPEND_CHUNK_LIMIT } from "./appends";
 import { LiveSession, type LiveSessionOptions, RESEED_PREFACE } from "./session";
 import type {
   DelegationRequest,
@@ -395,7 +396,7 @@ describe("appends", () => {
     expect(verified.actual).toEqual(fake.sent.find((e) => e.type === "session.thinking.append"));
   });
 
-  it("chunks long text into several appends in order", async () => {
+  it("chunks long text into several appends in order, one operation per chunk over one record", async () => {
     const fake = fakeTransport();
     const live = session(fake);
     sessions.push(live);
@@ -404,7 +405,34 @@ describe("appends", () => {
     await live.say(long);
     const appends = fake.sent.filter((event) => event.type === "session.commentary.append");
     expect(appends.length).toBeGreaterThan(1);
-    expect(appends.map((event) => event.content).join(" ")).toBe(long.trim());
+    // Nothing omitted, nothing trimmed at a cut: the chunks concatenate to the text sent.
+    expect(appends.map((event) => event.content).join("")).toBe(long.trim());
+    for (const event of appends) {
+      expect(CONSERVATIVE_ESTIMATOR.text(String(event.content))).toBeLessThanOrEqual(
+        APPEND_CHUNK_LIMIT,
+      );
+    }
+    // Every append is a session operation naming its chunk, all over the ONE record whose
+    // chunk decision holds the cut points; each wire verifies on its own.
+    const entries = live.ledger().filter((e) => e.kind === "append");
+    expect(entries.length).toBe(appends.length);
+    const fingerprints = new Set(entries.map((e) => e.records?.prompt?.fingerprint));
+    expect(fingerprints.size).toBe(1);
+    const decision = entries[0]?.records?.prompt
+      ? rehydrate(entries[0].records.prompt).decisions.find((d) => d.kind === "chunk")
+      : undefined;
+    expect(decision).toMatchObject({ selected: String(appends.length) });
+    for (const [index, entry] of entries.entries()) {
+      const body = entry.records?.operation?.operation;
+      expect(body?.kind === "session" ? body.chunk : undefined).toEqual({
+        index,
+        count: appends.length,
+      });
+      expect(
+        verifyWire(entry.records?.operation as never, entry.records?.wire as never).equal,
+      ).toBe(true);
+      expect(entry.summary.startsWith(`commentary ${index + 1}/${appends.length}`)).toBe(true);
+    }
   });
 
   it("refuses to append when not live", async () => {

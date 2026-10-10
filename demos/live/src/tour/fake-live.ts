@@ -16,12 +16,12 @@ import {
   APPEND_TOKEN_LIMIT,
   APPENDED_EVENT,
   type AppendKind,
-  approxTokens,
   type LiveEvent,
   type LiveTransport,
   type TransportConnectOptions,
   type TransportHandle,
 } from "@habemus-papadum/aiui-live";
+import { CONSERVATIVE_ESTIMATOR } from "@habemus-papadum/aiui-prompts";
 
 export interface FakeLiveKnobs {
   /** ms after the user's last word before `session.delegation.created` (measured 0.49–0.80 s). */
@@ -409,7 +409,7 @@ class Connection {
       fail(null, "Unknown client delegation.");
       return;
     }
-    if (approxTokens(content) > APPEND_TOKEN_LIMIT) {
+    if (CONSERVATIVE_ESTIMATOR.text(content) > APPEND_TOKEN_LIMIT) {
       fail("invalid_value", "Context append text must not exceed 500 tokens.");
       return;
     }

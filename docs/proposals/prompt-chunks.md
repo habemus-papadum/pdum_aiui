@@ -1,8 +1,27 @@
 # Chunks — a partition primitive for the prompt toolkit
 
-*Status: proposal, 2026-10-10, for the toolkit's owner. Written from the one consumer that needs
-it today (the live session's appends) after the structured-prompts migration closed everything
-else — see `structured-prompts-review.md`, stage 2, "append chunking stays host-side".*
+*Status: IMPLEMENTED 2026-10-10, same day, with the owner's go-ahead. Written from the one
+consumer that needs it (the live session's appends) after the structured-prompts migration closed
+everything else — see `structured-prompts-review.md`. The text below is the proposal as written;
+the deltas taken while building it:*
+
+- *The default boundary order includes `line` (paragraph, line, sentence, word, character): a
+  newline is a stronger cut than a sentence end inside a line.*
+- *`marker` is a string, like `Elide`'s, not a prompt value.*
+- *The decision's `cuts[].at` counts each image as one slot beside the text's code units; the
+  compiled artifact carries `cuts` as part positions (`{ part, offset }`, an image part at offset
+  0), which is what `chunksOf` slices by.*
+- *`chunksOf` returns slices of part ranges (`{ part, type, text, start, end }` or an image part),
+  not compiled prompts; the delivery map for a chunk is a new `slice` relation carrying its
+  `source` range, since `copy` means a whole part.*
+- *The live session omits the chunk reference when a text is one chunk; the ledger row reads
+  `commentary 2/3` when it is not.*
+- *Errors: `CHUNK_OVERFLOW`, `ATOMIC_CHUNK`, `CHUNK_SIBLINGS`, `CHUNK_MULTIPLE`, `CHUNK_NESTED`,
+  `CHUNK_ELISION` (a character/line elision cannot window through a chunk), and
+  `CHUNK_COUNT_MISMATCH` at lowering.*
+- *The inspector's ruler is a list under "Provenance and decisions" (one row per chunk: size over
+  limit, the boundary kind and offset of its cut) plus a note on a chunked delivery; the graphical
+  ruler can come later.*
 
 ## The gap
 

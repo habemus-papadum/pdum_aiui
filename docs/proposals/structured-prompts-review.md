@@ -305,7 +305,9 @@ Each stage is byte-identical first (the corpus), then improved with recorded dif
   delegator's prompt crosses the live relay as a `record` server frame, so the browser ledger holds
   what the Claude Code backend read; the HTTP request to Anthropic stays the Agent SDK's, so the
   capturable wire there is the message pushed into it. Chunking as a toolkit primitive is proposed
-  in `docs/proposals/prompt-chunks.md`.
+  in `docs/proposals/prompt-chunks.md` — and built the same day: `Chunk` in the core (a recorded
+  partition, `chunksOf`, the `slice` delivery map), `chunk: { index, count }` on session appends,
+  the inspector's ruler, and the live session's appends over it (`tokens.ts` deleted).
 - **Stage 3 — the lowering pipeline and the channel.** `ComposedItem[]` becomes the semantic
   input: shots as markers with asset-reference policies and sidecars, selections as text plus
   XML, navigation and tab switches as markers, corrections as `Case`. The contributions map

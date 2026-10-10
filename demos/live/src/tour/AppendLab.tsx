@@ -1,20 +1,22 @@
 /**
  * AppendLab.tsx — the three ways back into the voice model, and the two
  * ways to type at it. Pick a kind, write text, see the exact event, the
- * token estimate against the 500-token cap, how a long text is chunked,
- * and the ack that settles it. The tables beside it say what the model
- * DOES with each kind — the measured answer, not the brochure.
+ * token estimate against the 500-token cap, how a long text is chunked by
+ * the prompt toolkit (the same plan the session sends, cut by cut), and the
+ * ack that settles it. The tables beside it say what the model DOES with
+ * each kind — the measured answer, not the brochure.
  */
 
 import {
+  APPEND_CHUNK_LIMIT,
   APPEND_TOKEN_LIMIT,
   APPENDED_EVENT,
   type AppendKind,
   appendEvent,
-  approxTokens,
-  chunkForAppend,
+  planAppends,
   typedInputEvents,
 } from "@habemus-papadum/aiui-live";
+import { CONSERVATIVE_ESTIMATOR } from "@habemus-papadum/aiui-prompts";
 import { createMemo, createSignal, For, Show } from "solid-js";
 
 const KINDS: Array<{ kind: AppendKind; method: string; does: string; measured: string }> = [
@@ -56,9 +58,18 @@ export function AppendLab() {
   const [typedMode, setTypedMode] = createSignal<"client" | "responses">("client");
 
   const delegationId = () => (target() === "null" ? null : "item_9f3c…");
-  const tokens = createMemo(() => approxTokens(text()));
-  const chunks = createMemo(() => chunkForAppend(text()));
-  const event = createMemo(() => appendEvent(kind(), "c_7", delegationId(), chunks()[0] ?? ""));
+  const tokens = createMemo(() => CONSERVATIVE_ESTIMATOR.text(text().trim()));
+  // The plan the session itself would send: one record, cut by the toolkit.
+  const plan = createMemo(() => planAppends(kind(), text().trim(), delegationId()));
+  const chunks = () => plan().chunks;
+  const partition = () =>
+    (plan().decision?.detail ?? {}) as {
+      sizes?: number[];
+      cuts?: { at: number; boundary: string }[];
+    };
+  const event = createMemo(() =>
+    appendEvent(kind(), "c_7", delegationId(), chunks()[0]?.text ?? ""),
+  );
   const ack = () => ({
     type: APPENDED_EVENT[kind()],
     event_id: "s_41",
@@ -111,21 +122,31 @@ export function AppendLab() {
           </button>
         </div>
         <p class="tour-meter">
-          ≈ {tokens()} tokens (3.5 chars each, conservative) against a cap of {APPEND_TOKEN_LIMIT}
+          ≈ {tokens()} tokens (the toolkit's conservative estimate, 3.5 chars each) against a cap of{" "}
+          {APPEND_TOKEN_LIMIT}
           {" → "}
-          <b>{chunks().length}</b> append{chunks().length === 1 ? "" : "s"} (chunked at 70 % of the
-          cap, on sentence ends)
+          <b>{chunks().length}</b> append{chunks().length === 1 ? "" : "s"} (a <code>Chunk</code> of{" "}
+          {APPEND_CHUNK_LIMIT} tokens, cut at paragraph, line, sentence or word boundaries — the cut
+          is a recorded decision)
         </p>
         <Show when={chunks().length > 1}>
           <ol class="tour-chunks">
             <For each={chunks()}>
-              {(chunk) => (
+              {(chunk, i) => (
                 <li>
-                  <span class="muted">≈ {approxTokens(chunk)} t</span> {chunk.slice(0, 90)}…
+                  <span class="muted">
+                    ≈ {partition().sizes?.[i()] ?? "?"} t
+                    {i() > 0 ? ` · after a ${partition().cuts?.[i() - 1]?.boundary} boundary` : ""}
+                  </span>{" "}
+                  {chunk.text.slice(0, 90)}…
                 </li>
               )}
             </For>
           </ol>
+          <details>
+            <summary>the recorded chunk decision</summary>
+            <pre class="tour-json">{JSON.stringify(plan().decision, null, 1)}</pre>
+          </details>
         </Show>
       </div>
       <div class="tour-out">

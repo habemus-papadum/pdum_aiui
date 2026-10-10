@@ -507,6 +507,9 @@ importers:
       '@habemus-papadum/aiui-oscillator':
         specifier: workspace:^
         version: link:../oscillator
+      '@habemus-papadum/aiui-prompts':
+        specifier: workspace:^
+        version: link:../../packages/aiui-prompts
       '@habemus-papadum/aiui-source-processor':
         specifier: workspace:^
         version: link:../../packages/aiui-source-processor
