@@ -11,20 +11,20 @@ output mappings, delivery, and the supported implementation boundary. The
 [architecture proposal](../../docs/proposals/structured-prompts.md) retains the larger roadmap.
 The [corpus shape review](docs/corpus-shapes.md) explains how markers, sidecars, tool budgets, and
 mixed XML/Markdown map to the new contracts without requiring legacy output parity.
-The [adoption guide](docs/adoption.md) covers the first consumer port and compatibility expectations.
+The [adoption guide](docs/adoption.md) covers consumer migration and the package split.
 
 ## Run and inspect
 
 From the repository root:
 
 ```sh
-pnpm --filter @habemus-papadum/aiui-prompts dev
+pnpm --filter @habemus-papadum/aiui-prompts-inspector dev
 pnpm --filter @habemus-papadum/aiui-prompts test
 pnpm --filter @habemus-papadum/aiui-prompts typecheck
 pnpm --filter @habemus-papadum/aiui-prompts exec tsc -p tsconfig.test.json
 pnpm --filter @habemus-papadum/aiui-prompts lint
 pnpm --filter @habemus-papadum/aiui-prompts build
-pnpm --filter @habemus-papadum/aiui-prompts build:inspector
+pnpm --filter @habemus-papadum/aiui-prompts-inspector build:bench
 ```
 
 The workbench runs on **<http://127.0.0.1:5219>**. It uses the actual record validator, compiler,
@@ -33,7 +33,7 @@ branch, fold part of an equation, inspect inline images and raw-image popups, im
 compare two records, and switch
 between Realtime, live append, channel, and Responses delivery. No request is sent.
 
-The [inspector API and behavior](inspector/README.md) cover embedding and mapping precision.
+The [inspector API and behavior](../aiui-prompts-inspector/README.md) cover embedding and mapping precision.
 The [styling contract](docs/theming.md) covers neutral defaults, host themes, and per-instance overrides.
 Use the workbench's theme selector to compare styles without resetting selection or folds.
 Tree badges show subtree text units and image placements; their tooltips distinguish each node's own contribution.
@@ -196,11 +196,12 @@ capability profiles; there is no mutable global registry or fallback to the late
 | Root and `jsx-runtime` | Portable owned authoring, semantic records, compiler, tool snapshots |
 | `analysis` | Output queries, accounting, conservative comparison, bounded variant search |
 | `operations` | Versioned operation records, consumer adapter framework, and utility lowerers |
-| `inspector` and `inspector/style.css` | DOM controller/view, positional Markdown, KaTeX |
-| `vite` | `.prompt.tsx` routing and optional revision-qualified source owners |
+| `@habemus-papadum/aiui-prompts-inspector` | Native Solid components, positional Markdown, KaTeX, historical loading |
+| `@habemus-papadum/aiui-prompts-vite` | `.prompt.tsx` routing and optional revision-qualified source owners |
 
-The current implementation uses one physical package with isolated entry points. Importing core
-loads no DOM renderer, Markdown parser, KaTeX, Vite, provider SDK, or existing aiui runtime.
-Parser/math/build primitives are dependencies of their corresponding entry points only. The package
-is published with the workspace (public, lockstep version, `dist/` swapped in by `publishConfig`
-at pack time); both nested spikes stay private and unpublished.
+These are three independent public packages. Core has no third-party runtime dependencies and runs
+in Node or a browser without DOM globals. Its root does not re-export operations; import that explicit
+subpath when preparing delivery. Markdown, KaTeX, and Solid belong to the inspector package. Vite and
+source instrumentation belong to the build plugin, normally installed as a development dependency.
+They use the workspace's public lockstep publication configuration (`dist/` swapped in by
+`publishConfig` at pack time); both nested spikes stay private and unpublished.

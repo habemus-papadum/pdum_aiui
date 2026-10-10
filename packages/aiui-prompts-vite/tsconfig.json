@@ -4,9 +4,6 @@
     "outDir": "dist",
     "declarationDir": "dist",
     "rootDir": "src",
-    "jsx": "react-jsx",
-    "jsxImportSource": "@habemus-papadum/aiui-prompts",
-    "lib": ["ES2022"],
     "types": ["node"]
   },
   "include": ["src"],

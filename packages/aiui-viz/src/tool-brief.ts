@@ -105,7 +105,8 @@ function kit(doc: KitDoc): ToolKit {
  * record WHICH document a rendering came from, and a refresh can tell
  * "nothing changed" without comparing rendered text. The fingerprint covers
  * the declared fields (names, descriptions, usage, kind, group, schemas, the
- * briefs) and `origin`, which says where the document was taken from.
+ * briefs). `origin` records where it was captured, outside the content hash;
+ * an enclosing semantic or operation record includes it in its own fingerprint.
  */
 export function toolSnapshot(kits: readonly KitDoc[], origin?: JsonObject): ToolSnapshot {
   return captureToolSnapshot(kits.map(kit), origin);

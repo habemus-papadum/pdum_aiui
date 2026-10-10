@@ -111,11 +111,14 @@ These sibling-checkout links are reference material, never build dependencies.
 
 ## Package boundaries and dependency direction
 
-The first implementation uses one private production package with isolated core, analysis,
-operations, inspector, and Vite entry points. The table below describes logical boundaries and
-possible later package separation; the inspector and source plugin currently live under
-`aiui-prompts/inspector` and `aiui-prompts/vite`. Keep both existing spikes independently runnable.
-Their schemas are not production schemas.
+The implementation now has three public physical packages: `aiui-prompts` for portable core,
+`aiui-prompts-inspector` for native Solid views, and `aiui-prompts-vite` for build-time source capture
+and routing. Core has no third-party runtime dependencies; operations and analysis are explicit
+subpaths. Inspector owns Markdown/KaTeX dependencies and Solid peers. The table below describes
+logical boundaries, including prospective entry points that are not all exposed yet. The
+[adoption guide](../../packages/aiui-prompts/docs/adoption.md#package-split-and-native-solid-refactoring)
+lists actual imports, historical loading, condensed embedding, and the jsdom testing approach.
+Both spikes remain independently runnable; their schemas are not production schemas.
 
 | Package or entry point | Responsibility | Allowed runtime dependencies |
 | --- | --- | --- |
@@ -124,10 +127,10 @@ Their schemas are not production schemas.
 | `aiui-prompts/artifact`, `mapping` | Serialized contracts, validation, source/output queries, interval indexes. | Portable core. |
 | `aiui-prompts/analysis`, `optimize` | Accounting contracts, structural/output comparison, candidate selection. | Core; tokenizers and evaluators arrive as explicit services. |
 | `aiui-prompts/operations` | Versioned operation records, consumer-owned adapter framework, and utility capability profiles/lowerers. | Core and adapter-local types; no SDK initialization or network. |
-| `aiui-prompts-inspector/model` | View projections, controller, selection/fold/revision state, host interfaces. | Core; no DOM or existing aiui runtime. |
+| `aiui-prompts-inspector/model` | Controller, historical record loading, selection/fold state, host interfaces. | Core; no Solid, DOM, or parser runtime. |
 | `aiui-prompts-inspector/preview` | Positional Markdown parsing, owned preview AST and maps, math preparation. | Core plus isolated parser/math primitives. |
-| `aiui-prompts-inspector/dom` | Embeddable raw, preview, tree, source, request, and comparison views. | Inspector model/preview and browser APIs. |
-| `aiui-prompts-source` | Source capture and file routing, standalone transform, Vite integration. | Core metadata types plus build-time AST tooling; no source-processor reuse. |
+| `aiui-prompts-inspector` | Native Solid full and condensed previews, raw, tree, provenance, and comparison views. | Inspector model/preview, Solid, and browser APIs. |
+| `aiui-prompts-vite` | Source capture and file routing, Vite integration. | Core metadata types plus build-time AST tooling; no source-processor reuse. |
 
 Use the full `@habemus-papadum/` scope in manifests and imports. Keep lightweight barrels explicit:
 importing the core must not import the inspector, parser, KaTeX, a tokenizer, or build tools.
@@ -565,7 +568,7 @@ in mixed projects. TypeScript supports those runtime imports and pragmas, but th
 other bundler transforms. See
 [TypeScript JSX configuration](https://www.typescriptlang.org/tsconfig/jsxImportSource.html).
 
-`aiui-prompts-source` exposes a standalone AST transform and a Vite wrapper. Its routing filter
+`aiui-prompts-vite` exposes a standalone AST transform and a Vite wrapper. Its routing filter
 selects prompt modules, including source-first workspace files outside the app directory. Prompt
 TSX must be excluded from Solid's compiler and from the existing aiui DOM-locator pass. One JSX
 dialect per file; import a prompt builder into UI code rather than mixing prompt and DOM elements.
@@ -1328,7 +1331,7 @@ packages/aiui-prompts-inspector/
   src/dom/             view bindings, raw/tree/preview/request views, overlays
   src/platform/        browser layout, clipboard, focus and selection adapters
   test/                real-pipeline jsdom harness and behavioral scenarios
-packages/aiui-prompts-source/
+packages/aiui-prompts-vite/
   src/                 binding resolution, source sites, JSX routing, Vite wrapper
   test/fixtures/       mixed projects, aliases/spreads, transformed/untransformed pairs
 ```

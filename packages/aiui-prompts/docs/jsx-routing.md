@@ -7,7 +7,7 @@ semantic data and never mounts DOM.
 ```ts
 // vite.config.ts
 import aiui from "@habemus-papadum/aiui-source-processor";
-import { promptFilePattern, prompts } from "@habemus-papadum/aiui-prompts/vite";
+import { promptFilePattern, prompts } from "@habemus-papadum/aiui-prompts-vite";
 import { defineConfig } from "vite";
 import solid from "vite-plugin-solid";
 
@@ -48,7 +48,7 @@ This routing pass does not evaluate session decisions, inject DOM source stamps,
 or claim exact authored-text provenance. Its standard source map is distinct from
 the toolkit's semantic record and output-contribution maps.
 
-The test under `test/routing/` exercises the actual installed aiui, Solid, and
+The tests under `packages/aiui-prompts-vite/test/routing/` exercises the actual installed aiui, Solid, and
 prompt plugins together: dev transforms, execution of the prompt via Vite's
 module runner, and a production consumer build. The ordinary UI receives DOM
 source stamps and the Solid transform; the prompt uses the toolkit runtime and

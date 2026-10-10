@@ -1,0 +1,85 @@
+{
+  "name": "@habemus-papadum/aiui-prompts-inspector",
+  "version": "0.21.0+dev",
+  "description": "Native Solid inspection and compact previews for stored structured prompt records.",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/habemus-papadum/pdum_aiui.git",
+    "directory": "packages/aiui-prompts-inspector"
+  },
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./style.css": "./src/style.css",
+    "./themes/aiui.css": "./src/themes/aiui.css",
+    "./themes/terminal.css": "./src/themes/terminal.css",
+    "./model": "./src/model.ts"
+  },
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
+  "files": [
+    "dist",
+    "src",
+    "!dist/bench"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "main": "./dist/index.js",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js",
+        "default": "./dist/index.js"
+      },
+      "./style.css": "./dist/style.css",
+      "./themes/aiui.css": "./dist/themes/aiui.css",
+      "./themes/terminal.css": "./dist/themes/terminal.css",
+      "./model": {
+        "types": "./dist/model.d.ts",
+        "import": "./dist/model.js",
+        "default": "./dist/model.js"
+      }
+    }
+  },
+  "scripts": {
+    "build": "vite build && tsc --emitDeclarationOnly -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
+    "test": "vitest run",
+    "lint": "biome check src bench package.json tsconfig.json tsconfig.test.json vite.config.ts vite.bench.config.ts",
+    "dev": "vite --config vite.bench.config.ts",
+    "build:bench": "vite build --config vite.bench.config.ts"
+  },
+  "devDependencies": {
+    "@habemus-papadum/aiui-build-config": "workspace:^",
+    "@habemus-papadum/aiui-design": "workspace:^",
+    "@solidjs/web": "catalog:solid",
+    "@types/katex": "^0.16.7",
+    "@types/node": "^26.1.0",
+    "jsdom": "catalog:",
+    "solid-js": "catalog:solid",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plugin-solid": "catalog:solid",
+    "vitest": "catalog:"
+  },
+  "dependencies": {
+    "@habemus-papadum/aiui-prompts": "workspace:^",
+    "katex": "^0.17.0",
+    "mdast-util-from-markdown": "^2.1.0",
+    "mdast-util-gfm": "^3.1.0",
+    "mdast-util-math": "^3.0.0",
+    "micromark-extension-gfm": "^3.0.0",
+    "micromark-extension-math": "^3.1.0"
+  },
+  "peerDependencies": {
+    "@solidjs/web": ">=2.0.0-rc.13 <3",
+    "solid-js": ">=2.0.0-rc.13 <3"
+  }
+}

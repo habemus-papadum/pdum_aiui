@@ -156,6 +156,8 @@ describe("toolSnapshot", () => {
   it("renders the same text from a snapshot as from its kits, and carries the origin", () => {
     const snapshot = toolSnapshot(kits, { site: "page registry: app" });
     expect(snapshot.origin).toEqual({ site: "page registry: app" });
+    expect(snapshot.fingerprint).toBe(toolFingerprint(kits));
+    expect(toolSnapshot(kits, { site: "another registry" }).fingerprint).toBe(snapshot.fingerprint);
     expect(snapshot.kind).toBe("aiui.tools");
     expect(renderToolBrief(snapshot)).toBe(renderToolBrief(kits));
     expect(renderToolBrief(snapshot, { maxChars: 10 })).toBe(

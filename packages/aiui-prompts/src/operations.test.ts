@@ -405,6 +405,35 @@ describe("channel and Responses consumers", () => {
       tools.fingerprint,
     );
   });
+  it("retains tool capture identity in operation records without changing declaration or wire identity", () => {
+    const kits = [
+      {
+        ns: "app",
+        tools: [{ name: "read", description: "Read state.", inputSchema: { type: "object" } }],
+      },
+    ];
+    const input = instruction();
+    const firstTools = toolSnapshot(kits, { site: "oracle" });
+    const secondTools = toolSnapshot(kits, { site: "live-session" });
+    const first = responseOperation({ input, tools: firstTools });
+    const second = responseOperation({ input, tools: secondTools });
+    const target = { kind: "openai-responses/1" as const, model: "test-model" };
+    const firstDelivery = lowerOperation(first, target);
+    const secondDelivery = lowerOperation(second, target);
+    expect(firstTools.fingerprint).toBe(secondTools.fingerprint);
+    expect(first.fingerprint).not.toBe(second.fingerprint);
+    expect(firstDelivery.payload).toEqual(secondDelivery.payload);
+    expect(firstDelivery.mappings.find((mapping) => mapping.binding === "tools")?.origin).toEqual({
+      kind: "tool",
+      snapshot: firstTools.fingerprint,
+      namespace: "app",
+      name: "read",
+      capture: { site: "oracle" },
+    });
+    const tampered = JSON.parse(serializeOperation(first));
+    tampered.operation.tools.origin.site = "rewritten";
+    expect(() => parseOperation(tampered)).toThrow(/fingerprint/);
+  });
   it("rejects unsupported targets, asset policies, missing representations, stale digests, and assistant images", () => {
     const operation = responseOperation({ input: media() });
     code(

@@ -7,8 +7,8 @@ Each inspector, or a comparison containing two inspectors, can therefore have it
 
 ```ts
 import "katex/dist/katex.min.css";
-import "@habemus-papadum/aiui-prompts/inspector/style.css";
-import { mountInspector } from "@habemus-papadum/aiui-prompts/inspector";
+import "@habemus-papadum/aiui-prompts-inspector/style.css";
+import { mountInspector } from "@habemus-papadum/aiui-prompts-inspector";
 
 const wrapper = document.querySelector<HTMLElement>("#prompt-audit")!;
 wrapper.style.setProperty("--prompt-accent", "#12615a");
@@ -18,11 +18,12 @@ const inspector = mountInspector(wrapper, savedRecord);
 // inspector.dispose();
 ```
 
-All base selectors use `:where(...)`, have zero specificity, and are scoped to a
+Base selectors put their class qualifiers in `:where(...)` and are scoped to a
 `.prompt-inspector` or `.prompt-comparison` root. There are no page resets, external imports,
 or aiui token references in the base stylesheet. Normal host class rules override it without
 `!important`. Host global rules can also override it: scope page heading and button styles to
 the page chrome if the embedded inspector should retain its own typography.
+Ordinary selectors have zero specificity; the dialog backdrop adds only its pseudo-element.
 
 ## Optional themes
 
@@ -30,7 +31,7 @@ The aiui bridge consumes the existing host design tokens. It does not load fonts
 tokens, or add a dependency on a design package. The host supplies its usual aiui tokens/fonts.
 
 ```ts
-import "@habemus-papadum/aiui-prompts/inspector/themes/aiui.css";
+import "@habemus-papadum/aiui-prompts-inspector/themes/aiui.css";
 wrapper.dataset.promptTheme = "aiui";
 ```
 
@@ -38,7 +39,7 @@ The `terminal.css` example is an independent host palette with compact spacing a
 surface. It is not a dark variant of the FAI Labs design system.
 
 ```ts
-import "@habemus-papadum/aiui-prompts/inspector/themes/terminal.css";
+import "@habemus-papadum/aiui-prompts-inspector/themes/terminal.css";
 wrapper.dataset.promptTheme = "terminal";
 // Return to neutral base defaults:
 wrapper.dataset.promptTheme = "neutral";
@@ -93,9 +94,17 @@ the supported styling contract; theme files are useful examples rather than requ
 | `--prompt-image-max-height` | `24rem`; inline preview image bound, keeping its aspect ratio |
 | `--prompt-popup-width`, `--prompt-popup-max-height` | `28rem`, `70vh`; raw-image hover/pinned preview |
 | `--prompt-popup-image-max-height` | `45vh`; image bound within that popup |
-| `--prompt-popup-inset`, `--prompt-popup-z-index` | `1rem`, `1000`; fixed popup position and stacking |
+| `--prompt-popup-z-index` | `1000`; stacking of anchored image previews |
+| `--prompt-compact-max-height` | `24rem`; condensed preview's scrolling content area |
+| `--prompt-dialog-width` | `90vw`; full inspector opened from a condensed preview |
+| `--prompt-dialog-backdrop` | `#0006`; backdrop behind the full-view modal |
 
-Popup width is also capped to the viewport minus `4rem`. Inline images and popup images have
+Popup width is also capped to the viewport minus `1rem`. The image popup anchors to its raw marker,
+flips above when necessary, and clamps to the viewport with an eight-pixel margin. It follows scroll,
+resize, and image loading. Unpinned previews close on pointer exit or focus loss; Escape dismisses a
+pinned preview and restores marker focus. Browsers supporting native popovers render it in the top
+layer while preserving inherited themes, including inside transformed hosts. The fixed-position
+fallback for older browsers requires an untransformed containing ancestor. Inline images and popup images have
 `width: auto; height: auto; max-width: 100%` and use `object-fit: contain`; they do not stretch to
 fill their columns. Image buttons preserve the same maximum width. Hosts can lower the image
 height token independently of the popup height token.
@@ -107,6 +116,7 @@ These classes identify visual roles, rather than semantic identity:
 | Role | Classes / states |
 | --- | --- |
 | Inspector / comparison | `.prompt-inspector`, `.prompt-inspector-content`, `.prompt-comparison` |
+| Embedded / expanded | `.prompt-compact`, `.prompt-compact-output`, `.prompt-inspector-dialog` |
 | Panels | `.prompt-panels`, `.prompt-tree`, `.prompt-raw`, `.prompt-preview` |
 | Tree | `.prompt-tree-item`, `.prompt-tree-row`, `.prompt-tree-children` |
 | Contribution display | `.prompt-tree-cost`, `.prompt-cost-legend` |

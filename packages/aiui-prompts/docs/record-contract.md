@@ -143,7 +143,17 @@ second pass that searches emitted strings to guess where they came from.
 
 Tool declarations are immutable `ToolSnapshot` JSON: namespace/kit brief plus each tool's name,
 description, usage, kind, group, and optional input schema. Execution callbacks remain with the host.
-ToolBrief, CapabilityList, ToolJson, and provider tool schemas derive from the same fingerprint.
+Its `fingerprint` hashes canonical `{ kind, schemaVersion, kits }`: ordered declarations determine
+content identity, while `origin` records the capture site outside that hash. Equal documents captured
+at different sites therefore share a tool fingerprint. The enclosing `SemanticRecord` or
+`OperationRecord` fingerprint includes the full snapshot, including its origin. Changing capture
+metadata changes that retained record's identity; it does not change declaration identity. A bare
+tool fingerprint is not an integrity check for its origin metadata.
+
+ToolBrief, CapabilityList, ToolJson, and provider tool schemas derive from that content identity.
+Field/schema mapping origins retain both `snapshot` (the declaration fingerprint) and `capture`
+(the snapshot's origin), so two captures placed in one document stay distinguishable. Placement
+origins identify where a projection was used independently from where its declarations were captured.
 Usage removal is a longest-usage-first policy with recorded before/after counts and removed keys;
 mandatory names/descriptions and the failure instruction remain even when they exceed `maxChars`.
 A capability projection records its first-sentence rule. These derived decisions are recomputable
@@ -187,6 +197,10 @@ all transport framing fields or JSON-encoded escape byte offsets. When composing
 separator/reference insertion participates in the derived mapping; it never changes stored content.
 
 ## Three consumers and separate history
+
+Delivery operations are imported explicitly from `@habemus-papadum/aiui-prompts/operations`.
+The package root exports authoring, semantic records, compilation, and tool declarations; it does
+not load the operations module. Analysis similarly lives at `@habemus-papadum/aiui-prompts/analysis`.
 
 `OperationRecord.operation` is a discriminated union, not a universal request-shaped provider:
 
@@ -272,19 +286,19 @@ is not a token-window guarantee for a multimodal request. There is no automatic
 summarization, truncation of history, semantic-equivalence claim, or built-in tokenizer.
 
 The inspector parses each complete contiguous text part using original-source Markdown positions,
-GFM, and math extensions. It renders an owned DOM and KaTeX. Clicking raw/preview/tree regions uses
+GFM, and math extensions. It renders native Solid components and KaTeX in the separate inspector package. Clicking raw/preview/tree regions uses
 contribution mappings; preview precision is a block or complete equation. Folds are a view state:
 raw text may hide exactly one contributor while a shared equation/table remains complete and marked
 partly folded. Canonical copy/export remains unchanged. Rich preview shows images inline in part
 order, with atomic-owner selection and coordinated folds; raw output retains hover/pinned popups.
 Malformed imports preserve the last validated view with diagnostics. Source navigation callbacks
-receive recorded origins. Comparison uses two independent views. See [inspector details](../inspector/README.md).
+receive recorded origins. Comparison uses two independent views. See [inspector details](../../aiui-prompts-inspector/README.md).
 XML tags remain literal. If the Markdown parser recognizes an equation wholly inside a compiler
 XML region, the preview decodes one text-escaping layer for KaTeX while preserving the encoded
 output range. This is whole-equation attribution, not a general nested XML renderer or an exact
 decoded-character map.
 
-The first test line uses jsdom with the real compiler, positional parser, KaTeX, DOM events, and
+The first test line uses jsdom with the real Solid runtime, compiler, positional parser, KaTeX, DOM events, and
 mounted views. No hand-authored fake maps stand in for compiler behavior. Browser checks cover real
 fonts/math layout, hover reachability, image loading, and other platform behavior. Ordinary semantic
 logic, fold state, error recovery, canonical copying, and listener disposal stay in fast DOM tests.

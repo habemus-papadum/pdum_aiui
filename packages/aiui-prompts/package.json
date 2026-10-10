@@ -1,7 +1,7 @@
 {
   "name": "@habemus-papadum/aiui-prompts",
   "version": "0.21.0+dev",
-  "description": "Owned structured prompt records, deterministic compilation, delivery adapters, and inspection.",
+  "description": "Structured prompt records, deterministic compilation, provenance, and delivery operations for Node.js and browsers.",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -9,18 +9,11 @@
     "url": "git+https://github.com/habemus-papadum/pdum_aiui.git",
     "directory": "packages/aiui-prompts"
   },
-  "sideEffects": [
-    "**/*.css"
-  ],
+  "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
     "./jsx-runtime": "./src/jsx-runtime.ts",
     "./jsx-dev-runtime": "./src/jsx-dev-runtime.ts",
-    "./vite": "./src/vite.ts",
-    "./inspector": "./inspector/index.ts",
-    "./inspector/style.css": "./inspector/style.css",
-    "./inspector/themes/aiui.css": "./inspector/themes/aiui.css",
-    "./inspector/themes/terminal.css": "./inspector/themes/terminal.css",
     "./operations": "./src/operations.ts",
     "./analysis": "./src/analysis.ts"
   },
@@ -29,51 +22,36 @@
   "types": "./src/index.ts",
   "files": [
     "dist",
-    "src",
-    "inspector",
-    "!dist/inspector-bench"
+    "src"
   ],
   "publishConfig": {
     "access": "public",
     "main": "./dist/index.js",
     "module": "./dist/index.js",
-    "types": "./dist/src/index.d.ts",
+    "types": "./dist/index.d.ts",
     "exports": {
       ".": {
-        "types": "./dist/src/index.d.ts",
+        "types": "./dist/index.d.ts",
         "import": "./dist/index.js",
         "default": "./dist/index.js"
       },
       "./jsx-runtime": {
-        "types": "./dist/src/jsx-runtime.d.ts",
+        "types": "./dist/jsx-runtime.d.ts",
         "import": "./dist/jsx-runtime.js",
         "default": "./dist/jsx-runtime.js"
       },
       "./jsx-dev-runtime": {
-        "types": "./dist/src/jsx-dev-runtime.d.ts",
+        "types": "./dist/jsx-dev-runtime.d.ts",
         "import": "./dist/jsx-dev-runtime.js",
         "default": "./dist/jsx-dev-runtime.js"
       },
-      "./vite": {
-        "types": "./dist/src/vite.d.ts",
-        "import": "./dist/vite.js",
-        "default": "./dist/vite.js"
-      },
-      "./inspector": {
-        "types": "./dist/inspector/index.d.ts",
-        "import": "./dist/inspector/index.js",
-        "default": "./dist/inspector/index.js"
-      },
-      "./inspector/style.css": "./dist/inspector/style.css",
-      "./inspector/themes/aiui.css": "./dist/inspector/themes/aiui.css",
-      "./inspector/themes/terminal.css": "./dist/inspector/themes/terminal.css",
       "./operations": {
-        "types": "./dist/src/operations.d.ts",
+        "types": "./dist/operations.d.ts",
         "import": "./dist/operations.js",
         "default": "./dist/operations.js"
       },
       "./analysis": {
-        "types": "./dist/src/analysis.d.ts",
+        "types": "./dist/analysis.d.ts",
         "import": "./dist/analysis.js",
         "default": "./dist/analysis.js"
       }
@@ -86,40 +64,14 @@
     "spike:authoring": "pnpm --filter @habemus-papadum/aiui-prompts-authoring-spike examples",
     "spike:playground": "pnpm --filter @habemus-papadum/aiui-prompts-authoring-spike dev",
     "spike:inspector": "pnpm --filter @habemus-papadum/aiui-prompts-inspector-spike dev",
-    "lint": "biome check src inspector test package.json tsconfig.json tsconfig.test.json vite.config.ts",
-    "dev": "vite --config inspector/vite.config.ts",
-    "build:inspector": "vite build --config inspector/vite.config.ts"
+    "lint": "biome check src test package.json tsconfig.json tsconfig.test.json vite.config.ts"
   },
   "devDependencies": {
     "@habemus-papadum/aiui-build-config": "workspace:^",
-    "@habemus-papadum/aiui-design": "workspace:^",
-    "@habemus-papadum/aiui-source-processor": "workspace:^",
-    "@solidjs/web": "catalog:solid",
-    "@types/katex": "^0.16.7",
     "@types/node": "^26.1.0",
-    "jsdom": "catalog:",
-    "solid-js": "catalog:solid",
     "tsx": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
-    "vite-plugin-solid": "catalog:solid",
     "vitest": "catalog:"
-  },
-  "dependencies": {
-    "katex": "^0.17.0",
-    "magic-string": "^0.30.21",
-    "mdast-util-from-markdown": "^2.1.0",
-    "mdast-util-gfm": "^3.1.0",
-    "mdast-util-math": "^3.0.0",
-    "micromark-extension-gfm": "^3.0.0",
-    "micromark-extension-math": "^3.1.0"
-  },
-  "peerDependencies": {
-    "vite": ">=8"
-  },
-  "peerDependenciesMeta": {
-    "vite": {
-      "optional": true
-    }
   }
 }

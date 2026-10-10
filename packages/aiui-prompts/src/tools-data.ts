@@ -16,8 +16,10 @@ export interface ToolKit {
 export interface ToolSnapshot {
   readonly kind: "aiui.tools";
   readonly schemaVersion: 1;
+  /** Content identity of the ordered declarations; capture origin is deliberately excluded. */
   readonly fingerprint: string;
   readonly kits: readonly ToolKit[];
+  /** Capture metadata, protected by an enclosing semantic or operation record's fingerprint. */
   readonly origin: JsonObject;
 }
 export interface ToolProjectionOptions {
@@ -38,12 +40,17 @@ export interface ToolProjection {
   }[];
 }
 
-/** Capture declarations once. Execution callbacks never belong in a tool document. */
+/** Capture declarations once. Equal documents share an identity across capture sites. */
 export function toolSnapshot(kits: readonly ToolKit[], origin: JsonObject = {}): ToolSnapshot {
   const data = copyJson({ kind: "aiui.tools" as const, schemaVersion: 1 as const, kits, origin });
   plain(data.origin, "tool origin");
   validateKits(data.kits);
-  return freeze({ ...data, fingerprint: `sha256:${sha256(canonicalJson(data))}` });
+  return freeze({ ...data, fingerprint: toolFingerprint(data) });
+}
+function toolFingerprint(data: Pick<ToolSnapshot, "kind" | "schemaVersion" | "kits">): string {
+  return `sha256:${sha256(
+    canonicalJson({ kind: data.kind, schemaVersion: data.schemaVersion, kits: data.kits }),
+  )}`;
 }
 function plain(value: unknown, label: string): asserts value is Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value))
@@ -102,8 +109,7 @@ export function validateToolSnapshot(snapshot: ToolSnapshot): void {
   fields(value, ["kind", "schemaVersion", "fingerprint", "kits", "origin"], "tool snapshot");
   plain(value.origin, "tool origin");
   validateKits(value.kits);
-  const { fingerprint, ...data } = value;
-  if (fingerprint !== `sha256:${sha256(canonicalJson(data))}`)
+  if (value.fingerprint !== toolFingerprint(value))
     throw new TypeError("Tool snapshot fingerprint mismatch.");
 }
 const headings = {
@@ -139,10 +145,12 @@ export function projectTools(
   );
   if (new Set(rows.map((row) => row.name)).size !== rows.length)
     throw new TypeError("Tool projection has ambiguous names; enable qualify.");
+  const capture = copyJson(snapshot.origin);
   const origin = (field: string): JsonObject => ({
     kind: "tool-projection",
     snapshot: snapshot.fingerprint,
     field,
+    capture,
   });
   const segments: ToolProjection["segments"][number][] = [];
   const decisions: ToolProjection["decisions"][number][] = [];
@@ -286,5 +294,11 @@ export function projectToolSchemas(snapshot: ToolSnapshot, qualify = false) {
   );
 }
 export function originForTool(snapshot: ToolSnapshot, namespace: string, name: string): JsonObject {
-  return { kind: "tool", snapshot: snapshot.fingerprint, namespace, name };
+  return {
+    kind: "tool",
+    snapshot: snapshot.fingerprint,
+    namespace,
+    name,
+    capture: copyJson(snapshot.origin),
+  };
 }

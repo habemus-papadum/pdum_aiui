@@ -42,7 +42,36 @@ describe("retained tool declarations and projections", () => {
     expect(() =>
       validateToolSnapshot({ ...snapshot, schemaVersion: 2 } as unknown as typeof snapshot),
     ).toThrow(/schema/);
-    expect(() => validateToolSnapshot({ ...snapshot, origin: {} })).toThrow(/fingerprint/);
+    expect(() => validateToolSnapshot({ ...snapshot, origin: {} })).not.toThrow();
+    const tampered = JSON.parse(JSON.stringify(snapshot));
+    tampered.kits[0].tools[0].description = "Different declaration.";
+    expect(() => validateToolSnapshot(tampered)).toThrow(/fingerprint/);
+  });
+  it("shares declaration identity across capture sites and preserves each capture in projections", () => {
+    const first = toolSnapshot(declarations(), { site: "oracle" });
+    const second = toolSnapshot(declarations(), { site: "live-session" });
+    expect(first.fingerprint).toBe(second.fingerprint);
+    expect(first.origin).not.toEqual(second.origin);
+    for (const snapshot of [first, second]) {
+      const brief = projectTools(snapshot, { style: "brief" });
+      expect(brief.segments.filter((segment) => segment.origin).length).toBeGreaterThan(0);
+      for (const segment of brief.segments.filter((segment) => segment.origin))
+        expect(segment.origin).toMatchObject({
+          snapshot: first.fingerprint,
+          capture: snapshot.origin,
+        });
+      expect(projectToolSchemas(snapshot)[0].origin).toMatchObject({
+        snapshot: first.fingerprint,
+        capture: snapshot.origin,
+      });
+    }
+    expect(text(projectTools(first, { style: "brief" }))).toBe(
+      text(projectTools(second, { style: "brief" })),
+    );
+    const readBack = JSON.parse(JSON.stringify(first));
+    projectTools(readBack, { style: "brief" });
+    projectToolSchemas(readBack);
+    expect(Object.isFrozen(readBack.origin)).toBe(false);
   });
   it("derives brief, capabilities, JSON, and provider schemas from the same source", () => {
     const snapshot = toolSnapshot(declarations());

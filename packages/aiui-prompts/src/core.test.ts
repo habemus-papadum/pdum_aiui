@@ -470,6 +470,50 @@ describe("source and declaration projections", () => {
     expect(JSON.parse(rendered(compilePrompt(ToolJson({ snapshot: tools }))))).toEqual(tools.kits);
     covers(compiled);
   });
+  it("keeps tool capture and placement provenance separate from declaration identity", () => {
+    const kits = [{ ns: "app", tools: [{ name: "read", description: "Read state." }] }];
+    const first = toolSnapshot(kits, { site: "oracle" });
+    const second = toolSnapshot(kits, { site: "live-session" });
+    const record = snapshot(
+      Prompt({
+        children: [
+          Use({
+            value: ToolBrief({ snapshot: first }),
+            key: "oracle",
+            origin: { site: "first-placement" },
+          }),
+          Use({
+            value: ToolBrief({ snapshot: second }),
+            key: "live",
+            origin: { site: "second-placement" },
+          }),
+        ],
+      }),
+    );
+    const compiled = rehydrate(parseRecord(serializeRecord(record)));
+    const captures = [first, second];
+    for (const [index, key] of ["oracle", "live"].entries()) {
+      const occurrence = compiled.occurrences.find((item) => item.key === key);
+      expect(occurrence?.origin).toEqual({
+        site: index === 0 ? "first-placement" : "second-placement",
+      });
+      const field = compiled.contributions.find(
+        (item) => item.occurrence === occurrence?.id && item.origin?.field === "app/read/name",
+      );
+      expect(field?.origin).toEqual({
+        kind: "tool-projection",
+        snapshot: first.fingerprint,
+        field: "app/read/name",
+        capture: captures[index].origin,
+      });
+    }
+    const records = captures.map((capture) => snapshot(ToolBrief({ snapshot: capture })));
+    expect(records[0].fingerprint).not.toBe(records[1].fingerprint);
+    expect(rehydrate(records[0]).parts).toEqual(rehydrate(records[1]).parts);
+    const tampered = JSON.parse(serializeRecord(records[0]));
+    tampered.definitions[0].toolSnapshot.origin.site = "rewritten";
+    expect(() => parseRecord(tampered)).toThrow(/fingerprint/);
+  });
   it("escapes plain section titles and preserves XML attribute whitespace", () => {
     expect(rendered(compilePrompt(Section({ title: "[x] * y", children: "body" })))).toBe(
       "# \\[x\\] \\* y\n\nbody",
