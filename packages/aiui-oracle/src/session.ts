@@ -17,16 +17,27 @@
  *  - unrecognized vendor events land in the ledger as `raw`, never dropped.
  */
 
-import { importText, type SemanticRecord } from "@habemus-papadum/aiui-prompts";
+import { importText, type JsonObject, type SemanticRecord } from "@habemus-papadum/aiui-prompts";
+import {
+  captureWire,
+  consumerOperation,
+  lowerOperation,
+  type OperationRecord,
+  type PreparedDelivery,
+  sessionOperation,
+  type WireRecord,
+} from "@habemus-papadum/aiui-prompts/operations";
 import {
   instructionsWithToolBrief,
+  type RenderedPrompt,
   renderPrompt,
   type ToolSnapshot,
   toolSnapshot,
 } from "@habemus-papadum/aiui-viz";
 import { priceRealtimeUsage, usageFromRealtimeResponse } from "./cost";
 import { pruneTurnDetection, setPath, TURN_DETECTION_TYPE } from "./params";
-import { weaveInstructions } from "./prompt";
+import { greetingPrompt, instructionsPrompt } from "./prompt";
+import { ORACLE_REALTIME_ADAPTER_IDENTITY, ORACLE_REALTIME_ADAPTERS } from "./realtime-adapter";
 import type {
   Greeting,
   KeySource,
@@ -90,6 +101,14 @@ interface PendingFunctionCall {
   args: string;
 }
 
+/** A `session.update` in flight: what was sent, and the records it was derived from. */
+interface PendingUpdate {
+  sent: Record<string, unknown>;
+  prompt?: SemanticRecord;
+  operation?: OperationRecord;
+  wire?: WireRecord;
+}
+
 export class OracleSession {
   readonly transport: OracleTransport;
 
@@ -98,7 +117,7 @@ export class OracleSession {
   private readonly entries: LedgerEntry[] = [];
   private readonly ledgerListeners = new Set<(entry: LedgerEntry) => void>();
   private readonly stateListeners = new Set<(state: OracleState) => void>();
-  private readonly pendingUpdates: Array<Record<string, unknown>> = [];
+  private readonly pendingUpdates: PendingUpdate[] = [];
   /** `function_call_arguments.done` stamps, per call_id — the gate's cost
    * (args-ready → response.done) is measured, not argued about. */
   private readonly argsDoneAt = new Map<string, number>();
@@ -149,7 +168,7 @@ export class OracleSession {
    * `config` ledger entry beside what was sent; rehydrating it reproduces
    * the text, and its decisions say what a budget dropped.
    */
-  private instructionsRecord: SemanticRecord | undefined;
+  private instructionsRendered: RenderedPrompt | undefined;
   /** The app's brief, rendered above the tools in the `Tools:` section. */
   private toolBrief: string | undefined;
   /** The tool document the last `Tools:` section was projected from (the
@@ -167,6 +186,9 @@ export class OracleSession {
    * start, frozen, keeps that read synchronous and stable.
    */
   private resolvedGreeting: Greeting | undefined;
+  /** The greeting as a prompt, rendered once at start beside {@link resolvedGreeting}:
+   * its record is what the `respond` operation binds and the ledger keeps. */
+  private greetingRendered: RenderedPrompt | undefined;
   /** How many times `start` has run — {@link PromptContext.starts}. */
   private startCount = 0;
 
@@ -242,6 +264,11 @@ export class OracleSession {
     try {
       this.instructionsText = await this.composeInstructions(reason);
       this.resolvedGreeting = await this.resolve(this.options.config.greeting, reason);
+      const greeting = greetingPrompt(this.resolvedGreeting);
+      this.greetingRendered =
+        greeting === undefined
+          ? undefined
+          : renderPrompt(greeting, { context: this.promptFacts(reason) });
     } catch (error) {
       // A resolver that throws fails the START rather than falling through to
       // a default. Running on a prompt the app did not mean is worse than not
@@ -250,6 +277,9 @@ export class OracleSession {
       return;
     }
     const session = this.wireSession();
+    // The baked config as a `connect` operation of the oracle's adapter —
+    // what the mint and the transport receive, reproducible from the record.
+    const connect = this.lowerSession("connect", session);
     let credential: Awaited<ReturnType<KeySource["credential"]>>;
     try {
       credential = await this.options.keySource.credential(session);
@@ -292,15 +322,54 @@ export class OracleSession {
       kind: "session",
       phase: "live",
       ...(liveBits.length > 0 ? { detail: liveBits.join(" · ") } : {}),
+      ...(connect !== undefined
+        ? {
+            ...(connect.prompt !== undefined ? { prompt: connect.prompt } : {}),
+            operation: connect.operation,
+            wire: this.captureSent(connect.prepared, session),
+          }
+        : {}),
     });
     // The greeting — echo-canceller priming (see OracleConfig.greeting). Sent
     // AFTER the opening update so the window's suppressions are in force
     // before the model speaks; the explicit create is also what makes those
     // suppressions safe (the window's exit is this very reply).
-    const greeting = this.greetingText();
+    const greeting = this.greetingRendered;
     if (greeting !== undefined) {
-      this.record({ kind: "sent", type: "greeting" });
-      this.send({ type: "response.create", response: { instructions: greeting } });
+      // A per-response instruction: the toolkit's own Realtime profile
+      // lowers it to the `response.create` event, stamped with the id this
+      // session allocates — so the event that leaves is the lowered payload.
+      const eventId = this.nextEventId();
+      let payload: Record<string, unknown> = {
+        type: "response.create",
+        event_id: eventId,
+        response: { instructions: greeting.text },
+      };
+      let records:
+        | { prompt: SemanticRecord; operation: OperationRecord; wire: WireRecord }
+        | undefined;
+      try {
+        const operation = sessionOperation(greeting.record, {
+          action: "respond",
+          sessionId: callId ?? `start:${this.startCount}`,
+          eventId,
+        });
+        const prepared = lowerOperation(operation, { kind: "openai-realtime/1" });
+        payload = prepared.payload as Record<string, unknown>;
+        records = {
+          prompt: greeting.record,
+          operation,
+          wire: this.captureSent(prepared, payload),
+        };
+      } catch (error) {
+        this.record({
+          kind: "error",
+          source: "prompt",
+          message: `the greeting's record could not be lowered: ${message(error)}`,
+        });
+      }
+      this.record({ kind: "sent", type: "greeting", ...(records ?? {}) });
+      this.send(payload);
     }
     // Connecting is not activity, but it IS the moment the mic opens — so the
     // stopwatch starts here. A session opened and then abandoned before a word
@@ -398,7 +467,17 @@ export class OracleSession {
    */
   setInstructions(instructions: string): void {
     this.options.config.instructions = instructions;
-    this.applyInstructions(instructions);
+    // Stated text is still a record — an imported one, so the ledger says
+    // the app took the wheel, and the adapter binds THIS text, not the last
+    // composed prompt.
+    this.instructionsRendered = renderPrompt(
+      instructionsWithToolBrief(
+        importText({ text: instructions, origin: { site: "aiui-oracle setInstructions" } }),
+        undefined,
+      ),
+      { context: this.promptFacts("refresh") },
+    );
+    this.applyInstructions(this.instructionsRendered.text);
   }
 
   /**
@@ -460,16 +539,84 @@ export class OracleSession {
             importText({ text: resolved, origin: { site: "aiui-oracle config.instructions" } }),
             undefined,
           )
-        : instructionsWithToolBrief(
-            importText({
-              text: weaveInstructions(resolved),
-              origin: { site: "aiui-oracle weaveInstructions" },
-            }),
-            this.toolDocument(),
-          );
-    const rendered = renderPrompt(prompt);
-    this.instructionsRecord = rendered.record;
+        : instructionsWithToolBrief(instructionsPrompt(resolved), this.toolDocument());
+    // The facts the resolver was handed ride in the record's context, so a
+    // reader can tell a start from a reconnect without re-running the app.
+    const rendered = renderPrompt(prompt, { context: this.promptFacts(reason) });
+    this.instructionsRendered = rendered;
     return rendered.text;
+  }
+
+  /** The session facts a prompt is composed under — what {@link resolve}
+   * hands a resolver, as the record's context. */
+  private promptFacts(reason: PromptContext["reason"]): JsonObject {
+    return {
+      session: {
+        reason,
+        turns: this.current.turns,
+        starts: this.startCount,
+        usage: { ...this.current.usage },
+      },
+    };
+  }
+
+  /**
+   * Derive a session block from records with the oracle's own adapter: the
+   * instructions as the composed record's binding, everything else as the
+   * captured parameters — and prepare the payload. A failure is a ledger
+   * error, never a lost send: the caller falls back to the plain object.
+   */
+  private lowerSession(
+    action: "session.update" | "connect",
+    session: Record<string, unknown>,
+    eventId?: string,
+  ):
+    | { prompt?: SemanticRecord; operation: OperationRecord; prepared: PreparedDelivery }
+    | undefined {
+    try {
+      const { instructions, ...rest } = session;
+      const rendered = this.instructionsRendered;
+      const bound = typeof instructions === "string";
+      if (bound && (rendered === undefined || instructions !== rendered.text)) {
+        throw new Error("the instructions on the wire are not the composed record's text");
+      }
+      const operation = consumerOperation({
+        adapter: ORACLE_REALTIME_ADAPTER_IDENTITY,
+        action,
+        bindings:
+          bound && rendered !== undefined
+            ? [{ key: "instructions", content: rendered.record }]
+            : [],
+        params: { session: rest as JsonObject, ...(eventId !== undefined ? { eventId } : {}) },
+      });
+      const prepared = lowerOperation(
+        operation,
+        { kind: "custom", adapter: ORACLE_REALTIME_ADAPTER_IDENTITY, options: {} },
+        {},
+        ORACLE_REALTIME_ADAPTERS,
+      );
+      return {
+        ...(bound && rendered !== undefined ? { prompt: rendered.record } : {}),
+        operation,
+        prepared,
+      };
+    } catch (error) {
+      this.record({
+        kind: "error",
+        source: "prompt",
+        message: `the ${action} record could not be derived: ${message(error)}`,
+      });
+      return undefined;
+    }
+  }
+
+  /** The wire record: the payload that actually leaves, against its prepared delivery. */
+  private captureSent(prepared: PreparedDelivery, actual: unknown): WireRecord {
+    const callId = this.handle?.callId;
+    return captureWire(prepared, actual as PreparedDelivery["payload"], {
+      capturedAt: new Date(this.now()).toISOString(),
+      ...(callId !== undefined ? { transportId: callId } : {}),
+    });
   }
 
   /** The tool document for the current tool array — what the `Tools:`
@@ -574,8 +721,23 @@ export class OracleSession {
    * light; masked on connect because the mint had baked the same config). */
   private sendSessionUpdate(session: Record<string, unknown>): void {
     const typed = { type: "realtime", ...session };
-    this.send({ type: "session.update", session: typed });
-    this.pendingUpdates.push(typed);
+    const eventId = this.nextEventId();
+    const lowered = this.lowerSession("session.update", session, eventId);
+    const payload =
+      lowered !== undefined
+        ? (lowered.prepared.payload as Record<string, unknown>)
+        : { type: "session.update", event_id: eventId, session: typed };
+    this.send(payload);
+    this.pendingUpdates.push({
+      sent: typed,
+      ...(lowered !== undefined
+        ? {
+            ...(lowered.prompt !== undefined ? { prompt: lowered.prompt } : {}),
+            operation: lowered.operation,
+            wire: this.captureSent(lowered.prepared, payload),
+          }
+        : {}),
+    });
   }
 
   // ── rich input (ad-hoc text and images ride the same conversation) ─────────
@@ -787,14 +949,7 @@ export class OracleSession {
    * {@link resolvedGreeting} for why this read has to be stable.
    */
   private greetingText(): string | undefined {
-    const greeting = this.resolvedGreeting;
-    if (greeting === undefined || greeting === "") {
-      return undefined;
-    }
-    if (typeof greeting === "string") {
-      return `Open the conversation by saying exactly: "${greeting}". Say nothing else.`;
-    }
-    return greeting.instructions === "" ? undefined : greeting.instructions;
+    return this.greetingRendered?.text;
   }
 
   // ── the first-reply echo window ────────────────────────────────────────────
@@ -919,12 +1074,20 @@ export class OracleSession {
    * attributable against. */
   private static readonly TRACED_SENDS = new Set(["response.create", "response.cancel"]);
 
+  /** The next client event id. An event lowered from a record carries the
+   * id it was lowered with; {@link send} stamps only the rest. */
+  private nextEventId(): string {
+    return `evt_${++this.eventSeq}`;
+  }
+
   private send(event: Record<string, unknown>): void {
     const type = typeof event.type === "string" ? event.type : "";
     if (OracleSession.TRACED_SENDS.has(type)) {
       this.record({ kind: "sent", type });
     }
-    this.handle?.send({ event_id: `evt_${++this.eventSeq}`, ...event });
+    this.handle?.send(
+      typeof event.event_id === "string" ? event : { event_id: this.nextEventId(), ...event },
+    );
   }
 
   private onVendorEvent(event: Record<string, unknown>): void {
@@ -933,7 +1096,8 @@ export class OracleSession {
       case "session.created":
         return;
       case "session.updated": {
-        const sent = this.pendingUpdates.shift();
+        const pending = this.pendingUpdates.shift();
+        const sent = pending?.sent;
         const effective = (event.session ?? {}) as Record<string, unknown>;
         this.lastEffective = effective;
         this.record({
@@ -944,9 +1108,12 @@ export class OracleSession {
           ...(this.toolsFingerprint !== undefined
             ? { tools: { fingerprint: this.toolsFingerprint, count: this.toolsByName.size } }
             : {}),
-          // The record behind the instructions — on the updates that carried them.
-          ...(sent !== undefined && "instructions" in sent && this.instructionsRecord !== undefined
-            ? { prompt: this.instructionsRecord }
+          // The records behind the update: the instructions' semantic record
+          // (on the updates that carried them), the operation it was lowered
+          // from, and the wire as it left — `verifyWire` ties the three.
+          ...(pending?.prompt !== undefined ? { prompt: pending.prompt } : {}),
+          ...(pending?.operation !== undefined
+            ? { operation: pending.operation, wire: pending.wire }
             : {}),
         });
         return;

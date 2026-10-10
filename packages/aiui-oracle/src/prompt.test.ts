@@ -6,8 +6,15 @@
  * indistinguishable from an empty one, and `extra` stays the unheaded escape
  * hatch it has always been.
  */
+import { type PromptNode, rehydrate } from "@habemus-papadum/aiui-prompts";
+import { renderPrompt } from "@habemus-papadum/aiui-viz";
 import { describe, expect, it } from "vitest";
-import { ORACLE_BASE_PERSONA, weaveInstructions } from "./prompt";
+import {
+  greetingPrompt,
+  instructionsPrompt,
+  ORACLE_BASE_PERSONA,
+  weaveInstructions,
+} from "./prompt";
 
 describe("weaveInstructions", () => {
   it("is the bare persona when nothing is supplied", () => {
@@ -57,5 +64,63 @@ describe("weaveInstructions", () => {
 
   it("keeps the persona first and unmodified — it is the shared contract", () => {
     expect(weaveInstructions({ app: "x" }).startsWith(ORACLE_BASE_PERSONA)).toBe(true);
+  });
+});
+
+describe("instructionsPrompt — the weave as nodes", () => {
+  it("places each slot under its own key, the heading and the value as separate contributions", () => {
+    const rendered = renderPrompt(
+      instructionsPrompt({ app: "A spectrum viewer.", extra: "Never mention the weather." }),
+    );
+    expect(rendered.text).toBe(
+      weaveInstructions({ app: "A spectrum viewer.", extra: "Never mention the weather." }),
+    );
+    const keyed = rendered.compiled.occurrences.filter((o) => o.key !== undefined);
+    expect(keyed.map((o) => o.key)).toEqual(["app", "extra"]);
+    const sites = rendered.compiled.contributions
+      .map((c) => {
+        const occurrence = rendered.compiled.occurrences.find((o) => o.id === c.occurrence);
+        return occurrence?.origin?.site;
+      })
+      .filter((site): site is string => typeof site === "string");
+    expect(sites).toContain("aiui-oracle persona");
+    expect(sites).toContain("aiui-oracle slot heading");
+    expect(sites).toContain("aiui-oracle slot");
+    // The app's own words are attributed to the slot, not to the weaver.
+    const app = rendered.compiled.contributions.find((c) => {
+      const occurrence = rendered.compiled.occurrences.find((o) => o.id === c.occurrence);
+      return occurrence?.origin?.site === "aiui-oracle slot" && occurrence.origin.slot === "app";
+    });
+    expect(app).toBeDefined();
+    expect(rendered.text.slice(app?.start, app?.end)).toBe("A spectrum viewer.");
+  });
+
+  it("is a plain record a ledger can hold and rehydrate", () => {
+    const rendered = renderPrompt(instructionsPrompt({ context: "<tab url='/x' />" }));
+    const stored = JSON.parse(JSON.stringify(rendered.record));
+    expect(rehydrate(stored).parts).toEqual(rendered.compiled.parts);
+  });
+});
+
+describe("greetingPrompt", () => {
+  it("frames a plain string as the priming line, attributing the line to the config", () => {
+    const rendered = renderPrompt(greetingPrompt("Hi there.") as PromptNode);
+    expect(rendered.text).toBe(
+      'Open the conversation by saying exactly: "Hi there.". Say nothing else.',
+    );
+    const line = rendered.compiled.contributions.find((c) => {
+      const occurrence = rendered.compiled.occurrences.find((o) => o.id === c.occurrence);
+      return occurrence?.origin?.site === "aiui-oracle config.greeting";
+    });
+    expect(rendered.text.slice(line?.start, line?.end)).toBe("Hi there.");
+  });
+
+  it("hands the object form's brief through unframed, and says nothing for nothing", () => {
+    expect(
+      renderPrompt(greetingPrompt({ instructions: "Greet them by name." }) as PromptNode).text,
+    ).toBe("Greet them by name.");
+    expect(greetingPrompt(undefined)).toBeUndefined();
+    expect(greetingPrompt("")).toBeUndefined();
+    expect(greetingPrompt({ instructions: "" })).toBeUndefined();
   });
 });

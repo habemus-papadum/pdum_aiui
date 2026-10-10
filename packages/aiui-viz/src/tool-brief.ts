@@ -32,6 +32,7 @@
 
 import {
   type CompiledPrompt,
+  type CompileOptions,
   toolSnapshot as captureToolSnapshot,
   type JsonObject,
   Prompt,
@@ -196,10 +197,12 @@ export interface RenderedPrompt {
  * Snapshot a prompt value into its semantic record, compile the RECORD
  * (never the value — so what the ledger holds is proven to reproduce the
  * wire), and join its text. The wires this serves carry text only, so an
- * image part is an error here, not a silent drop.
+ * image part is an error here, not a silent drop. `options` are the
+ * toolkit's: the captured facts a `Case` decides on (`context`) and the
+ * `Choice` selection — both end up in the record.
  */
-export function renderPrompt(value: PromptValue): RenderedPrompt {
-  const record = snapshot(value);
+export function renderPrompt(value: PromptValue, options?: CompileOptions): RenderedPrompt {
+  const record = snapshot(value, options);
   const compiled = rehydrate(record);
   let text = "";
   for (const part of compiled.parts) {

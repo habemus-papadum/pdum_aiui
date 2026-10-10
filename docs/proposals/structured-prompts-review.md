@@ -252,6 +252,17 @@ Each stage is byte-identical first (the corpus), then improved with recorded dif
   elision (LV5), the appends as session operations (LV6), the backend prompt and the delegation
   messages (LV8–LV11) with the `delegation` XML element and the transcript rendering. This is
   where the Realtime adapter and session operations (item 6) get built.
+  **Oracle half done 2026-10-10.** `instructionsPrompt` is the weave as nodes (persona, keyed
+  slots, heading and value as separate contributions); the resolver's facts ride as the record's
+  context; the greeting is a `respond` session operation under the toolkit's `openai-realtime/1`
+  profile; every update that carries instructions is lowered by the oracle-owned adapter
+  `aiui-oracle/realtime-session@1` (instructions bound, audio/tools/limits as parameters — the
+  toolkit agent's guidance, since `verifyWire` compares the whole event) and captured as it leaves;
+  the `config`, `live` and greeting entries carry `prompt`/`operation`/`wire`. Corpus byte-identical.
+  Not done: the panel and the dock still author `context` as two different strings (a canonical
+  `<tab …/>` record versus a prose sentence); unifying them changes the dock's bytes, so it waits
+  for a reviewed diff. No oracle-internal `Case` exists yet because nothing in the oracle's own
+  text branches on a fact — the facts are recorded so an app's resolver can.
 - **Stage 3 — the lowering pipeline and the channel.** `ComposedItem[]` becomes the semantic
   input: shots as markers with asset-reference policies and sidecars, selections as text plus
   XML, navigation and tab switches as markers, corrections as `Case`. The contributions map

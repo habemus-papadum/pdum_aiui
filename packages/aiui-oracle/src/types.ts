@@ -12,6 +12,7 @@
  */
 
 import type { SemanticRecord } from "@habemus-papadum/aiui-prompts";
+import type { OperationRecord, WireRecord } from "@habemus-papadum/aiui-prompts/operations";
 
 /**
  * The prompt's structured modification points.
@@ -606,7 +607,16 @@ export type LedgerEntry = { at: number; seq: number } & LedgerBody;
 
 /** The entry payloads, without the stamp — what the engine's `record` takes. */
 export type LedgerBody =
-  | { kind: "session"; phase: OracleStatus; detail?: string }
+  | {
+      kind: "session";
+      phase: OracleStatus;
+      detail?: string;
+      /** On `live`: the baked config as a `connect` operation of the oracle's
+       * adapter — what the mint and the transport received — with its wire. */
+      prompt?: SemanticRecord;
+      operation?: OperationRecord;
+      wire?: WireRecord;
+    }
   | {
       /** A config we sent + what the server acked (`session.updated` is the
        * reconciliation signal); `drift` names intended-vs-effective gaps. */
@@ -623,6 +633,12 @@ export type LedgerBody =
        * prompt toolkit): rehydrate it and the text comes back; its decisions
        * say what a budget dropped. On the updates that carried instructions. */
       prompt?: SemanticRecord;
+      /** The operation the update was lowered from (the oracle's own Realtime
+       * adapter: the instructions bound, everything else as parameters) and
+       * the wire as it left — `verifyWire(operation, wire, adapters)` proves
+       * the record reproduces the event. */
+      operation?: OperationRecord;
+      wire?: WireRecord;
     }
   | { kind: "speech"; phase: "started" | "stopped" }
   /**
@@ -662,7 +678,15 @@ export type LedgerBody =
    * evidence. Deliberately NOT every outbound event — audio frames and
    * session updates would drown the thing this exists to show.
    */
-  | { kind: "sent"; type: string }
+  | {
+      kind: "sent";
+      type: string;
+      /** The greeting carries its records: the per-response instructions
+       * (semantic), the `respond` session operation, and the wire. */
+      prompt?: SemanticRecord;
+      operation?: OperationRecord;
+      wire?: WireRecord;
+    }
   | { kind: "response"; responseId: string; status: string; usage?: UsageTotals }
   | {
       kind: "error";

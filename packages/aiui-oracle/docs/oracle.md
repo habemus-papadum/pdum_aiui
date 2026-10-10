@@ -269,7 +269,22 @@ declarations: a tool's `usage` is its doc comment's `@usage`/`@example`, the bri
 `agentToolkit(ns, { brief })` — see the user guide's "Documenting a tool". Pass the brief with
 the tools: `session.setTools(tools, { brief })`; `briefFromAiuiRegistry()` collects it from the
 page registry, as `toolsFromAiuiRegistry()` collects the tools (`{ groups, excludeGroups }`
-keeps or drops whole groups). A plain-string `instructions`
+keeps or drops whole groups).
+
+**What the ledger holds (stage 2 of the structured-prompts migration).** The weave is a prompt of
+the toolkit's nodes (`instructionsPrompt`): the persona is one text with its own origin, each slot
+is placed under its own key with the weaver's heading and the app's value as separate
+contributions, and the session compiles it late with the tool brief, under the facts the resolver
+was handed (`reason`, `turns`, `starts`, `usage`) as the record's context. Every send that carries
+instructions is derived from that record by the oracle's own adapter of the toolkit
+(`aiui-oracle/realtime-session@1`: the instructions as the one binding, the audio block, the tool
+schemas and the limits as captured parameters), and the event that leaves is captured as the wire.
+The `config` ledger entry of each acked update therefore carries `prompt`, `operation` and `wire`,
+the `live` session entry carries the baked config the mint and the transport received the same way,
+and the greeting's `sent` entry carries its per-response `respond` operation (lowered by the
+toolkit's own Realtime profile). `verifyWire(operation, wire, ORACLE_REALTIME_ADAPTERS)` proves a
+stored record reproduces the event; `setInstructions` records its text as imported, naming the
+hand that wrote it. A plain-string `instructions`
 gets no section: a string is the whole prompt, stated.
 
 ## The lab

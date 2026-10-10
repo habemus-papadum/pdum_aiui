@@ -6,7 +6,13 @@
  * vendor events retained as `raw`).
  */
 import { rehydrate, type SemanticRecord } from "@habemus-papadum/aiui-prompts";
+import {
+  type OperationRecord,
+  verifyWire,
+  type WireRecord,
+} from "@habemus-papadum/aiui-prompts/operations";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ORACLE_REALTIME_ADAPTERS } from "./realtime-adapter";
 import { OracleSession } from "./session";
 import type {
   KeySource,
@@ -1539,5 +1545,131 @@ describe("the unattended session parks itself", () => {
     session.close();
     await vi.advanceTimersByTimeAsync(600_000);
     expect(session.state().status).toBe("closed");
+  });
+});
+
+describe("the records behind every send (stage 2 of the structured-prompts migration)", () => {
+  const kick: OracleTool = {
+    name: "kick",
+    description: "Add a phase impulse.",
+    usage: "Call once; the trace settles in a second.",
+    kind: "write",
+    parameters: { type: "object" },
+    execute: () => null,
+  };
+  const started = async (greeting?: string) => {
+    const rig = fakeTransport();
+    const session = new OracleSession({
+      config: {
+        instructions: { app: "A wave app.", stance: "Be terse." },
+        tools: [kick],
+        ...(greeting !== undefined ? { greeting } : {}),
+      },
+      keySource: testKeys,
+      transport: rig.transport,
+      now: () => 1_760_000_000_000,
+    });
+    session.setTools([kick], { brief: "One damped oscillator." });
+    await session.start();
+    return { rig, session };
+  };
+  const entryOf = <K extends LedgerEntry["kind"]>(
+    session: OracleSession,
+    kind: K,
+    which: "first" | "last" = "last",
+  ) => {
+    const entries = session.ledger().filter((e) => e.kind === kind);
+    return (which === "first" ? entries[0] : entries.at(-1)) as Extract<LedgerEntry, { kind: K }>;
+  };
+
+  it("the opening session.update is the lowered event, and its ack entry verifies it", async () => {
+    const { rig, session } = await started();
+    rig.emit({ type: "session.updated", session: {} });
+    const config = entryOf(session, "config");
+    expect(config.prompt).toBeDefined();
+    expect(config.operation?.operation).toMatchObject({
+      kind: "custom",
+      adapter: { name: "aiui-oracle/realtime-session", version: "1" },
+      action: "session.update",
+      bindings: [{ key: "instructions" }],
+    });
+    // The wire IS the event the transport received — not a reconstruction.
+    const update = rig.sent.find((m) => m.type === "session.update");
+    expect(config.wire?.payload).toEqual(update);
+    expect((config.wire?.payload as { event_id?: string }).event_id).toBe(update?.event_id);
+    expect(config.wire?.capturedAt).toBe("2025-10-09T08:53:20.000Z");
+    expect(config.wire?.transportId).toBe("rtc_test");
+    // The stored operation + wire + the oracle's adapter reproduce it exactly.
+    expect(
+      verifyWire(
+        config.operation as OperationRecord,
+        config.wire as WireRecord,
+        ORACLE_REALTIME_ADAPTERS,
+      ).equal,
+    ).toBe(true);
+    // And the record's context carries the facts the resolver was handed.
+    expect(config.prompt?.context).toEqual({
+      session: { reason: "start", turns: 0, starts: 1, usage: expect.any(Object) },
+    });
+    // The weave is nodes now: the slots are placements under their own keys.
+    const keys = config.prompt?.definitions.flatMap((d) =>
+      "children" in d ? (d.children ?? []).map((c) => c.key).filter(Boolean) : [],
+    );
+    expect(keys).toEqual(expect.arrayContaining(["app", "stance"]));
+    expect(keys).not.toContain("context");
+  });
+
+  it("the baked config rides the live entry as a connect operation, and the greeting its respond operation", async () => {
+    const { rig, session } = await started("Hi there.");
+    const live = entryOf(session, "session");
+    expect(live.phase).toBe("live");
+    expect(live.operation?.operation).toMatchObject({ action: "connect" });
+    expect(live.wire?.payload).toEqual(session.sessionConfig());
+    expect(
+      verifyWire(
+        live.operation as OperationRecord,
+        live.wire as WireRecord,
+        ORACLE_REALTIME_ADAPTERS,
+      ).equal,
+    ).toBe(true);
+
+    const greeting = session
+      .ledger()
+      .find((e) => e.kind === "sent" && e.type === "greeting") as Extract<
+      LedgerEntry,
+      { kind: "sent" }
+    >;
+    expect(greeting.operation?.operation).toMatchObject({ kind: "session", action: "respond" });
+    const create = rig.sent.find((m) => m.type === "response.create");
+    expect(greeting.wire?.payload).toEqual(create);
+    expect((create as { response: { instructions: string } }).response.instructions).toBe(
+      'Open the conversation by saying exactly: "Hi there.". Say nothing else.',
+    );
+    // The toolkit's own Realtime profile lowers a respond operation: no adapter needed.
+    expect(
+      verifyWire(greeting.operation as OperationRecord, greeting.wire as WireRecord).equal,
+    ).toBe(true);
+    // Every client event left with its own id, none stamped twice.
+    const ids = rig.sent.map((m) => m.event_id).filter((id) => typeof id === "string");
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("manual control is still a record — imported text that names the hand that wrote it", async () => {
+    const { rig, session } = await started();
+    rig.emit({ type: "session.updated", session: {} }); // the opening update's ack
+    rig.sent.length = 0;
+    session.setInstructions("stated by hand");
+    rig.emit({ type: "session.updated", session: {} }); // the manual update's ack
+    const config = entryOf(session, "config");
+    expect((config.sent as { instructions?: string }).instructions).toBe("stated by hand");
+    const origins = config.prompt?.definitions.map((d) => d.origin?.site).filter(Boolean);
+    expect(origins).toContain("aiui-oracle setInstructions");
+    expect(
+      verifyWire(
+        config.operation as OperationRecord,
+        config.wire as WireRecord,
+        ORACLE_REALTIME_ADAPTERS,
+      ).equal,
+    ).toBe(true);
   });
 });
