@@ -58,7 +58,7 @@
   },
   "devDependencies": {
     "@habemus-papadum/aiui-build-config": "workspace:^",
-    "@habemus-papadum/aiui-claude-channel": "workspace:^",
+    "@habemus-papadum/aiui-util": "workspace:^",
     "@types/express": "catalog:",
     "@types/ws": "catalog:",
     "express": "catalog:",
@@ -68,11 +68,11 @@
     "ws": "catalog:"
   },
   "peerDependencies": {
-    "@habemus-papadum/aiui-claude-channel": "workspace:^",
+    "@habemus-papadum/aiui-util": "workspace:^",
     "express": "catalog:"
   },
   "peerDependenciesMeta": {
-    "@habemus-papadum/aiui-claude-channel": {
+    "@habemus-papadum/aiui-util": {
       "optional": true
     },
     "express": {

@@ -1,1 +1,0 @@
-make the baseline curve a bit thicker and color it amber the legend overlaps the plot on narrow screens can you move it below

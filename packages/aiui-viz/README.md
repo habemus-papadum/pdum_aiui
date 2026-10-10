@@ -7,9 +7,10 @@ between durable state and disposable logic is made explicit so hot-module reload
 during a tight agent iteration loop.
 
 This is the library layer of the repo's **frontend-for-agents** methodology. The long-form write-up
-lives in the three-level guide at [`docs/guide/frontend-for-agents`](../../docs/guide/); the demo's
-[`PRINCIPLES.md`](../../demos/gallery/PRINCIPLES.md) and the [`gallery`](../../demos/gallery) demo itself are the
-worked example that every utility here was paid for building.
+is the three-level guide in this package's docs — [concepts](./docs/frontend-for-agents.md),
+[design choices](./docs/frontend-design-choices.md), [hard-won details](./docs/frontend-hard-won.md) —
+and the demo's [`PRINCIPLES.md`](../../demos/gallery/PRINCIPLES.md) and the [`gallery`](../../demos/gallery)
+demo itself are the worked example that every utility here was paid for building.
 
 ## Plumbing and porcelain
 
@@ -21,8 +22,8 @@ The library has two layers (one package for now; the seam is deliberate):
   (`/plot`), the page chrome + math + theming (`/site`). Each porcelain surface lives on its own
   subpath so its heavyweight dependency (`@observablehq/plot`, `katex`) stays an **optional
   peer** that plumbing consumers never pay for. Porcelain grows by extraction: a pattern proves
-  itself in a reference notebook first, then moves here (the repo's
-  [style guide](../../packages/aiui-viz/docs/frontend-style-guide.md) tracks which patterns are where).
+  itself in a reference notebook first, then moves here (the
+  [style guide](./docs/frontend-style-guide.md) tracks which patterns are where).
 
 ## What's in it
 
@@ -38,7 +39,7 @@ The library has two layers (one package for now; the seam is deliberate):
 | `CellText` | A cell's value as **quiet prose** — for a number inside a sentence, where CellView's chrome would break the line: reads `latest()` (never suspends), renders "…" until the first value, keeps the last value through refreshes and errors, and carries the same `data-cell` / `data-cell-loc` / `data-cell-state` stamps. |
 | `workerStream`, `fromWorker` | A dependency-free, cancellable request/stream protocol that turns a Web Worker into an async generator a cell consumes directly — partials stream in, progress drives `ctx.progress`, and aborting posts a `cancel` so the worker actually stops. |
 | `durable`, `durableSignal`, `disposeDurable` | A keyed, idempotent `window` registry for resources that must outlive a module reload (a WebGL context, a worker, accumulated history, the user's parameters). `durable(key, create)` creates once and *adopts* forever after — the discipline HMR needs; `durableSignal(key, initial)` is the signal-shaped case. |
-| `agentToolkit` | A WebMCP-flavored tool surface installed at `window.__<ns>`: named, described, loosely-schema'd operations an agent discovers and calls, plus pluggable `report()` sections for one bounded, JSON-serializable snapshot of the app. The intent client forwards the surface (`window.__AIUI__.tools`) to the channel and the panel. |
+| `agentToolkit` | A WebMCP-flavored tool surface installed at `window.__<ns>`: named, described, loosely-schema'd operations an agent discovers and calls, plus pluggable `report()` sections for one bounded, JSON-serializable snapshot of the app. The surface is also forwarded to the page's shared registry (`window.__AIUI__.tools`), where the voice dock's sessions and any external host that drives the page list and call it. |
 | `@habemus-papadum/aiui-viz/testing` → `cellHarness`, `whenReady`, `whenState`, `recordCommits`, `tick`, `resetControlSurface` | The cell-testing harness: build a graph under a disposable owner (kept live — cells created outside the setup callback throw `NO_OWNER_BOUNDARY`), await states/values with diagnostic timeouts, record a stream's commits, and reset the control surface between cases (`afterEach(resetControlSurface)` — restores initial values and clears edges while keeping registrations, since modules only import once). |
 | `@habemus-papadum/aiui-viz/plot` → `PlotFigure`, `PLOT_STYLE` | The Observable Plot bridge (reactive options in, a figure out) behind one seam. Kept on a subpath so `@observablehq/plot` stays an **optional** peer that core consumers never import. |
 | `@habemus-papadum/aiui-viz/site` → `SiteNav`, `TocRail`, `TeX`, `Lens`, `colorMode` | Page chrome for the paper-like notebook anatomy: the site nav (a left sidebar of name + one-line-descriptor items, collapsing to a top bar + drawer on a phone), the "On this page" rail, KaTeX math with the `data-tex` attribution stamp, the **Lens** (levels of detail: an inline trigger → hover peek → click-to-open detail panel in the page's own reactive graph; born in aiui-slides, promoted once plain pages carried copies; alone on `/site/lens`, katex-free), and the reactive `prefers-color-scheme` signal apps key their palettes on. `katex` is an optional peer only `/site` consumers need. Styling is the consumer's (`.site-*`, `.toc-*`, `.math-*`, `.aiui-lens-*`) — same CSS seam as `CellView`. |
@@ -86,7 +87,8 @@ function Results() {
 
 `CellView` emits stable class names (`cell-body`, `cell-body-loading`, `cell-pending`, `cell-error`,
 `progress-stripe`, `progress-stripe-fill`, and `btn`/`btn-outline` on the retry button) — style them
-in your app. The demo's [`styles.css`](../../demos/gallery/src/styles.css) is a worked dark-surface example.
+in your app, or import the design system's `site.css` (`@habemus-papadum/aiui-design`), which skins
+every one of them.
 
 ## See it in use
 

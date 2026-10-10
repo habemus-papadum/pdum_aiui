@@ -495,13 +495,28 @@ export interface SourceLocatorViteOptions extends SourceLocatorOptions {
   loadBabel?: () => Promise<BabelModule>;
 }
 
-/** The content sniff: JSX open tag (when stamping) or a factory call. */
+/**
+ * The content sniff: JSX open tag (when stamping) or a factory call. The
+ * factory half admits an optional type-argument list between the callee and
+ * its paren — `control<Grade>({…})`, `cell<Map<string, number>>(…)`, one
+ * level of nesting — because Babel parses those as the same CallExpression
+ * (the type argument rides in `typeParameters`, not the callee), and a file
+ * the sniff skips is a file whose controls reach the page NAMELESS: the
+ * paren-right-after-the-callee sniff let `control<Grade>({…})` through to a
+ * build that threw `control() needs a name` at page load (found 2026-09-23;
+ * the proposal that recorded it is retired with this fix). A false admission
+ * costs one Babel pass on that file — the visitor decides.
+ */
 function buildSniff(factories: FactorySpec[], stampJsx: boolean): RegExp | undefined {
   const parts: string[] = [];
   if (stampJsx) parts.push("<[A-Za-z]");
   if (factories.length > 0) {
     const escaped = factories.map((f) => f.callee.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-    parts.push(`\\b(?:${escaped.join("|")})\\s*\\(`);
+    // `<…>` whose body is anything but a bare angle bracket, OR one nested
+    // `<…>` — the two alternatives are disjoint on their first character, so
+    // the group cannot backtrack catastrophically.
+    const typeArguments = "(?:<(?:[^<>]|<[^<>]*>)*>\\s*)?";
+    parts.push(`\\b(?:${escaped.join("|")})\\s*${typeArguments}\\(`);
   }
   return parts.length > 0 ? new RegExp(parts.join("|")) : undefined;
 }

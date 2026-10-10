@@ -11,9 +11,7 @@
     "directory": "demos/twins"
   },
   "scripts": {
-    "claude": "../../bin/aiui claude",
     "dev": "vite",
-    "open": "../../bin/aiui open",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
@@ -28,10 +26,8 @@
   },
   "devDependencies": {
     "@babel/core": "catalog:",
-    "@habemus-papadum/aiui": "workspace:^",
     "jsdom": "catalog:",
     "typescript": "catalog:",
-    "typescript-language-server": "catalog:",
     "vite": "catalog:",
     "vite-plugin-solid": "catalog:solid",
     "vitest": "catalog:"

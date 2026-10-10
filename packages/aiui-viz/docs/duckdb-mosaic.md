@@ -388,11 +388,13 @@ registerSqlTools(kit, {
 ```
 
 Two read tools land on the kit, each carrying its usage (the tool-docs convention, so the
-oracle, a live delegation and `page_tools_list` all render the same guidance):
+oracle, a live delegation and an external host reading the page's tool listing all render the
+same guidance):
 
 - **`sql { sql, limit?, format? }`** — one `SELECT`/`WITH` statement, guarded: read-only, a
   single statement, wrapped in a `LIMIT` one past the cap so truncation is *detected* rather
-  than guessed, a byte budget on the rows (32 KB, the panel's `read_file` precedent), bounded
+  than guessed, a byte budget on the rows (32 KB, the former intent panel's `read_file`
+  precedent), bounded
   cells (long strings clip at 256 chars with a marker; BigInt to number, dates to ISO,
   binary to `<n bytes>`), and a timeout that cancels the statement (`cancelSent`). The answer
   is **columnar** — `columns`, `types` (free from Arrow), `rows` as arrays (half the tokens of

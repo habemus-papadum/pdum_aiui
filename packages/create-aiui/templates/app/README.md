@@ -1,42 +1,29 @@
 # your app (an aiui starter)
 
-A SolidJS app scaffolded by [`create-aiui`](https://habemus-papadum.github.io/pdum_aiui/), wired
-for the aiui loop: a Claude Code session with a custom channel, a shared agent+human browser, and
-a web intent tool floating over the page. The app you see on first run — a banner and a rose you
-can play with — is **scenery, built to be rebuilt**: open the overlay and describe the app you
+A SolidJS + aiui-viz app scaffolded by
+[`create-aiui`](https://github.com/habemus-papadum/pdum_aiui/tree/main/packages/create-aiui), with
+the voice dock in the corner, ready for an agent to edit. The app you see on first run — a banner
+and a rose you can play with — is **scenery, built to be rebuilt**: tell your agent the app you
 actually want.
-
-> ⚠️ First read *Read before running* in the aiui docs: `aiui claude` can skip permissions and
-> gives the agent a browser. This scaffold assumes you've decided to trust it.
 
 ## Run it
 
 ```sh
 pnpm install
-npx aiui claude   # terminal 1 — Claude Code with the aiui channel + session browser
-
-# in a second terminal
-pnpm dev
+npm run dev
 ```
 
-Then open the app **in the session browser** (the window you share with the agent):
-
-```sh
-npx aiui open http://localhost:5173
-```
-
-Arm the overlay with the backtick key `` ` `` (or the floating **✳ aiui** button), then talk:
-hold **Space** and speak, drag to circle the thing you mean, or use the plain-text tab — then
-**Enter** to send. What you say lands in the Claude session as a prompt, with screenshots and
-source locations attached.
+Open the printed URL. The `aiui` pill in the corner is the voice dock: it expands into the voice
+sessions, the page's tool log, a key pane and a source browser, and nothing connects until you
+press one. Both voice engines want an OpenAI key — export `OPENAI_API_KEY` before `npm run dev`
+and the dev server hands it to the page, or paste one into the key pane.
 
 Optional but recommended: `direnv allow` activates `.envrc` — it puts `node_modules/.bin` on
-your PATH (bare `aiui`, `vite`, `tsc`) and loads `.env`, where `OPENAI_API_KEY` belongs if you
-want real voice transcription.
+your PATH (bare `vite`, `tsc`) and loads `.env`, where `OPENAI_API_KEY` belongs.
 
 ## What's what
 
-The layout is the [frontend-for-agents](https://habemus-papadum.github.io/pdum_aiui/guide/frontend-for-agents)
+The layout is the [frontend-for-agents](https://github.com/habemus-papadum/pdum_aiui/blob/main/packages/aiui-viz/docs/frontend-for-agents.md)
 methodology in miniature:
 
 ```
@@ -67,4 +54,4 @@ model, however small, can follow it — no code reasoning involved).
 This is a standalone git repo of your own — let the agent redesign, break, and rebuild
 everything; nothing flows back anywhere.
 
-Docs: <https://habemus-papadum.github.io/pdum_aiui/guide/getting-started>
+Docs: <https://github.com/habemus-papadum/pdum_aiui/blob/main/packages/aiui-viz/docs/frontend-user-guide.md>

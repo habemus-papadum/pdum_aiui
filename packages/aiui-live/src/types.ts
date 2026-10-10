@@ -4,7 +4,7 @@
  * seams every host plugs into — the TRANSPORT (how audio and events move) and
  * the DELEGATOR (who does the thinking).
  *
- * Contract of record: docs/proposals/oracle-live.md §6–§7. The oracle's
+ * Contract of record: docs/oracle-live.md §6–§7. The oracle's
  * vocabulary (`heard`/`said`/`response`) is deliberately NOT reused: Live has
  * fragment transcripts with no turn boundaries, tickets instead of tool calls,
  * and seconds instead of tokens.

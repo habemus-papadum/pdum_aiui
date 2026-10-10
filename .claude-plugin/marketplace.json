@@ -8,7 +8,7 @@
     {
       "name": "aiui",
       "source": "./",
-      "description": "The aiui skills (workflow introspection, frontend architecture, session-browser etiquette), fronting the repo docs they digest — the whole repo is the plugin, so the linked docs are the live ones."
+      "description": "The aiui-architecture skill (how an aiui-viz frontend is built: the four-layer playbook, cells, scopes, the agent tool surface, site pages and cards), fronting the repo docs it digests — the whole repo is the plugin, so the linked docs are the live ones."
     }
   ]
 }

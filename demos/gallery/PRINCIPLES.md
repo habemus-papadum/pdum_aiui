@@ -3,7 +3,7 @@
 This file was the working draft written alongside the morphogen build. It has graduated into the
 repo documentation, which is now the **single source of truth**:
 
-- **Concepts & desiderata** — [`docs/guide/frontend-for-agents.md`](../../docs/guide/frontend-for-agents.md)
+- **Concepts & desiderata** — [`packages/aiui-viz/docs/frontend-for-agents.md`](../../packages/aiui-viz/docs/frontend-for-agents.md)
 - **Design choices** (framework-designer level, with code references) —
   [`packages/aiui-viz/docs/frontend-design-choices.md`](../../packages/aiui-viz/docs/frontend-design-choices.md)
 - **Hard-won technical details** (the paid-for findings ledger) —
@@ -32,7 +32,7 @@ demos/
 ```
 
 The gallery is a **single-document SPA** (it began as one Vite entry per notebook — "Level 1" —
-and moved to client-side routing so an open intent turn survives switching pages; see the
+and moved to client-side routing so an open voice session survives switching pages; see the
 SPA-navigation-and-turn-continuity proposal in git history). Each notebook is a self-contained
 package, discovered through its `aiui.sitePage` marker (demo-discovery.ts), lazily imported and
 code-split; leaving a route parks its rAF loops and disposes its components while every durable

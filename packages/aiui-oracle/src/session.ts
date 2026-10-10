@@ -232,7 +232,7 @@ export class OracleSession {
     // `replyText` resets HERE, not on close: a new connection is a new
     // conversation (the vendor carries no history across sessions), and a
     // session object is REUSED across connects by hosts that hold one for the
-    // page's lifetime — the intent panel does. Without this, a reconnect would
+    // page's lifetime (a side panel does). Without this, a reconnect would
     // open showing the last session's reply, and "ready — talk to it" (the
     // once-per-session invitation the strip no longer returns to) would never
     // appear again.
@@ -768,9 +768,10 @@ export class OracleSession {
    *
    * `respond` defaults to true — pasting an image into a lab bench is a
    * question. Pass `false` when the image is CONTEXT the human is about to
-   * talk about: the intent panel's oracle does, because a shot taken
-   * mid-sentence must not make the model start answering over them (owner,
-   * 2026-07-30 — the same rule `sendText` already carries).
+   * talk about — a host that captures screenshots mid-conversation must,
+   * because a shot taken mid-sentence must not make the model start
+   * answering over them (owner, 2026-07-30 — the same rule `sendText`
+   * already carries).
    */
   sendImage(image: string, caption?: string, options: { respond?: boolean } = {}): void {
     if (this.handle === undefined) {

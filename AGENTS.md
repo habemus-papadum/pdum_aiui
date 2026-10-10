@@ -19,12 +19,12 @@ It has **two modes**, and both live in that one file so there is exactly one wor
 publish — one gate, one version computation, one secret surface:
 
 - **release** (default) — stamp `X.Y.Z` across every manifest, commit, tag, publish to `latest`,
-  cut a GitHub Release, deploy the gallery.
+  cut a GitHub Release, deploy the gallery (the demo notebooks' static site).
 - **canary** — `gh workflow run release.yml -f canary=true` publishes
   `X.Y.Z-canary.<sha>` under the **`canary`** dist-tag and stops. No commit, no tag, no GitHub
-  Release, no site deploy. It exists so a small upstream fix can reach a consumer (see the
-  evicted `cc-miner` repo) in a couple of minutes rather than a full release, which is what
-  otherwise discourages making the fix upstream at all. `latest` is never touched.
+  Release, no site deploy. It exists so a small upstream fix can reach a consumer in a couple of
+  minutes rather than a full release, which is what otherwise discourages making the fix
+  upstream at all. `latest` is never touched.
 
 The workflow authenticates with the **`NPM_TOKEN` repo secret** (an npm token from the owner's
 account — see CLAUDE.md → *Publication convention*). Never run `pnpm publish` / `npm publish` to
@@ -48,17 +48,7 @@ staged publishing with a human 2FA approval.
 **Name reservation is not releasing.** `pnpm npm:reserve <slug>` (placeholder-publish a name to
 claim it ahead of its first real release — optional; nothing requires it) is a deliberate local
 step run with the human's npm login. Do not run it on your own initiative; only when the user
-explicitly asks. (`pnpm npm:trust` is retired — it belonged to the OIDC trusted-publishing era;
-never suggest it as a setup step.)
-
-**The one exception: `bootstrap/` packages.** `bootstrap/aiui-registry` (and any future
-`bootstrap/*`) sits OUTSIDE the workspace, carries its own semver, and is published **manually** via
-its own `scripts/publish.mjs` — run locally by the human (npm login + 2FA), never from CI and never
-via bare `npm publish` (a `prepublishOnly` guard blocks that; the script stages
-`optionalDependencies` the source manifest deliberately omits). Everything else in this section —
-CI-only releasing, versioning.mjs lockstep — simply does not apply to `bootstrap/`, and conversely:
-never fold a bootstrap package into `release.yml` or the lockstep. See CLAUDE.md → *The `bootstrap/`
-directory* and the aiui-registry proposal §10 (git history). Do not run its publish script unasked.
+explicitly asks.
 
 ## Development
 
@@ -68,7 +58,8 @@ pnpm build       # Vite library build + tsc .d.ts, per package
 pnpm test        # Vitest
 pnpm typecheck   # tsc --noEmit
 pnpm lint        # Biome (also enforced in CI)
-./aiui <cmd>     # run the aiui CLI from source via tsx (e.g. `./aiui claude`)
+pnpm demo        # the notebook gallery's dev server (every demo, one site)
+pnpm -C demos/<slug> dev   # one demo on its own
 pnpm new-package <name> (--public | --private | --no-publish) [--no-reserve]
 pnpm new-demo <name>    # scaffold demos/<name> — an in-repo demo app on workspace:^ deps
 pnpm npm:list    # the packages release.yml would publish
@@ -93,7 +84,9 @@ join version lockstep like everything else — see [CLAUDE.md](./CLAUDE.md) → 
 - **Editable (source-first) deps**: dev manifests point `exports`/`main`/`types` at
   `src/index.ts`; the `dist/` mapping lives in `publishConfig` and is swapped in by pnpm at
   pack/publish time. In-workspace consumers always run live source — no rebuild loop. `bin`
-  stays on `dist/` (dev CLI spawning goes through tsx). See CLAUDE.md → *Workspace dependencies
-  are editable* for the rules.
+  stays on `dist/` (create-aiui's bin is run by plain node from the installed tarball). See
+  CLAUDE.md → *Workspace dependencies are editable* for the rules.
 - Build: Vite library mode (ESM) + `tsc --emitDeclarationOnly` for `.d.ts` — the *published*
   artifact; the workspace dev loop doesn't consume it.
+- The repo root is a Claude Code plugin (`.claude-plugin/`, one skill in `skills/`); its
+  manifest version is part of the lockstep above.

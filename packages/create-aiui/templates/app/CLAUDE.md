@@ -1,7 +1,7 @@
 # an aiui starter app
 
-This directory was scaffolded by `create-aiui`. It is the user's sandbox: a SolidJS 2.0 (beta)
-app wired for the aiui loop, whose visible content — the banner, the rose — is **placeholder
+This directory was scaffolded by `create-aiui`. It is the user's sandbox: a SolidJS 2.0 (beta) +
+aiui-viz app with the voice dock, whose visible content — the banner, the rose — is **placeholder
 scenery meant to be replaced** the moment the user describes the app they actually want. Be bold
 about rebuilding the page (the banner included); be careful about the wiring underneath.
 
@@ -35,7 +35,7 @@ canvas before building theirs), do exactly this and nothing more:
    "no tests" green).
 
 The result compiles and runs: an empty page, an empty cell graph over empty durable roots, the
-intent tool still mounted, the standard agent tools still registered. Do not "clean up" anything
+voice dock still mounted, the standard agent tools still registered. Do not "clean up" anything
 else — unused-looking scaffolding outside the fences is the app's wiring.
 
 (For authors editing the scenery instead of deleting it: keep the invariant that fenced code is
@@ -45,7 +45,7 @@ blank app.)
 ## The build order (the playbook)
 
 When building the user's real app, work in the four-layer order of the
-[frontend playbook](https://habemus-papadum.github.io/pdum_aiui/guide/frontend-playbook), thin
+[frontend playbook](https://github.com/habemus-papadum/pdum_aiui/blob/main/packages/aiui-viz/docs/frontend-playbook.md), thin
 vertical slices first:
 
 1. **Pure functions** (`src/model/*.ts`, like the rose's math) — domain logic, no framework, no
@@ -59,9 +59,10 @@ vertical slices first:
 Ground rules:
 
 - **Don't remove the integration.** The `aiui()` plugin in `vite.config.ts` stamps JSX with
-  `data-source-loc` and injects `cell()` identities — the handles the intent client's
-  screenshot/selection attribution reads. The loop stops working without it. (And never
-  hand-write a `data-source-loc`/`data-cell-loc` — locations are compiler output.) The
+  `data-source-loc` and injects `cell()` identities — the handles the page's `locate`,
+  `selection` and `source` tools read, and the identity a durable cell keeps across hot edits.
+  Those tools stop answering without it. (And never hand-write a
+  `data-source-loc`/`data-cell-loc` — locations are compiler output.) The
   `PageBoundary` in `main.tsx` is wiring too: an uncaught effect throw halts the page's whole
   reactive system (Solid 2.0), and the boundary turns that into a contained fault card.
 - **Harden foreign crossings with `bridgeEffect`.** An effect whose handler calls into an
@@ -101,12 +102,11 @@ Ground rules:
   runs on cascade layers, so `src/styles.css` wins without specificity games. Style with the
   tokens (`var(--ink)`, `var(--surface-raised)`, `var(--space-sm)`, `var(--text-label)`…) rather
   than restating colors; a user who wants a different look deletes that one import.
-- The dev server runs via `npm run dev` (plain `vite`). Put the app in the shared session
-  browser with `aiui open http://localhost:5173` (it starts the browser if needed). The intent
-  client reaches the channel on its own (it is served by the channel at `/intent/`), so the app
-  itself needs no channel wiring.
+- The dev server runs via `npm run dev` (plain `vite`). The voice dock takes its OpenAI key from
+  `OPENAI_API_KEY` in the environment (the `devKeys` opt-in in `vite.config.ts`; `.env` under
+  direnv is the usual place) or from its own key pane.
 - This is a standalone git repo scaffolded for the user; commit freely — history here belongs to
   their sandbox and goes nowhere else.
 
 Methodology docs (user guide, playbook, design choices, hard-won details):
-<https://habemus-papadum.github.io/pdum_aiui/guide/frontend-user-guide>
+<https://github.com/habemus-papadum/pdum_aiui/blob/main/packages/aiui-viz/docs/frontend-user-guide.md>

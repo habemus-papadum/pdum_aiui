@@ -12,8 +12,8 @@
  * Deliberately unstyled beyond geometry: the wrapper is `aiui-dropdown`, the
  * popup `aiui-dropdown-pop` (positioned under the trigger) — the HOST styles
  * surfaces, borders, and type; the trigger button takes `class` verbatim so
- * it can be the host's own chip/pill. Born in the aiui browser extension's
- * connection chip (channel list that rescans on open); extracted here because
+ * it can be the host's own chip/pill. Born in the first aiui browser extension's
+ * connection chip (a server list that rescans on open); extracted here because
  * "a dropdown that refreshes itself when asked" is a shape, not an app
  * feature.
  *

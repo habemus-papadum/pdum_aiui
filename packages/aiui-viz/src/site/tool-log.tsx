@@ -6,16 +6,17 @@
  * {@link toggleToolLog}; the app decides where it mounts and what key opens
  * it. Three views over the page's own registry (`window.__AIUI__.tools`):
  *
- *  - **calls** — the registry's call log, live: who called what (`channel`,
- *    `oracle`, `live:claude`, `page`…, each with its glyph), with what, how
+ *  - **calls** — the registry's call log, live: who called what (`oracle`,
+ *    `live:claude`, `page`, an external host's own name…, each with its
+ *    glyph), with what, how
  *    long it took, and the result or error — args and results as a folding
  *    JSON explorer, not a line of text;
  *  - **inventory** — every registered kit, its brief, and each tool's class,
  *    description, and usage, laid out to be read;
  *  - **as rendered** — what a model sees: the `Tools:` section
  *    (`renderToolBrief`, the same function the oracle and the live delegators
- *    call) as Markdown with a raw toggle, and the structured form
- *    `page_tools_list` returns.
+ *    call) as Markdown with a raw toggle, and the structured form the
+ *    registry's `list()` returns (what a host forwards as its tool listing).
  *
  * Its own subpath (`@habemus-papadum/aiui-viz/site/tool-log`) so pages that
  * never open it pay nothing. It is shipped chrome: its inline panel and one
@@ -68,7 +69,7 @@ function registrySnapshot(registry: AiuiToolsRegistry | undefined) {
   });
 }
 
-/** The `page_tools_list` shape (descriptors only — never functions). */
+/** The registry's listing shape (descriptors only — never functions). */
 function listing(registry: AiuiToolsRegistry | undefined): unknown {
   return (registry?.list() ?? []).map((ns) => ({
     ns: ns.ns,

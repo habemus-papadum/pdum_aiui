@@ -9,15 +9,14 @@ import solid from "vite-plugin-solid";
 // (in every mode; `stampJsx: false` opts a build out) and `cell()` call sites get
 // their `{ name, loc }` identity injected in EVERY mode (load-bearing for
 // durable cells) — plus the dev-only sourceRoot seed and
-// the dev server's source listing (and any devKeys/duckdbAssets opt-ins). Nothing else: no overlay
-// injection, no channel port; connectivity arrives from the intent client
-// (window.__AIUI__ itself is the viz runtime's job, production included).
+// the dev server's source listing (and any devKeys/duckdbAssets opt-ins). Nothing else: no runtime
+// injection (window.__AIUI__ itself is the viz runtime's job, production included).
 //
 // Order matters: aiui() comes BEFORE solid() so the locator's `pre` babel pass
 // stamps JSX before vite-plugin-solid (also `pre`) compiles each element into
 // an opaque template. Same-enforce plugins run in array order.
 export default defineConfig({
-  // devKeys: the OS-vault/env MOTHERDUCK_BROWSER_TOKEN reaches the page under
+  // devKeys: MOTHERDUCK_BROWSER_TOKEN from the dev server's environment reaches the page under
   // `vite serve` only; duckdbAssets: the wasm is served from this origin at the
   // MotherDuck layout, no CDN — both are the lab's whole point.
   plugins: [aiui({ devKeys: ["motherduck", "openai"], duckdbAssets: true }), solid()],

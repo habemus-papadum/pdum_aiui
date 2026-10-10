@@ -1,7 +1,7 @@
 /**
  * Word-level diff, merged into runs for rendering — the computation half of
- * the "one visual language for text changed in front of you" rule (see
- * ../../handoff/modal-interaction-lessons.md §1). Lifted verbatim from the
+ * the "one visual language for text changed in front of you" rule (the
+ * modal-interaction-lessons handoff §1, git history). Lifted verbatim from the
  * retired dev overlay's intent pipeline, where it powered correction patches,
  * streaming-STT self-revisions, and undo restores; it lives here so every
  * aiui surface diffs (and therefore flashes) text the same way.

@@ -36,7 +36,7 @@ wrapper.dataset.promptTheme = "aiui";
 ```
 
 The `terminal.css` example is an independent host palette with compact spacing and a dark
-surface. It is not a dark variant of the FAI Labs design system.
+surface. It is not a dark variant of another design system.
 
 ```ts
 import "@habemus-papadum/aiui-prompts-inspector/themes/terminal.css";

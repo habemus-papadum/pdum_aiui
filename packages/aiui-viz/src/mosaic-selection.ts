@@ -24,8 +24,8 @@
  * `set-<name>` tool until 2026-10-09.) Setting a dimension publishes clauses
  * exactly the way a mouse brush does — same Selection, same clause shape,
  * stable per-(dimension, target) sources — so every coordinated view
- * cross-filters identically for a drag, a `page_tools_call`, and a spoken
- * sentence.
+ * cross-filters identically for a drag, an external host's tool call, and a
+ * spoken sentence.
  *
  * Multi-table: the cross-filter from ./crossfilter ROUTES clauses — a clause
  * reaches a client only when its table has every column the clause names —

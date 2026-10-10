@@ -1,9 +1,9 @@
 # Frontend design choices
 
 The level-2 document: what we actually built, how it works, and why — written for a reader who
-designs frameworks for a living. [Frontend for agents](/guide/frontend-for-agents) is the conceptual
-overview; [Hard-won details](./frontend-hard-won) is the ledger of low-level findings this page
-occasionally leans on; the [Style guide](./frontend-style-guide) carries the authoring
+designs frameworks for a living. [Frontend for agents](./frontend-for-agents.md) is the conceptual
+overview; [Hard-won details](./frontend-hard-won.md) is the ledger of low-level findings this page
+occasionally leans on; the [Style guide](./frontend-style-guide.md) carries the authoring
 conventions built on these mechanisms. Code lives in `packages/aiui-viz` (the library) and `demos/gallery`
 (two reference notebooks — morphogen, aztec — that exercise everything below).
 
@@ -60,7 +60,7 @@ with the cell reporting `held` so the UI shows it quietly rather than as endless
 
 > How these stamps are *consumed* — the resolution ladders that turn a text selection or a drag
 > rectangle into elements, cells, and source locations in the composed prompt — is its own
-> concepts page: [Attribution: gesture → source](./attribution).
+> concepts page: [Attribution: gesture → source](./attribution.md).
 
 Attribution, the registry, and HMR all need stable identity, and nobody should have to write it.
 A compile-time pass — the aiui compiler (`packages/aiui-source-processor`, the `aiui()`
@@ -205,12 +205,15 @@ Three semantics carry the design:
 - **`report()` is one bounded, JSON-serializable call** for the whole picture — the single most
   used call in agent-driven verification of both reference apps.
 
-The pipeline (frontend → dev overlay → channel → agent-visible MCP tools, with calls routed
-back) is **implemented**: `agentToolkit` forwards each namespace's tool set to the overlay's
-tools bridge (`window.__AIUI__.tools`, installed by the Vite plugin's mount module), which
-declares it over the channel's `/tools` websocket; the session reaches it through the
-`page_tools_list` / `page_tools_call` MCP tools. The load-bearing properties, carried over from
-the handoff (see git history: aiui-dev-overlay's handoff/frontend-tool-registry.md): registration is
+The page's end of the pipeline (frontend → a shared in-page registry → whatever host drives the
+page) is **implemented**: `agentToolkit` forwards each namespace's tool set to the page's shared
+registry (`window.__AIUI__.tools`, installed unconditionally by `aiui-global.ts`), which any
+host lists and calls — in-repo the voice dock's oracle and live sessions, externally a tool
+driving the page over CDP or through an extension. The transport that once declared the
+registry over a websocket to an MCP channel host, so that a Claude Code session reached the
+tools as `page_tools_list` / `page_tools_call`, belonged to the intent tool and lives outside
+this repo now. The load-bearing properties, carried over from the original overlay's
+frontend-tool-registry handoff (git history) and still true of the registry: registration is
 *declarative* (always re-register the full set; identity = namespace + name), forwarding is
 *content-hashed* (page reloads with unchanged tool sets are invisible upstream), and
 implementations are resolved *at call time* (HMR swaps closures invisibly).
@@ -238,8 +241,8 @@ verbatim copies across two sites, the select as five in one.
 chrome (spinner + progress before the first value, keep-last-render dimmed under a progress
 stripe, error box with retry) — also stamps `data-cell` with its cell's name and
 `data-cell-loc` with its definition site (the `cell(...)` call's `file:line`, babel-injected),
-so DOM-contract consumers — the shot locator, the overlay's VS Code jump mode — can open the
-cell's source without a registry lookup. One deliberate
+so DOM-contract consumers — a host's screenshot locator, an editor's jump-to-source — can open
+the cell's source without a registry lookup. One deliberate
 library seam: CellView ships *behavior and class names*, never styles — the consumer owns the
 CSS for `cell-body`, `cell-pending`, `cell-error`, `progress-stripe` and friends (the demo's
 `styles.css` is the worked example), so the library imposes no theme. That makes the
@@ -255,7 +258,7 @@ registry closes the loop for anything it misses.
 
 ## 8 · Pages, entries, and resource lifecycles
 
-Documented in [Frontend for agents](/guide/frontend-for-agents#many-notebooks-one-lab) at the concept
+Documented in [Frontend for agents](./frontend-for-agents.md#many-notebooks-one-lab) at the concept
 level; the design commitments: **Level 1** (separate Vite entries, plain-link nav, full reload as
 the resource policy) and **Level 2** (one entry, one document, lazy page modules behind
 client-side routing, per-island suspend policies). The gallery ran Level 1 for its first life and
@@ -265,9 +268,10 @@ and a **pause-not-destroy** page lifecycle — leaving a route disposes the page
 (the same disposability HMR relies on) and *parks its rAF loops* (`SimLoop.pause`,
 `Player.pause`), while every durable (the WebGL field, workers, DuckDB, history rings) survives
 for the return visit. Event-driven resources need no handling: a worker between jobs costs
-nothing. The motive is **turn continuity**: one document means an open intent turn, its socket,
-and its capture grant survive switching notebooks, and the overlay's navigation watcher records
-each switch as a `navigation` event. A shell-level delegated click
+nothing. The motive is **turn continuity**: one document means an open agent-collaboration
+turn — a voice session, or an intent tool's open thread, its socket, and its capture grant —
+survives switching notebooks, and a host watching navigation sees each switch as one
+`navigation` event rather than a reload. A shell-level delegated click
 interceptor turns every same-origin in-base anchor into a client-side navigation, so no link can
 hard-navigate the document and kill a turn. At larger scale the suspend ladder continues:
 `hibernate` reads GPU state back to CPU and releases the context — mandatory eventually because

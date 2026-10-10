@@ -1,16 +1,13 @@
 # @habemus-papadum/create-aiui
 
-Scaffold a fresh SolidJS app pre-wired for the [aiui](https://habemus-papadum.github.io/pdum_aiui/)
-loop — a Claude Code session with a custom channel, a shared agent+human browser, and the web
-intent tool floating over your page.
+Scaffold a fresh SolidJS + [aiui-viz](https://github.com/habemus-papadum/pdum_aiui) app with the
+voice dock, ready for an agent to edit.
 
 ```sh
 pnpm create @habemus-papadum/aiui@latest my-app   # or: npm create @habemus-papadum/aiui@latest my-app
 cd my-app
 pnpm install
-npx aiui claude   # terminal 1 — Claude Code with the aiui channel + session browser
-pnpm dev       # terminal 2 — the app (Vite + the intent tool)
-npx aiui open http://localhost:5173
+pnpm dev          # Vite; open the printed URL
 ```
 
 > Use the `@latest` tag: `pnpm create` runs through a dlx cache that can otherwise reuse a
@@ -20,10 +17,10 @@ npx aiui open http://localhost:5173
 > pins the app's aiui dependencies to *its own* release line, so an old scaffolder gives you old
 > `@habemus-papadum/*` packages.
 
-The scaffolded app opens on a banner that explains itself: the page is alive, arm the ✳ aiui
-overlay and start talking about the app you want. Its starter content — a Maurer rose driven by
-two sliders — is scenery built to be rebuilt, but its *shape* is the
-[frontend-for-agents](https://habemus-papadum.github.io/pdum_aiui/guide/frontend-for-agents)
+The scaffolded app opens on a banner that explains itself, with the voice dock in the corner
+(it takes an OpenAI key from `OPENAI_API_KEY` in the environment or from its own key pane). Its
+starter content — a Maurer rose driven by two sliders — is scenery built to be rebuilt, but its
+*shape* is the [frontend-for-agents](https://github.com/habemus-papadum/pdum_aiui/blob/main/packages/aiui-viz/docs/frontend-for-agents.md)
 methodology in miniature:
 
 - **durable roots** (`src/model/store.ts`) — `durableSignal()` interaction state that survives
@@ -35,8 +32,8 @@ methodology in miniature:
   git repo so agent churn is versioned in the sandbox and nowhere else.
 
 Re-running the command on an existing scaffold **continues** it (tops up `node_modules`, reprints
-the loop) — it never overwrites your or the agent's changes. Anything else at the target path is
-refused.
+the next steps) — it never overwrites your or the agent's changes. Anything else at the target
+path is refused.
 
 This is the **only** starter aiui ships. (An older `aiui demo` subcommand scaffolded a second,
 throwaway playground; it was removed in favour of one template that people actually build on.)

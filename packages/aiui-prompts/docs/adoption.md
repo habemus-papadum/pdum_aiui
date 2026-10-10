@@ -1,7 +1,9 @@
 # Starting the first consumer migration
 
 The foundation is ready for an initial consumer port. Begin with the shared tool brief, following
-the [consumer review's migration order](../../../docs/proposals/structured-prompts-review.md).
+the consumer review's migration order (the review itself is retired to git history; the order
+was: the shared tool brief, then the oracle and live delegators, then the intent tool's lowering
+and channel sites, then small page-authored tool text).
 The packages are public and their authoring APIs can still evolve with integration feedback.
 No version has been published yet. This refactoring deliberately removes the earlier entry points;
 the stored schema/compiler contract has fixtures defining the first release's behavior.

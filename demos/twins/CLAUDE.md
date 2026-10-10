@@ -27,8 +27,9 @@ Ground rules (the same ones the starter ships with):
 
 - **Don't remove the integration.** The `aiui()` plugin in `vite.config.ts` stamps JSX with
   `data-source-loc` and injects `cell()`/`control()`/`action()` identities — the handles the
-  intent client's screenshot/selection attribution reads. The loop stops working without it.
-  (And never hand-write a `data-source-loc`/`data-cell-loc` — locations are compiler output.)
+  page's `locate`, `selection` and `source` tools read, and the identity a durable keeps across
+  hot edits. Those tools stop answering without it. (And never hand-write a
+  `data-source-loc`/`data-cell-loc` — locations are compiler output.)
 - **Keep the architecture's split.** `src/model/store.ts` holds the *durable roots* AND the
   **control surface**: user-movable parameters are `control({ value, min, max, … })` with a real
   doc comment (the compiler injects the name from the binding and lifts the comment as the
@@ -44,8 +45,8 @@ Ground rules (the same ones the starter ships with):
   rare genuinely-bespoke case.
 - **Test the surface with the cells.** `resetControlSurface()` in afterEach, build cells inside
   `cellHarness`, probe each input.
-- Run the dev server with `pnpm dev` from this directory (plain `vite`); the intent client
-  reaches the channel through the channel-served `/intent/` page or the side panel, so the dev
-  server needs no channel wiring of its own.
+- Run the dev server with `pnpm dev` from this directory (plain `vite`); the voice dock takes its
+  OpenAI key from `OPENAI_API_KEY` in the environment (the `devKeys` opt-in in `vite.config.ts`)
+  or from its own key pane.
 
-Methodology: [docs/guide/frontend-for-agents.md](../../docs/guide/frontend-for-agents.md).
+Methodology: [frontend-for-agents.md](../../packages/aiui-viz/docs/frontend-for-agents.md).

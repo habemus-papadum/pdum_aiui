@@ -152,7 +152,7 @@ function main() {
   // For a publishable level, reserve the name on npm now (a placeholder publish
   // via the shared provisioning tool, using local npm auth) unless --no-reserve.
   // Reservation only claims the name early — the next release publishes with the
-  // NPM_TOKEN secret either way, no per-package setup (docs/guide/releasing.md).
+  // NPM_TOKEN secret either way, no per-package setup (AGENTS.md → Releasing).
   if (publish && reserve) {
     process.stdout.write(
       `\nReserving ${scope}/${slug} on npm (local auth; may prompt for 2FA)...\n`,
@@ -171,7 +171,7 @@ function main() {
   } else if (publish) {
     process.stdout.write(
       `\nNo publishing setup needed — the next release publishes it. (Optional: claim the name\n` +
-        `early with \`pnpm npm:reserve ${slug}\`; see docs/guide/releasing.md.)\n`,
+        `early with \`pnpm npm:reserve ${slug}\`; see AGENTS.md → Releasing.)\n`,
     );
   }
 }

@@ -3,7 +3,7 @@
 The second notebook page: uniformly-random domino tilings of the Aztec diamond
 by **EKLP domino shuffling**, the arctic-circle phase transition, and the
 tilings-as-permanents connection. Built to the methodology in
-[`../../../PRINCIPLES.md`](../../../PRINCIPLES.md); this file records what the
+[`demos/gallery/PRINCIPLES.md`](../../gallery/PRINCIPLES.md); this file records what the
 build taught, for folding back into that document.
 
 ## What it exercises (all from PRINCIPLES)

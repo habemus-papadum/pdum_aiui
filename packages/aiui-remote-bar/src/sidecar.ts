@@ -27,7 +27,7 @@
  * no frontend process; a bar remote is an ordinary app).
  */
 
-import type { MountedSidecar, Sidecar, SidecarContext } from "@habemus-papadum/aiui-claude-channel";
+import type { MountedSidecar, Sidecar, SidecarContext } from "@habemus-papadum/aiui-util";
 import type { Express } from "express";
 import { createBarBackend } from "./backend";
 

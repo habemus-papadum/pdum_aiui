@@ -7,7 +7,7 @@
  * delegation relay, speech synthesis) at `./node`, the Claude Code delegator
  * at `./claude`, and the Vite dev-server plugin at `./vite`.
  *
- * Contract of record: docs/proposals/oracle-live.md.
+ * Contract of record: docs/oracle-live.md.
  */
 
 // adapter.ts — the session's connect config as a consumer-owned adapter for

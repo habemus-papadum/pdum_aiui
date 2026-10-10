@@ -12,8 +12,6 @@
       "!**/.aiui/lsp",
       "!**/templates/*/aiui/lsp",
       "!.claude/worktrees",
-      "!archive",
-      "!exploration/cc-usage/snapshots",
       "!**/corpus"
     ]
   },

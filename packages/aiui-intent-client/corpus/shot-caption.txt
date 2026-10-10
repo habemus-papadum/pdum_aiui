@@ -1,4 +1,0 @@
-[screenshot of the area I selected — 300×181]
-<screenshot-metadata attached="true">
-  <element name="Legend" source="src/Legend.tsx:30:2"/>
-</screenshot-metadata>

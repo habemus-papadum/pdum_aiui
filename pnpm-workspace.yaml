@@ -8,13 +8,7 @@ packages:
   # the globs in this list, so every demo carries the shared version.
   - "demos/*"
 
-# The ONE npm-pinned in-repo package (bootstrap/aiui-registry — outside the
-# workspace, published manually; see CLAUDE.md → "The bootstrap/ directory").
-# A catalog entry so every workspace consumer resolves the SAME version: its
-# on-disk formats are a cross-process protocol, and two compiled-in versions
-# could disagree. Bump it here, once, after publishing a new registry version.
 catalog:
-  "@habemus-papadum/aiui-registry": 0.1.0
   # Shared singleton versions: deps declared by 3+ workspace members, where
   # "everyone on the same version" is the point. Each bumps independently —
   # unlike the `solid` group below, these carry no moves-together claim.
@@ -32,7 +26,6 @@ catalog:
   jsdom: ^29.0.0
   tsx: ^4.22.5
   typescript: ^5.6.0
-  typescript-language-server: ^5.3.0
   # Vite 8 (Rolldown + oxc) and Vitest 5, since 2026-10-08 — the Solid 2.0
   # release candidates compile only through a Vite-8 plugin. The floor is the
   # newest version old enough for the release-age policy below; a fresher
@@ -81,14 +74,7 @@ overrides:
 # pnpm blocks dependency build scripts by default; allow the ones we trust.
 # (esbuild ships a prebuilt binary but runs a postinstall to link it.)
 allowBuilds:
-  # @vscode/vsce (aiui-vscode's .vsix packager) drags these two in; neither
-  # build script matters for `vsce package` — keytar's native build backs the
-  # legacy credential store, vsce-sign's postinstall fetches its marketplace
-  # signing binary — so both are explicitly denied, not trusted.
-  "@vscode/vsce-sign": false
-  electron: set this to true or false
   esbuild: true
-  keytar: false
 
 minimumReleaseAgeExclude:
   # The cf_browser_credentials kit (aiui-cf-creds' substrate) is our own —
@@ -98,11 +84,6 @@ minimumReleaseAgeExclude:
   - '@habemus-papadum/cf-creds-elevenlabs@0.4.0 || 0.5.0'
   - '@habemus-papadum/cf-creds-mosaic@0.4.0 || 0.5.0'
   - '@habemus-papadum/cf-creds-openai@0.4.0 || 0.5.0'
-  - '@habemus-papadum/aiui-registry-host-darwin-arm64@0.1.0'
-  - '@habemus-papadum/aiui-registry-host-darwin-x64@0.1.0'
-  - '@habemus-papadum/aiui-registry-host-linux-arm64@0.1.0'
-  - '@habemus-papadum/aiui-registry-host-linux-x64@0.1.0'
-  - '@habemus-papadum/aiui-registry@0.1.0'
   - vite-plugin-solid@3.0.0-next.27
   - '@anthropic-ai/claude-agent-sdk@0.3.272'
   - '@habemus-papadum/cf-creds-motherduck@0.5.0'

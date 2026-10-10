@@ -30,17 +30,12 @@
  * retired): no channel-port injection, no page-side `/tools` dialing, no
  * session bus, no overlay UI mounting. The `window.__AIUI__` global itself is
  * the RUNTIME's job now (see `aiui-viz/src/aiui-global.ts` — it exists in
- * production too), and channel connectivity arrives from OUTSIDE, via the
- * intent client (the Chrome extension or the CDP tier), never from the app.
+ * production too), and any agent connectivity arrives from OUTSIDE — a host
+ * that drives the page over CDP or an extension — never from the app.
  */
 
-import {
-  type ResolveVendorKeysOptions,
-  resolveVendorKeys,
-  type VendorProvider,
-  vendorKeysModeSelf,
-} from "@habemus-papadum/aiui-util";
 import type { Plugin } from "vite";
+import { type ResolvedDevKeys, resolveDevKeys, type VendorProvider } from "./dev-keys.ts";
 import { devSources } from "./dev-sources.ts";
 import { type DuckdbAssetsOptions, duckdbAssets } from "./duckdb-assets.ts";
 import { shipSources } from "./ship-sources.ts";
@@ -77,9 +72,10 @@ export interface AiuiPluginOptions {
   /**
    * OPT-IN, DEV-SERVE ONLY: inject these vendors' API keys into served pages
    * as `window.__AIUI__.devKeys` (e.g. `devKeys: ["openai"]` for an embedded
-   * oracle). Resolution is the house vendor-key machinery (aiui-util): a
-   * source checkout honors the environment first, then the OS vault; an
-   * installed aiui reads the vault only (`aiui keys set <provider>`). The
+   * oracle). A key comes from the ENVIRONMENT of the process that starts the
+   * dev server, and nowhere else — `OPENAI_API_KEY`, `ELEVEN_LABS_API_KEY`,
+   * `GEMINI_API_KEY`, `MOTHERDUCK_BROWSER_TOKEN` (the table in ./dev-keys):
+   * a `.env` in the checkout with direnv, or an `export` in the shell. The
    * seeding plugin applies to serve alone — a production bundle structurally
    * cannot contain a key — but every DEV-SERVED page carries it (LAN-readable
    * under `server.host: true`), which is why this is never on by default.
@@ -137,45 +133,37 @@ function sourceRootSeed(explicit: string | undefined): Plugin {
 
 /**
  * The dev-only `devKeys` seed (see {@link AiuiPluginOptions.devKeys}). The
- * resolver parameter is the test seam; the default is the house machinery.
- * Keys resolve ONCE per dev-server run (vault shell-outs must not ride every
- * page load); missing/skipped providers warn LOUDLY with the remedy.
+ * resolver parameter is the test seam; the default reads the environment
+ * (./dev-keys). Keys resolve ONCE per dev-server run — the environment the
+ * server started with IS the environment, a page load never re-reads it —
+ * and every missing provider warns LOUDLY with the remedy.
  */
 export function devKeysSeed(
   providers: VendorProvider[],
-  resolve: (
-    options: ResolveVendorKeysOptions,
-  ) => ReturnType<typeof resolveVendorKeys> = resolveVendorKeys,
+  resolve: (env: NodeJS.ProcessEnv) => ResolvedDevKeys = resolveDevKeys,
 ): Plugin {
   let warn: (message: string) => void = (message) => console.warn(message);
-  let held: Promise<Record<string, string>> | undefined;
-  const resolveOnce = (): Promise<Record<string, string>> => {
-    held ??= (async () => {
-      // Self-provenance (never a by-name lookup from aiui-util's vantage):
-      // under pnpm's strict layout a workspace package is invisible to a
-      // sibling's node_modules chain, and the by-name form 500'd a consuming
-      // dev server on every page load whenever no incidental NODE_PATH
-      // rescued it (found live 2026-08-24, pitch deck).
-      const mode = vendorKeysModeSelf({
-        importMetaUrl: import.meta.url,
-        packageName: "@habemus-papadum/aiui-source-processor",
-      });
-      const resolved = await resolve({ mode, onWarn: warn });
-      const keys: Record<string, string> = {};
-      for (const provider of providers) {
-        const key = resolved[provider];
-        if (key.value !== undefined) {
-          keys[provider] = key.value;
-        } else {
-          warn(
-            `[aiui] devKeys: no ${key.label} key (${key.source}) — export ${key.envVar} ` +
-              `or \`aiui keys set ${provider}\`; the page gets no ${provider} dev key`,
-          );
-        }
+  let held: Record<string, string> | undefined;
+  const resolveOnce = (): Record<string, string> => {
+    if (held !== undefined) {
+      return held;
+    }
+    const resolved = resolve(process.env);
+    const keys: Record<string, string> = {};
+    for (const provider of providers) {
+      const key = resolved[provider];
+      if (key.value !== undefined) {
+        keys[provider] = key.value;
+      } else {
+        warn(
+          `[aiui] devKeys: no ${key.label} key — export ${key.envVar} ` +
+            "(a `.env` in the checkout works with direnv); " +
+            `the page gets no ${provider} dev key`,
+        );
       }
-      return keys;
-    })();
-    return held;
+    }
+    held = keys;
+    return keys;
   };
   return {
     name: "aiui:dev-keys",
@@ -183,8 +171,8 @@ export function devKeysSeed(
     configResolved(config) {
       warn = (message) => config.logger.warn(message);
     },
-    async transformIndexHtml() {
-      const keys = await resolveOnce();
+    transformIndexHtml() {
+      const keys = resolveOnce();
       if (Object.keys(keys).length === 0) {
         return [];
       }
@@ -240,6 +228,14 @@ export function aiui(options: AiuiPluginOptions = {}): Plugin[] {
   return plugins;
 }
 
+export {
+  type ResolvedDevKey,
+  type ResolvedDevKeys,
+  resolveDevKeys,
+  VENDOR_KEYS,
+  type VendorKeySpec,
+  type VendorProvider,
+} from "./dev-keys.ts";
 export { type DevSourcesOptions, devSources, listSourceFiles } from "./dev-sources.ts";
 export {
   DUCKDB_ASSET_FILES,

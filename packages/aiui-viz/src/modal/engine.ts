@@ -5,7 +5,8 @@
  * The kit has vocabulary — ladder columns (mode.ts), key layers (keys.ts),
  * per-event reconciliation (reconcile.ts), guarded effects (effect.ts) — but
  * no grammar: each app hand-rolled the composition, and the composition is
- * where the two intent clients' ~25-incident bug ledger lived. The engine is
+ * where the ~25-incident bug ledger of its first consumers (two generations
+ * of intent client, since moved out of this repo) lived. The engine is
  * that grammar, built on one clarifying split:
  *
  * > Every "mode" is two things: a **setting** (what the user chose —

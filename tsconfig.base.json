@@ -12,8 +12,8 @@
     // emit so the published `.d.ts` still points at the built artifact. Only
     // touches imports that carry a `.ts`/`.tsx` extension — every existing
     // extensionless import is unaffected. (A package that emits real JS via
-    // `tsc` — `aiui-devtools-extension` — turns `allowImportingTsExtensions`
-    // back off, since it's incompatible with JS emit.)
+    // `tsc` would have to turn `allowImportingTsExtensions` back off, since
+    // it's incompatible with JS emit.)
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": true,
     "noUnusedLocals": true,

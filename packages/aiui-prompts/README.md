@@ -8,7 +8,7 @@ aiui package, Python code, or third-party prompt framework.
 
 The [record contract](docs/record-contract.md) describes storage, decisions, replay, identities,
 output mappings, delivery, and the supported implementation boundary. The
-[architecture proposal](../../docs/proposals/structured-prompts.md) retains the larger roadmap.
+[architecture record](docs/architecture.md) retains the larger design and roadmap.
 The [corpus shape review](docs/corpus-shapes.md) explains how markers, sidecars, tool budgets, and
 mixed XML/Markdown map to the new contracts without requiring legacy output parity.
 The [adoption guide](docs/adoption.md) covers consumer migration and the package split.
@@ -128,6 +128,8 @@ carries over the one record.
 
 A prompt is content. A session update, channel push, and delegated request are different operations.
 Their versioned records retain references to deduplicated semantic records, never cached output.
+(`claude-channel/1` is the channel-push profile for an MCP channel host — a target shape the
+toolkit lowers to; no such host is a dependency of, or lives in, this repository.)
 
 ```ts
 import {

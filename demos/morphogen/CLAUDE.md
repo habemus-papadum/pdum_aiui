@@ -6,11 +6,10 @@ analysis pipeline, an observable history ring, and a regime catalog with
 simulated-failure chrome. A real, maintained demo — **not** starter scenery;
 edit it the way you'd edit an app you intend to keep.
 
-## Run the loop
+## Run it
 
 ```sh
-pnpm claude   # terminal 1 — Claude Code with the aiui channel + session browser
-pnpm dev      # terminal 2 — this app (Vite + the intent tool)
+pnpm dev      # Vite; the voice dock takes OPENAI_API_KEY from the environment
 ```
 
 ## The dual shape (app + library)
@@ -42,10 +41,10 @@ convention (root CLAUDE.md, "In-repo demo apps"):
   readers, freely hot-swappable. `src/sim/` + `src/analysis/` = playbook
   layer 1 (pure functions + the worker), unit-tested headless.
 - **Don't remove the integration.** The `aiui()` plugin in vite.config.ts
-  stamps the source locations the intent client's attribution reads; the same
-  plugin (locator-only) runs under Vitest so compiler-injected names hold in
-  tests.
+  stamps the source locations the page's `locate`/`selection`/`source` tools
+  read; the same plugin (locator-only) runs under Vitest so compiler-injected
+  names hold in tests.
 - The shader HMR hook in store.ts recompiles GLSL in place, preserving the
   accrued field — edit `src/sim/shaders.ts` freely while a run matters.
 
-Methodology docs: <https://habemus-papadum.github.io/pdum_aiui/guide/frontend-user-guide>
+Methodology docs: [the user guide](../../packages/aiui-viz/docs/frontend-user-guide.md).

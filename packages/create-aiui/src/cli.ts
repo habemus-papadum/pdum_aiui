@@ -2,7 +2,7 @@
  * The `create-aiui` bin — what `pnpm create @habemus-papadum/aiui [dir]` runs.
  *
  * Deliberately tiny: classify the target, copy the shipped template, make it a
- * git repo, install, print the loop. All the interesting parts live in the
+ * git repo, install, print the next steps. All the interesting parts live in the
  * template (templates/app) and in scaffold.ts (which the tests exercise).
  */
 import { spawnSync } from "node:child_process";
@@ -11,7 +11,7 @@ import { join, relative, resolve } from "node:path";
 import { classifyTarget, initGitRepo, packageManager, scaffoldApp, templateRoot } from "./scaffold";
 import { VERSION } from "./version";
 
-const USAGE = `create-aiui — scaffold a SolidJS app pre-wired for the aiui loop
+const USAGE = `create-aiui — scaffold a SolidJS + aiui-viz app with the voice dock, ready for an agent to edit
 
 usage: pnpm create @habemus-papadum/aiui [dir] [--skip-install]
 
@@ -81,19 +81,15 @@ function main(): void {
 
   const rel = relative(process.cwd(), target) || ".";
   console.log(`
-your app is ready. Run the loop:
+your app is ready. Next:
 
   cd ${rel}
-  npx aiui claude      # terminal 1 — Claude Code with the aiui channel + session browser
-  ${pm} run dev        # terminal 2 — your app (Vite + the intent tool)
+  ${pm} run dev        # Vite; open the printed URL
 
-then open it in the session browser (the window you share with the agent):
-
-  npx aiui open http://localhost:5173
-
-The page explains itself from there: activate the intent client (⌘B) and start talking
-about the app you want — the starter is scenery to point at, built to be
-rebuilt. (Optional: \`direnv allow\` in ${rel} activates .envrc — PATH + .env.)`);
+The page explains itself from there: the starter is scenery for your agent to
+point at, built to be rebuilt. The voice dock in the corner takes an OpenAI key
+from OPENAI_API_KEY in the environment or from its own key pane. (Optional:
+\`direnv allow\` in ${rel} activates .envrc — PATH + .env.)`);
 }
 
 main();

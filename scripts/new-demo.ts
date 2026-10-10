@@ -66,10 +66,9 @@ function parseArgs(argv: string[]): { name: string; description?: string } {
  * the dependency *sets* are the template's, untouched, so the two scaffolders
  * can't drift on what the starter app needs. Everything else is replaced:
  *
- *  - scripts run the CLI through `bin/aiui`, the repo's source-run launcher. The
- *    `aiui` bin resolves to `dist/cli.js` by convention (CLAUDE.md → *Workspace
- *    dependencies are editable*), which doesn't exist in a fresh checkout, so a
- *    demo can't call the bare `aiui` its published sibling calls.
+ *  - scripts are the demo's own set (dev/test/typecheck) — the same three the
+ *    template ships, restated here so this file, not the template, owns what an
+ *    in-repo demo runs.
  *  - the `aiui.scaffold` marker goes away. It only exists so `pnpm create` can
  *    *continue* a scaffold instead of clobbering it; this script refuses an
  *    existing directory outright, and dropping the marker makes create-aiui
@@ -110,9 +109,7 @@ function rewirePackageJson(
     types: template.types,
     ...(template.aiui?.sitePage ? { aiui: { sitePage: template.aiui.sitePage } } : {}),
     scripts: {
-      claude: "../../bin/aiui claude",
       dev: "vite",
-      open: "../../bin/aiui open",
       test: "vitest run",
       typecheck: "tsc --noEmit -p tsconfig.json",
     },
@@ -197,9 +194,9 @@ It differs from a scaffolded sandbox in exactly two ways, both deliberate:
   next door, live, with no build step. A change to \`packages/aiui-viz\` shows up here on save.
 - It lives in this repo's git history. Commits here are commits to pdum_aiui.
 
-Run the dev server with \`pnpm dev\` from this directory (plain \`vite\`); the intent client
-reaches the channel through the channel-served \`/intent/\` page or the side panel, so the dev
-server needs no channel wiring of its own.
+Run the dev server with \`pnpm dev\` from this directory (plain \`vite\`); the voice dock takes its
+OpenAI key from \`OPENAI_API_KEY\` in the environment (the \`devKeys\` opt-in in \`vite.config.ts\`) or
+from its own key pane.
 
 ${shared}`;
 }
@@ -210,21 +207,15 @@ function readmeMd(slug: string, description: string): string {
 ${description}
 
 An in-repo demo wired to the workspace (\`workspace:^\`, no npm install of aiui packages, no build
-step). Run the loop from this directory:
+step). Run it from this directory:
 
 \`\`\`sh
-pnpm claude   # terminal 1 — Claude Code with the aiui channel + session browser
-pnpm dev      # terminal 2 — this app (Vite + the intent tool)
+pnpm dev      # this app (Vite)
 \`\`\`
 
-Then open it in the session browser — the window you share with the agent:
-
-\`\`\`sh
-./aiui open http://localhost:5173   # from the repo root
-\`\`\`
-
-Activate the intent client (**⌘B**) and describe
-what you want. See [docs/guide/getting-started.md](../../docs/guide/getting-started.md).
+Open the printed URL. The voice dock in the corner drives the page's own tools; it takes an OpenAI
+key from \`OPENAI_API_KEY\` in the environment (the dev server hands it to the page) or from its own
+key pane. See the [user guide](../../packages/aiui-viz/docs/frontend-user-guide.md).
 `;
 }
 
@@ -280,8 +271,7 @@ function main(): void {
     `Created demos/${slug} (${deriveContext().scope}/demo-${slug} @ ${version}) [no-publish]\n` +
       "Next:\n" +
       "  pnpm install                 # link the new workspace member\n" +
-      `  pnpm -C demos/${slug} claude    # terminal 1 — Claude Code + channel\n` +
-      `  pnpm -C demos/${slug} dev       # terminal 2 — Vite + the intent tool\n` +
+      `  pnpm -C demos/${slug} dev       # Vite; OPENAI_API_KEY in the environment feeds the voice dock\n` +
       "The scaffold carries the aiui.sitePage marker, so the gallery shell\n" +
       "(pnpm demo) discovers it as a tab on its next dev-server start.\n",
   );

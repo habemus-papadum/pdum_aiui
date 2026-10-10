@@ -1,9 +1,7 @@
 # Getting Started with @habemus-papadum/aiui-viz
 
-> This page lives at `packages/aiui-viz/docs/getting-started.md`. It's picked up automatically by the
-> docs site as a guide under this package — edit or delete it, and add more `*.md` files here for
-> additional per-package guides. The package overview comes from the `README.md`; the API
-> reference is generated from `src/index.ts`.
+> This page lives at `packages/aiui-viz/docs/getting-started.md`, beside the package's other
+> guides. The package overview is the `README.md`; the API is `src/index.ts`.
 
 `@habemus-papadum/aiui-viz` gives an agent-written SolidJS 2.0 frontend the pieces it needs to treat
 every asynchronous value as a first-class, cancellable, observable **cell**. The two most common

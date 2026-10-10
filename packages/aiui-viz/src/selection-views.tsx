@@ -30,7 +30,8 @@
  * returns the SAME store (so the widget and the actions share one reactive
  * list), and the four actions — `save-view`, `load-view`, `list-views`,
  * `delete-view` — register once per page, scope-qualified, with real JSON
- * Schemas (the oracle and page_tools_call see them with zero app wiring).
+ * Schemas (the oracle and an external host's tool calls see them with zero
+ * app wiring).
  */
 import type { JSX } from "@solidjs/web";
 import { createSignal, For } from "solid-js";

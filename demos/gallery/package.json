@@ -11,9 +11,7 @@
     "directory": "demos/gallery"
   },
   "scripts": {
-    "claude": "../../bin/aiui claude",
     "dev": "vite",
-    "open": "../../bin/aiui open",
     "gen:favicon": "bash ./scripts/gen-favicon.sh",
     "publish": "bash ./publish.sh",
     "typecheck": "tsc --noEmit -p tsconfig.json"
@@ -28,9 +26,7 @@
   },
   "devDependencies": {
     "@babel/core": "catalog:",
-    "@habemus-papadum/aiui": "workspace:^",
     "typescript": "catalog:",
-    "typescript-language-server": "catalog:",
     "vite": "catalog:",
     "vite-plugin-solid": "catalog:solid"
   }

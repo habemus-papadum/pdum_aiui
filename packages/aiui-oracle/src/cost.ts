@@ -2,14 +2,14 @@
  * cost.ts — what a session has spent, priced as it goes.
  *
  * Prices come from [@pydantic/genai-prices](https://github.com/pydantic/genai-prices),
- * the same catalog the channel's lowering pipeline uses — a maintained
- * multi-provider table whose `Usage` shape is natively multimodal and whose
- * data ships with the package. A hardcoded rate table was the alternative and
- * is strictly worse: realtime audio and text differ by ~8× per token, the
- * numbers move, and a stale constant would be wrong silently.
+ * a maintained multi-provider table whose `Usage` shape is natively
+ * multimodal and whose data ships with the package. A hardcoded rate table
+ * was the alternative and is strictly worse: realtime audio and text differ
+ * by ~8× per token, the numbers move, and a stale constant would be wrong
+ * silently.
  *
  * Two properties matter more than the arithmetic, both inherited deliberately
- * from `aiui-claude-channel/src/cost.ts`:
+ * from the former channel implementation's server-side pricing:
  *
  *  - **It never throws.** `calcPrice` validates aggressively (audio subsets
  *    must not exceed their totals, and providers report them inconsistently),
@@ -21,13 +21,13 @@
  *    running total. A cost display that under-reports without saying so is
  *    worse than none.
  *
- * DUPLICATION, deliberate and bounded: `usageFromRealtimeResponse` also exists
- * in `aiui-claude-channel/src/cost.ts`, which maps four vendor dialects for the
- * server-side pipeline. The two must agree. They are not shared because the
- * dependency would run the wrong way — the channel is a server, this is a
- * browser widget library that carries solid-js — and because the realtime wire
- * shape is this package's own domain knowledge. If a third consumer appears,
- * that is the signal to extract it rather than copy it again.
+ * `usageFromRealtimeResponse` was once one of two copies — the former channel
+ * implementation kept a server-side twin mapping four vendor dialects. They
+ * were not shared because the dependency would have run the wrong way (a
+ * server depending on a browser widget library that carries solid-js) and
+ * because the realtime wire shape is this package's own domain knowledge.
+ * This is now the only copy in the repo; the rule stands: if a second consumer
+ * appears, extract it rather than copy it again.
  */
 
 import { calcPrice, type Usage } from "@pydantic/genai-prices";
@@ -61,8 +61,9 @@ export function usageFromRealtimeResponse(raw: unknown): Usage | undefined {
     // `uncached_text = input − input_audio − (cache_read − cache_audio_read)`,
     // and it REJECTS a negative — so folding cached audio into `cache_read`
     // alone throws the moment a conversation has any audio history, which is
-    // immediately. (`aiui-claude-channel/src/cost.ts` does exactly that and so
-    // silently prices realtime responses at nothing; measured 2026-07-31.)
+    // immediately. (The former channel implementation's server-side pricing
+    // did exactly that and so silently priced realtime responses at nothing;
+    // measured 2026-07-31.)
     // It matters: on a representative turn the split gives $0.0583 where
     // dropping the cache credit entirely gives $0.1616 — a 2.8× error.
     ...(typeof asRecord(input?.cached_tokens_details)?.audio_tokens === "number"

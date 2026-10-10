@@ -27,7 +27,7 @@
 
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { MountedSidecar, Sidecar, SidecarContext } from "@habemus-papadum/aiui-claude-channel";
+import type { MountedSidecar, Sidecar, SidecarContext } from "@habemus-papadum/aiui-util";
 import { serveClientSurface } from "@habemus-papadum/aiui-util/web-surface";
 import type { Express } from "express";
 import { createPencilBackend } from "./backend";

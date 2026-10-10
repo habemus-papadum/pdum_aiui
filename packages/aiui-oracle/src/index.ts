@@ -5,7 +5,6 @@
  * git history).
  */
 
-export type { TabRecord } from "@habemus-papadum/aiui-lowering-pipeline";
 export type {
   ControlSurfaceToolsOptions,
   PageToolExecute,
@@ -62,6 +61,8 @@ export {
 } from "./prompt";
 export type { OracleSessionOptions, OracleState } from "./session";
 export { OracleSession } from "./session";
+export type { TabRecord } from "./tab-record";
+export { renderTabRecord } from "./tab-record";
 export type {
   FirstReplyGuard,
   Greeting,

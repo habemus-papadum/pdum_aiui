@@ -12,7 +12,7 @@ layer, vertical slices — follow it when creating or extending an app) →
 [frontend-user-guide.md](../../packages/aiui-viz/docs/frontend-user-guide.md)
 (the progressive how-to — cells, deps tracking and its out-of-sync bug, testing, streaming,
 cancellation, workers, layout) →
-[frontend-for-agents.md](../../docs/guide/frontend-for-agents.md)
+[frontend-for-agents.md](../../packages/aiui-viz/docs/frontend-for-agents.md)
 (concepts) →
 [frontend-design-choices.md](../../packages/aiui-viz/docs/frontend-design-choices.md)
 (design, with code refs) →
@@ -20,8 +20,7 @@ cancellation, workers, layout) →
 includes the Mosaic/DuckDB-WASM section) →
 [frontend-style-guide.md](../../packages/aiui-viz/docs/frontend-style-guide.md) (authoring
 conventions: page structure, TOC, plotting, math, porcelain/plumbing). (This plugin ships as
-the whole pdum_aiui repo, so these links are the live docs wherever the skill runs. Same
-content published at https://habemus-papadum.github.io/pdum_aiui/.) And
+the whole pdum_aiui repo, so these links are the live docs wherever the skill runs.) And
 always: the **installed package's own `.d.ts`/docblocks** — every export documents its
 contract; resolve `@habemus-papadum/aiui-viz` in node_modules and read the module headers.
 
@@ -247,17 +246,17 @@ list is introspected into the tool's usage — resolve the runner's promise once
 exist, not when the connection opens. To see what a model sees, open the page with
 `#aiui-tools`: `ToolLog` (`@habemus-papadum/aiui-viz/site/tool-log`; the app template's
 `main.tsx` and the gallery shell mount it, hidden by default) shows the document *as
-rendered* and the page's call log (who called what — `channel`, `oracle`, `live:…`, `page`
-— and the result). The app template and the gallery shell also mount **`VoiceDock`**
+rendered* and the page's call log (who called what — the oracle, a live delegation, the page
+itself — and the result). The app template and the gallery shell also mount **`VoiceDock`**
 (`@habemus-papadum/aiui-dock`): the oracle and a live session on the page over the same
 projection (active kits only), the tool log behind its tools pill, one OpenAI key for both
 (the dev server's, else pasted into localStorage). User guide: "Documenting a tool".
 
 Forwarding is unconditional: the toolkit publishes every namespace into
 `window.__AIUI__.tools` (installed by the runtime, production included — the page dials
-nothing). When an intent client is running, it relays each tab's tools to the channel, and
-the session drives the page remotely via the `page_tools_list` / `page_tools_call` MCP tools
-— no app wiring. **The activity bit**: a shell parks a page's namespace when the user routes
+nothing); any host that can reach the page — the dock's voice sessions, a browser-automation
+MCP, a relay of your own — drives it through that one surface, with no app wiring. **The
+activity bit**: a shell parks a page's namespace when the user routes
 away — `SitePage.toolsNs` + `setSitePageActive` handle it for site pages; an app with its own
 routing calls `kit.setActive(active)`. Parked tools stay listed (flagged) and callable.
 `window.__AIUI__.tools.ledger()` prints a console.table-friendly enumeration.
@@ -297,10 +296,10 @@ core in `aiui-viz/modal`, regions built with `ladder`/`toggle`/`choice`):
 - Regions with `agent:` auto-register a `control()` whose setter dispatches — never mirror
   engine state into separate controls or signals.
 - Imperative events from outside (global shortcuts, sockets) cross in as sequential idempotent
-  dispatches, re-reading committed state between steps — copy
-  `packages/aiui-intent-client/src/activation.ts`. Spec worked example:
-  `packages/aiui-intent-client/src/spec.ts` (its `BEHAVIOR.md` is the decided interaction
-  contract); rationale: the mode-engine design note (git history).
+  dispatches, re-reading committed state between steps — worked example:
+  `packages/aiui-remote-bar/src/solid.ts` (a remote tap arrives over a socket and lands as the
+  same dispatch a key would). Keymap worked example: `packages/aiui-slides/src/keys.ts` (a pure
+  table, tested); rationale: the mode-engine design note (git history).
 
 ## Solid 2.0 (release candidate) instant-bite gotchas
 
@@ -373,9 +372,9 @@ A scaffolded app has the dual shape from birth — standalone app and library:
   router, nav, lazy page loaders, and landing cards all derive from it. Adding an app to the
   site = the marker existing.
 - One document, client-side routing — **never separate `.html` entries**: one document keeps
-  an open intent turn alive across page switches, and every internal link must be
-  routed/intercepted, since one bare hard-navigating anchor kills the turn.
-  `demos/gallery/src/site/` is the worked example.
+  an open voice session (the dock's oracle or live session) alive across page switches, and
+  every internal link must be routed/intercepted, since one bare hard-navigating anchor kills
+  the session. `demos/gallery/src/site/` is the worked example.
 
 ## Page anatomy & theming
 
@@ -387,7 +386,7 @@ actually demonstrates, via `TeX` from `aiui-viz/site` — never raw katex, you'd
 `data-tex` stamp), then experiments naming exact controls. `TocRail` + `SiteNav` from
 `aiui-viz/site`.
 
-Theming, current truth: the in-repo pages — notebooks, gallery, console, intent panel — share
+Theming, current truth: the in-repo pages — the notebooks, the gallery, the styleguide — share
 **one light-only design system**, `@habemus-papadum/aiui-design` (`packages/aiui-design`;
 owner, 2026-10-08, superseding the system-following journal of 2026-08-12): cotton paper,
 slate ink, a mixed ladder, one indigo accent, three status colors, Cormorant/Fraunces/Libre
@@ -401,7 +400,7 @@ head stamp; aiui-viz's `colorMode()` remains for consumers who theme per system.
 rule is absolute**: a sim canvas and the legend chips that key it are constants on `--plate`
 (dark, framed by a hairline) — never give one demo's plate a light variant — while chart marks
 on a panel are validated against the raised surface. Shipped chrome (the dock, the tool log,
-the trace debugger, the oracle/live strips, the slides deck) reads prefixed `--aiui-*` hooks
+the oracle/live strips, the slides deck) reads prefixed `--aiui-*` hooks
 with neutral fallbacks; never hard-code the palette in a package. A demo's page CSS uses
 demo-prefixed class names (or is scoped under a root class, like `demos/gears`' `.gears`) so
 nothing leaks onto a sibling mounted in the same document.
@@ -418,7 +417,7 @@ enough — no device JS; give a stacked drawing surface an explicit height. Abso
 float beside a wide figure must rejoin the flow and stack on phone (circle's readout/dock buries
 a narrow board otherwise); a drawing surface keeps `touch-action:none` while its stacked
 container allows `pan-y`. Preview by driving a real browser at a phone viewport (DevTools device
-mode, or the session browser's `emulate`/`resize_page` + screenshot loop) sweeping 360/390/414,
+mode, or a browser-automation MCP's emulate/resize + screenshot loop) sweeping 360/390/414,
 then re-shoot ~1440px to prove desktop is untouched.
 
 ## Charts
@@ -510,7 +509,7 @@ via `recordCommits`, cancellation via `whenState(cell, "held")`; a `set` through
 tool should round-trip into an observable recompute and the dependency edges should appear in
 `report`. The per-input probe is the instrument that catches an undeclared dependency. (The
 compiler must be wired in `vitest.config.ts` — the template ships it; without it controls are
-nameless and tests fail mysteriously.) Then drive the app through its own tool surface in the
-session browser (zero console errors, `report()` sane, `bridges` clean, the mount wrapped in
+nameless and tests fail mysteriously.) Then drive the app through its own tool surface in a
+real browser (zero console errors, `report()` sane, `bridges` clean, the mount wrapped in
 `PageBoundary`); prove HMR preserves the running state for a component edit and a graph edit;
 screenshot the result.

@@ -7,11 +7,10 @@ page — pure functions (`/step1.html`), controls + cells (`/step2.html`), desig
 **[WALKTHROUGH.md](./WALKTHROUGH.md) is the narration** — read it beside the code. The
 methodology it demonstrates is the [frontend playbook](../../packages/aiui-viz/docs/frontend-playbook.md).
 
-Run the loop from this directory:
+Run it from this directory:
 
 ```sh
-pnpm claude   # terminal 1 — Claude Code with the aiui channel + session browser
-pnpm dev      # terminal 2 — this app (Vite + the intent tool)
+pnpm dev      # this app (Vite); the voice dock takes OPENAI_API_KEY from the environment
 pnpm test     # the layer-1 physics + the headless layer-2 graph (stub worker)
 pnpm exec vitest bench   # the numbers behind the "worker or not" decision
 ```

@@ -2,8 +2,8 @@
 
 Realtime speech-to-text as a **pencil-shaped component**: start a session, feed it audio, watch a
 stream of cumulative text deltas, and know when a segment is final. Contract of record: the
-aiui-stt proposal (pdum_aiui git history); the wire facts underneath are the aiui
-channel's, hard-won against both live vendors and ported verbatim.
+aiui-stt proposal (pdum_aiui git history); the wire facts underneath were hard-won in the
+former aiui channel's realtime engines, against both live vendors, and ported verbatim.
 
 **The default engine is ElevenLabs Scribe v2 realtime.** The OpenAI `transcription`-type realtime
 flavor is the alternate. Both sit behind one seam, so the vendor difference is confined to the
@@ -20,7 +20,7 @@ npm install @habemus-papadum/aiui-stt
 ```ts
 import { createStt, scribeTransport, sttSignals } from "@habemus-papadum/aiui-stt";
 import { micAudioSource } from "@habemus-papadum/aiui-stt/mic";
-import { scribeConnectUrl } from "@habemus-papadum/aiui-cf-creds/stt"; // or a channel mint route
+import { scribeConnectUrl } from "@habemus-papadum/aiui-cf-creds/stt"; // or your own mint route
 
 const stt = createStt({
   transport: scribeTransport({ connectUrl: scribeConnectUrl }), // one call = one connect
@@ -43,7 +43,7 @@ appends extend, revisions flash and settle. This package ships no renderer.
 
 - **Credentials** — never owned here. Scribe takes a `connectUrl()` that mints one single-use
   token per connect (`aiui-cf-creds/stt`'s `scribeConnectUrl` for broker-fronted static apps, or
-  a channel mint route). OpenAI takes the oracle's `KeySource` (`transcriptionKeySource`, or any
+  your own mint route). OpenAI takes the oracle's `KeySource` (`transcriptionKeySource`, or any
   chain) — one `ek_` opens multiple sessions until TTL.
 - **Audio** — an `AudioSource` of 24 kHz PCM16 frames. `aiui-stt/mic` ships the real microphone
   (getUserMedia → AudioWorklet capture, device picker, level meter); a file player or a test
@@ -64,6 +64,6 @@ appends extend, revisions flash and settle. This package ships no renderer.
 
 ## What this package is NOT
 
-Not the lowering pipeline (deltas and finals are the whole product), not the talk lanes, not a
+Not a prompt pipeline (deltas and finals are the whole product), not the talk lanes, not a
 credential custodian, not a vendor SDK wrapper — raw WebSocket wire, the parts we specifically
 need to control.

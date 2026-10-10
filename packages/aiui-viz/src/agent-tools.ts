@@ -24,9 +24,10 @@
  * The page also carries a shared registry at `window.__AIUI__.tools`
  * (AiuiToolsRegistry, installed unconditionally by this package's own
  * aiui-global.ts); this module *forwards* its surface there after every
- * mutation, the intent client relays registrations via `onChange`, and the
- * tools appear to the Claude Code session as MCP tools (`page_tools_list` /
- * `page_tools_call`) with calls routing back to the live page functions.
+ * mutation, and any host that drives the page — the voice dock's sessions
+ * in-page, an external tool subscribing via `onChange` — lists and calls the
+ * tools with calls routing back to the live page functions (the former
+ * intent tool's channel surfaced them to a Claude Code session as MCP tools).
  * Forwarding sends the real, described tools plus one synthetic `report` tool
  * (remote `report()` — the single most useful agent call). It is best-effort:
  * any failure is swallowed so it never disturbs the page.
@@ -59,8 +60,9 @@ export interface AgentTool {
   params?: Record<string, string>;
   /**
    * Optional real JSON Schema for the arguments (draft 2020-12 object
-   * schema). When present it is the source of truth the channel forwards as
-   * an MCP tool definition; `params` remains the cheap inline documentation.
+   * schema). When present it is the source of truth a host forwards as a
+   * tool definition (an MCP tool, a Realtime function); `params` remains the
+   * cheap inline documentation.
    */
   inputSchema?: Record<string, unknown>;
   run: (args?: Record<string, unknown>) => unknown;
@@ -83,7 +85,8 @@ export interface AgentToolkitOptions {
   /**
    * The kit's brief: what the app is, its data model, how its tools relate —
    * the cross-tool text a consumer renders ABOVE the tool list (the oracle's
-   * prompt, the live delegation, `page_tools_list`). Purely authored; derived
+   * prompt, the live delegation, an external host's tool listing). Purely
+   * authored; derived
    * facts (a table list) belong in the relevant tool's `usage`. Re-calling
    * `agentToolkit` with a new brief (HMR) replaces it.
    */

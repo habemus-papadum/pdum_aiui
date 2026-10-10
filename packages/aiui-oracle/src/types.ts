@@ -11,9 +11,9 @@
  * `raw` ledger entries, never dropped (the trace-stages total-parse lesson).
  */
 
-import type { TabRecord } from "@habemus-papadum/aiui-lowering-pipeline";
 import type { SemanticRecord } from "@habemus-papadum/aiui-prompts";
 import type { OperationRecord, WireRecord } from "@habemus-papadum/aiui-prompts/operations";
+import type { TabRecord } from "./tab-record";
 
 /**
  * The prompt's structured modification points.
@@ -38,10 +38,9 @@ export interface PromptSlots {
    * Where the user is right now — page, route, selection. Short-lived.
    *
    * A {@link TabRecord} is the page the user is looking at, rendered as the
-   * canonical `<tab …/>` element the lowering pipeline puts in Claude's
-   * prompts, so the oracle reads the same shape the agent behind the channel
-   * does and "this page" means the same thing to both. A string is anything
-   * else, verbatim.
+   * canonical `<tab …/>` element (`./tab-record`) — the same shape a Claude
+   * Code agent reads in its lowered prompts, so "this page" means the same
+   * thing to both assistants. A string is anything else, verbatim.
    */
   context?: string | TabRecord;
   /** How to behave this conversation — tutorial-ish for a newcomer, terse for
@@ -419,8 +418,8 @@ export interface OracleConfig {
    * NOT read by {@link OracleSession} — and structurally cannot be: the
    * session never mints, it asks a {@link KeySource}. TTL belongs to whoever
    * holds the parent key, which is `mintClientSecret`'s `MintOptions` for an
-   * in-browser mint and the mint SERVER's own option for a hosted one (the
-   * channel sets it on `createMintBackend`). Kept as documentation of the
+   * in-browser mint and the mint SERVER's own option for a hosted one (a
+   * host sets it on `createMintBackend`). Kept as documentation of the
    * knob's existence and its range; a session-level value would be a lie
    * about who decides.
    */

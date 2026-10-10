@@ -10,7 +10,7 @@
  *    bounds. Plus one tool per `action()`, and a `report` snapshot tool.
  *  - {@link toolsFromAiuiRegistry} — GENERIC. Wraps `window.__AIUI__.tools`
  *    registrations (whatever the page installed, HMR-live) — the same surface
- *    the intent client forwards to the channel. The O3 spine.
+ *    any out-of-page agent host relays from a tab. The O3 spine.
  *
  * Solid-correctness (the pinned semantics, packages/aiui-viz/docs/frontend-hard-won.md):
  * a write goes through the control's own validated `set`, and the RETURNED
@@ -287,9 +287,9 @@ function selectRegistrations<T extends { ns: string; active?: boolean }>(
 
 /**
  * One page-tool registration as the projections take it — the shape of the
- * page registry's own `list()` entries AND of the registrations the intent
- * client relays from a tab, so one projection serves both hosts (the panel
- * once kept a copy that drifted: it dropped `group`).
+ * page registry's own `list()` entries AND of the registrations an
+ * out-of-page host relays from a tab, so one projection serves both (a relay
+ * host once kept its own copy, and it drifted: it dropped `group`).
  */
 export interface PageToolRegistration {
   ns: string;
@@ -378,9 +378,9 @@ export function briefFromAiuiRegistry(options: RegistryToolsOptions = {}): strin
 
 /**
  * Wrap the page's `window.__AIUI__.tools` registrations — whatever surface
- * the page installed (the standard tools, custom kits), exactly as the intent
- * client sees it. Names are `ns_name`-prefixed when more than one namespace
- * registers. Returns undefined when the page has no registry.
+ * the page installed (the standard tools, custom kits), exactly as an
+ * out-of-page host sees it. Names are `ns_name`-prefixed when more than one
+ * namespace registers. Returns undefined when the page has no registry.
  */
 export function toolsFromAiuiRegistry(
   options: RegistryToolsOptions = {},

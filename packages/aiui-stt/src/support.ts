@@ -1,10 +1,11 @@
 /**
- * support.ts — the vendor-agnostic session plumbing, ported from the
- * channel's `session-core.ts` (which distilled it from four live vendor
- * sessions): the injectable socket seam, the queue-until-ready send gate,
- * the drain controller, the failure fan-out, and base64 for wire frames.
+ * support.ts — the vendor-agnostic session plumbing, ported from the former
+ * aiui channel's `session-core.ts` (which distilled it from four live vendor
+ * sessions; that package now lives outside this repo): the injectable socket
+ * seam, the queue-until-ready send gate, the drain controller, the failure
+ * fan-out, and base64 for wire frames.
  *
- * The one browser-shaped difference from the channel: sockets are the
+ * The one browser-shaped difference from the channel's: sockets are the
  * platform `WebSocket` (auth rides the URL or a subprotocol — a browser
  * cannot set request headers), and there is no `unexpected-response` body
  * capture (the browser exposes only the close frame). What each vendor
@@ -76,8 +77,8 @@ export function closeSuffix(code?: number, reason?: string): string {
  * The queue-until-ready send gate. Frames sent before the vendor's ready
  * signal are buffered; `markReady()` flushes them in enqueue order. `onSent`
  * fires ONLY on a real socket send — never a buffered enqueue — because
- * Scribe arms its idle keepalive from real outbound frames (the channel's
- * recorded trap).
+ * Scribe arms its idle keepalive from real outbound frames (the former
+ * channel's recorded trap).
  */
 export interface ReadyGate {
   send(text: string): void;

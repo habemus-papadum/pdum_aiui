@@ -1,7 +1,7 @@
 # demo: gallery
 
 The notebook site's **shell**: an SPA that discovers the sibling demo packages
-and composes them into one dark journal — a **landing page** (a card per demo,
+and composes them into one notebook site — a **landing page** (a card per demo,
 each with a live preview) plus a left **sidebar** (collapsing to a top bar +
 drawer on a phone). The dev playground for the whole demo set, and the source of
 the published static site at <https://habemus-papadum.net/aiui/>.
@@ -33,9 +33,10 @@ landing never boots a demo's heavy graph). Every page is an aiui-viz
 Route changes are pause-not-destroy: the leaving page's components are
 disposed, its rAF loops parked, while every durable — the WebGL field, the
 workers, DuckDB, the history rings — survives for the return visit. All
-navigation is client-side (`src/site/router.ts`), so an open intent turn rides
-across notebook switches. The shared dark-journal look (tokens, notebook
-chrome, chart palette) is [`demos/journal`](../journal).
+navigation is client-side (`src/site/router.ts`), so the voice dock — mounted
+once, in the shell — keeps its session across notebook switches. The shared
+look (tokens, notebook chrome, chart palette) is the design system,
+[`packages/aiui-design`](../../packages/aiui-design).
 
 [PRINCIPLES.md](./PRINCIPLES.md) is the methodology written while these
 notebooks were built — read it next to the demo packages' code.
@@ -43,16 +44,13 @@ notebooks were built — read it next to the demo packages' code.
 ## Run it
 
 ```sh
-# terminal 1 — a Claude Code session with the channel attached
-./aiui claude
-
-# terminal 2 — this shell, served by plain vite (the intent client finds the channel itself)
-pnpm demo
+pnpm demo     # from the repo root: this shell, served by plain vite
 ```
 
-Open the printed URL **in the session browser**. Each demo also runs
-standalone from its own directory (`pnpm -C demos/<slug> dev`) with the same
-loop.
+Open the printed URL. The voice dock takes its OpenAI key from
+`OPENAI_API_KEY` in the environment (the dev server hands it to the page) or
+from its own key pane. Each demo also runs standalone from its own directory
+(`pnpm -C demos/<slug> dev`).
 
 ## Publishing the static site
 

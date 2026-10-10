@@ -13,19 +13,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      # Auth for any CI step that shells out to Claude Code. Mint it locally with
-      # `claude setup-token` (uses your Claude subscription, not per-token API
-      # billing) and store it as the CLAUDE_CODE_OAUTH_TOKEN Actions secret. GitHub
-      # withholds secrets from fork PRs, so it never reaches untrusted contributors.
-      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-      # Force the cheap, fast Haiku model everywhere `claude` runs in CI.
-      ANTHROPIC_MODEL: claude-haiku-4-5
-      # No autoupdater / telemetry / nonessential traffic.
-      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
-      # Tell Claude it's in a sandbox so `--dangerously-skip-permissions` doesn't
-      # block on its first-run confirmation prompt in a fresh directory.
-      IS_SANDBOX: "1"
     steps:
       - uses: actions/checkout@v5
 
@@ -39,19 +26,6 @@ jobs:
 
       - name: Install (frozen lockfile — also the lockfile-drift guard)
         run: pnpm install --frozen-lockfile
-
-      - name: Set up Claude Code
-        # Installs the `claude` CLI so tests can shell out to it. Nothing here calls
-        # `claude -p`, so no model inference (and no subscription usage) is spent on
-        # every push — `--version` just proves the install. The actual model call
-        # lives in the claude-smoke.yml smoke test. When you add tests that drive
-        # `claude`, they run in this job with Haiku + the OAuth token already in env.
-        run: |
-          curl -fsSL --retry 3 https://claude.ai/install.sh | bash
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-
-      - name: Claude Code available
-        run: claude --version
 
       - name: Lockstep version invariant
         run: node scripts/versioning.mjs current
@@ -68,22 +42,15 @@ jobs:
       - name: Lint & format check (Biome)
         run: pnpm run lint
 
-      - name: Docs prose lint (bare <tag> placeholders that break the VitePress build)
-        # Biome doesn't lint markdown, so a placeholder like `<path>` written without
-        # backticks slips through and only surfaces as a cryptic Vue "missing end tag"
-        # in the full docs build (docs.yml, push-to-main only). This sub-second check
-        # catches it here — on PRs too — with a precise source location.
-        run: pnpm run docs:lint
-
       - name: Test
         run: pnpm run test
 
   # Consumability gate: build → pack every publishable package → install the
-  # tarballs into a scratch npm project → drive the installed CLIs the way a
-  # consumer would. Catches missing `files` entries (e.g. the devtools
-  # extension shipping without its built js/), bins that only resolve in the
-  # workspace layout, and workspace:^ ranges that don't convert. No Claude
-  # Code, no browser. Locally: `pnpm test:packaging`.
+  # tarballs into a scratch npm project → probe the installed packages the way
+  # a consumer would. Catches missing `files` entries (a package shipping
+  # without its built assets), subpaths that only resolve in the workspace
+  # layout, and workspace:^ ranges that don't convert. No browser. Locally:
+  # `pnpm test:packaging`.
   packaging:
     runs-on: ubuntu-latest
     steps:
@@ -100,7 +67,7 @@ jobs:
       - name: Install (frozen lockfile)
         run: pnpm install --frozen-lockfile
 
-      - name: Packaging test (pack → scratch install → CLI smoke)
+      - name: Packaging test (pack → scratch install → installed-shape probes)
         run: pnpm run test:packaging
 
   # Starter-template gate: the template's example tests never execute under any
@@ -128,9 +95,3 @@ jobs:
 
       - name: Template e2e (scaffold → test → mechanical reset → blank verify)
         run: pnpm run test:template
-
-  # The live-session e2e is deliberately NOT part of this workflow: it drives a
-  # real Claude Code session (spends subscription usage, takes minutes, and is
-  # inherently a bit flaky), which is too expensive to pay on every push. It
-  # lives in e2e.yml — a weekly cron plus manual dispatch — so it stays healthy
-  # without taxing the inner loop. Run it locally anytime: `pnpm test:e2e`.

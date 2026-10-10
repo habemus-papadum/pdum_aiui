@@ -1,21 +1,19 @@
 /**
  * ── START HERE ────────────────────────────────────────────────────────────────
  *
- * This is an INTERACTIVE WEB PAGE wired into a live coding loop — not a static
- * site. Two processes are (or should be) running:
+ * This is an INTERACTIVE WEB PAGE meant to be rebuilt by an agent while you
+ * watch it hot-reload — not a static site. One process runs it:
  *
- *   terminal 1:  npx aiui claude   Claude Code with the aiui channel + browser
- *   terminal 2:  npm run dev       this app, served by Vite via `aiui vite`
+ *   pnpm dev          this app, served by Vite
  *
- * On the page, activate the intent client (⌘B), then SAY or
- * type what you want — "make this golden", "turn this into a tide chart
- * for my harbor", anything. Your words (plus screenshots and the source
- * locations of what you pointed at) land in the Claude session as a prompt,
- * and the agent edits this very code while you watch it hot-reload.
+ * The voice dock on the page (an oracle over OpenAI's realtime API, with the
+ * app's cells as its tools) takes OPENAI_API_KEY from the dev server's
+ * environment, or a key pasted into its field. Describe what you want and
+ * edit this code with your coding agent while the page keeps running.
  *
  * There is deliberately almost nothing in this file. The aiui() plugin
  * (vite.config.ts — the entire integration) stamps the source locations the
- * intent client's attribution reads; the app splits along HMR lines:
+ * page's attribution tools read; the app splits along HMR lines:
  *
  *   src/model/store.ts   durable roots — parameters survive hot edits
  *   src/model/graph.ts   the cell graph (dataflow) + the agent tools

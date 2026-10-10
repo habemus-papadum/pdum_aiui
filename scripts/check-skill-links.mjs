@@ -4,12 +4,13 @@
 //
 // The plugin ships as the WHOLE repo (installed from the git marketplace, or
 // loaded with --plugin-dir at the repo root in a source checkout), so skill
-// markdown links straight into docs/guide/, packages/*/docs/, etc. with
-// ordinary relative links — no bundling, no rewriting, nothing generated.
-// The one thing that can rot is a link whose target moves: this check walks
-// every .md under skills/, resolves every relative link, and fails on any
-// that resolves nowhere. It also parses the two plugin manifests, so a
-// syntax error never waits for an install to surface.
+// markdown links straight into packages/*/docs/, packages/*/README.md, etc.
+// with ordinary relative links — no bundling, no rewriting, nothing
+// generated. The one thing that can rot is a link whose target moves: this
+// check walks every .md under skills/ (however many skills there are),
+// resolves every relative link, and fails on any that resolves nowhere. It
+// also parses the two plugin manifests, so a syntax error never waits for an
+// install to surface.
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";

@@ -7,8 +7,8 @@
 #   direnv allow                            # in this directory, after reading this file
 #
 # `layout node` is direnv's stdlib helper: it prepends ./node_modules/.bin to
-# PATH, so `aiui`, `vite`, and `tsc` run as bare commands — no npx. The .env
-# file is where secrets live (gitignored) — e.g. OPENAI_API_KEY, which the
-# aiui intent pipeline reads for voice transcription and corrections.
+# PATH, so `vite` and `tsc` run as bare commands — no npx. The .env file is
+# where secrets live (gitignored) — e.g. OPENAI_API_KEY, which the dev server
+# hands to the page's voice dock (the `devKeys` option in vite.config.ts).
 layout node
 dotenv_if_exists .env

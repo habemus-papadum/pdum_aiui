@@ -6,7 +6,7 @@ exists so the pattern has a living reference:
 
 - **`oscillatorStore(scope)`** declares one instance's control surface (`freq` / `damping` /
   `amp` controls, a `kick` action, internal `phase` state) under an explicit
-  [`Scope`](../aiui-viz/src/scope.ts). Two instances from this one call site get distinct
+  [`Scope`](../../packages/aiui-viz/src/scope.ts). Two instances from this one call site get distinct
   qualified identity (`left/freq`, `right/freq`) and distinct durable state — the
   double-instantiation problem scopes exist to fix.
 - **`oscillatorCells(scope, store)`** builds the derived cells (`params`, `trace`) over an

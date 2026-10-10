@@ -1,4 +1,4 @@
-/* Independent host example, not a dark variant of the FAI Labs design system.
+/* Independent host example, not a dark variant of another design system.
  * An opt-in compact terminal palette using only public prompt tokens. */
 :where([data-prompt-theme="terminal"]) {
   --prompt-color-scheme: dark;

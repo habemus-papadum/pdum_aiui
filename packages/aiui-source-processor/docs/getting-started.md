@@ -25,4 +25,6 @@ export default { plugins: [aiui(), solid()] };
 
 The plugin stamps JSX with `data-source-loc` (every mode; `stampJsx: false` opts a build out),
 injects `cell()`/`control()` identities, and under `vite serve` lists the project's sources for
-the page's `sources`/`source` tools. Opt-ins: `devKeys`, `sources: "ship"`, `duckdbAssets`.
+the page's `sources`/`source` tools. Opt-ins: `devKeys` (vendor keys from the dev server's
+environment — `OPENAI_API_KEY` and friends, a `.env` with direnv works — seeded into served pages
+only), `sources: "ship"`, `duckdbAssets`.

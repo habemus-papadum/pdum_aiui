@@ -1,8 +1,8 @@
 /**
  * @habemus-papadum/aiui-viz — reactive scientific-visualization utilities for
  * agent-written frontends, extracted from the morphogen demo. The methodology
- * these embody is documented at docs/guide/frontend-for-agents (and worked
- * through in the demo's PRINCIPLES.md).
+ * these embody is documented in this package's docs/frontend-for-agents.md
+ * (and worked through in the demo's PRINCIPLES.md).
  *
  * The core surface is framework code — async cells, worker streaming, the
  * durable HMR registry, and the agent tool surface. The Observable Plot bridge

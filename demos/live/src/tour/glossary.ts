@@ -4,7 +4,7 @@
  * backends as a comparison table, the measured numbers, and the vendor
  * pages each fact came from. Everything here is checked against
  * `packages/aiui-live/src/protocol.ts` / `session.ts` and the proposal
- * (`docs/proposals/oracle-live.md`); when they move, move this.
+ * (`packages/aiui-live/docs/oracle-live.md`); when they move, move this.
  */
 
 import type { LedgerEntry } from "@habemus-papadum/aiui-live";
@@ -32,7 +32,8 @@ export const LINKS = {
   sdkCustomTools: `${CLAUDE}/custom-tools`,
   sdkPermissions: `${CLAUDE}/permissions`,
   sdkRepo: "https://github.com/anthropics/claude-agent-sdk-typescript",
-  proposal: "https://github.com/habemus-papadum/pdum_aiui/blob/main/docs/proposals/oracle-live.md",
+  proposal:
+    "https://github.com/habemus-papadum/pdum_aiui/blob/main/packages/aiui-live/docs/oracle-live.md",
 } as const;
 
 // ── the wire vocabulary ──────────────────────────────────────────────────────
@@ -368,12 +369,12 @@ export const BACKEND_FACTS: BackendFact[] = [
   },
 ];
 
-// ── measured numbers (2026-09-15, exploration/live-probe + demos/live) ───────
+// ── measured numbers (2026-09-15, the live probe (retired to git history) + demos/live) ───────
 
 export const MEASURED: Array<{ what: string; value: string }> = [
   {
     what: "socket open → session.started",
-    value: "0.5–0.9 s (WebRTC in the session browser: 0.7–0.95 s)",
+    value: "0.5–0.9 s (WebRTC in a Chrome tab: 0.7–0.95 s)",
   },
   {
     what: "user stops → session.delegation.created",

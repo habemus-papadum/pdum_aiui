@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // npm provisioning helpers. Releases authenticate with the NPM_TOKEN secret
-// (see docs/guide/releasing.md), so a new package's first publish needs NO
+// (see AGENTS.md → Releasing), so a new package's first publish needs NO
 // setup — the only live provisioning act here is the optional `reserve`.
 // Zero dependencies; run with the repo's Node.
 //
@@ -9,15 +9,12 @@
 //   reserve [slug...]     OPTIONAL: placeholder-publish names not yet on the registry,
 //                         claiming them ahead of their first real release (local auth;
 //                         may prompt for 2FA)
-//   trust   [slug...]     RETIRED (OIDC trusted-publishing era): attach release.yml as
-//                         a trusted publisher (npm >= 11.15.0). Kept for a future
-//                         return to OIDC; nothing requires it today.
 //   publish [--tag <t>]   pack each package and `npm publish` the tarball with ambient
 //                         auth. The workflow publishes via `pnpm -r publish` instead;
-//                         kept as the per-tarball alternative (it was the OIDC path).
+//                         kept as the per-tarball alternative.
 //
-// `reserve`/`trust`/`publish` default to ALL publishable packages when no slug is
-// given. `reserve`/`trust` also accept `--dry-run`.
+// `reserve`/`publish` default to ALL publishable packages when no slug is
+// given. `reserve` also accepts `--dry-run`.
 
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -29,17 +26,12 @@ const scriptsDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptsDir, "..");
 const packagesDir = join(repoRoot, "packages");
 
-// The workflow file that release.yml lives in — this is the identity npm ties the
-// trusted publisher to (`npm trust github --file <this>`), so it must match exactly.
-const WORKFLOW_FILE = "release.yml";
 // Placeholder version for a name reservation. A prerelease sorts BELOW every real
 // X.Y.Z release, so it can never collide with a future published version. It's
 // published under a dedicated dist-tag (not `latest`) — npm requires a --tag for a
 // prerelease anyway — so the first real CI release is what claims `latest`.
 const RESERVE_VERSION = "0.0.0-reserve.0";
 const RESERVE_TAG = "reserve";
-// `npm trust` (the OIDC-config CLI) landed in this npm version.
-const MIN_NPM_FOR_TRUST = "11.15.0";
 
 function fail(message) {
   process.stderr.write(`error: ${message}\n`);
@@ -70,25 +62,6 @@ function listPublishable() {
     });
   }
   return out;
-}
-
-/** Resolve owner/repo (for `npm trust --repository`) from a package's repository url. */
-function deriveRepoSlug(packages) {
-  for (const p of packages) {
-    const url = p.repository?.url ?? "";
-    const m = url.match(/github\.com[/:]([^/]+\/[^/]+?)(?:\.git)?$/);
-    if (m) return m[1];
-  }
-  // Fall back to the git remote.
-  try {
-    const url = execFileSync("git", ["remote", "get-url", "origin"], {
-      cwd: repoRoot,
-      encoding: "utf8",
-    }).trim();
-    const m = url.match(/github\.com[/:]([^/]+\/[^/]+?)(?:\.git)?$/);
-    if (m) return m[1];
-  } catch {}
-  return fail("could not determine owner/repo for `npm trust --repository`");
 }
 
 /** Resolve the requested slugs (positional args) against the publishable set. */
@@ -124,25 +97,11 @@ function existsOnRegistry(name) {
   }
 }
 
-/** Numeric semver-core compare of two X.Y.Z strings: -1 | 0 | 1. */
-function cmpVersion(a, b) {
-  const pa = a.split(".").map(Number);
-  const pb = b.split(".").map(Number);
-  for (let i = 0; i < 3; i++) {
-    if ((pa[i] ?? 0) !== (pb[i] ?? 0)) return (pa[i] ?? 0) < (pb[i] ?? 0) ? -1 : 1;
-  }
-  return 0;
-}
-
-function npmVersion() {
-  return execFileSync("npm", ["--version"], { encoding: "utf8" }).trim();
-}
-
 /**
- * A one-time 2FA code passed as `--otp=<code>`. npm's write endpoints (publish,
- * and *always* the `trust` endpoint) require 2FA when the account has it enabled;
- * a non-interactive spawn can't answer the prompt, so the caller supplies it here.
- * Only the `--otp=<code>` form is supported (unambiguous vs. positional slugs).
+ * A one-time 2FA code passed as `--otp=<code>`. npm's publish endpoint requires
+ * 2FA when the account has it enabled; a non-interactive spawn can't answer the
+ * prompt, so the caller supplies it here. Only the `--otp=<code>` form is
+ * supported (unambiguous vs. positional slugs).
  */
 function getOtp(args) {
   const hit = args.find((a) => a.startsWith("--otp="));
@@ -184,7 +143,7 @@ function cmdReserve(args) {
       const placeholder = {
         name: p.name,
         version: RESERVE_VERSION,
-        description: `${p.description} (name-reservation placeholder — real releases are published from CI via trusted publishing).`,
+        description: `${p.description} (name-reservation placeholder — real releases are published from CI).`,
         license: "MIT",
         repository: p.repository,
         publishConfig: { access: p.access },
@@ -193,7 +152,7 @@ function cmdReserve(args) {
       writeFileSync(
         join(staging, "README.md"),
         `# ${p.name}\n\nName-reservation placeholder. The real package is published from CI ` +
-          `(\`.github/workflows/${WORKFLOW_FILE}\`) via npm trusted publishing.\n`,
+          `(\`.github/workflows/release.yml\`).\n`,
       );
       const publishArgs = ["publish", "--access", p.access, "--tag", RESERVE_TAG];
       if (otp) publishArgs.push(`--otp=${otp}`);
@@ -217,80 +176,16 @@ function cmdReserve(args) {
       `${failed ? `, ${failed} failed` : ""}.\n` +
       (reserved > 0 && !dryRun
         ? `Done — no further setup: the next release publishes real versions over the\n` +
-          `NPM_TOKEN secret (see docs/guide/releasing.md).\n`
+          `NPM_TOKEN secret (see AGENTS.md → Releasing).\n`
         : ""),
   );
   if (failed) process.exitCode = 1;
 }
 
-function cmdTrust(args) {
-  const dryRun = args.includes("--dry-run");
-  const otp = getOtp(args);
-  const slugs = args.filter((a) => !a.startsWith("--"));
-  const publishable = listPublishable();
-  const targets = resolveTargets(slugs, publishable);
-  const repoSlug = deriveRepoSlug(publishable);
-
-  const ver = npmVersion();
-  if (cmpVersion(ver.replace(/-.*$/, ""), MIN_NPM_FOR_TRUST) < 0) {
-    process.stderr.write(
-      `warning: npm ${ver} is older than the ${MIN_NPM_FOR_TRUST} the docs recommend for ` +
-        `\`npm trust\`. Trying anyway; if it errors, run \`npm install -g npm@latest\` and retry.\n`,
-    );
-  }
-
-  for (const p of targets) {
-    // Best-effort heads-up only. We do NOT gate on this: the npm registry read
-    // path is eventually consistent, so a just-reserved name can still 404 here
-    // (yet be visible on npmjs.com). `npm trust` below talks to the registry and
-    // is the real authority — if the name truly isn't there, it will say so.
-    if (!existsOnRegistry(p.name)) {
-      process.stderr.write(
-        `note: couldn't confirm ${p.name} on the registry read API (it may still be ` +
-          `propagating after reserve, or you're offline). Proceeding — \`npm trust\` will verify.\n`,
-      );
-    }
-    process.stdout.write(
-      `• ${p.name} — trusting ${repoSlug} · ${WORKFLOW_FILE} (--allow-publish)...\n`,
-    );
-    const trustArgs = [
-      "trust",
-      "github",
-      p.name,
-      "--file",
-      WORKFLOW_FILE,
-      "--repository",
-      repoSlug,
-      "--allow-publish",
-      "-y",
-    ];
-    if (otp) trustArgs.push(`--otp=${otp}`);
-    if (dryRun) trustArgs.push("--dry-run");
-    try {
-      execFileSync("npm", trustArgs, { stdio: "inherit" });
-    } catch {
-      process.stderr.write(
-        `\n\`npm trust\` failed for ${p.name} (see npm's output above).\n` +
-          `If it's a 403 / "two-factor authentication is required": the CLI can only answer 2FA\n` +
-          `with a TOTP code (\`--otp=<code>\`), and npm no longer enrolls new TOTP authenticators.\n` +
-          `Passkey-only accounts must configure this on the website instead:\n` +
-          `  https://www.npmjs.com/package/${p.name}/access\n` +
-          `  → Trusted Publisher → GitHub Actions → repo ${repoSlug}, workflow ${WORKFLOW_FILE}.\n`,
-      );
-      fail(`could not attach the trusted publisher for ${p.name}`);
-    }
-  }
-  process.stdout.write(
-    `\ntrust: configured ${targets.length} package(s). ` +
-      `NOTE: releases publish with the NPM_TOKEN secret today — trust is only\n` +
-      `meaningful for a future return to OIDC (docs/guide/releasing.md, History).\n`,
-  );
-}
-
 // Pack each publishable package (pnpm rewrites `workspace:^` -> the real
 // version in the tarball), then `npm publish` the tarball with ambient auth +
 // --provenance. Build must have run first. The workflow uses `pnpm -r publish`
-// instead; this remains as the per-tarball alternative (it was the OIDC path).
+// instead; this remains as the per-tarball alternative.
 function cmdPublish(args = []) {
   const targets = listPublishable();
   // A dist-tag, for canary builds. npm defaults to `latest`, which is exactly
@@ -336,15 +231,12 @@ switch (cmd) {
   case "reserve":
     cmdReserve(rest);
     break;
-  case "trust":
-    cmdTrust(rest);
-    break;
   case "publish":
     cmdPublish(rest);
     break;
   default:
     process.stderr.write(
-      "usage: npm-provision.mjs <list [--slugs] | reserve [slug...] | trust [slug...] | publish> [--dry-run] [--otp=<code>]\n",
+      "usage: npm-provision.mjs <list [--slugs] | reserve [slug...] | publish [--tag <t>]> [--dry-run] [--otp=<code>]\n",
     );
     process.exit(2);
 }

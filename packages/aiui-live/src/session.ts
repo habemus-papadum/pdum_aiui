@@ -2,7 +2,7 @@
  * session.ts — the live engine: one GPT-Live session over a pluggable
  * transport, with the bookkeeping the vendor leaves to the application.
  *
- * What the session OWNS (docs/proposals/oracle-live.md §6):
+ * What the session OWNS (docs/oracle-live.md §6):
  *  - the TASK TABLE: every `session.delegation.created` becomes a ticket; the
  *    delegator answers on that id; timings (created → first append → first
  *    spoken word → done) are recorded, because the wire never says "this

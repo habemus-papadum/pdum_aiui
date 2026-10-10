@@ -7,8 +7,8 @@ What it exercises, end to end, in one page:
 
 - **The dev key.** `aiui({ devKeys: ["motherduck"] })` seeds the page with
   `MOTHERDUCK_BROWSER_TOKEN` under `vite serve` only — a READ-SCALING token of your own
-  MotherDuck user, never the admin token. Store it once: `aiui keys set motherduck` (or export it
-  in a source checkout). Mint one from the MotherDuck UI (Settings → Access Tokens, type
+  MotherDuck user, never the admin token. Export it in the dev server's environment (a `.env`
+  with direnv works). Mint one from the MotherDuck UI (Settings → Access Tokens, type
   read-scaling) or the REST API.
 - **Self-hosted wasm.** `duckdbAssets: true` publishes the installed duckdb-wasm binaries at
   the MotherDuck layout (`/duckdb-wasm-assets/<version>/…`) from this origin; the engine loads
@@ -32,8 +32,8 @@ What it exercises, end to end, in one page:
   (`viewEpoch`: the engine generation).
 
 ```sh
-aiui keys set motherduck      # once: paste a read-scaling token (pbpaste | aiui keys set motherduck)
-pnpm dev                      # then open the page; pick a table and a numeric column
+export MOTHERDUCK_BROWSER_TOKEN=…   # a read-scaling token (or put it in .env)
+pnpm dev                            # then open the page; pick a table and a numeric column
 ```
 
 **Attach mode.** The page URL decides how the engine attaches, once per load (a mode is fixed

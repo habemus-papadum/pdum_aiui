@@ -1,125 +1,128 @@
 # pdum_aiui
 
-Tooling and knowledge for building **scientific/technical visualization UIs with AI agents in a
-tight iteration loop** — keeping an interactive Claude Code CLI session at the center while raising
-the level of abstraction you prompt it at. Three layers:
-
-1. **Prompt lowering (intent compilation)** — high-level multimodal prompts (voice, screenshots,
-   DOM context, pronouns like "make *this* wider") are *lowered*, compiler-style, into agent-ready
-   prompts — **interleaved text and images**, the format current agents execute best — and injected
-   into the running session via a custom Claude Code channel. The lowering pipeline is meant to be
-   inspectable — an open research area, not just a feature.
-2. **Intent tools** — frontends for that pipeline: the intent client (a side panel or the
-   channel-served `/intent/` page) for the page under development (speak a change, capture
-   screenshots/DOM state, send it down the pipeline).
-3. **Frontend for agents** — principles, utilities, and Claude skills for the code agents write in
-   this loop: SolidJS 2.0 (beta), Observable-style async dataflow, debuggable by the agent's
-   future self.
-
-**Full story in the [docs](https://habemus-papadum.github.io/pdum_aiui/):**
-[motivation](https://habemus-papadum.github.io/pdum_aiui/guide/motivation) ·
-[prompt lowering](https://habemus-papadum.github.io/pdum_aiui/guide/prompt-lowering) ·
-[frontend for agents](https://habemus-papadum.github.io/pdum_aiui/guide/frontend-for-agents)
-
-> [!CAUTION]
-> **This codebase is dangerous to run.** It injects externally-supplied prompts into your live
-> Claude Code session through a custom channel — and can launch that session with
-> `--dangerously-skip-permissions` (opt-in via `aiui config yolo`, off by default) — which
-> means trusting this code completely. It is **safer to read than to run**: treat it as reference
-> and parts for building your own system. Details:
-> [Read before running](https://habemus-papadum.github.io/pdum_aiui/guide/warning).
+A UI framework for **agent-written scientific and technical interfaces**: SolidJS 2.0 with
+Observable-style async cells, a compile-time pass that gives every component and cell a stable
+identity and source location, a derived agent tool surface, and a design system for notebook
+pages. Around it, the AI utilities an agent-driven UI needs — structured prompt records, a
+realtime voice oracle that drives the page's own controls, GPT-Live sessions with pluggable
+delegation backends, and a voice dock that embeds both in any page. And the demos: a set of
+scientific notebooks composed into one gallery, published at
+**<https://habemus-papadum.net/aiui/>**.
 
 A pnpm + TypeScript monorepo. Packages live under `packages/*` in the `@habemus-papadum` scope,
-versioned in **lockstep** (one shared version across the whole repo). Each package declares a
-publication level — public, private, or never-published — when it's created (see
-[CLAUDE.md](./CLAUDE.md)).
+versioned in **lockstep** (one shared version across the whole repo); every package declares a
+publication level when it is created (see [CLAUDE.md](./CLAUDE.md)). The repo root is also a
+Claude Code plugin carrying one skill, `aiui-architecture`.
 
 ## Requirements
 
-- Node 24.5+ (24.4.0 exactly cannot install the workspace: a Node bug OOMs on one 210 MB tarball)
-- pnpm 11+ — install it however you like (`brew install pnpm`, the
-  [standalone script](https://pnpm.io/installation#using-a-standalone-script), or
-  `npm i -g pnpm`). You do **not** need corepack: this repo pins an exact pnpm in
-  `package.json` → `packageManager`, and pnpm 10+ automatically downloads and runs that
-  exact version for every command in this repo. Every machine (and CI) gets the identical
-  pnpm. To change it, run `pnpm pkg set packageManager=pnpm@<version>` and commit.
+- Node 24.5+ (24.4.0 exactly cannot install the workspace: a Node bug OOMs on one 210 MB tarball).
+- pnpm 11+. You do not need corepack: `package.json` → `packageManager` pins an exact pnpm, and
+  pnpm 10+ downloads and runs that version for every command in this repo.
 
 ## Getting started
 
 ```sh
 pnpm install
-pnpm build       # build every package (Vite library mode + tsc .d.ts)
-pnpm test        # run all tests (Vitest)
-pnpm typecheck   # tsc --noEmit across packages
-pnpm lint        # Biome (lint + format check)
-pnpm format      # Biome autofix
+pnpm demo                      # the notebook gallery, every demo on one dev server
+pnpm -C demos/morphogen dev    # one demo on its own
+pnpm build                     # build every package (Vite library mode + tsc .d.ts)
+pnpm test                      # Vitest, repo-wide
+pnpm typecheck                 # tsc --noEmit across packages and demos
+pnpm lint                      # Biome (lint + format check); `pnpm format` autofixes
 ```
 
+**Keys.** The demos' voice dock runs on OpenAI. Put `OPENAI_API_KEY` in a root `.env` — the
+checked-in `.envrc` exports it through [direnv](https://direnv.net) — and the dev server injects
+it into the page for the dock (`aiui({ devKeys: ["openai"] })` in each demo's Vite config). Note
+that `devKeys` deliberately places a vendor key into dev-served pages; it is a dev-serve-only
+opt-in and never part of a build. A built page takes a pasted key instead.
+`demos/motherduck-lab` additionally wants `MOTHERDUCK_BROWSER_TOKEN`.
 
-## Add a package
+## Packages
 
-Every package picks a publication level at creation time — pass exactly one of `--public`,
-`--private`, or `--no-publish` (see [CLAUDE.md](./CLAUDE.md) for the full convention):
+| Package | What it is |
+| --- | --- |
+| [`aiui-viz`](./packages/aiui-viz/README.md) | The framework: async cells for SolidJS 2.0, controls/actions, durable HMR structure, scopes, worker streaming, the agent toolkit, site pages and cards, Plot/Mosaic/DuckDB porcelain. Its [`docs/`](./packages/aiui-viz/docs) hold the methodology, starting at [frontend-for-agents.md](./packages/aiui-viz/docs/frontend-for-agents.md). |
+| [`aiui-source-processor`](./packages/aiui-source-processor/README.md) | The Vite/Babel pass: identity injection for cells/controls/actions, JSX source locators, the dev server's source listing, `devKeys`. |
+| [`aiui-design`](./packages/aiui-design/README.md) | The design system: tokens, fonts, a skin for every stable aiui-viz class, the notebook chrome. `DESIGN.md` is the language. |
+| [`aiui-slides`](./packages/aiui-slides/README.md) | A deck of viewport slides as an ordinary aiui app: current slide as a control, HUD overview, URL binding, the Lens component. |
+| [`create-aiui`](./packages/create-aiui/README.md) | `pnpm create @habemus-papadum/aiui` — scaffolds a starter app with the dual page + card shape. |
+| [`aiui-prompts`](./packages/aiui-prompts/README.md) | Structured prompt records: deterministic compilation, provenance, delivery operations, for Node and browsers. |
+| [`aiui-prompts-inspector`](./packages/aiui-prompts-inspector/README.md) | Native Solid inspection and compact previews of stored prompt records. |
+| [`aiui-prompts-vite`](./packages/aiui-prompts-vite/README.md) | Vite routing and optional source provenance for prompt JSX. |
+| [`aiui-oracle`](./packages/aiui-oracle/README.md) | The oracle: a realtime voice control surface (OpenAI Realtime over WebRTC) with the app's cells and actions as tools. |
+| [`aiui-live`](./packages/aiui-live/README.md) | GPT-Live sessions with pluggable delegation backends (local tools, hosted Responses, the Claude Agent SDK). Its `docs/` carry the measured findings. |
+| [`aiui-dock`](./packages/aiui-dock/README.md) | The voice dock: the oracle and a live session embedded in any aiui page, with the tool log, a key field and a source browser. |
+| [`aiui-stt`](./packages/aiui-stt/README.md) | Realtime speech-to-text (ElevenLabs Scribe, OpenAI) behind one component. |
+| [`aiui-cf-creds`](./packages/aiui-cf-creds/README.md) | Broker-backed ephemeral credentials for aiui apps. |
+| [`aiui-pencil`](./packages/aiui-pencil/README.md) | A pressure/tilt-driven pencil on a raster surface, with a client surface and a `./sidecar` for a host to mount. |
+| [`aiui-remote-bar`](./packages/aiui-remote-bar/README.md) | A page's mode-engine command bar projected over a websocket to a remote client; also publishes a `./sidecar`. |
+| [`aiui-room-relay`](./packages/aiui-room-relay/README.md) | A host-neutral websocket room relay pairing a browser host with remote clients. |
+| [`aiui-util`](./packages/aiui-util/README.md) | The sidecar contract a host mounts, and client-surface serving for sidecar packages. |
+| `aiui-build-config` | *Internal, never published.* The one home of the externalize-deps matcher and the Solid-under-Vitest configuration every package shares. |
+| `aiui-prompts/spikes/*` | *Internal, never published.* Two prompt-authoring spikes kept beside their future foundation package (`authoring`, `inspector`). |
+
+The two demo-only libraries, `demos/optics` (the scalar-wave engine) and `demos/oscillator` (a
+reusable slice), are workspace members too and never published.
+
+## Demos
+
+Every demo runs on its own (`pnpm -C demos/<slug> dev`) and, when it carries the `aiui.sitePage`
+marker, appears in the gallery automatically. `demos/gallery` is the shell and the published
+site; its [`PUBLISHING.md`](./demos/gallery/PUBLISHING.md) and `publish.sh` are the deploy path.
+
+| Demo | What it shows |
+| --- | --- |
+| [`morphogen`](./demos/morphogen) | Gray–Scott reaction–diffusion: a WebGL sim island, worker analysis, a history ring. |
+| [`aztec`](./demos/aztec) | Random domino tilings and the arctic circle: a streaming shuffle worker. |
+| [`seismos`](./demos/seismos) | Earthquakes and the Gutenberg–Richter law: DuckDB-WASM + Mosaic crossfilter, SQL tools. |
+| [`circle`](./demos/circle) | How round can you draw a circle? The pencil-package demo. |
+| [`gears`](./demos/gears) | Involute gears in kinematic mesh, pure SVG geometry. |
+| [`gear-talk`](./demos/gear-talk) | The involute gear as slides — the reference deck for `aiui-slides`. |
+| [`gratings`](./demos/gratings), [`holograms`](./demos/holograms) | Diffraction and holography over the shared wave engine in [`optics`](./demos/optics). |
+| [`dna-script`](./demos/dna-script) | A shape notation for DNA, where complements interlock. |
+| [`wine`](./demos/wine) | Wine reviews on an embedding atlas. |
+| [`styleguide`](./demos/styleguide) | Every role, token and component of the design system on one page. |
+| [`twins`](./demos/twins) | One [`oscillator`](./demos/oscillator) slice instantiated twice: the composability worked example. |
+| [`walkthrough`](./demos/walkthrough) | The frontend playbook built step by step on 1-D diffusion, every layer left standing. |
+| [`live`](./demos/live) | The GPT-Live lab: raw wire timing, delegation backends, a voice-driven app. Not in the gallery. |
+| [`motherduck-lab`](./demos/motherduck-lab) | The in-tab MotherDuck engine; needs a token, so not in the gallery. |
+
+## Working in the repo
+
+Add a package with a publication level (exactly one flag) or an in-repo demo:
 
 ```sh
-pnpm new-package my-lib --public       # published publicly as @habemus-papadum/my-lib
-pnpm new-package my-lib --private       # published to npm, private (needs a paid npm org)
-pnpm new-package demo --no-publish      # internal-only, never published
+pnpm new-package my-lib --public      # published publicly as @habemus-papadum/my-lib
+pnpm new-package my-lib --private     # published to npm, restricted (needs a paid npm org)
+pnpm new-package my-lib --no-publish  # internal-only, never published
+pnpm new-demo spectra                 # demos/spectra, on workspace:^ deps, in the gallery
 ```
 
-New packages join version lockstep automatically. Internal dependencies use `workspace:^`; pnpm
-rewrites them to a concrete version at publish time.
-
-## Documentation
-
-Docs are a monorepo-aware static site — [VitePress](https://vitepress.dev) (Markdown, like MkDocs)
-plus a [TypeDoc](https://typedoc.org) API-reference step. It documents the repo at two altitudes:
-top-level conceptual docs live under [`docs/`](./docs), and each package contributes its own section
-(README → overview, `packages/<slug>/docs/*.md` → guides, `src/index.ts` → an API reference).
-
-```sh
-pnpm docs:dev       # generate + serve locally with hot reload (http://localhost:5173)
-pnpm docs:build     # generate + build the static site into docs/.vitepress/dist
-pnpm docs:preview   # serve the built static site
-pnpm docs:gen       # regenerate package pages + API + sidebar only
-```
-
-The site is generated from the same `packages/*` glob everything else uses, so **adding a package
-needs no doc-config changes** — its pages and API reference appear automatically on the next
-`docs:gen`. `scripts/docs-gen.mjs` is the generator; the docs-system section of
-`docs/guide/development.md` explains it in full. The generated tree (`docs/packages/**`, the
-sidebar, VitePress `cache/`/`dist/`) is gitignored.
+Internal dependencies use `workspace:^` and run from source (no build step between edits);
+`pnpm test:packaging` guards the published shape, `pnpm test:template` the starter template, and
+`pnpm skills:check` the plugin's links. The conventions behind all of this are in
+[CLAUDE.md](./CLAUDE.md).
 
 ## Releasing
 
-Releases run **entirely in CI** — there is no local release script and no tag trigger. From the
-GitHub Actions UI run the **release** workflow (or `gh workflow run release.yml -f bump=minor`),
-choosing `patch`, `minor`, or `major`. The pipeline:
-
-1. **gate** — require this commit's CI to be green (skippable with `skip_ci_check`).
-2. **prepare** — compute the next version from the highest `vX.Y.Z` tag, write it across every
-   `package.json`, commit, tag `vX.Y.Z`, push.
-3. **npm-publish** — `pnpm -r publish --provenance` (private packages are skipped).
-4. **github-release** — a GitHub Release with generated notes.
-5. **finalize** — return `main` to a `X.Y.Z+dev` marker.
-
-Use `dry_run: true` to compute the version and preview the diff without committing or publishing.
-
-Between releases the tree carries an `X.Y.Z+dev` version — npm rejects it, so a stray publish can't
-overwrite a released version.
-
-### One-time setup
-
-Add an npm automation token as the `NPM_TOKEN` Actions secret (Settings → Secrets and variables →
-Actions). Provenance additionally requires the repo to be public (or npm Pro/Teams).
+Releases run **entirely in CI** — no local release script, no tag trigger. From the GitHub
+Actions UI run the **release** workflow (or `gh workflow run release.yml -f bump=minor`): it
+computes the next version from the latest tag, stamps every manifest, publishes to npm, cuts a
+GitHub Release and deploys the gallery; `canary=true` publishes a prerelease under the `canary`
+dist-tag and stops. Between releases the tree carries an `X.Y.Z+dev` version, which npm rejects,
+so a stray publish cannot overwrite a released one. The guardrails are in
+[AGENTS.md](./AGENTS.md).
 
 ## Layout
 
 ```
-packages/*               published libraries (shared lockstep version)
-docs/                    documentation site (VitePress) — top-level guides + generated package docs
-scripts/versioning.mjs   the lockstep version engine (CI-managed — do not run `set` by hand)
-scripts/new-package.mjs  scaffolder for new packages
-scripts/docs-gen.mjs     docs generator — package pages + TypeDoc API + sidebar
-.github/workflows/       ci.yml (gate) + release.yml (publish)
+packages/*               the published libraries (one lockstep version)
+demos/*                  the notebooks, the gallery shell, and two demo-only libraries
+docs/proposals/          finished proposals, kept as a record (status in each header)
+skills/aiui-architecture the one skill of the repo-root Claude plugin (.claude-plugin/)
+scripts/                 versioning (CI-managed), new-package / new-demo, the packaging and
+                         template gates, npm name reservation, the skill-link check
+.github/workflows/       ci.yml (gate) + release.yml (publish + gallery deploy)
 ```

@@ -6,8 +6,8 @@ exercise the shapes with different content and deliberate escaping/ownership edg
 
 | Evidence | Foundation contract |
 | --- | --- |
-| [All markers](../../aiui-lowering-pipeline/corpus/all-markers.txt) | Ordered Group/Prompt/Join composition, structured Marker children, XML sidecars, explicit asset identity/reference policy |
-| [Existing span map](../../aiui-lowering-pipeline/corpus/all-markers.spans.json) | Exact primary contribution partitions plus captured event/selection/source origins; `importText` for opaque inputs moving later |
+| All markers (`aiui-lowering-pipeline/corpus/all-markers.txt`; that package moved out of this repo with the intent tool — git history keeps the corpus) | Ordered Group/Prompt/Join composition, structured Marker children, XML sidecars, explicit asset identity/reference policy |
+| Existing span map (`aiui-lowering-pipeline/corpus/all-markers.spans.json`, likewise) | Exact primary contribution partitions plus captured event/selection/source origins; `importText` for opaque inputs moving later |
 | [Tool brief](../../aiui-viz/corpus/tool-brief-seismos-like.txt) | One ToolSnapshot, read/write/other and group projections, preserved declaration and field origins |
 | [Budgeted brief](../../aiui-viz/corpus/tool-brief-seismos-like-900.txt) | Retained full declarations, longest-usage-first policy and recorded removals, explicit required-over-budget result |
 | [Delegation](../../aiui-live/corpus/claude-delegation-message.txt) | XML wrapper containing transcript lines, a structured request, Markdown sections, and ToolBrief without flattening author-side |
@@ -43,8 +43,8 @@ compiler XML region decodes one text-escaping layer for display, while keeping i
 range and whole-equation navigation. Tree/raw navigation, contributions, folds, and budget decisions
 remain available. General nested XML preview and decoded-character navigation need additional maps.
 
-The [consumer review](../../../docs/proposals/structured-prompts-review.md) and
-[site survey](../../../docs/proposals/prompt-sites.md) remain the authority for downstream adoption
-order: shared tool brief, oracle/live, lowering/channel, then small page-authored tool text. This
+The consumer review and the prompt-site survey (both retired to git history) set the downstream
+adoption order: shared tool brief, oracle/live, the intent tool's lowering/channel sites (now
+outside this repo), then small page-authored tool text. This
 foundation adds consumer-owned adapter contracts and utility profiles; transport implementations
 and caller-specific policy stay with those consumers.

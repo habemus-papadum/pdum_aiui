@@ -1,8 +1,8 @@
 # Frontend: hard-won details
 
 The level-3 ledger: technical findings underneath
-[Frontend for agents](/guide/frontend-for-agents) and
-[Design choices](./frontend-design-choices), each paid for with a real debugging loop while
+[Frontend for agents](./frontend-for-agents.md) and
+[Design choices](./frontend-design-choices.md), each paid for with a real debugging loop while
 building the reference notebooks. Some are transient (pinned to beta versions — noted); all are
 worth keeping so nobody pays twice. Format: **symptom → cause → rule.**
 
@@ -63,11 +63,11 @@ Versions these were established against: `solid-js@2.0.0-beta.15`, `@solidjs/web
 - **`<Index>` is also gone; `<Repeat count={n}>{(i) => …}` is 2.0's position-keyed list** — and
   the distinction is load-bearing, not cosmetic. Reference-keyed `<For>` over freshly-*computed*
   row objects re-creates the DOM node on every recompute, which detaches a node mid-interaction:
-  the intent client's press-and-hold cap was re-created the instant its own lit state flipped,
+  a command bar's press-and-hold cap was re-created the instant its own lit state flipped,
   and the pointerup died with the detached node (event delegation only delivers to connected
   nodes). Render recomputed projections position-keyed — the node persists and its attributes
-  update in place. Regression: `packages/aiui-intent-client/src/ui/panel.test.tsx` ("survives
-  its own press").
+  update in place. (Found in the intent client's panel, whose "survives its own press"
+  regression test went with it out of this repo.)
 - **A disabled button swallows pointer events.** A press-and-hold gesture whose down-command
   becomes unavailable mid-hold (pressing it is exactly what made it unavailable) must keep the
   button enabled across the whole gesture, or the pointerup lands on a disabled element and the
@@ -136,7 +136,7 @@ still hold for any consumer theming per system through aiui-viz's `colorMode()`.
   `Cell<unknown>` — every `CellView`/`CellText` child then sees `unknown`. Annotate the
   compute's return (`async (deps, ctx): Promise<number> => …`), as the circle demo does.
 - **Shipped chrome reads hooks, not a palette.** Widgets that land on any page (the dock, the
-  tool log, the trace debugger, the oracle and live strips) read prefixed `--aiui-*` tokens
+  tool log, the oracle and live strips) read prefixed `--aiui-*` tokens
   with neutral fallbacks; the design package sets the hooks from its own tokens. Bare token
   names would collide with a host's; hard-coding the palette would be wrong on every host but
   ours.
@@ -188,8 +188,8 @@ Found building the wine demo (embedding-atlas integration; full detail:
   `document.visibilityState` still reads "visible": Chrome pauses the rendering steps (rAF,
   ResizeObserver delivery, screenshots), and coordinator-driven updates ride them — views
   stay blank, menus never populate, custom clients never get results, and nothing errors.
-  Bites hardest when driving the session browser from an agent while its window sits behind
-  other apps; verify in a headless instance instead (headless never occludes). Layout still
+  Bites hardest when driving a browser from an agent while its window sits behind other apps;
+  verify in a headless instance instead (headless never occludes). Layout still
   computes under occlusion (`clientWidth` is live), which is why size-dependent mounts should
   measure directly rather than wait for a first ResizeObserver delivery.
 - **`embedding-atlas` declares non-optional peers on `@uwdata/mosaic-spec` and
@@ -326,7 +326,7 @@ Found building the wine demo (embedding-atlas integration; full detail:
   the demos inline the same literal) under Vitest — Solid's own jsx-runtime, never rendered by
   such tests. (2) Vitest 5 no longer augments Vite's `UserConfig` with `test`: a config carrying
   a test block imports `defineConfig` from **`vitest/config`**, or `tsc` on the config fails
-  (surfaced by the packaging test, which typechecks the intent client's config). (3) Vitest 5
+  (surfaced by the packaging test, which typechecks a package's config). (3) Vitest 5
   **rewrote the benchmark API**: `bench()` is a fixture of the test context —
   `test("…", async ({ bench }) => { await bench("case", fn).run() })`, `bench.compare(...)` for
   several (the walkthrough's `diffusion.bench.ts`). (4) Vite 8 keeps source comments through
@@ -384,8 +384,8 @@ Found building the wine demo (embedding-atlas integration; full detail:
   never-matching `external` regex (`/^never-external-solid-js$/`) — vite-plugin-solid
   force-externalizes solid-js unless the user config already lists a matching external, so
   without it `inline` silently loses. Every test config in this repo carries the recipe
-  (aiui-viz's vite.config.ts has the full story; aiui-intent-client's copied it); copy it into
-  any NEW package that tests Solid before debugging "my cell doesn't update".
+  (aiui-viz's vite.config.ts has the full story); copy it into any NEW package that tests Solid
+  before debugging "my cell doesn't update".
 
 - **Cells must be created inside `cellHarness`'s setup callback** — created outside any owner
   they throw `NO_OWNER_BOUNDARY` (Solid 2.0 requires an owner for the underlying memo). The

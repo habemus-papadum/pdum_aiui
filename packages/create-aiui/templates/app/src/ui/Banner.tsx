@@ -9,10 +9,9 @@ export function Banner() {
     <header class="banner">
       <h1>this page is alive — talk to it</h1>
       <p>
-        You're looking at a running web app wired to a Claude Code session. Press <kbd>⌘B</kbd> to
-        activate the intent client, then <em>say or type</em> what you want. Hold <kbd>space</kbd>{" "}
-        to speak; drag to circle the thing you mean. Your intent lands in the session, and the agent
-        edits this app's source while you watch it hot-reload.
+        You're looking at a running web app built to be rebuilt by an agent. Open the voice dock and{" "}
+        <em>say or type</em> what you want, or describe it to your coding agent; the page keeps
+        running while its source changes under you, and it hot-reloads as it goes.
       </p>
       <p>
         The rose below is placeholder scenery. Play with it — drag the sliders — then describe the

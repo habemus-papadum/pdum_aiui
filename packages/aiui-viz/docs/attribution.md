@@ -9,10 +9,14 @@ answer two different questions about whatever was pointed at:
 
 They are different questions (a `<span>` in a table is authored in `Table.tsx` but its number came
 from the `analysis` cell defined in `graph.ts`), and everything on this page exists to answer both
-mechanically. This is the concepts-level description; the code lives in the dev overlay
-(`source-locator.ts`, `selection.ts`, `multimodal/shot.ts`, `multimodal/vscode.ts`,
-`intent-pipeline/engine.ts`) and in `aiui-viz` (`CellView`, the cell registry,
-`registerStandardTools`).
+mechanically. This is the concepts-level description. The page's half of the code lives in
+`aiui-viz` (`CellView`, the cell registry, `page-selection.ts`, `registerStandardTools`) and in
+the compiler (`aiui-source-processor`, the `aiui()` Vite plugin that stamps the DOM). The
+capture half — the shot locator that resolves a dragged rectangle, the selection watcher an
+extension runs in its isolated world, the prompt composition that renders what was found — is
+a *host's* job: it was built in the intent tool that originally drove this contract, which now
+lives outside this repo. The sections below describe the contract and the algorithms a host
+follows against it; where they describe the former host's code, they describe it as history.
 
 ## The contract: three DOM attributes and a registry
 
@@ -76,8 +80,9 @@ and walks outward — nearest stamped ancestor first:
 - `closest("[data-control]")` → the control the selection sits in.
 
 The page does this itself: aiui-viz's `page-selection.ts` installs `window.__AIUI__.selection()`
-and registers it as the `selection` standard tool, so an agent (through the channel, the oracle,
-a live delegation) asks the page what is selected and gets the text, the TeX, both chains with
+and registers it as the `selection` standard tool, so an agent (the oracle, a live delegation, or
+an external host calling the page's tools) asks the page what is selected and gets the text, the
+TeX, both chains with
 every location split into `file`/`line`/`col` — `file` exactly what the `source` tool takes — the
 control, and optionally the client rects or the fragment rendered as Markdown. The page remembers
 the last non-collapsed selection for two minutes, because focus moving into a textarea (the dock's
@@ -85,10 +90,11 @@ key field) empties the document's selection at exactly the moment a user presses
 answered from memory says `live: false`. A selection inside agent chrome (`data-aiui-chrome`) is
 never one.
 
-The intent client's extension tier reads the same contract on its own (`aiui-intent-runtime`'s
-`selection.ts` — its content script runs in an isolated world and cannot see the page's global);
-the plain-page CDP tier asks the page. Either way the selection renders into the prompt inline,
-compact but complete:
+A host can read the same contract on its own — a browser extension's content script runs in an
+isolated world and cannot see the page's global, so it walks the same stamps itself (the former
+intent tool's extension tier did exactly that) — while a host that drives the page over CDP
+simply asks the page. Either way the selection renders into the prompt inline, compact but
+complete:
 
 > Regarding the on-screen selection "3.2 eV" (authored at src/ui/Table.tsx:88:12; produced by cell
 > analysis defined at src/model/graph.ts:31)
@@ -101,7 +107,8 @@ its TeX source (the `data-tex` stamp from the `TeX` component).
 A region screenshot must name **what the user framed** — a point of reference, not an inventory.
 The first implementation grid-sampled `elementsFromPoint` over the rect and reported every
 annotated ancestor it touched, which put the app shell in every single shot (any rect intersects
-it). The current strategy, in `locateComponents`:
+it). The strategy that replaced it — the intent tool's `locateComponents`, retired from this repo
+with that tool, and the intended reading of the contract for any host resolving a rectangle:
 
 1. **Enclosure.** Keep the annotated elements *fully inside* the rect (±2px tolerance), then drop
    any that another kept element contains. The survivors — the highest enclosed elements — are
@@ -118,8 +125,8 @@ it). The current strategy, in `locateComponents`:
    its `data-cell` name → the **authoring module** read off its source stamp
    (`src/ui/Controls.tsx:44:7` → `Controls`) → the bare tag as last resort. The middle rung is a
    paid-for fix: without it, a drag across a dashboard rendered as `name="div"` repeated per
-   panel — noise in the prompt and in the trace viewer's captions — while the informative name
-   sat right there in the stamp.
+   panel — noise in the prompt and in the captions of the trace debugger that reviewed it —
+   while the informative name sat right there in the stamp.
 5. **The cell-source ladder** (shared by the shot locator, the selection watcher, and the jump
    picker — one implementation, `cellSourceLoc`). A frontier cell's `source` is its
    `data-cell-loc` (definition site) when stamped; else the **live cell registry** — aiui-viz
@@ -128,18 +135,19 @@ it). The current strategy, in `locateComponents`:
    element's own JSX stamp; else the first stamped element *inside* the cell — where its UI is
    authored, an approximation, but the right file to open first.
 
-Full-viewport shots (`S`) skip the locator entirely: "everything" frames nothing, and element
+Full-viewport shots skip the locator entirely: "everything" frames nothing, and element
 metadata without a reference point is bulk.
 
 Stamps are app-root-relative; when the page knows its `sourceRoot` (`window.__AIUI__.sourceRoot`)
-they're resolved to absolute paths on the spot, otherwise the channel resolves them at compose
-time.
+they're resolved to absolute paths on the spot, otherwise the host resolves them when it composes
+the prompt.
 
 ## What the agent actually receives
 
-The structured intent carries **everything** the locator found — rendering decisions happen at
-lowering time, never at capture time (the repo's defer-rendering rule). The composed prompt then
-inlines each shot at its position in the prose:
+The structured record carries **everything** the locator found — rendering decisions happen when
+the prompt is composed, never at capture time (the defer-rendering rule: inputs travel
+structured; formatting is the composer's decision). The prompt the former intent tool composed
+inlined each shot at its position in the prose, and the shape is the one any host should keep:
 
 ```xml
 [screenshot located at ~/.cache/aiui/projects/app-1a2b3c4d/traces/…/shot_1.png]
@@ -153,19 +161,19 @@ inlines each shot at its position in the prose:
 
 The image reference is a plain-text bracket line; the XML block carries the located-element
 metadata and appears only when elements were located. (Every render path — shots, selections,
-boundaries, the preamble — is cataloged with real outputs in the
-[prompt vocabulary](/packages/aiui-claude-channel/prompt-vocabulary).) Every path — the image and each source —
+boundaries, the preamble — was cataloged with real outputs in the former channel package's
+`prompt-vocabulary.md`, retired to git history with it.) Every path — the image and each source —
 is relativized against the agent's working directory. Two render-time caps keep a big drag from
 flooding the prompt while the structured record stays complete: at most **8 elements** per shot
 (`elements-omitted="N"` says what was dropped) and at most **4 cells** per element
 (`cells-omitted="N"`). A `within` anchor renders as `containment="within"` so the agent knows
 it's context, not framing.
 
-The debug UI's transcript preview shows the same resolution in miniature — each screenshot's
-caption lists the first few element names — so a caption reading `shot_1 · SimCanvas, Controls,
-TimeSeries +2` is your one-glance check that resolution worked, and a caption full of bare tags
-means the page isn't stamped (the plugin's `locator` option is missing, or the elements carry no
-annotations).
+A host's transcript preview can show the same resolution in miniature — the former trace
+debugger captioned each screenshot with the first few element names — so a caption reading
+`shot_1 · SimCanvas, Controls, TimeSeries +2` is a one-glance check that resolution worked, and a
+caption full of bare tags means the page isn't stamped (the plugin's `locator` option is missing,
+or the elements carry no annotations).
 
 ## Resolving from the agent's side
 
@@ -174,23 +182,25 @@ The same contract serves the reverse direction. `registerStandardTools` gives ev
 `report` tool (full format: every control with meta and loc, every named cell with state,
 description, and definition site, the dependency edges, and each registered action). An
 agent that received `<cell name="analysis" …/>` in a prompt can go from the name to the live
-cell's state without any further wiring. The VS Code extension's jump mode rides the same stamps.
+cell's state without any further wiring. An editor integration's jump-to-source rides the same
+stamps (the former VS Code extension's jump mode did).
 
 ## The call log
 
 Attribution answers "which code made this?"; the call log answers the other question an
 agent-driven app raises — **"was my agent actually calling the tools?"** The page's registry
-(`window.__AIUI__.tools`) records every tool call it routes: who called (`channel` for Claude
-Code through `page_tools_call`, `oracle`, `panel`, `live:<delegator>`, `page` for the app or
-the console), with what, how long it took, and the result or error, clipped to 4 KB and kept
-to the last 200. `calls()` reads it; `onCall` follows it; a projection that executes a
+(`window.__AIUI__.tools`) records every tool call it routes: who called (`oracle`,
+`live:<delegator>`, `page` for the app itself, and whatever name an external host sends —
+`channel` was the former MCP channel host's, `panel` its intent panel's), with what, how long it
+took, and the result or error, clipped to 4 KB and kept to the last 200. `calls()` reads it; `onCall` follows it; a projection that executes a
 control's setter directly (the oracle's control-surface tools) reports through `record` so the
 log stays complete.
 
 The on-page viewer is `ToolLog` (`@habemus-papadum/aiui-viz/site/tool-log`, its own subpath):
 mount it once, hidden by default, opened by `#aiui-tools` in the URL or `toggleToolLog()`. Its
 third view, *as rendered*, shows what a model sees — the `Tools:` section every consumer
-renders from the same document, and the structured form `page_tools_list` returns.
+renders from the same document, and the structured form the registry's `list()` returns (what an
+external host forwards as its tool listing).
 
 ## Where this can drift
 

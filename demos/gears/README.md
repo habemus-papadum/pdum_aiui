@@ -10,10 +10,10 @@ step), with the demo-package dual shape: run it standalone, or let
 of the published notebook site.
 
 ```sh
-pnpm claude   # terminal 1 — Claude Code with the aiui channel + session browser
-pnpm dev      # terminal 2 — this app (Vite + the intent tool)
+pnpm dev      # this app (Vite), from this directory
 ```
 
-Then open it in the session browser: `./aiui open http://localhost:5173` (from
-the repo root), activate the intent client (**⌘B**), and describe what you
-want. See [docs/guide/getting-started.md](../../docs/guide/getting-started.md).
+Open the printed URL. The voice dock in the corner drives the page's own tools;
+it takes an OpenAI key from `OPENAI_API_KEY` in the environment (the dev server
+hands it to the page) or from its own key pane. See the
+[user guide](../../packages/aiui-viz/docs/frontend-user-guide.md).

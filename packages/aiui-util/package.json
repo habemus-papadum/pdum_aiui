@@ -1,7 +1,7 @@
 {
   "name": "@habemus-papadum/aiui-util",
   "version": "0.21.0+dev",
-  "description": "Shared utilities for aiui packages (cache dirs, environment detection, session-browser plumbing).",
+  "description": "The sidecar contract (what a host hands a mounted sidecar, and gets back) and the client-surface serving helper the aiui sidecar packages are built on.",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -43,10 +43,6 @@
     "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run"
-  },
-  "dependencies": {
-    "@puppeteer/browsers": "^2.10.5",
-    "execa": "^9.6.1"
   },
   "devDependencies": {
     "@habemus-papadum/aiui-build-config": "workspace:^",

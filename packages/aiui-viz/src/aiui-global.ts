@@ -2,22 +2,26 @@
  * aiui-global.ts — `window.__AIUI__`, installed by the RUNTIME (owner,
  * 2026-07-14): the global exists whether the app runs in dev or production,
  * with no plugin, no ports, and no sockets. It is the page's one visible
- * aiui surface — what the intent client's content script / CDP bootstrap
- * detects (`aiuiSupport`, the `aiui` pill), and where page tools live.
+ * aiui surface — what an external host that drives the page (an extension's
+ * content script, a CDP bootstrap) detects to tell an aiui app from any
+ * other page, and where page tools live.
  *
  * The tools half is a REGISTRY, not a bridge: `register(ns, tools)` declares
  * a namespace's full current tool set (replace-by-namespace — HMR-safe, the
- * same contract the old overlay bridge had, so `agentToolkit` forwards
+ * same contract the original overlay bridge had, so `agentToolkit` forwards
  * unchanged), and the registry is CALLABLE in-page — `list()` and `call()`
- * serve internal clients (an app driving its own tools; no use case today,
- * the door stays open by shape) exactly as they serve the intent client,
- * which subscribes via `onChange` and relays registrations to the channel.
- * The page dials nothing; connectivity arrives from OUTSIDE.
+ * serve internal clients (the voice dock's oracle and live sessions; an app
+ * driving its own tools) exactly as they serve an external host, which
+ * subscribes via `onChange` and relays registrations wherever it likes (the
+ * former intent tool relayed them to its MCP channel, where a Claude Code
+ * session saw them as tools). The page dials nothing; connectivity arrives
+ * from OUTSIDE.
  *
  * The selection half is a READER: `selection(options)` says what the user
  * has selected — text, TeX, the authoring elements and producing cells with
  * their source locations (page-selection.ts). The `selection` standard tool
- * is this call; the CDP intent tier calls it when the page has it.
+ * is this call; a host driving the page over CDP calls it when the page has
+ * it.
  */
 import {
   type PageSelection,
@@ -56,9 +60,10 @@ export interface AiuiToolsNamespace {
 
 /** Who called a tool, as the transport that carried the call knows it. */
 export interface AiuiCallMeta {
-  /** `channel` (Claude Code through `page_tools_call`), `oracle`, `panel`,
-   * `live:<delegator>`, `page` (the app itself, or the console)… free-form;
-   * each transport names itself. Absent ⇒ `unknown`. */
+  /** `oracle`, `live:<delegator>`, `page` (the app itself), or whatever an
+   * external host sends (`channel` was the former MCP channel host's name,
+   * `panel` its intent panel's)… free-form; each transport names itself.
+   * Absent ⇒ `unknown`. */
   caller?: string;
   /** A glyph for the caller — an emoji or a Unicode symbol — shown beside its
    * name wherever calls are listed. A transport may send its own; the on-page
@@ -154,7 +159,7 @@ export interface AiuiGlobal {
    * the TeX, the authoring elements and the producing cells with their
    * source locations. Null when nothing is selected. Installed by the
    * runtime like `tools`; read in-page, by the `selection` standard tool, and
-   * by the CDP intent tier. */
+   * by a host driving the page over CDP. */
   selection?: (options?: PageSelectionOptions) => PageSelection | null;
   /** DEV-SERVE ONLY: vendor keys the aiui Vite plugin's opt-in `devKeys`
    * option injected (per-provider, e.g. `{ openai: "sk-…" }`). Never present

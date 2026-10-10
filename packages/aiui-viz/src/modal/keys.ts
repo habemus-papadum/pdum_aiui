@@ -1,6 +1,6 @@
 /**
- * Keymap layers with exhaustive claims (modal-interaction-lessons §4.2, rules
- * §3.2/3/8/9).
+ * Keymap layers with exhaustive claims (the modal-interaction-lessons handoff
+ * §4.2, rules §3.2/3/8/9; git history).
  *
  * A modal surface's keyboard behavior is a STACK of layers resolved top-down
  * by a pure function — table-testable across state × key × phase × repeat,

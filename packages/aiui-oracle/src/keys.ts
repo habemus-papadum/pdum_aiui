@@ -8,9 +8,9 @@
  *    key-custody choice, not a mechanics one: paste-key mode is the user
  *    knowingly holding their own key in their own browser (standalone/dev);
  *  - a mint URL exchanges an app identity for an `ek_` server-side (static
- *    sites; the channel later).
+ *    sites, or any host that holds the parent key).
  *
- * Ground truth (exploration/ephemeral-keys, live 2026-07-20): the mint is
+ * Ground truth (the ephemeral-keys exploration, retired to git history; live 2026-07-20): the mint is
  * `POST /v1/realtime/client_secrets`, TTL 10–7200 s; an expired `ek_` can fail
  * EITHER at upgrade (401) or after open (an `error` event) — callers handle
  * both.
@@ -105,8 +105,8 @@ export function pasteKeySource(
 
 /**
  * The DEV-MODE key: what the aiui Vite plugin's opt-in `devKeys` option
- * injected at `window.__AIUI__.devKeys` (resolution is the house vendor-key
- * machinery — env first in a source checkout, the OS vault otherwise). Exists
+ * injected at `window.__AIUI__.devKeys` (read from the dev server's environment,
+ * `OPENAI_API_KEY`; a `.env` with direnv works). Exists
  * only under `vite serve` — a built app never carries it — so a purely static
  * app develops with zero setup (no pasting, no mint server) and deploys on
  * paste-key alone.
@@ -133,8 +133,8 @@ export function devKeySource(vendor = "openai", options: MintOptions = {}): KeyS
 }
 
 export interface StandardKeySourcesOptions {
-  /** A mint endpoint, when this app has one (a channel, a cloud function).
-   * Absent = the flow simply doesn't exist for this app. */
+  /** A mint endpoint, when this app has one (a dev-server mount, a cloud
+   * function). Absent = the flow simply doesn't exist for this app. */
   mintUrl?: string;
   storage?: Pick<Storage, "getItem">;
   mint?: MintOptions;
@@ -221,8 +221,9 @@ export function cachingKeySource(inner: KeySource, marginSeconds = 60): KeySourc
 
 /**
  * A mint service: POST the wire session config to a URL we trust (the lab's
- * dev-server mount, the standalone mint server, a channel route later); it
- * answers `{ value, expires_at }` — the same shape the vendor mint returns.
+ * dev-server mount, the standalone mint server, any host mounting
+ * `./server`); it answers `{ value, expires_at }` — the same shape the vendor
+ * mint returns.
  */
 export function mintingKeySource(
   mintUrl: string,

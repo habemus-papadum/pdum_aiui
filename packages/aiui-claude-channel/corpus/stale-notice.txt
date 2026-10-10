@@ -1,1 +1,0 @@
-⚠️ aiui channel source changed on disk. The running MCP server does NOT hot-reload, so it is now STALE — your edits take effect only after the channel restarts (restart the aiui session). Treat the channel's behavior as out-of-date until then.

@@ -8,7 +8,7 @@
  * (Emulation.setDefaultBackgroundColorOverride, alpha 0 — the "no background"
  * ask), and capture. gen-favicon.sh launches a private headless Chrome with a
  * debug port and passes it here; it also works against an already-running
- * browser (e.g. the aiui session browser's DevToolsActivePort).
+ * browser (any Chrome with a debug port; its DevToolsActivePort file names it).
  *
  *   node rasterize-cdp.mjs <port> <file-url> <out.png> <size>
  */

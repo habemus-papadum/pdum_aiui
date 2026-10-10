@@ -2,8 +2,9 @@
 
 The aiui design system: cotton paper, slate ink, editorial type, and a skin for every stable
 class aiui-viz emits — one import for a notebook page or a tool surface. It dresses every
-page this repo serves (the gallery and its notebooks, the console, the intent panel, the
-starter a scaffolded app begins from). Other consumers of the aiui packages may use it or
+page this repo serves (the gallery and its notebooks, the voice dock and tool log they host,
+the starter a scaffolded app begins from — and, before they moved to their own repository, the
+intent tool's console and panel). Other consumers of the aiui packages may use it or
 ignore it: aiui-viz ships no CSS and depends on nothing here.
 
 Three artifacts:

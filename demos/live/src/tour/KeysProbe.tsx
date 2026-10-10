@@ -44,7 +44,7 @@ const FLOWS = [
       "the page POSTs its SDP offer to /live/sessions on its own origin; the server does the vendor exchange and returns the answer",
     backends:
       "server-side delegators over the relay (responses-server, claude) use the server's key or the CLI's login",
-    when: "the key must never reach a browser — the aiui posture for installed users (OS vault, env in a source checkout)",
+    when: "the key must never reach a browser — it lives in the server's environment",
   },
 ];
 

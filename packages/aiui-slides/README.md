@@ -44,5 +44,5 @@ import "@habemus-papadum/aiui-slides/styles.css";
 ```
 
 The reference deck is `demos/gear-talk` (the involute gear as a six-slide
-talk); the decided design contract is `docs/proposals/slides.md` in the
-[pdum_aiui](https://github.com/habemus-papadum/pdum_aiui) repo.
+talk) in the [pdum_aiui](https://github.com/habemus-papadum/pdum_aiui) repo;
+the decided design contract is its `docs/proposals/slides.md`.

@@ -73,7 +73,7 @@ export async function sessionOutcome(
       status: 503,
       body: {
         error:
-          "no OPENAI_API_KEY in the server's environment — set it (or `aiui keys set openai` and export it) and restart",
+          "no OPENAI_API_KEY in the server's environment — export it (a `.env` with direnv works) and restart",
       },
     };
   }

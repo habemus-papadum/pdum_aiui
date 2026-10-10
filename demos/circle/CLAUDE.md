@@ -6,11 +6,10 @@ least-squares circle/ellipse fit scores each stroke, with guide/zen/blind
 difficulty modes and a KaTeX math section. The pencil package's demo. A real,
 maintained demo — **not** starter scenery.
 
-## Run the loop
+## Run it
 
 ```sh
-pnpm claude   # terminal 1 — Claude Code with the aiui channel + session browser
-pnpm dev      # terminal 2 — this app (Vite + the intent tool)
+pnpm dev      # Vite; the voice dock takes OPENAI_API_KEY from the environment
 ```
 
 ## The dual shape (app + library)
@@ -37,4 +36,4 @@ pnpm dev      # terminal 2 — this app (Vite + the intent tool)
 - **Don't remove the integration.** The `aiui()` plugin in vite.config.ts
   stamps source locations; the locator also runs under Vitest.
 
-Methodology docs: <https://habemus-papadum.github.io/pdum_aiui/guide/frontend-user-guide>
+Methodology docs: [the user guide](../../packages/aiui-viz/docs/frontend-user-guide.md).

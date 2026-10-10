@@ -383,6 +383,36 @@ describe("sourceLocatorVite — plugin surface", () => {
     expect(out?.code).toContain('loc: "../../packages/spectra/src/store.ts:2"');
   });
 
+  it("admits a factory call that carries a type argument, in a build and out of root", async () => {
+    // The sniff gates the Babel pass. Until 2026-10-10 it required `(` right
+    // after the callee, so `control<Grade>({…})` was never transformed and the
+    // built page threw `control() needs a name` at load — in dev the JSX half
+    // of the sniff happened to admit `<Grade>`, so nothing before the build
+    // saw it. `stampJsx: false` and the out-of-root path both run the factory
+    // half alone; neither may depend on the JSX half's accident.
+    const code = 'export const cutoff = control<"minor" | "major">({ value: "minor" });';
+    const build = sourceLocatorVite({ stampJsx: false });
+    (build.configResolved as (c: object) => void)({ root: "/repo/demos/twins", command: "build" });
+    const prod = await transformOf(build)(code, "/repo/demos/twins/src/store.ts");
+    expect(prod?.code).toContain('name: "cutoff"');
+    expect(prod?.code).toContain('loc: "src/store.ts:1"');
+
+    const p = sourceLocatorVite();
+    (p.configResolved as (c: object) => void)({ root: "/repo/demos/twins", command: "serve" });
+    const out = await transformOf(p)(code, "/repo/packages/spectra/src/store.ts");
+    expect(out?.code).toContain('name: "cutoff"');
+
+    // One level of nesting inside the type argument is admitted too, and a
+    // blank between the callee and the list.
+    const nested = [
+      "export const counts = cell<Map<string, number>>([rows], (r) => tally(r));",
+      "export const tag = control <Set<string>>({ value: new Set() });",
+    ].join("\n");
+    const deep = await transformOf(p)(nested, "/repo/packages/spectra/src/model.ts");
+    expect(deep?.code).toContain('name: "counts"');
+    expect(deep?.code).toContain('name: "tag"');
+  });
+
   it("stamps JSX in a declared stampRoot (sibling app code) with dotdot-relative locs", async () => {
     const p = sourceLocatorVite({ stampRoots: ["/repo/demos/"] });
     (p.configResolved as (c: object) => void)({ root: "/repo/demos/gallery", command: "serve" });

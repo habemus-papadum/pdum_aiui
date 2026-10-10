@@ -17,11 +17,8 @@
   "module": "./src/index.ts",
   "types": "./src/index.ts",
   "scripts": {
-    "claude": "../../bin/aiui claude",
     "dev": "vite",
-    "open": "../../bin/aiui open",
     "headless": "tsx scripts/headless.mts",
-    "tools-bench": "tsx scripts/tools-bench.mts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json"
   },
@@ -38,12 +35,10 @@
   },
   "devDependencies": {
     "@babel/core": "catalog:",
-    "@habemus-papadum/aiui": "workspace:^",
     "@types/node": "^22.0.0",
     "jsdom": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:",
-    "typescript-language-server": "catalog:",
     "vite": "catalog:",
     "vite-plugin-solid": "catalog:solid",
     "vitest": "catalog:"

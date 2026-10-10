@@ -134,7 +134,7 @@ handles for you, pinned by `mosaic-facet.test.ts`:
   Mosaic's coordinator scheduling rides that pipeline, so views, menus, and
   clients all stall until the window is actually seen. The bridge measures
   its host directly at mount (layout still computes under occlusion) so at
-  least the component exists; when driving a page from a session browser
+  least the component exists; when driving a page in an agent-driven browser
   whose window is buried, verify in a headless instance instead.
 - **Point clauses + the preagg index:** like every Mosaic app here, a custom
   stats client over the crossfilter wants `filterStable = false`, or a

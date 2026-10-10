@@ -17,18 +17,12 @@
 Methodology write-up: the user guide's "Composing bigger apps" section.
 
 An in-repo demo wired to the workspace (`workspace:^`, no npm install of aiui packages, no build
-step). Run the loop from this directory:
+step). Run it from this directory:
 
 ```sh
-pnpm claude   # terminal 1 — Claude Code with the aiui channel + session browser
-pnpm dev      # terminal 2 — this app (Vite + the intent tool)
+pnpm dev      # this app (Vite)
 ```
 
-Then open it in the session browser — the window you share with the agent:
-
-```sh
-./aiui open http://localhost:5173   # from the repo root
-```
-
-Arm the overlay with the backtick key `` ` `` (or the floating **✳ aiui** button) and describe
-what you want. See [docs/guide/getting-started.md](../../docs/guide/getting-started.md).
+Open the printed URL. The voice dock in the corner drives the page's own tools; it takes an OpenAI
+key from `OPENAI_API_KEY` in the environment (the dev server hands it to the page) or from its own
+key pane. See the [user guide](../../packages/aiui-viz/docs/frontend-user-guide.md).

@@ -3,10 +3,11 @@
  * implement, the callbacks results ride back on, and the injected audio
  * contract. Contract of record: the aiui-stt proposal (pdum_aiui git history).
  *
- * The seam is a browser-side port of the channel's proven two-engine
- * interface (`aiui-claude-channel/src/realtime.ts` — `RealtimeSession` /
- * `RealtimeCallbacks`), where the wire facts underneath were hard-won and
- * live-verified. The vocabulary is kept deliberately close so the recorded
+ * The seam is a browser-side port of the former aiui channel's proven
+ * two-engine interface (its `realtime.ts` — `RealtimeSession` /
+ * `RealtimeCallbacks`; that package now lives outside this repo), where the
+ * wire facts underneath were hard-won and live-verified. The vocabulary is
+ * kept deliberately close so the recorded
  * protocol knowledge transfers verbatim: a **segment** is the client's
  * push-to-talk unit (begin → audio frames → commit), identified by ordinal;
  * the vendor's own utterance boundaries are the engines' problem, never the
@@ -40,8 +41,8 @@ export interface SttFinal {
  * Something the vendor did that the engine did not act on, or acted on in a
  * way worth recording. Purely observational — a diagnostic never changes
  * control flow. They exist because every silent drop in a vendor message
- * switch is a place transcript can vanish without a trace (the channel's
- * Scribe self-commit post-mortem).
+ * switch is a place transcript can vanish without a trace (the former
+ * channel's Scribe self-commit post-mortem).
  */
 export type SttDiagnostic =
   | { kind: "config-echo"; config: Record<string, unknown> }
@@ -72,7 +73,7 @@ export interface SttCallbacks {
 }
 
 /**
- * A live vendor session. The seam the channel proved against both engines:
+ * A live vendor session. The seam the former channel proved against both engines:
  * audio streams in by segment ordinal; results come back through the
  * {@link SttCallbacks} handed to {@link SttTransport.open}.
  */

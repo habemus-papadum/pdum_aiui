@@ -1,13 +1,13 @@
 /**
  * styles.ts — the widgets' own stylesheet, as a string a host concatenates
- * into its `<style>` (the house pattern: the intent panel's PANEL_STYLES is
- * BAR_STYLES + PILLS_STYLES + … in order).
+ * into its `<style>` (the house pattern: a host's sheet is its own pieces +
+ * these, in order).
  *
  * Deliberately THEME-NEUTRAL — system colors (`Canvas`/`CanvasText`) and
  * `color-mix(in srgb, currentColor …)`, never a hard-coded palette. A shipped
  * widget cannot assume a dark host: the oracle lab is dark by choice and keeps
  * its own richer rules (lab/src/styles.css, loaded after these and therefore
- * winning), while the intent panel follows the viewer's light/dark preference.
+ * winning), while another host may follow the viewer's light/dark preference.
  * That is why this is not the lab's CSS extracted — it is the same structure
  * re-expressed in the one idiom that works everywhere.
  */

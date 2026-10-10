@@ -60,7 +60,7 @@ export interface ServeClientSurfaceOptions {
   /** Prod only: the prebuilt static bundle served under `prefix`. Required in prod. */
   distDir?: string;
   /**
-   * Vite's `appType` in dev (default `"mpa"`, matching the intent panel). Use
+   * Vite's `appType` in dev (default `"mpa"`). Use
    * `"spa"` for a single-page client that wants an index.html fallback.
    */
   appType?: "mpa" | "spa";
@@ -241,7 +241,7 @@ function serveProd(
         return true;
       }
       // SPA fallback: a client ROUTE (a path with no file extension, e.g.
-      // `/__aiui/debug`) has no file of its own — serve the app's index.html
+      // `/app/settings`) has no file of its own — serve the app's index.html
       // and let the client router take it. Asset paths (with an extension)
       // keep falling through: an unknown `.js` may belong to a sibling.
       if (spa && !rel.slice(rel.lastIndexOf("/") + 1).includes(".")) {

@@ -2,7 +2,7 @@
  * store.ts — the lab app's durable frontier: a small standing-wave bench,
  * scoped under `oracle-lab`. Names and descriptions are compiler-injected
  * (the aiui plugin lifts the binding + doc comment); the toolkit registers
- * the standard page tools so the intent client sees this page too.
+ * the standard page tools so an out-of-page agent host sees this page too.
  */
 
 import {

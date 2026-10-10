@@ -38,9 +38,6 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
     "test": "vitest run"
   },
-  "dependencies": {
-    "@habemus-papadum/aiui-util": "workspace:^"
-  },
   "peerDependencies": {
     "@babel/core": "catalog:",
     "vite": ">=6"

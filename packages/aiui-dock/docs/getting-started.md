@@ -1,8 +1,8 @@
 # Getting started with @habemus-papadum/aiui-dock
 
-Mount `<VoiceDock />` once beside the app and the page can be driven by voice without the
-intent panel or the browser extension. The template scaffolded by `create-aiui` and the
-notebook gallery both mount it.
+Mount `<VoiceDock />` once beside the app and the page can be driven by voice with no external
+host at all — no browser extension, no CDP driver. The template scaffolded by `create-aiui` and
+the notebook gallery both mount it.
 
 ```tsx
 import { VoiceDock } from "@habemus-papadum/aiui-dock";
@@ -13,7 +13,7 @@ five panes:
 
 - **oracle** — an OpenAI Realtime session over the page's tools: the control strip (start,
   park, stop, the mic meter), the ledger viewer, usage, and the woven prompt as sent — the
-  `Tools:` section in it is the same document `page_tools_list` returns.
+  `Tools:` section in it is rendered from the same tool document the page's registry lists.
 - **live** — a GPT-Live session and a backend picker: a Responses model with the key in this
   browser, the vendor-hosted backend, and, when the dev server's live routes answer, the
   server's Responses and Claude Code. Captions, the task table, the session config as sent.

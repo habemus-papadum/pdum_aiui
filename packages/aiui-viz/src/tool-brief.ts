@@ -10,9 +10,9 @@
  * name a tool the tool list does not carry. So the text is DERIVED from the
  * same tool documents every consumer already holds, in the same breath as
  * the tool array is set, so the two cannot drift (the tool-docs proposal,
- * docs/proposals/tool-docs.md).
+ * retired to git history).
  *
- * Since the prompt toolkit (docs/proposals/structured-prompts-review.md,
+ * Since the prompt toolkit (its consumer review, retired to git history;
  * stage 1) the document is the toolkit's `ToolSnapshot` — immutable,
  * fingerprinted JSON — and the text is its `ToolBrief` projection: a prompt
  * NODE a consumer places inside a larger prompt, compiled late, with the
@@ -25,9 +25,10 @@
  *
  * Consumers: the oracle appends it to its woven instructions; the live
  * delegators put it in the backend instructions and the delegation message;
- * the panel's tool log shows it as "what the model sees". The channel does
- * NOT render it into prompts — Claude Code reads the structured form from
- * `page_tools_list` — so nothing here is on a billed prompt path by default.
+ * the page's tool log shows it as "what the model sees". An external host
+ * forwarding the registry as tool definitions need not render it at all —
+ * the structured form travels on its own — so nothing here is on a billed
+ * prompt path by default.
  */
 
 import {

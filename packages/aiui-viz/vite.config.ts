@@ -42,8 +42,8 @@ export default defineConfig({
       // peers that core consumers never import; the page-chrome porcelain
       // (`./site`, plus `./site/color-mode` and `./site/lens` alone — the
       // katex-free pieces a deck or a theme reaches for); and the modal interaction kit (`./modal`: framework-free,
-      // no Solid import, so node-side consumers can reach it —
-      // aiui-lowering-pipeline re-exports `wordDiff` from it).
+      // no Solid import, so node-side consumers can reach it, e.g. a host
+      // that re-exports `wordDiff`).
       entry: {
         index: "src/index.ts",
         plot: "src/plot.tsx",

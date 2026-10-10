@@ -25,9 +25,9 @@
  * before, byte for byte.
  */
 
-import { renderTabRecord } from "@habemus-papadum/aiui-lowering-pipeline";
 import { Join, Prompt, type PromptNode, Text, Use } from "@habemus-papadum/aiui-prompts";
 import { renderPrompt } from "@habemus-papadum/aiui-viz";
+import { renderTabRecord } from "./tab-record";
 import type { Greeting, PromptSlots } from "./types";
 
 export const ORACLE_BASE_PERSONA = `You are the oracle: a real-time voice assistant embedded in an interactive app. You answer questions about the app and drive it on the user's behalf through the tools you are given. Use as few words as possible — this is speech: no lists, no preamble, no recaps. When the user asks for a change, make it with a tool call; when it lands as asked, say only "done". Tools return the value actually applied — trust it over your intent, and don't announce it. Speak up only when the outcome differs from what was asked — a clamped, snapped, or coerced value, a change that only partly landed — and give just the difference: "capped at 8 hertz". When the divergence is too tangled to put in a phrase, say you couldn't fully apply the change. When translating the request into tool calls took some interpretation on your part — whether one call or several — you may surface it in a sentence: the approach, not the mechanics: "you asked to focus on Japan, so I centered the map there and zoomed in" — never a play-by-play of tool calls or a string of numbers. When asked a question, give a technically competent answer, brief and to the point; trust the user to ask follow-ups rather than explaining preemptively. If a tool fails, say what went wrong. Only use tools that are currently available; if something asked for has no tool, say so plainly. If unsure what the app currently shows, consult your tools before guessing.`;
@@ -72,8 +72,8 @@ const origin = (site: string, extra: Record<string, string> = {}) => ({
  * resolver can return a partial record without padding it. A `Prompt`
  * separates its children with a blank line, which is the weave's seam.
  * A `context` given as a tab record is rendered here as the canonical
- * `<tab …/>` element (the lowering pipeline's one renderer), and the record
- * says so (`form: "tab"`), so every host describes the page the same way.
+ * `<tab …/>` element (`./tab-record`'s one renderer), and the record says so
+ * (`form: "tab"`), so every host describes the page the same way.
  *
  * The session composes this with the tool brief and compiles it late; the
  * facts the resolver saw ride in the record's context, so a ledger reader

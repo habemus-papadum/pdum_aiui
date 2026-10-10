@@ -16,11 +16,10 @@ provinces read as clouds, and Equal-Earth eq_x/eq_y are baked in at load (`src/m
 is the pure JS mirror). If the dataset revision ever changes, regenerate the lookup (match
 NE admin-1 by normalized name per country, hand-fill misses, country-centroid the rest).
 
-## Run the loop
+## Run it
 
 ```sh
-pnpm claude   # terminal 1 — Claude Code with the aiui channel + session browser
-pnpm dev      # terminal 2 — this app (Vite + the intent tool)
+pnpm dev      # Vite; the voice dock takes OPENAI_API_KEY from the environment
 ```
 
 ## The data (fetched, not vendored)
@@ -47,4 +46,4 @@ are instant.
 - **Don't remove the integration.** The `aiui()` plugin in vite.config.ts stamps source
   locations; the locator also runs under Vitest.
 
-Methodology docs: <https://habemus-papadum.github.io/pdum_aiui/guide/frontend-user-guide>
+Methodology docs: [the user guide](../../packages/aiui-viz/docs/frontend-user-guide.md).

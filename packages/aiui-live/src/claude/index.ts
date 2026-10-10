@@ -5,7 +5,7 @@
  * One long-lived `query()` per delegator, in streaming-input mode, so the
  * agent keeps its context across delegations: a follow-up question lands in
  * the same session that just read the code. Measured before this was
- * written (exploration/live-probe, 2026-09-15):
+ * written (the live probe, retired to git history, 2026-09-15):
  *  - a user message pushed WHILE a turn runs is NOT interleaved — it is
  *    dropped or folded, never answered — so delegations are SERIALIZED here:
  *    the next one is pushed only after the previous turn's `result`;

@@ -52,8 +52,8 @@ export function CellView<T>(props: {
       <Match when={showValue()}>
         {/* data-cell / data-cell-loc: the element → cell attribution stamp
             (see PRINCIPLES §7) — the name, plus the cell's *definition* site
-            ("file:line", babel-injected) so DOM-contract consumers (the intent
-            client's jump mode, the intent runtime's VS Code ladder) can open
+            ("file:line", babel-injected) so DOM-contract consumers (a host's
+            jump-to-source, a selection resolver's cell ladder) can open
             the `cell(...)` call without a runtime registry lookup. */}
         {/* data-cell-state mirrors state() so CSS can key off it (e.g.
             [data-cell-state="held"]) and agents/tests can read it off the DOM. */}

@@ -96,9 +96,9 @@ export function catalogRefs() {
 
 /**
  * Infer the npm scope and repo URL from the first existing scoped package under
- * packages/. Output-identical to reading packages/aiui directly as long as every
- * package shares one scope and repo URL (as they do), while tolerating that
- * package being absent or renamed.
+ * packages/. Every package shares one scope and repo URL, so any of them will
+ * do — reading the first one tolerates any single package being absent or
+ * renamed.
  * @returns {{ scope: string; repoUrl: string }}
  */
 export function deriveContext() {

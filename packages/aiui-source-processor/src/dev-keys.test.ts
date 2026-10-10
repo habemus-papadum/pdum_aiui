@@ -1,39 +1,13 @@
 /**
- * The devKeys seed: resolved keys become one `__AIUI__.devKeys` script tag,
- * missing providers warn loudly with the remedy, and resolution happens ONCE
- * per server run (the vault must not be shelled per page load).
+ * The devKeys seed: keys read from the environment become one
+ * `__AIUI__.devKeys` script tag, missing providers warn loudly with the
+ * env remedy, and resolution happens ONCE per server run.
  */
-import type { ResolvedVendorKeys } from "@habemus-papadum/aiui-util";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { resolveDevKeys } from "./dev-keys.ts";
 import { devKeysSeed } from "./index.ts";
 
-function resolved(openaiValue?: string): ResolvedVendorKeys {
-  return {
-    openai: {
-      provider: "openai",
-      envVar: "OPENAI_API_KEY",
-      label: "OpenAI",
-      ...(openaiValue !== undefined
-        ? { source: "env" as const, value: openaiValue }
-        : { source: "missing" as const }),
-    },
-    gemini: { provider: "gemini", envVar: "GEMINI_API_KEY", label: "Gemini", source: "missing" },
-    elevenlabs: {
-      provider: "elevenlabs",
-      envVar: "ELEVEN_LABS_API_KEY",
-      label: "ElevenLabs",
-      source: "missing",
-    },
-    motherduck: {
-      provider: "motherduck",
-      envVar: "MOTHERDUCK_BROWSER_TOKEN",
-      label: "MotherDuck",
-      source: "missing",
-    },
-  };
-}
-
-type TransformHook = () => Promise<Array<{ children: string }>>;
+type TransformHook = () => Array<{ children: string }>;
 
 function run(plugin: ReturnType<typeof devKeysSeed>, warnings: string[]) {
   (plugin.configResolved as unknown as (config: unknown) => void)({
@@ -42,27 +16,66 @@ function run(plugin: ReturnType<typeof devKeysSeed>, warnings: string[]) {
   return (plugin.transformIndexHtml as unknown as TransformHook)();
 }
 
+describe("resolveDevKeys", () => {
+  it("reads each provider's own variable; blank counts as absent", () => {
+    const keys = resolveDevKeys({
+      OPENAI_API_KEY: " sk-dev ",
+      GEMINI_API_KEY: "   ",
+      MOTHERDUCK_TOKEN: "admin-token",
+    });
+    expect(keys.openai.value).toBe("sk-dev");
+    expect(keys.gemini.value).toBeUndefined();
+    expect(keys.elevenlabs.value).toBeUndefined();
+    // MOTHERDUCK_TOKEN is the admin token a data repo's .env holds — never the
+    // browser key; only MOTHERDUCK_BROWSER_TOKEN reaches a page.
+    expect(keys.motherduck.value).toBeUndefined();
+    expect(keys.motherduck.envVar).toBe("MOTHERDUCK_BROWSER_TOKEN");
+    expect(Object.keys(keys).sort()).toEqual(["elevenlabs", "gemini", "motherduck", "openai"]);
+  });
+});
+
 describe("devKeysSeed", () => {
-  it("seeds __AIUI__.devKeys with the resolved keys, once", async () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("applies to serve only — a production bundle structurally cannot carry a key", () => {
+    expect(devKeysSeed(["openai"]).apply).toBe("serve");
+  });
+
+  it("seeds __AIUI__.devKeys with the requested keys found in the environment, once", () => {
     let resolves = 0;
-    const plugin = devKeysSeed(["openai"], async () => {
+    const plugin = devKeysSeed(["openai"], () => {
       resolves += 1;
-      return resolved("sk-dev");
+      return resolveDevKeys({ OPENAI_API_KEY: "sk-dev", GEMINI_API_KEY: "g-dev" });
     });
     const warnings: string[] = [];
-    const tags = await run(plugin, warnings);
-    expect(tags[0]?.children).toContain('.devKeys = {"openai":"sk-dev"}');
+    const tags = run(plugin, warnings);
+    // Only the requested provider is seeded, even though gemini was set.
+    expect(tags[0]?.children).toBe('(window.__AIUI__ ??= { v: 1 }).devKeys = {"openai":"sk-dev"};');
     expect(warnings).toEqual([]);
-    await (plugin.transformIndexHtml as unknown as TransformHook)();
+    (plugin.transformIndexHtml as unknown as TransformHook)();
     expect(resolves).toBe(1); // per-server, not per-page
   });
 
-  it("a missing provider warns LOUDLY with both remedies and seeds nothing", async () => {
-    const plugin = devKeysSeed(["openai"], async () => resolved());
+  it("the default resolver reads the dev server's process.env", () => {
+    vi.stubEnv("GEMINI_API_KEY", "g-from-env");
     const warnings: string[] = [];
-    const tags = await run(plugin, warnings);
+    const tags = run(devKeysSeed(["gemini"]), warnings);
+    expect(tags[0]?.children).toContain('.devKeys = {"gemini":"g-from-env"}');
+    expect(warnings).toEqual([]);
+  });
+
+  it("a missing provider warns LOUDLY with the env remedy and seeds nothing", () => {
+    const plugin = devKeysSeed(["openai"], () => resolveDevKeys({}));
+    const warnings: string[] = [];
+    const tags = run(plugin, warnings);
     expect(tags).toEqual([]);
-    expect(warnings[0]).toContain("OPENAI_API_KEY");
-    expect(warnings[0]).toContain("aiui keys set openai");
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("no OpenAI key");
+    expect(warnings[0]).toContain("export OPENAI_API_KEY");
+    expect(warnings[0]).toContain(".env");
+    expect(warnings[0]).toContain("direnv");
+    expect(warnings[0]).not.toContain("aiui keys"); // the vault remedy is gone
   });
 });

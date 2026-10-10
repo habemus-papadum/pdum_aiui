@@ -2,7 +2,7 @@
 
 An in-repo aiui demo (scaffolded by `pnpm new-demo`, scenery replaced) that exercises
 `@habemus-papadum/aiui-live` — the GPT-Live voice front with pluggable delegation backends. Read
-`README.md` for the three pages and how to run them; `docs/proposals/oracle-live.md` is the design.
+`README.md` for the three pages and how to run them; `packages/aiui-live/docs/oracle-live.md` is the design.
 
 What differs from a stock demo:
 

@@ -27,9 +27,7 @@
     }
   },
   "scripts": {
-    "claude": "../../bin/aiui claude",
     "dev": "vite",
-    "open": "../../bin/aiui open",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
@@ -45,11 +43,9 @@
   },
   "devDependencies": {
     "@babel/core": "catalog:",
-    "@habemus-papadum/aiui": "workspace:^",
     "@types/d3": "^7.4.3",
     "jsdom": "catalog:",
     "typescript": "catalog:",
-    "typescript-language-server": "catalog:",
     "vite": "catalog:",
     "vite-plugin-solid": "catalog:solid",
     "vitest": "catalog:"

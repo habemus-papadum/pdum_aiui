@@ -1,8 +1,9 @@
 # The aiui design language
 
 The design vocabulary for every page this repo serves: the notebook demos and the gallery
-that composes them, the console, the intent panel, the trace debugger, the voice dock, and
-the starter a scaffolded app begins from. It owns *what things are* and *what they look like*.
+that composes them, the voice dock and the tool log, and the starter a scaffolded app begins
+from (the intent tool's console, panel, and trace debugger were built on it too, before they
+moved to their own repository). It owns *what things are* and *what they look like*.
 How they become CSS lives next door in `src/` — one package, one import — and
 `demos/styleguide` renders everything on this page as the visual acceptance test.
 
@@ -168,8 +169,9 @@ such consumer. The roles above map onto that anatomy:
 
 ## The tool chrome
 
-The console, the intent panel, the trace debugger, the voice dock, the tool log, and the
-widgets they host are instrument panels, not documents, so they run on the label voice and
+The voice dock, the tool log, the oracle and live strips, and the widgets they host (and the
+intent tool's console, panel, and trace debugger, which share the language from their own
+repository) are instrument panels, not documents, so they run on the label voice and
 the mono face at the `ui` and `mono` sizes, with the reading face reserved for the one place
 a person reads sentences (a transcript, a prompt). Rules that keep them of a piece with the
 pages:

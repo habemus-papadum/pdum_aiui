@@ -3,7 +3,7 @@
  *
  * The distilled shape of the retired dev overlay's modal system (armed modes,
  * layered keymaps, mode-dependent surfaces, guarded async effects), extracted per
- * `handoff/modal-interaction-lessons.md` so viz apps get the bug classes
+ * the modal-interaction-lessons handoff (git history) so viz apps get the bug classes
  * designed out instead of re-learned: modes as data with a mechanical Esc
  * ladder, keymap layers whose claim-or-pass is exhaustive by construction, a
  * reconciler that asserts surface invariants from state on every event,
@@ -12,7 +12,8 @@
  * tempo, for "this text changed in front of you").
  *
  * The kit's *modules* do NOT own state — but the kit now also ships the
- * composition layer both intent clients used to hand-roll: the **mode
+ * composition layer its first consumers (two generations of intent client,
+ * since moved out of this repo) used to hand-roll: the **mode
  * engine** (engine.ts — regions + a pure command reducer + mechanical
  * esc/blur + atomic commit), **claims** (claims.ts — derived async
  * operations with per-claim status; the end of hand-called `sync*`
@@ -24,8 +25,8 @@
  *
  * Realm rules: no Solid import, no DOM access at module scope (DOM only
  * inside install/render functions), so this subpath is safe to import from
- * node (aiui-lowering-pipeline re-exports `wordDiff` to the channel) and
- * from workers.
+ * node (a server-side prompt pipeline can re-export `wordDiff`) and from
+ * workers.
  */
 
 export {

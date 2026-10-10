@@ -20,7 +20,7 @@ import { Oscilloscope } from "./Oscilloscope";
 export function App() {
   // The app's PAGE TOOLS — the kit's whole surface (report/set/locate, the
   // actions, anything registerTool added), with each tool's usage and the
-  // kit's brief — exactly what the intent panel's oracle and Claude Code see.
+  // kit's brief — exactly what the dock's oracle and a delegated Claude Code see.
   const namespaces = [appScope.name];
   const project = () => ({
     tools: (toolsFromAiuiRegistry({ namespaces }) ?? []) as LiveTool[],

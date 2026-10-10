@@ -45,12 +45,12 @@ function oracleMint(): Plugin {
 export default defineConfig({
   root: fileURLToPath(new URL(".", import.meta.url)),
   // All three key flows live here: the mint endpoint (oracleMint), the
-  // injected dev key (the aiui plugin's devKeys option — serve-only, resolved
-  // env-first then OS vault by the house machinery), and paste-key in-page.
+  // injected dev key (the aiui plugin's devKeys option — serve-only, read from
+  // the dev server's environment), and paste-key in-page.
   plugins: [oracleMint(), aiui({ locator: true, devKeys: ["openai"] }), solid()],
   server: {
-    // A LAN device (the iPad) may join — the trusted-LAN posture,
-    // docs/guide/warning.md. Note the mic needs a secure context: fine on
+    // A LAN device (the iPad) may join — the trusted-LAN posture: everything
+    // on this port is reachable from the LAN. Note the mic needs a secure context: fine on
     // localhost; a LAN address wants the CfT flag or https.
     host: true,
   },

@@ -1,3 +1,0 @@
-# Built browser app (prod bundle) — rebuilt by `pnpm build:app`, served by the
-# console sidecar in prod mode. Source-first dev never needs it (Vite middleware).
-assets/app/

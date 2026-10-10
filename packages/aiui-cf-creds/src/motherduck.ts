@@ -21,8 +21,8 @@
  *
  * The dev key is `window.__AIUI__.devKeys.motherduck`, seeded only under
  * `vite serve` by `aiui({ devKeys: ["motherduck"] })` from
- * `MOTHERDUCK_BROWSER_TOKEN` (env in a source checkout, the OS vault
- * otherwise) — a READ-SCALING token of your own MotherDuck user, never the
+ * `MOTHERDUCK_BROWSER_TOKEN` in the dev server's environment (a `.env` with
+ * direnv works) — a READ-SCALING token of your own MotherDuck user, never the
  * admin token. A built page never carries it, so production is the broker.
  *
  * One typing seam lives here on purpose. The client vendors its own copy of
@@ -194,8 +194,8 @@ export function devMotherDuckEngine(
   const token = devMotherDuckToken(global);
   if (token === undefined) {
     throw new Error(
-      "no motherduck dev key injected (the aiui vite plugin's devKeys option, dev serve only; " +
-        "`aiui keys set motherduck` stores a read-scaling token as MOTHERDUCK_BROWSER_TOKEN)",
+      'no motherduck dev key injected (the aiui vite plugin\'s devKeys: ["motherduck"] option, dev serve ' +
+        "only; export a read-scaling token as MOTHERDUCK_BROWSER_TOKEN in the dev server's environment)",
     );
   }
   const { params, ...engine } = options;

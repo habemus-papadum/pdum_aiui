@@ -1,6 +1,6 @@
 # demo: live — GPT-Live, four pages deep
 
-The hands-on companion to `docs/proposals/oracle-live.md`. A tour first, then three live pages,
+The hands-on companion to `packages/aiui-live/docs/oracle-live.md`. A tour first, then three live pages,
 read in order, each one layer more integrated than the last; the live pages share one bench
 (`src/live/Bench.tsx`).
 

@@ -1,8 +1,8 @@
 # Frontend: style guide
 
-The fourth frontend document — where [concepts](/guide/frontend-for-agents) says *what the pieces
-are*, [design choices](./frontend-design-choices) says *how they're built and why*, and the
-[ledger](./frontend-hard-won) records *what it cost to learn*, this page says **how a notebook
+The fourth frontend document — where [concepts](./frontend-for-agents.md) says *what the pieces
+are*, [design choices](./frontend-design-choices.md) says *how they're built and why*, and the
+[ledger](./frontend-hard-won.md) records *what it cost to learn*, this page says **how a notebook
 page should look and read**: the conventions an author (human or agent) follows so every page in
 a lab feels like one publication. The reference implementations are the notebooks in
 `demos/gallery`; the components live in `@habemus-papadum/aiui-viz`.
@@ -13,7 +13,7 @@ The library splits along a deliberate seam:
 
 - **Plumbing** — dataflow semantics, no opinions about appearance: `cell`, `CellView`'s
   *behavior*, the worker protocol, `durable`, `agentToolkit`. This is the layer the
-  [design-choices](./frontend-design-choices) document is about.
+  [design-choices](./frontend-design-choices.md) document is about.
 - **Porcelain** — the conveniences this style guide is about: the Plot bridge
   (`aiui-viz/plot`), the Mosaic bridge and DuckDB glue (`aiui-viz/mosaic`, `aiui-viz/duckdb`),
   the page chrome, math, and theming machinery (`aiui-viz/site`). Each porcelain surface sits
@@ -39,7 +39,7 @@ Every notebook page has the same skeleton, in this order:
 3. **Explanatory sections** (`§observables`, `§structure-analysis`, domain sections): prose
    that says what the numbers *mean*, each re-rendering **its own live instance of the same
    widgets** shown in the overview. Double-mounting is free (see
-   [design choices](./frontend-design-choices)) and intended: the reader watches the same cell
+   [design choices](./frontend-design-choices.md)) and intended: the reader watches the same cell
    from inside the explanation, and controls stay in sync across copies.
 4. **`§theory`** — the governing mathematics, honestly tied to what's on screen (the equations
    whose behavior the page demonstrates, ideally with a live-computed quantity linking them).
@@ -97,7 +97,7 @@ Use `TeX` (`aiui-viz/site`; KaTeX under the hood, optional peer):
 
 **Observable Plot is the default** for statistical graphics, always through the `PlotFigure`
 bridge (`aiui-viz/plot`) — reactive options in, figure out, one seam around the imperative
-library. Conventions (the [dataviz procedure](./frontend-design-choices) governs color):
+library. Conventions (the [dataviz procedure](./frontend-design-choices.md) governs color):
 
 - Options are a function reading cells/signals — including the color-mode signal — so charts
   re-render on data *and* theme changes.
@@ -162,17 +162,17 @@ render on a phone from the same markup the desktop uses.
   drags as scroll); once it shares a stacked board with normal panels, the *container* must allow
   `touch-action: pan-y` so the page still scrolls when a touch lands off the canvas.
 - **Preview on the real thing.** Drive an actual browser at a phone viewport — Chrome DevTools
-  device/responsive mode, or the session browser via the Chrome DevTools MCP (`emulate` /
+  device/responsive mode, or an agent-driven browser via the Chrome DevTools MCP (`emulate` /
   `resize_page` + a screenshot loop) — and sweep 360/390/414, then re-shoot at ~1440px to prove
   desktop is untouched. A real phone over the LAN (`vite --host`, then the machine's LAN IP on the
   same Wi-Fi) is the gold standard.
 
 ## Theming
 
-Covered in depth in [design choices §8](./frontend-design-choices); the style-guide rules:
+Covered in depth in [design choices §8](./frontend-design-choices.md); the style-guide rules:
 
-- The in-repo pages — the notebooks, the gallery, the console, the intent panel — share **one
-  design system**, `@habemus-papadum/aiui-design` (owner, 2026-10-08, superseding the
+- The in-repo pages — the notebooks, the gallery, the voice dock and tool log they host — share
+  **one design system**, `@habemus-papadum/aiui-design` (owner, 2026-10-08, superseding the
   system-following journal of 2026-08-12 and the dark-only period before it): cotton paper,
   slate ink, a ladder mixed from the two, one indigo accent, editorial type. Its language is
   the package's `DESIGN.md`; its visual acceptance test is `demos/styleguide`. A page imports

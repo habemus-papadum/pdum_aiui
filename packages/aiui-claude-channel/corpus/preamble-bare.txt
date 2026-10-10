@@ -1,3 +1,0 @@
-This prompt was sent from the aiui intent tool.
-
-[current tab: <tab url="https://example.com/docs" title="Docs"/>]

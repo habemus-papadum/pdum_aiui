@@ -1,8 +1,8 @@
 # Semantic record and re-derivation contract
 
-This is the implemented foundation contract. It incorporates the
-[consumer review](../../../docs/proposals/structured-prompts-review.md) and supersedes preliminary
-API shapes in the larger architecture proposal. The public TypeScript definitions remain the exact
+This is the implemented foundation contract. It incorporates the consumer review (retired to git
+history) and supersedes preliminary API shapes in the larger
+[architecture record](./architecture.md). The public TypeScript definitions remain the exact
 field-level authority. Static version-1 fixtures for [content](../test/fixtures/semantic-v1.json),
 [operations](../test/fixtures/operation-v1.json), and [captured wire payloads](../test/fixtures/wire-v1.json)
 are read directly by the compatibility suite; tests do not regenerate them.

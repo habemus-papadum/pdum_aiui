@@ -1,5 +1,6 @@
 /**
- * The reconciler pass (modal-interaction-lessons §4.5, rule §3.5).
+ * The reconciler pass (the modal-interaction-lessons handoff §4.5, rule §3.5;
+ * git history).
  *
  * Render is reconciliation: every mode-dependent surface (an overlay veil,
  * pointer-events routing, a cursor, a ring color) is asserted FROM state on

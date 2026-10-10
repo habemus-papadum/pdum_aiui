@@ -11,8 +11,7 @@ standing as its own page** so you can diff the layers:
 | [`/step3.html`](./step3.html) | 3 · components | the same cells, worn well |
 | [`/`](./index.html) | 4 · application | sections, prose, keys |
 
-Run it: `pnpm -C demos/walkthrough dev` (or through the full loop with
-`pnpm -C demos/walkthrough claude` in another terminal).
+Run it: `pnpm -C demos/walkthrough dev`.
 
 ## Step 1 — pure functions (`src/lib/diffusion.ts`)
 

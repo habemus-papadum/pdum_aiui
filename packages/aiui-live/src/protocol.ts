@@ -2,7 +2,7 @@
  * protocol.ts — the GPT-Live wire vocabulary, typed. Ground truth is the
  * vendor's live guides (live, live-conversations, live-delegation), read as
  * exact markdown on 2026-09-15 and measured against the real API by
- * `exploration/live-probe`. Where this file disagrees with a guide, the guide
+ * the live probe (retired to git history). Where this file disagrees with a guide, the guide
  * is newer — fix this file.
  *
  * Two facts shape everything downstream:

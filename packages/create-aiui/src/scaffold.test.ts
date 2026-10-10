@@ -123,7 +123,6 @@ describe("scaffoldApp (against the real shipped template)", () => {
     // Placeholders resolved to a real range (dev build → "latest").
     expect(pkg.dependencies["@habemus-papadum/aiui-viz"]).toBe("latest");
     expect(pkg.dependencies["@habemus-papadum/aiui-source-processor"]).toBe("latest");
-    expect(pkg.devDependencies["@habemus-papadum/aiui"]).toBe("latest");
 
     // The marker makes a second run a continuation, not a re-scaffold.
     expect(classifyTarget(target)).toBe("existing-scaffold");
@@ -147,6 +146,5 @@ describe("scaffoldApp (against the real shipped template)", () => {
     };
     expect(pkg.dependencies["@habemus-papadum/aiui-viz"]).toBe("workspace:^");
     expect(pkg.dependencies["@habemus-papadum/aiui-source-processor"]).toBe("workspace:^");
-    expect(pkg.devDependencies["@habemus-papadum/aiui"]).toBe("workspace:^");
   });
 });

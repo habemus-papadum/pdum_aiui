@@ -11,8 +11,7 @@ import { demoPages } from "./demo-discovery";
 // (in every mode; `stampJsx: false` opts a build out) and `cell()` call sites get
 // their `{ name, loc }` identity injected in EVERY mode (load-bearing for
 // durable cells) — plus the dev-only sourceRoot seed and
-// the dev server's source listing (and any devKeys/duckdbAssets opt-ins). Nothing else: no overlay
-// injection, no channel port; connectivity arrives from the intent client
+// the dev server's source listing (and any devKeys/duckdbAssets opt-ins). Nothing else
 // (window.__AIUI__ itself is the viz runtime's job, production included).
 //
 // Order matters: aiui() comes BEFORE solid() so the locator's `pre` babel pass
@@ -27,23 +26,19 @@ export default defineConfig(({ command, isPreview }) => ({
   // fallback then returns index.html for every asset URL — a confusing 200).
   base: command === "build" || isPreview ? "/aiui/" : "/",
   // One entry, one document: the SPA shell (src/main.tsx) client-side-routes
-  // between notebooks so the intent tool's turn survives switching pages.
+  // between notebooks so the voice dock's session survives switching pages.
   // Per-notebook code isolation now comes from the dynamic import() in
   // src/site/pages.ts (Vite code-splits each page into its own chunk), not
   // from multi-entry rollupOptions. Deep links (/aztec) ride the dev server's
   // SPA fallback; the published static site gets real objects per route
   // (publish.sh).
   plugins: [
-    // No explicit `format`: the intent tool rides the default modality set —
-    // the multimodal (intent-v1) tab active, with the text tab as the escape
-    // hatch. (Sends fail against an old channel that doesn't know intent-v1;
-    // that degrades to a widget error, not a crash.)
     // stampRoots: the demos live in SIBLING packages, outside this root, and
     // the locator stamps JSX only for app code under the root — so in the
     // gallery's dev loop the demo pages carried no data-source-loc at all
     // (found live 2026-10-08). Declaring demos/ as app code stamps them with
     // root-relative locs ("../seismos/src/ui/App.tsx:42:7"), which /@fs/ and
-    // the attribution consumers resolve against sourceRoot as before.
+    // the page's source tools resolve against sourceRoot as before.
     //
     // The BUILD ships the sources (`sources: "ship"` — every demo's files
     // under /aiui/__aiui/src/, a public repo's code on a public site), with

@@ -8,8 +8,8 @@
  * mounts identically into the lab's Vite dev server (configureServer
  * middleware), a standalone node/express server ({@link runMintServer} — an
  * express app mounts it as `app.use((req,res,next) => handleHttp(req,res) ||
- * next())`), and, later, the channel sidecar — the same code path everywhere
- * is what makes the sidecar claim honest.
+ * next())`), and any other node host that holds the parent key — the same
+ * code path everywhere is what makes the host-neutral claim honest.
  *
  * Keyless degrades LOUDLY (503 with the remedy), never silently.
  */
@@ -44,8 +44,8 @@ export async function mintOutcome(
       status: 503,
       body: {
         error:
-          "no OPENAI_API_KEY in the mint server's environment — set it (or `aiui keys set openai` " +
-          "and export it) and restart the dev server",
+          "no OPENAI_API_KEY in the mint server's environment — export it (a `.env` with direnv " +
+          "works) and restart the dev server",
       },
     };
   }
@@ -121,8 +121,8 @@ export function createMintBackend(options: MintBackendOptions = {}): MintBackend
 }
 
 /**
- * The standalone runner — the future channel sidecar's functionality as its
- * own little server, today. `npx tsx -e 'import("@habemus-papadum/aiui-oracle/server").then(m => m.runMintServer({ port: 8787 }))'`
+ * The standalone runner — the mint endpoint as its own little server.
+ * `npx tsx -e 'import("@habemus-papadum/aiui-oracle/server").then(m => m.runMintServer({ port: 8787 }))'`
  */
 export async function runMintServer(
   options: MintBackendOptions & { port?: number } = {},

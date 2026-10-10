@@ -1,6 +1,6 @@
 # Frontend: the playbook
 
-The [user guide](./frontend-user-guide) teaches the pieces — cells, views, workers, the layout.
+The [user guide](./frontend-user-guide.md) teaches the pieces — cells, views, workers, the layout.
 This page answers the other question: **in what order do you build an analytic frontend, and how
 do you know each part is done?** It is written for whoever is doing the building, which in this
 workflow is usually an agent with a human steering.
@@ -82,7 +82,7 @@ knobs are controls, internal state stays plain signals. Declaring is exposing �
 get-params/set-params tool pair this framework once required is gone.
 
 Then organize the *application's* dataflow as
-[cells](./frontend-user-guide#step-3-your-first-cell)
+[cells](./frontend-user-guide.md#step-3-your-first-cell)
 — still no UI. A cell is a **computation boundary you chose on purpose**: the unit that
 recomputes together, cancels together, fails together, and reports progress as one thing. Layer 1
 pretended time and failure don't exist; this layer is exactly where they're allowed in — fetches
@@ -104,7 +104,7 @@ Two structural facts to hold onto:
 **Test the graph headless — this is not optional.** Dependency tracking has one silent failure
 mode (an input read in compute instead of deps: the cell goes quietly stale), and a headless test
 that moves each input is the instrument that catches it. The library ships a harness,
-[`@habemus-papadum/aiui-viz/testing`](/packages/aiui-viz/), that buries the Solid trivia
+[`@habemus-papadum/aiui-viz/testing`](../README.md), that buries the Solid trivia
 (owners, batching, tick counting):
 
 ```ts
@@ -171,16 +171,17 @@ Done when: each component has its behavioral test, and a human has actually look
 Last, the layer where it becomes *an application* rather than a pile of instruments: the page
 anatomy (a complete dashboard overview first, then explanatory sections re-rendering the same
 widgets, theory with real mathematics, an experiments section — the
-[style guide](./frontend-style-guide) owns these conventions); keyboard interactions as **modal
+[style guide](./frontend-style-guide.md) owns these conventions); keyboard interactions as **modal
 command structures** (the `aiui-viz/modal` kit: modes, layers, and surfaces as data — never
 scattered `addEventListener("keydown", …)` calls, with bindings dispatching the SAME registered
 actions and validated controls the widgets and the agent use; and when the modes themselves
 multiply, the **mode engine** composes them — regions, commands, and excludes as one spec,
 enablement derived via `canDispatch`, see
-[Concepts](/guide/frontend-for-agents#the-mode-engine-settings-operations-and-one-writer)); and, when one page isn't enough, the
+[Concepts](./frontend-for-agents.md#the-mode-engine-settings-operations-and-one-writer)); and, when one page isn't enough, the
 progression across pages — an introductory notebook flowing to a deeper one, as **routed page
 modules under one document** (a thin SPA shell + client-side routing), never separate `.html`
-entries: one document is what lets an open intent turn survive the switch, and the resource story
+entries: one document is what lets an open agent turn (a voice session, an intent tool's thread)
+survive the switch, and the resource story
 is a pause-not-destroy lifecycle — leaving a route parks the page's rAF loops while its durables
 (engines, workers, accrued state) survive for the return (`demos/gallery` is the worked example;
 its `src/site/router.ts` is the whole router). Keep every internal link routed — one bare
@@ -190,7 +191,7 @@ intercepts same-origin anchors app-wide, which makes the safe idiom the default 
 This layer is deliberately late because it's the most tasteful and least testable — but not
 untestable: the modal kit keeps keymaps as pure tables (unit-test the bindings and the Esc
 ladder — and a mode-engine spec is pure data plus a pure reducer, testable the same way;
-`packages/aiui-intent-client/src/spec.test.ts` is the worked example), and the whole app is
+`packages/aiui-remote-bar`'s tests are the in-repo example), and the whole app is
 drivable through its own tool surface — which is the layer's
 definition of done: `report` is sane, every knob is a declared control and every verb a declared
 action, and the agent can verify a feature by calling it rather than squinting at pixels.
@@ -204,14 +205,14 @@ By the time layer 4 closes, the surface *is* the app's integration test.
 
 And the loop that ties it together, per slice: descend (math → boundary → element → placement),
 test at each layer with that layer's instrument, then drive the result through the tool surface
-in the session browser and prove a hot edit preserves the running state. Then pick the next
+in an agent-driven browser and prove a hot edit preserves the running state. Then pick the next
 slice.
 
 ## Where to go next
 
-- [User guide](./frontend-user-guide) — how to write each piece this playbook sequences.
-- [Design choices](./frontend-design-choices) — why the pieces are shaped this way.
-- [Hard-won details](./frontend-hard-won) — the findings ledger (worker choreography, HMR
+- [User guide](./frontend-user-guide.md) — how to write each piece this playbook sequences.
+- [Design choices](./frontend-design-choices.md) — why the pieces are shaped this way.
+- [Hard-won details](./frontend-hard-won.md) — the findings ledger (worker choreography, HMR
   routing, theming).
 - `demos/walkthrough` — this playbook executed in order on one small app (1-D diffusion), with
   **every layer left standing as its own page** (`step1.html` → the finished index) and

@@ -63,7 +63,6 @@
   "devDependencies": {
     "@babel/core": "catalog:",
     "@habemus-papadum/aiui-build-config": "workspace:^",
-    "@habemus-papadum/aiui-claude-channel": "workspace:^",
     "@habemus-papadum/aiui-source-processor": "workspace:^",
     "@types/express": "catalog:",
     "@types/ws": "catalog:",

@@ -2,11 +2,11 @@
  * router.ts — the gallery's client-side router: a thin route mapping over the
  * shared `pathname()` signal (`@habemus-papadum/aiui-viz/site` path.ts, the
  * one source of truth for location — the SPA-navigation proposal's "router
- * choice is almost immaterial" made concrete; the intent client's navigation
- * watcher observes pushState/popstate identically either way).
+ * choice is almost immaterial" made concrete; a navigation watcher observes
+ * pushState/popstate identically either way).
  *
- * Why an SPA at all: one document means the intent tool — its open turn, its
- * websocket, its capture grant — survives switching notebooks. The old
+ * Why an SPA at all: one document means an open agent turn — the voice dock's
+ * session, a tool's websocket, a capture grant — survives switching notebooks. The old
  * multi-entry layout killed the turn on every header click
  * (the SPA-navigation-and-turn-continuity proposal, in git history, traces
  * the loss).

@@ -7,10 +7,10 @@ The user talks; the oracle answers *and drives the app* — "make it a square wa
 frequency" moves the actual sliders, through the same validated setters the widgets use.
 
 It is deliberately simple: one session, one tool surface, one conversation. The oracle tracks
-no navigation and no page content, and contributes **nothing** to intent turns or prompt
-lowering — it is an app feature, like the pencil, not part of the briefing
-pipeline. (An earlier, entirely different oracle lived inside the intent client and channel;
-it was deleted end to end on 2026-07-25 — git history keeps it, along with the `aiui-oracle`
+no navigation and no page content, and contributes **nothing** to an intent tool's turns or
+prompt lowering — it is an app feature, like the pencil, not part of any briefing pipeline.
+(An earlier, entirely different oracle lived inside the intent tool's client and channel; it
+was deleted end to end on 2026-07-25 — git history keeps it, along with the `aiui-oracle`
 proposal recording the research and decisions behind this rebuild.)
 
 ## Developer setup
@@ -33,9 +33,8 @@ export default defineConfig({
 
 `devKeys` is an option on the aiui plugin itself (it already stamps dev context like
 `sourceRoot` onto `window.__AIUI__`; keys are just more dev context, vendor-keyed for
-Gemini later). Resolution is the house vendor-key machinery: a source checkout honors the
-**environment** first (`.env` / direnv), then the **OS vault**; an installed aiui reads the
-vault only (`aiui keys set openai`). Serve-only, by construction — `vite build` never sees
+Gemini later). Resolution is env-only: the dev server reads `OPENAI_API_KEY` from its
+**environment** (`.env` / direnv). Serve-only, by construction — `vite build` never sees
 it. Note the injected key rides every page the dev server serves: with `server.host: true`
 (the trusted-LAN posture) that means LAN-readable, exactly like the rest of the dev
 surface — which is why it is opt-in, never a default.
@@ -171,13 +170,13 @@ Auth is a pluggable `KeySource`; `standardKeySources()` is the decided priority 
    whatever the user pastes (an `sk-…` parent key or a pre-minted `ek_…`) wins. This is
    also the whole deployment story for a purely static app.
 2. **The dev key** — opt in with `aiui({ devKeys: ["openai"] })` and dev mode just works:
-   the dev server resolves the key (env first, OS vault fallback) and injects it as
+   the dev server reads the key from its environment and injects it as
    `window.__AIUI__.devKeys`. The seed applies to serve alone, so it does not exist during
    `vite build` — a production bundle structurally cannot contain the key.
 3. **A mint endpoint**, when the app has one: pass `mintUrl` and the chain fetches
    short-lived credentials from it (cached, refreshed near expiry). The endpoint is the
    host-neutral backend from `./server` — mountable in a Vite dev server, a standalone
-   express/node server, or (later) the channel sidecar, one code path everywhere.
+   express/node server, or any other node host, one code path everywhere.
 
 Whatever the source, every connection uses an **ephemeral client secret** (`ek_…`, minted via
 `POST /v1/realtime/client_secrets`); a parent key mints in the browser only in the modes where
@@ -294,8 +293,8 @@ per-tool toggles, and the viewer. The lab is where every capability lands first.
 
 ## Status
 
-V1 (2026-07-26): WebRTC transport, OpenAI only, live-verified end to end. The intent-panel
-embedding (the "intent oracle") has since landed — see
-[the intent panel](/guide/intent-panel#the-oracle). Still deliberately parked, with their
-seams in place: the WebSocket transport, the sideband control channel, and
-session resume-by-replay. Gemini follows once the OpenAI shapes settle.
+V1 (2026-07-26): WebRTC transport, OpenAI only, live-verified end to end. An embedding in
+the intent tool's panel (the "intent oracle") landed next; that panel now lives outside this
+repo, and in-repo the oracle is mounted by the voice dock (`@habemus-papadum/aiui-dock`).
+Still deliberately parked, with their seams in place: the WebSocket transport, the sideband
+control channel, and session resume-by-replay. Gemini follows once the OpenAI shapes settle.

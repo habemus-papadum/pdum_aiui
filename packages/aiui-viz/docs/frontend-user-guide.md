@@ -12,10 +12,10 @@ wiring. That is deliberate: explicit code is code an agent (and its future self,
 test, and debug. Everything here remains perfectly writable by hand, and this guide teaches it that
 way.
 
-The other frontend pages are for framework designers: [Concepts](/guide/frontend-for-agents),
-[Design choices](./frontend-design-choices), and the [findings ledger](./frontend-hard-won). You
+The other frontend pages are for framework designers: [Concepts](./frontend-for-agents.md),
+[Design choices](./frontend-design-choices.md), and the [findings ledger](./frontend-hard-won.md). You
 need none of them to use this one. When you're past learning the pieces and are building a whole
-app, the [Playbook](./frontend-playbook) sequences the work — pure functions, then cells, then
+app, the [Playbook](./frontend-playbook.md) sequences the work — pure functions, then cells, then
 components, then the application — with a definition of done per layer.
 
 ## The idea: a spreadsheet for computations
@@ -570,8 +570,8 @@ rather than squinting at screenshots.
 A tool definition says *what* a tool does; a model also needs to know *when* to call it, what
 the result means, and how the app's tools fit together. That text is part of the surface, and
 it travels with the registration to every consumer (the oracle's prompt, a live delegation,
-`page_tools_list`), rendered by each from the same document — so the prompt can never name a
-tool the tool list does not carry.
+an external host's tool listing), rendered by each from the same document — so the prompt can
+never name a tool the tool list does not carry.
 
 Two places to write it, both in the code you already have:
 
@@ -621,7 +621,7 @@ description — but it is cheap, and it is the part of the surface a model reads
 Collected here so they bite zero times. The first two you have already met; the rest come from the
 underlying UI library (SolidJS 2.0) and are the kind of thing no one should have to remember — so
 they're written down. The full ledger, with the debugging stories, is
-[Hard-won details](./frontend-hard-won).
+[Hard-won details](./frontend-hard-won.md).
 
 - **Deps and compute drifting apart** (Step 4). Everything `compute` uses arrives via the bundle.
   Test each input.
@@ -637,7 +637,7 @@ they're written down. The full ledger, with the debugging stories, is
   state-machine dispatch) calls `flush()` from `solid-js`, which commits synchronously
   (`flush(fn)` runs effect handlers too). In tests, `await tick()` after every `set` also works.
   And when the state in question is modal machine state, put it in the
-  [mode engine](/guide/frontend-for-agents#the-mode-engine-settings-operations-and-one-writer): its
+  [mode engine](./frontend-for-agents.md#the-mode-engine-settings-operations-and-one-writer): its
   dispatch commits under `flush` and machine state is a plain frozen object — never stale to
   read, so this trap has no surface there.
 - **Don't `set` a signal from inside a cell's compute** (before its first `await`). The dev build
@@ -755,7 +755,7 @@ client-side routing. The four reference notebooks (`demos/morphogen` · `aztec` 
 - **Do:** `npm create @habemus-papadum/aiui my-app` — the starter with this whole shape working,
   its example tests included. Its placeholder rose is fenced with `<aiui-scenery>` markers: ask
   any model to follow the starter `CLAUDE.md`'s three-step reset and you have a blank canvas.
-- **Build:** the [Playbook](./frontend-playbook) — the four-layer order of construction for a
+- **Build:** the [Playbook](./frontend-playbook.md) — the four-layer order of construction for a
   real analytic app, with each layer's testing story.
 - **Watch it built:** `demos/walkthrough` — the playbook executed step by step on one small app
   (1-D heat diffusion), with every stage left standing as its own page and a narration of each
@@ -764,7 +764,7 @@ client-side routing. The four reference notebooks (`demos/morphogen` · `aztec` 
   pipeline), `demos/seismos` (DuckDB crossfilter), `demos/circle` (pencil input), `demos/gears`
   (pure SVG geometry) — real demo packages built from nothing but these steps, composed into one
   site (landing + sidebar) by `demos/gallery`.
-- **Deeper:** [Concepts](/guide/frontend-for-agents) · [Design choices](./frontend-design-choices) ·
-  [Hard-won details](./frontend-hard-won) ·
-  [Attribution: gesture → source](./attribution) (how "make *this* wider" finds your code) · the
-  [`aiui-viz` API reference](/packages/aiui-viz/).
+- **Deeper:** [Concepts](./frontend-for-agents.md) · [Design choices](./frontend-design-choices.md) ·
+  [Hard-won details](./frontend-hard-won.md) ·
+  [Attribution: gesture → source](./attribution.md) (how "make *this* wider" finds your code) · the
+  [`aiui-viz` README](../README.md) for the export table.

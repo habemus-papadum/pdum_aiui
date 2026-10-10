@@ -226,7 +226,7 @@ function toolOfAction(name: string, toolName: string): AgentTool | undefined {
  * registry name is scope-qualified (`testapp/reseed`), and the shared registry
  * republishes every kit tool under `<ns>/<tool>` — so for the common app shape
  * (kit ns == app scope) keeping the qualified name would double the prefix
- * (`testapp/testapp/reseed` on the channel). Strip the kit's namespace when
+ * (`testapp/testapp/reseed` to a host). Strip the kit's namespace when
  * the action's SCOPE sits inside it; a foreign-scoped action keeps its
  * qualified name, so a kit `app` hosting slices `left`/`right` still exposes
  * distinguishable `app/left/reseed` / `app/right/reseed`.

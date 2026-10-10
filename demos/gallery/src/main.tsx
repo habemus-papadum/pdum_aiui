@@ -1,7 +1,7 @@
 /**
  * main.tsx — the SPA shell: ONE document hosting the landing page and every
- * notebook behind client-side routing, so the aiui intent tool (its open turn,
- * its socket, its capture grant) survives switching pages — the whole point of
+ * notebook behind client-side routing, so an open agent turn (the voice dock's
+ * session, a tool's socket, a capture grant) survives switching pages — the whole point of
  * the rewrite (the SPA-navigation-and-turn-continuity proposal, git history).
  *
  * The layout is a left SIDEBAR (`<SiteNav>`, which collapses to a top bar +

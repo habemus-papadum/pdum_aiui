@@ -2,7 +2,7 @@
  * page-text.ts — the page as text a model can read: headings, prose, lists,
  * tables, the numbers on screen, and every equation as its TeX. Framework-free
  * (no Solid): the `read-page` standard tool calls it, and so can anything with
- * a DOM — an intent host, a test.
+ * a DOM — an external host, a test.
  *
  * Shape: Markdown-like, because models read it well and it keeps the
  * structure (a heading is a heading, a table row is a row) without an HTML
@@ -96,7 +96,7 @@ const BLOCK_TAGS = new Set([
 /**
  * The TeX behind an element: the nearest `data-tex` stamp (aiui-viz's `TeX`
  * component, the robust path), else the nearest KaTeX node's MathML
- * annotation. The same recovery the intent runtime's selection watcher does.
+ * annotation. The same recovery a host's own selection watcher makes.
  */
 export function texOfElement(el: Element | null): string | undefined {
   if (el === null) return undefined;

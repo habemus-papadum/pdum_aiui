@@ -23,7 +23,7 @@
  *    coordinates, for a consumer that annotates a screenshot.
  *
  * Snapshot, not read-through. The moment focus moves into a textarea — the
- * voice dock's key field, an intent widget — the document selection reads
+ * voice dock's key field, a host's prompt box — the document selection reads
  * empty, and that is exactly the moment a user who just selected something
  * presses a button. So the module remembers the LAST non-collapsed selection
  * (a cloned Range, refreshed on a debounced `selectionchange` and on every
@@ -31,9 +31,10 @@
  * says `live: false`. A selection inside agent chrome (the dock, the tool
  * log — `data-aiui-chrome`) is never one.
  *
- * The intent runtime's selection watcher (aiui-intent-runtime/selection.ts)
- * reads the same contract for the extension tier, whose isolated world
- * cannot see this global; the CDP tier calls this when the page has it.
+ * A host can read the same contract on its own — an extension's content
+ * script runs in an isolated world that cannot see this global, so it walks
+ * the same stamps itself (the former intent tool's selection watcher did);
+ * a host driving the page over CDP calls this when the page has it.
  */
 import { AGENT_CHROME_ATTR, pageText, texOfElement } from "./page-text";
 
@@ -168,8 +169,8 @@ function inAgentChrome(range: Range): boolean {
 }
 
 /**
- * The stamped-ancestor chain, nearest → outermost (the same walk the intent
- * client's jump picker does). Consecutive duplicate stamps collapse.
+ * The stamped-ancestor chain, nearest → outermost (the same walk a host's
+ * jump picker does). Consecutive duplicate stamps collapse.
  */
 function elementChain(start: Element, depth: number, withSource: boolean): SelectedElement[] {
   const out: SelectedElement[] = [];
@@ -187,10 +188,10 @@ function elementChain(start: Element, depth: number, withSource: boolean): Selec
 }
 
 /**
- * A cell element's definition site — THE shared resolution ladder (the intent
- * runtime's `cellSourceLoc` is the same ladder for the extension tier):
- * `data-cell-loc`, the live registry, the element's own JSX stamp, then the
- * first stamped descendant.
+ * A cell element's definition site — THE shared resolution ladder (a host
+ * that cannot see the page's globals, like an extension, re-implements the
+ * same ladder over the stamps): `data-cell-loc`, the live registry, the
+ * element's own JSX stamp, then the first stamped descendant.
  */
 function cellLocOf(el: Element, name: string, bridge: CellsBridge | undefined): string | undefined {
   let viaBridge: string | undefined;

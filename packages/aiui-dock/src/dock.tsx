@@ -122,8 +122,8 @@ function createOracle(surface: DockSurface, mintUrl: string | undefined): Oracle
     config: {
       // A resolver: the page is named when the session composes, so a tab the
       // user has navigated since the dock mounted is described correctly. The
-      // page rides as a tab RECORD — the same `<tab …/>` the intent panel
-      // gives its oracle and the lowering gives Claude.
+      // page rides as a tab RECORD — the canonical `<tab …/>` every host that
+      // describes a page to a model uses.
       instructions: () => {
         const title = document.title.trim();
         return {
@@ -131,7 +131,7 @@ function createOracle(surface: DockSurface, mintUrl: string | undefined): Oracle
           context: { url: location.href, ...(title === "" ? {} : { title }) },
         };
       },
-      // The intent panel's tuning (a laptop mic beside its own speakers):
+      // The tuning for a laptop mic beside its own speakers:
       // far-field noise reduction, semantic turn detection at low eagerness,
       // and a disposable greeting that lets the echo canceller converge.
       audio: {
