@@ -121,11 +121,16 @@ function createOracle(surface: DockSurface, mintUrl: string | undefined): Oracle
   const session = new OracleSession({
     config: {
       // A resolver: the page is named when the session composes, so a tab the
-      // user has navigated since the dock mounted is described correctly.
-      instructions: () => ({
-        app: appLine(),
-        context: `The user is looking at "${document.title}" (${location.href}).`,
-      }),
+      // user has navigated since the dock mounted is described correctly. The
+      // page rides as a tab RECORD — the same `<tab …/>` the intent panel
+      // gives its oracle and the lowering gives Claude.
+      instructions: () => {
+        const title = document.title.trim();
+        return {
+          app: appLine(),
+          context: { url: location.href, ...(title === "" ? {} : { title }) },
+        };
+      },
       // The intent panel's tuning (a laptop mic beside its own speakers):
       // far-field noise reduction, semantic turn detection at low eagerness,
       // and a disposable greeting that lets the echo canceller converge.

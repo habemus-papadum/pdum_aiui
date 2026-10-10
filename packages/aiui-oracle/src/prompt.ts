@@ -25,6 +25,7 @@
  * before, byte for byte.
  */
 
+import { renderTabRecord } from "@habemus-papadum/aiui-lowering-pipeline";
 import { Join, Prompt, type PromptNode, Text, Use } from "@habemus-papadum/aiui-prompts";
 import { renderPrompt } from "@habemus-papadum/aiui-viz";
 import type { Greeting, PromptSlots } from "./types";
@@ -70,6 +71,9 @@ const origin = (site: string, extra: Record<string, string> = {}) => ({
  * Empty and absent slots are indistinguishable and both place nothing, so a
  * resolver can return a partial record without padding it. A `Prompt`
  * separates its children with a blank line, which is the weave's seam.
+ * A `context` given as a tab record is rendered here as the canonical
+ * `<tab …/>` element (the lowering pipeline's one renderer), and the record
+ * says so (`form: "tab"`), so every host describes the page the same way.
  *
  * The session composes this with the tool brief and compiles it late; the
  * facts the resolver saw ride in the record's context, so a ledger reader
@@ -78,15 +82,19 @@ const origin = (site: string, extra: Record<string, string> = {}) => ({
 export function instructionsPrompt(slots: PromptSlots = {}): PromptNode {
   const persona = Text({ value: ORACLE_BASE_PERSONA, label: "persona", origin: origin("persona") });
   const placed = SLOT_HEADINGS.map(([slot, heading]) => {
-    const value = slots[slot];
-    if (value === undefined || value === "") {
+    const given = slots[slot];
+    if (given === undefined || given === "") {
       return null;
     }
+    const value =
+      typeof given === "string"
+        ? Text({ value: given, origin: origin("slot", { slot }) })
+        : Text({ value: renderTabRecord(given), origin: origin("slot", { slot, form: "tab" }) });
     const content = Join({
       separator: " ",
       children: [
         heading === "" ? null : Text({ value: heading, origin: origin("slot heading", { slot }) }),
-        Text({ value, origin: origin("slot", { slot }) }),
+        value,
       ],
     });
     return Use({ key: slot, label: slot, value: content });

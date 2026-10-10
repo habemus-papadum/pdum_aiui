@@ -115,7 +115,7 @@ without restating the others:
 | Slot | Heading the model reads | Lifetime |
 |---|---|---|
 | `app` | `About this app:` | standing — never changes |
-| `context` | `Right now:` | this second — page, route, selection |
+| `context` | `Right now:` | this second — page, route, selection; a `TabRecord` (`{ url, title? }`) renders as the canonical `<tab …/>` element |
 | `stance` | `For this conversation:` | this session — tutorial vs terse |
 | `extra` | *(none — verbatim)* | the escape hatch |
 

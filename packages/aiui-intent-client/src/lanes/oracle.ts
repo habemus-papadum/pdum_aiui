@@ -19,7 +19,7 @@
  * is a boolean, not a resource to acquire.
  */
 
-import { renderTabRecord } from "@habemus-papadum/aiui-lowering-pipeline";
+import type { TabRecord } from "@habemus-papadum/aiui-lowering-pipeline";
 import {
   briefOfRegistrations,
   chainKeySource,
@@ -253,17 +253,17 @@ export function createOracleLanes(ctx: OracleLaneContext): OracleLanes {
       .catch(() => {});
   };
   /**
-   * Where the human is standing, as the `<tab …/>` record the lowering
-   * renders — `renderTabRecord` verbatim, so the oracle reads the same shape
-   * the agent behind the channel does and the human's "this page" means the
-   * same thing to both.
+   * Where the human is standing, as a tab RECORD — the oracle's weaver
+   * renders it as the canonical `<tab …/>` element (the lowering pipeline's
+   * one renderer), so the oracle reads the same shape the agent behind the
+   * channel does and the human's "this page" means the same thing to both.
    *
    * BOUNDED, because this now runs before the mint (see the resolver below):
    * a targeting host that never answers must not hold connect open. On a
    * timeout the session simply opens without the slot and the post-connect
    * refresh fills it in — which is exactly what this did before it moved.
    */
-  const tabContext = async (): Promise<string | undefined> => {
+  const tabContext = async (): Promise<TabRecord | undefined> => {
     const meta = await Promise.race([
       config.tabMeta?.().catch(() => undefined),
       new Promise<undefined>((resolve) => {
@@ -274,10 +274,10 @@ export function createOracleLanes(ctx: OracleLaneContext): OracleLanes {
     if (url === undefined) {
       return undefined;
     }
-    return renderTabRecord({
+    return {
       url,
       ...(typeof meta?.title === "string" ? { title: meta.title } : {}),
-    });
+    };
   };
   const session = new OracleSession({
     config: {

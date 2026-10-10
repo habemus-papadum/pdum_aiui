@@ -54,6 +54,23 @@ describe("weaveInstructions", () => {
     expect(woven).toContain("\n\nNever mention the weather.");
   });
 
+  it("renders a tab record as the canonical <tab …/> element, and says so in the record", () => {
+    const woven = weaveInstructions({
+      app: "A spectrum viewer.",
+      context: { url: "http://localhost:5173/spectra", title: "spectra" },
+    });
+    expect(woven).toContain(
+      'Right now: <tab url="http://localhost:5173/spectra" title="spectra"/>',
+    );
+    const { record } = renderPrompt(
+      instructionsPrompt({ context: { url: "http://localhost:5173/spectra" } }),
+    );
+    const forms = record.definitions.flatMap((definition) =>
+      definition.kind === "text" && definition.origin?.form === "tab" ? [definition.origin] : [],
+    );
+    expect(forms).toEqual([{ site: "aiui-oracle slot", slot: "context", form: "tab" }]);
+  });
+
   it("treats empty and absent identically — a partial record needs no padding", () => {
     // A resolver that has nothing to say about `context` this time returns a
     // record without it, or with "". Neither may leave a dangling heading.

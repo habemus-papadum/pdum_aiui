@@ -5,6 +5,7 @@
  * git history).
  */
 
+export type { TabRecord } from "@habemus-papadum/aiui-lowering-pipeline";
 export type {
   ControlSurfaceToolsOptions,
   PageToolExecute,

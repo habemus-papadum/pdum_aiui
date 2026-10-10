@@ -59,6 +59,7 @@
     "vite-plugin-solid": "catalog:solid"
   },
   "dependencies": {
+    "@habemus-papadum/aiui-lowering-pipeline": "workspace:^",
     "@habemus-papadum/aiui-prompts": "workspace:^",
     "@habemus-papadum/aiui-prompts-inspector": "workspace:^",
     "@habemus-papadum/aiui-viz": "workspace:^",

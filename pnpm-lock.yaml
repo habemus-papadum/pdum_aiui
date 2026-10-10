@@ -1389,6 +1389,9 @@ importers:
 
   packages/aiui-oracle:
     dependencies:
+      '@habemus-papadum/aiui-lowering-pipeline':
+        specifier: workspace:^
+        version: link:../aiui-lowering-pipeline
       '@habemus-papadum/aiui-prompts':
         specifier: workspace:^
         version: link:../aiui-prompts

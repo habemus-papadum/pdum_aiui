@@ -11,6 +11,7 @@
  * `raw` ledger entries, never dropped (the trace-stages total-parse lesson).
  */
 
+import type { TabRecord } from "@habemus-papadum/aiui-lowering-pipeline";
 import type { SemanticRecord } from "@habemus-papadum/aiui-prompts";
 import type { OperationRecord, WireRecord } from "@habemus-papadum/aiui-prompts/operations";
 
@@ -33,8 +34,16 @@ import type { OperationRecord, WireRecord } from "@habemus-papadum/aiui-prompts/
 export interface PromptSlots {
   /** Standing: what this app IS, and what matters in it. */
   app?: string;
-  /** Where the user is right now — page, route, selection. Short-lived. */
-  context?: string;
+  /**
+   * Where the user is right now — page, route, selection. Short-lived.
+   *
+   * A {@link TabRecord} is the page the user is looking at, rendered as the
+   * canonical `<tab …/>` element the lowering pipeline puts in Claude's
+   * prompts, so the oracle reads the same shape the agent behind the channel
+   * does and "this page" means the same thing to both. A string is anything
+   * else, verbatim.
+   */
+  context?: string | TabRecord;
   /** How to behave this conversation — tutorial-ish for a newcomer, terse for
    * a regular. Chosen per session, not per turn. */
   stance?: string;
