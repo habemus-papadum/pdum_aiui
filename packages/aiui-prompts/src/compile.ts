@@ -1,6 +1,8 @@
 import { canonicalJson, freeze } from "./json.ts";
 import {
   type Asset,
+  type ChunkBoundary,
+  type ChunkCut,
   COMPILER,
   type CompiledPrompt,
   type CompileOptions,
@@ -41,7 +43,9 @@ type TextAtom = {
 type Atom =
   | TextAtom
   | { type: "image"; asset: Asset; occurrence: string }
-  | { type: "open" | "close"; region: Omit<SemanticRegion, "part" | "start" | "end"> };
+  | { type: "open" | "close"; region: Omit<SemanticRegion, "part" | "start" | "end"> }
+  /** A chunk boundary: the chunk `index` of `occurrence` begins here. */
+  | { type: "cut"; occurrence: string; index: number; boundary: ChunkBoundary | "image" };
 type Environment = { depth: number; mode: "normal" | "math"; xml: boolean };
 const nonempty = (atoms: readonly Atom[]) =>
   atoms.some((atom) => atom.type === "image" || (atom.type === "text" && atom.text.length > 0));
@@ -324,6 +328,12 @@ function compile(record: SemanticRecord, services: CompileServices = {}): Compil
             "Character/line elision only accepts text; use item selection for media.",
             id,
           );
+        if (atoms.some((atom) => atom.type === "cut"))
+          throw new PromptError(
+            "CHUNK_ELISION",
+            "A character/line elision cannot window through a chunk's cuts; elide the content, then chunk it.",
+            id,
+          );
         const source = atoms
           .filter((atom): atom is TextAtom => atom.type === "text")
           .map((atom) => atom.text)
@@ -393,12 +403,200 @@ function compile(record: SemanticRecord, services: CompileServices = {}): Compil
         }
         return framed(retained, omitted);
       }
+      case "chunk":
+        return chunked(def, id, children().flat(), env);
     }
+  }
+  /**
+   * The partition. Content is measured in VIRTUAL slots — one per text code
+   * unit, one per image — so a cut beside an image is a position like any
+   * other; math/XML/marker scopes are atomic spans no cut may enter. Windows
+   * fill greedily from the start: the farthest end within the budget is found
+   * by bisection (an estimator is monotone in prefixes), then the cut is the
+   * last position in the window of the strongest boundary kind listed. The
+   * whitespace at a cut stays with the chunk before it; nothing is omitted.
+   */
+  function chunked(
+    def: Extract<Definition, { kind: "chunk" }>,
+    id: string,
+    atoms: Atom[],
+    env: Environment,
+  ): Atom[] {
+    if (atoms.some((atom) => atom.type === "cut"))
+      throw new PromptError("CHUNK_NESTED", "A chunk cannot contain another chunk.", id);
+    const chars: string[] = [];
+    const images: (Asset | undefined)[] = [];
+    const spans: { start: number; end: number }[] = [];
+    const openAt = new Map<string, number>();
+    for (const atom of atoms) {
+      if (atom.type === "text")
+        for (let i = 0; i < atom.text.length; i++) {
+          chars.push(atom.text[i]);
+          images.push(undefined);
+        }
+      else if (atom.type === "image") {
+        chars.push("");
+        images.push(atom.asset);
+      } else if (atom.type === "open") openAt.set(atom.region.id, chars.length);
+      else if (atom.type === "close") {
+        const start = openAt.get(atom.region.id);
+        if (start !== undefined && chars.length > start) spans.push({ start, end: chars.length });
+      }
+    }
+    const total = chars.length;
+    // Prefix tables: the text before each slot, and the image cost before each slot.
+    const allText = chars.join("");
+    const textBefore = new Array<number>(total + 1);
+    const imagesBefore = new Array<number>(total + 1);
+    textBefore[0] = 0;
+    imagesBefore[0] = 0;
+    for (let i = 0; i < total; i++) {
+      textBefore[i + 1] = textBefore[i] + chars[i].length;
+      const asset = images[i];
+      imagesBefore[i + 1] =
+        imagesBefore[i] + (asset && def.unit === "tokens" ? estimator.image(asset) : 0);
+    }
+    const count = (value: string) =>
+      def.unit === "tokens" ? estimator.text(value) : Array.from(value).length;
+    const measure = (from: number, to: number) =>
+      count(allText.slice(textBefore[from], textBefore[to])) +
+      imagesBefore[to] -
+      imagesBefore[from];
+    const markerCost = def.marker ? count(def.marker) : 0;
+    const ch = (i: number): string | undefined =>
+      i < 0 || i >= total || images[i] !== undefined ? undefined : chars[i];
+    const isImage = (i: number) => i >= 0 && i < total && images[i] !== undefined;
+    const space = (value: string | undefined) => value !== undefined && /\s/.test(value);
+    const blocked = (k: number) => {
+      if (spans.some((span) => span.start < k && k < span.end)) return true;
+      const before = ch(k - 1);
+      const after = ch(k);
+      return (
+        before !== undefined &&
+        after !== undefined &&
+        /[\uD800-\uDBFF]/.test(before) &&
+        /[\uDC00-\uDFFF]/.test(after)
+      );
+    };
+    const kindsAt = (k: number): Set<ChunkBoundary> => {
+      const kinds = new Set<ChunkBoundary>(["character"]);
+      const before = ch(k - 1);
+      const after = ch(k);
+      if (before === "\n" && after !== "\n") {
+        kinds.add("line");
+        if (ch(k - 2) === "\n") kinds.add("paragraph");
+      }
+      if (space(before) && after !== undefined && !space(after)) {
+        kinds.add("word");
+        let j = k - 1;
+        while (j >= 0 && space(ch(j))) j--;
+        while (j >= 0 && /["')\]»”’]/.test(ch(j) ?? "")) j--;
+        if (j >= 0 && /[.!?]/.test(ch(j) ?? "")) kinds.add("sentence");
+      }
+      return kinds;
+    };
+    const findCut = (start: number, end: number): ChunkCutAt | undefined => {
+      for (let k = end; k > start; k--)
+        if (!blocked(k) && (isImage(k - 1) || isImage(k))) return { at: k, boundary: "image" };
+      for (const kind of def.boundaries)
+        for (let k = end; k > start; k--)
+          if (!blocked(k) && kindsAt(k).has(kind)) return { at: k, boundary: kind };
+      return undefined;
+    };
+    const cuts: ChunkCutAt[] = [];
+    let start = 0;
+    while (start < total) {
+      const budget = def.limit - (cuts.length ? markerCost : 0);
+      if (budget < 0)
+        throw new PromptError(
+          "CHUNK_OVERFLOW",
+          `The chunk marker alone exceeds the budget of ${def.limit} ${def.unit}.`,
+          id,
+        );
+      // The farthest end within the budget: measure is monotone in the end.
+      let low = start;
+      let high = total;
+      while (low < high) {
+        const mid = low + globalThis.Math.ceil((high - low) / 2);
+        if (measure(start, mid) <= budget) low = mid;
+        else high = mid - 1;
+      }
+      const end = low;
+      if (end === total) break;
+      const cut = findCut(start, end);
+      if (cut === undefined) {
+        if (def.boundaries.includes("character"))
+          throw new PromptError(
+            "ATOMIC_CHUNK",
+            `A budget of ${def.limit} ${def.unit} cannot hold an atomic math/XML/marker scope or image; raise the limit.`,
+            id,
+          );
+        throw new PromptError(
+          "CHUNK_OVERFLOW",
+          `No ${def.boundaries.join("/")} boundary lies within the budget of ${def.limit} ${def.unit}; add a finer boundary or raise the limit.`,
+          id,
+        );
+      }
+      cuts.push(cut);
+      start = cut.at;
+    }
+    const edges = [0, ...cuts.map((cut) => cut.at), total];
+    const sizes = edges
+      .slice(0, -1)
+      .map((from, i) => measure(from, edges[i + 1]) + (i ? markerCost : 0));
+    decisions.push({
+      occurrence: id,
+      kind: "chunk",
+      selected: String(cuts.length + 1),
+      detail: {
+        unit: def.unit,
+        limit: def.limit,
+        boundaries: [...def.boundaries],
+        ...(def.unit === "tokens" ? { estimator: estimator.identity } : {}),
+        count: cuts.length + 1,
+        cuts: cuts.map((cut) => ({ at: cut.at, boundary: cut.boundary })),
+        sizes,
+        ...(env.xml ? { scope: "content-before-xml-text-escaping" } : {}),
+      },
+    });
+    // Re-emit the atoms with a cut (and the marker) at every boundary; a text
+    // atom straddling a cut is split, a region opening at a cut follows it.
+    const out: Atom[] = [];
+    let cursor = 0;
+    let next = 0;
+    const emitCut = () => {
+      out.push({ type: "cut", occurrence: id, index: next + 1, boundary: cuts[next].boundary });
+      if (def.marker) out.push(text(def.marker, id, "generated", undefined, env.xml));
+      next++;
+    };
+    const due = (position: number) => next < cuts.length && cuts[next].at === position;
+    for (const atom of atoms) {
+      if (atom.type === "text") {
+        let offset = 0;
+        while (next < cuts.length && cuts[next].at <= cursor + atom.text.length) {
+          const at = cuts[next].at - cursor;
+          if (at > offset) out.push({ ...atom, text: atom.text.slice(offset, at) });
+          emitCut();
+          offset = at;
+        }
+        if (offset < atom.text.length) out.push({ ...atom, text: atom.text.slice(offset) });
+        cursor += atom.text.length;
+      } else if (atom.type === "image") {
+        if (due(cursor)) emitCut();
+        out.push(atom);
+        cursor += 1;
+      } else {
+        if (atom.type === "open" && due(cursor)) emitCut();
+        out.push(atom);
+      }
+    }
+    return out;
   }
   const atoms = render(record.root, "o", undefined, { depth: 1, mode: "normal", xml: false });
   const parts: OutputPart[] = [];
   const contributions: Contribution[] = [];
   const semanticRegions: SemanticRegion[] = [];
+  const cuts: ChunkCut[] = [];
   const open = new Map<
     string,
     { value: Omit<SemanticRegion, "part" | "start" | "end">; part: string; start: number }
@@ -444,6 +642,19 @@ function compile(record: SemanticRecord, services: CompileServices = {}): Compil
           relation,
           ...(atom.origin ? { origin: atom.origin } : {}),
         });
+    } else if (atom.type === "cut") {
+      // Before the next emitted code unit: inside the open text part, or at
+      // the start of whichever part comes next (an image, or new text).
+      const last = parts.at(-1);
+      cuts.push({
+        occurrence: atom.occurrence,
+        index: atom.index,
+        boundary: atom.boundary,
+        at:
+          last?.type === "text"
+            ? { part: last.id, offset: last.text.length }
+            : { part: `p${parts.length}`, offset: 0 },
+      });
     } else if (atom.type === "open") {
       const part = currentText();
       open.set(atom.region.id, { value: atom.region, part: part.id, start: part.text.length });
@@ -471,7 +682,99 @@ function compile(record: SemanticRecord, services: CompileServices = {}): Compil
     decisions,
     diagnostics: [],
     semanticRegions,
+    // Canonical positions: a cut at the end of a text part is the start of
+    // the part that follows it (always an image — text would have coalesced).
+    cuts: cuts.map((cut) => {
+      const index = parts.findIndex((part) => part.id === cut.at.part);
+      const part = parts[index];
+      return part?.type === "text" && cut.at.offset === part.text.length && index + 1 < parts.length
+        ? { ...cut, at: { part: parts[index + 1].id, offset: 0 } }
+        : cut;
+    }),
   });
+}
+type ChunkCutAt = { at: number; boundary: ChunkBoundary | "image" };
+
+/** One part of a chunk: a verbatim range of a text part, or a whole image part. */
+export type ChunkPart = Readonly<
+  | { part: string; type: "text"; text: string; start: number; end: number }
+  | { part: string; type: "image"; asset: Asset }
+>;
+export type ChunkSlice = Readonly<{ index: number; count: number; parts: readonly ChunkPart[] }>;
+/**
+ * The compiled prompt as the consecutive chunks a capped transport delivers,
+ * each a run of part ranges in order. A prompt with no chunk occurrence is one
+ * chunk. A chunked delivery needs exactly one chunk occurrence owning every
+ * contribution: a heading beside the chunk would belong to no chunk and break
+ * its budget, so that is refused rather than guessed.
+ */
+export function chunksOf(compiled: CompiledPrompt): readonly ChunkSlice[] {
+  const owners = compiled.occurrences.filter((occurrence) => occurrence.kind === "chunk");
+  if (owners.length > 1)
+    throw new PromptError(
+      "CHUNK_MULTIPLE",
+      `A chunked delivery needs exactly one chunk occurrence; this prompt has ${owners.length}.`,
+    );
+  const whole: ChunkPart[] = compiled.parts.map((part) =>
+    part.type === "text"
+      ? { part: part.id, type: "text", text: part.text, start: 0, end: part.text.length }
+      : { part: part.id, type: "image", asset: part.asset },
+  );
+  const owner = owners[0];
+  if (!owner) return freeze([{ index: 0, count: 1, parts: whole }]);
+  const parents = new Map(compiled.occurrences.map((item) => [item.id, item.parent]));
+  const inFamily = (occurrence: string) => {
+    let current: string | undefined = occurrence;
+    while (current !== undefined) {
+      if (current === owner.id) return true;
+      current = parents.get(current);
+    }
+    return false;
+  };
+  if (compiled.contributions.some((contribution) => !inFamily(contribution.occurrence)))
+    throw new PromptError(
+      "CHUNK_SIBLINGS",
+      "A chunked delivery needs the chunk to own every contribution; content beside it belongs to no chunk.",
+      owner.id,
+    );
+  const cuts = [...compiled.cuts]
+    .filter((cut) => cut.occurrence === owner.id)
+    .sort((a, b) => a.index - b.index);
+  const index = new Map(compiled.parts.map((part, i) => [part.id, i]));
+  const positions = [
+    { part: 0, offset: 0 },
+    ...cuts.map((cut) => ({
+      part: index.get(cut.at.part) ?? compiled.parts.length,
+      offset: cut.at.offset,
+    })),
+    { part: compiled.parts.length, offset: 0 },
+  ];
+  const count = cuts.length + 1;
+  return freeze(
+    positions.slice(0, -1).map((from, i) => {
+      const to = positions[i + 1];
+      const parts: ChunkPart[] = [];
+      for (const [pi, part] of compiled.parts.entries()) {
+        if (pi < from.part || pi > to.part) continue;
+        if (part.type === "image") {
+          if ((pi > from.part || from.offset === 0) && pi < to.part)
+            parts.push({ part: part.id, type: "image", asset: part.asset });
+          continue;
+        }
+        const low = pi === from.part ? from.offset : 0;
+        const high = pi === to.part ? to.offset : part.text.length;
+        if (high > low)
+          parts.push({
+            part: part.id,
+            type: "text",
+            text: part.text.slice(low, high),
+            start: low,
+            end: high,
+          });
+      }
+      return { index: i, count, parts };
+    }),
+  );
 }
 
 /** Compile a durable semantic record or snapshot an already evaluated authoring value. */

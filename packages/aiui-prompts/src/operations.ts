@@ -1,5 +1,5 @@
 /** Delivery records are semantic operations, not a universal request-shaped provider abstraction. */
-import { rehydrate } from "./compile.ts";
+import { chunksOf, rehydrate } from "./compile.ts";
 import {
   canonicalJson,
   copyJson,
@@ -66,6 +66,8 @@ type Body =
       readonly delegationId: string | null;
       /** The host's session block for `update` / `connect` — never instructions. */
       readonly session?: JsonObject;
+      /** For an append under a per-message cap: which chunk of the bound record this one carries. */
+      readonly chunk?: ChunkReference;
     }
   | {
       readonly kind: "channel";
@@ -126,9 +128,13 @@ export interface DeliveryMap {
   readonly part?: string;
   readonly start?: number;
   readonly end?: number;
-  readonly relation: "copy" | "asset-reference" | "generated";
+  /** `copy` is a whole text part; `slice` a verbatim range of one (`source` bounds it). */
+  readonly relation: "copy" | "slice" | "asset-reference" | "generated";
+  readonly source?: Readonly<{ start: number; end: number }>;
   readonly origin?: JsonObject;
 }
+/** One chunk of a record partitioned by a `Chunk` node: `index` of `count`. */
+export type ChunkReference = Readonly<{ index: number; count: number }>;
 export interface ConsumerAdapterInput {
   readonly operation: ConsumerOperation;
   readonly options: JsonObject;
@@ -341,6 +347,7 @@ export function sessionOperation(
     eventId?: string;
     delegationId?: string | null;
     session?: JsonObject;
+    chunk?: ChunkReference;
   },
 ): OperationRecord {
   const record = content === null ? null : parseRecord(content);
@@ -349,9 +356,14 @@ export function sessionOperation(
     "SESSION_OPERATION",
     "Session options",
   );
-  fields(value, ["action", "sessionId", "eventId", "delegationId", "session"], "SESSION_OPERATION");
+  fields(
+    value,
+    ["action", "sessionId", "eventId", "delegationId", "session", "chunk"],
+    "SESSION_OPERATION",
+  );
   const action = value.action as SessionAction;
   const block = action === "update" || action === "connect";
+  if ("chunk" in value) chunkReference(value.chunk, action);
   if (record === null && !block)
     fail("SESSION_OPERATION", `A ${String(action)} operation binds a semantic record.`);
   if ("session" in value && !block)
@@ -378,9 +390,26 @@ export function sessionOperation(
       eventId: typeof value.eventId === "string" ? value.eventId : null,
       delegationId: value.delegationId ?? null,
       ...("session" in value ? { session: value.session } : {}),
+      ...("chunk" in value ? { chunk: value.chunk } : {}),
     } as Body,
     record === null ? [] : [record],
   );
+}
+/** A chunk reference rides an append only, and names a chunk inside its count. */
+function chunkReference(input: unknown, action: string): ChunkReference {
+  if (!action.startsWith("append-"))
+    fail("SESSION_OPERATION", "Only an append is delivered in chunks.");
+  const value = object(input, "SESSION_OPERATION", "Chunk reference");
+  fields(value, ["index", "count"], "SESSION_OPERATION");
+  if (
+    !Number.isSafeInteger(value.index) ||
+    !Number.isSafeInteger(value.count) ||
+    (value.count as number) < 1 ||
+    (value.index as number) < 0 ||
+    (value.index as number) >= (value.count as number)
+  )
+    fail("SESSION_OPERATION", "A chunk reference is an index inside a positive count.");
+  return value as ChunkReference;
 }
 export function channelPush(
   content: SemanticRecord,
@@ -502,7 +531,7 @@ export function parseOperation(input: unknown): OperationRecord {
   } else if (body.kind === "session") {
     fields(
       body,
-      ["kind", "action", "content", "sessionId", "eventId", "delegationId", "session"],
+      ["kind", "action", "content", "sessionId", "eventId", "delegationId", "session", "chunk"],
       "SESSION_OPERATION",
     );
     const action = body.action as string;
@@ -537,6 +566,7 @@ export function parseOperation(input: unknown): OperationRecord {
     if (body.content === null) {
       if (!block) fail("RECORD_REFERENCE", `A ${action} operation binds a semantic record.`);
     } else refs.push(nonempty(body.content, "RECORD_REFERENCE", "Session content reference"));
+    if ("chunk" in body) chunkReference(body.chunk, action);
   } else if (body.kind === "channel") {
     fields(body, ["kind", "content", "meta"], "CHANNEL_META");
     const meta = object(body.meta, "CHANNEL_META", "Channel metadata");
@@ -619,7 +649,7 @@ function consumerResult(input: unknown, context: ConsumerAdapterInput): Consumer
     const map = object(input, "ADAPTER_MAPPING", "Delivery mapping");
     fields(
       map,
-      ["path", "binding", "record", "part", "start", "end", "relation", "origin"],
+      ["path", "binding", "record", "part", "start", "end", "relation", "source", "origin"],
       "ADAPTER_MAPPING",
     );
     if (!Array.isArray(map.path)) fail("ADAPTER_MAPPING", "Mapping path must be an array.");
@@ -660,6 +690,20 @@ function consumerResult(input: unknown, context: ConsumerAdapterInput): Consumer
         (addressed as string).slice(map.start as number, map.end as number) !== part.text
       )
         fail("ADAPTER_MAPPING", "A copy mapping must exactly match the full bound text part.");
+    } else if (map.relation === "slice") {
+      const source = object(map.source, "ADAPTER_MAPPING", "Slice source");
+      fields(source, ["start", "end"], "ADAPTER_MAPPING");
+      if (
+        !ranged ||
+        part?.type !== "text" ||
+        !Number.isSafeInteger(source.start) ||
+        !Number.isSafeInteger(source.end) ||
+        (source.start as number) < 0 ||
+        (source.end as number) > part.text.length ||
+        (addressed as string).slice(map.start as number, map.end as number) !==
+          part.text.slice(source.start as number, source.end as number)
+      )
+        fail("ADAPTER_MAPPING", "A slice mapping must exactly match its source range of the part.");
     } else if (map.relation === "asset-reference") {
       if (part?.type !== "image")
         fail("ADAPTER_MAPPING", "Asset-reference mappings require an image part.");
@@ -762,6 +806,39 @@ export function lowerOperation(
         relation: part.type === "text" ? "copy" : "asset-reference",
       });
     }
+    return output;
+  };
+  /** One chunk of a partitioned record, as the text an append carries. */
+  const chunkText = (
+    id: string,
+    binding: string,
+    path: (string | number)[],
+    chunk: ChunkReference,
+  ): string => {
+    const slices = chunksOf(get(id));
+    if (slices.length !== chunk.count)
+      return fail(
+        "CHUNK_COUNT_MISMATCH",
+        `The record partitions into ${slices.length} chunks, not ${chunk.count}.`,
+      );
+    let output = "";
+    for (const part of slices[chunk.index].parts) {
+      if (part.type !== "text")
+        return fail("TEXT_ONLY", "An append carries text; a chunk with an image cannot be sent.");
+      const start = output.length;
+      output += part.text;
+      mappings.push({
+        path,
+        binding,
+        record: id,
+        part: part.part,
+        start,
+        end: output.length,
+        relation: "slice",
+        source: { start: part.start, end: part.end },
+      });
+    }
+    decisions.push({ kind: "chunk", record: id, index: chunk.index, count: chunk.count });
     return output;
   };
   const content = (
@@ -942,7 +1019,10 @@ export function lowerOperation(
         type: `session.${body.action.slice(7)}.append`,
         event_id: body.eventId,
         delegation_id: body.delegationId,
-        content: text(body.content as string, body.action, path),
+        content:
+          body.chunk === undefined
+            ? text(body.content as string, body.action, path)
+            : chunkText(body.content as string, body.action, path, body.chunk),
       };
     } else if (body.action === "respond") {
       payload = {

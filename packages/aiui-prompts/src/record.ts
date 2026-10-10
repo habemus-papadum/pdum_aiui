@@ -108,7 +108,7 @@ function validateDefinition(input: unknown) {
   const allowed = ["id", "kind", "label", "origin"];
   const add = (...keys: string[]) => fields(value, [...allowed, ...keys], "definition");
   if (
-    ["prompt", "group", "paragraph", "section", "math", "join", "xml", "elide"].includes(
+    ["prompt", "group", "paragraph", "section", "math", "join", "xml", "elide", "chunk"].includes(
       value.kind as string,
     ) ||
     (value.kind === "marker" && "children" in value)
@@ -212,6 +212,33 @@ function validateDefinition(input: unknown) {
       if (value.keep !== "first" && value.keep !== "last")
         throw new PromptError("INVALID_RECORD", "Elision keeps first or last.");
       break;
+    case "chunk": {
+      add("children", "unit", "limit", "boundaries", "marker");
+      if (
+        !["tokens", "characters"].includes(value.unit as string) ||
+        !Number.isSafeInteger(value.limit) ||
+        (value.limit as number) < 0
+      )
+        throw new PromptError(
+          "INVALID_RECORD",
+          "A chunk needs a supported unit and nonnegative safe integer limit.",
+        );
+      array(value.boundaries, "chunk boundaries");
+      if (
+        !value.boundaries.length ||
+        new Set(value.boundaries).size !== value.boundaries.length ||
+        value.boundaries.some(
+          (kind) =>
+            !["paragraph", "line", "sentence", "word", "character"].includes(kind as string),
+        )
+      )
+        throw new PromptError(
+          "INVALID_RECORD",
+          "Chunk boundaries are a nonempty list of distinct supported kinds.",
+        );
+      string(value.marker, "chunk marker");
+      break;
+    }
     case "tools": {
       add("toolSnapshot", "projection");
       try {

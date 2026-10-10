@@ -144,6 +144,18 @@ second pass that searches emitted strings to guess where they came from.
   the marker before it: a transcript's newest lines within a budget. It does not bisect atomic
   math/XML/image content. Its derived selection/counts, the estimator's identity, and the generated
   marker's ownership are visible in the compiled artifact.
+- Chunk is a partition, not a selection: its children compile as anywhere, then are cut into
+  consecutive windows each within a token or code-point budget, at the strongest boundary listed
+  (paragraph, line, sentence, word, character, in the host's preference order; a cut beside an
+  image is always allowed), never inside a math/XML/marker scope or an image. Nothing is omitted
+  and whitespace at a cut stays with the chunk before it, so the chunks concatenate to the
+  unchunked rendering plus any marker (prefixed to every chunk after the first, counted in its
+  budget). The decision records unit, limit, boundaries, estimator, count, every cut's offset and
+  boundary kind, and each chunk's size; the compiled artifact carries the cuts as part positions,
+  and `chunksOf` slices it into the chunks a capped transport delivers — one chunk occurrence
+  owning every contribution, or it refuses. A session append names `chunk: { index, count }` over
+  the whole record, so every envelope keeps one wire and one verdict and the shared fingerprint
+  links them; its delivery map is a `slice` of the part with its source range.
 
 Tool declarations are immutable `ToolSnapshot` JSON: namespace/kit brief plus each tool's name,
 description, usage, kind, group, and optional input schema. Execution callbacks remain with the host.

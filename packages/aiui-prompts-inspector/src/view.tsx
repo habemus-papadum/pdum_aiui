@@ -1,6 +1,7 @@
 import type {
   Asset,
   CompiledPrompt,
+  Decision,
   Occurrence,
   SemanticRecord,
 } from "@habemus-papadum/aiui-prompts";
@@ -195,6 +196,14 @@ function RecordStatus(props: {
                 {props.snapshot().document?.kind === "wire" ? "Wire" : "Prepared delivery"}{" "}
                 verification: {verification().status}.{" "}
                 {"reason" in verification() ? (verification() as { reason: string }).reason : ""}
+              </p>
+            )}
+          </Show>
+          <Show when={chunkReference(props.snapshot().document?.operation)}>
+            {(chunk) => (
+              <p class="prompt-note">
+                This delivery carries chunk {chunk().index + 1} of {chunk().count} of the bound
+                record: the whole record is shown here; the wire verifies that chunk alone.
               </p>
             )}
           </Show>
@@ -1056,7 +1065,55 @@ function Provenance(props: { model: Model }) {
         )}
       </Show>
       <JsonDetails title="Captured context" value={model.record.context} />
+      <For each={model.compiled.decisions.filter((decision) => decision.kind === "chunk")}>
+        {(decision) => <ChunkRuler decision={decision} label={model.label(decision.occurrence)} />}
+      </For>
       <JsonDetails title="Recorded decisions" value={model.compiled.decisions} open />
+    </section>
+  );
+}
+
+/** The chunk an operation carries, when it is one chunk of a partitioned record. */
+function chunkReference(
+  operation: { operation: { kind: string; chunk?: { index: number; count: number } } } | undefined,
+): { index: number; count: number } | undefined {
+  const body = operation?.operation;
+  return body !== undefined && body.kind === "session" ? body.chunk : undefined;
+}
+
+/** A chunk decision as a ruler: one row per chunk with its size over the limit and its cut. */
+function ChunkRuler(props: { decision: Decision; label: string }) {
+  const detail = () =>
+    (props.decision.detail ?? {}) as {
+      unit?: string;
+      limit?: number;
+      count?: number;
+      sizes?: number[];
+      cuts?: { at: number; boundary: string }[];
+      estimator?: { name: string; version: string };
+    };
+  return (
+    <section class="prompt-chunks" aria-label="Chunk partition">
+      <p class="prompt-note">
+        {props.label}: {detail().count} chunk{detail().count === 1 ? "" : "s"} of at most{" "}
+        {detail().limit} {detail().unit}
+        {detail().estimator
+          ? ` under ${detail().estimator?.name}@${detail().estimator?.version}`
+          : ""}
+        .
+      </p>
+      <ol class="prompt-chunk-ruler">
+        <For each={detail().sizes ?? []}>
+          {(size, index) => (
+            <li>
+              <b>{index() + 1}</b> {size}/{detail().limit} {detail().unit}
+              {index() > 0
+                ? ` · after a ${detail().cuts?.[index() - 1]?.boundary ?? "?"} boundary at ${detail().cuts?.[index() - 1]?.at ?? "?"}`
+                : ""}
+            </li>
+          )}
+        </For>
+      </ol>
     </section>
   );
 }

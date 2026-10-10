@@ -120,6 +120,9 @@ Emitted parts preserve text–image–text ordering. Character ranges are half-o
 within a text part. Primary contribution ranges partition output exactly, including generated
 headings, escaped XML, and elision markers. A source owner is separate from an output offset;
 optional source capture does not claim exact source-character or rendered-math-glyph mappings.
+A `Chunk` partitions content under a budget without omitting any of it; `chunksOf` slices the
+compiled parts into the chunks a capped transport sends, and a session append names the chunk it
+carries over the one record.
 
 ## Choose an operation, then a delivery target
 

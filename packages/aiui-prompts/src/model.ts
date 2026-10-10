@@ -27,6 +27,23 @@ export type Selection = Readonly<Record<string, "full" | "short" | "omit">>;
  * a host supplies its own) — the unit a transcript tail wants.
  */
 export type ElisionUnit = "characters" | "lines" | "items" | "tokens";
+/** What a chunk budgets: tokens under the compile's estimator, or Unicode code points. */
+export type ChunkUnit = "tokens" | "characters";
+/**
+ * Where a chunk may cut, strongest first: after a blank line, after a newline,
+ * after a sentence end, at whitespace, or between any two code units (never
+ * inside a surrogate pair). A cut beside an image is always allowed. The
+ * whitespace at a cut stays with the chunk before it, so the chunks
+ * concatenate back to the original.
+ */
+export type ChunkBoundary = "paragraph" | "line" | "sentence" | "word" | "character";
+export const CHUNK_BOUNDARIES: readonly ChunkBoundary[] = Object.freeze([
+  "paragraph",
+  "line",
+  "sentence",
+  "word",
+  "character",
+]);
 export type Predicate =
   | { readonly op: "eq" | "ne"; readonly path: string; readonly value: JsonValue }
   | { readonly op: "gt" | "gte" | "lt" | "lte"; readonly path: string; readonly value: number }
@@ -81,6 +98,14 @@ type Spec<C> = Base &
         readonly limit: number;
         readonly marker: string;
         readonly keep: "first" | "last";
+        readonly children: readonly C[];
+      }
+    | {
+        readonly kind: "chunk";
+        readonly unit: ChunkUnit;
+        readonly limit: number;
+        readonly boundaries: readonly ChunkBoundary[];
+        readonly marker: string;
         readonly children: readonly C[];
       }
     | {
@@ -147,6 +172,14 @@ export type PromptNode = Base &
         readonly children: readonly PromptValue[];
       }
     | {
+        readonly kind: "chunk";
+        readonly unit: ChunkUnit;
+        readonly limit: number;
+        readonly boundaries: readonly ChunkBoundary[];
+        readonly marker: string;
+        readonly children: readonly PromptValue[];
+      }
+    | {
         readonly kind: "marker";
         readonly name: string;
         readonly fields: JsonObject;
@@ -164,7 +197,7 @@ export type Definition = Spec<Placement> & { readonly id: string };
 export type FactObservation = Readonly<{ path: string; present: boolean; value: JsonValue }>;
 export type Decision = Readonly<{
   occurrence: string;
-  kind: "case" | "choice" | "elide" | "tool-budget";
+  kind: "case" | "choice" | "elide" | "chunk" | "tool-budget";
   name?: string;
   selected: string;
   facts?: readonly FactObservation[];
@@ -222,6 +255,19 @@ export type SemanticRegion = Readonly<{
   end: number;
   mode?: "inline" | "display";
 }>;
+/** A position in the emitted parts: before `offset` in `part` (an image part has offset 0). */
+export type PartPosition = Readonly<{ part: string; offset: number }>;
+/**
+ * Where a chunk occurrence cut its content: the chunk `index` begins at `at`.
+ * Positions order by part then offset, so a cut at an image part's offset 0
+ * puts the image in the chunk that begins there.
+ */
+export type ChunkCut = Readonly<{
+  occurrence: string;
+  index: number;
+  boundary: ChunkBoundary | "image";
+  at: PartPosition;
+}>;
 export type CompiledPrompt = Readonly<{
   recordFingerprint: string;
   compiler: typeof COMPILER;
@@ -231,6 +277,7 @@ export type CompiledPrompt = Readonly<{
   decisions: readonly Decision[];
   diagnostics: readonly Diagnostic[];
   semanticRegions: readonly SemanticRegion[];
+  cuts: readonly ChunkCut[];
 }>;
 
 type Props = Base & { children?: PromptValue };
@@ -368,6 +415,31 @@ export const Elide = (
     limit: props.limit,
     marker: props.marker ?? "…",
     keep: props.keep ?? "first",
+    children: children(props),
+  });
+/**
+ * A partition: the children compile as they would anywhere, then are cut into
+ * consecutive windows each within `limit` units, at the strongest boundary
+ * available in preference order, never inside a math/XML/marker scope or an
+ * image. Nothing is omitted. `marker` prefixes every chunk after the first
+ * and counts against its budget; none by default. A transport with a cap on
+ * one message delivers each chunk as its own operation over the one record.
+ */
+export const Chunk = (
+  props: Props & {
+    unit: ChunkUnit;
+    limit: number;
+    boundaries?: readonly ChunkBoundary[];
+    marker?: string;
+  },
+): PromptNode =>
+  Object.freeze({
+    ...base(props),
+    kind: "chunk",
+    unit: props.unit,
+    limit: props.limit,
+    boundaries: Object.freeze([...(props.boundaries ?? CHUNK_BOUNDARIES)]),
+    marker: props.marker ?? "",
     children: children(props),
   });
 export const Marker = (props: Props & { name: string; fields?: JsonObject }): PromptNode =>

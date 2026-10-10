@@ -51,8 +51,19 @@ function bindings(operation: OperationRecord): readonly InspectionBinding[] {
     return body.bindings.map((item) => binding(item.key, item.key, item.content));
   if (body.kind === "channel") return [binding("content", "Channel content", body.content)];
   if (body.kind === "session")
-    // A tools-only update or a connect may bind no record at all.
-    return body.content === null ? [] : [binding("content", body.action, body.content)];
+    // A tools-only update or a connect may bind no record at all; a chunked
+    // append binds the whole record and names the chunk it carries.
+    return body.content === null
+      ? []
+      : [
+          binding(
+            "content",
+            body.chunk === undefined
+              ? body.action
+              : `${body.action} · chunk ${body.chunk.index + 1} of ${body.chunk.count}`,
+            body.content,
+          ),
+        ];
   return [
     ...(body.instructions ? [binding("instructions", "Instructions", body.instructions)] : []),
     ...body.messages.map((item) =>

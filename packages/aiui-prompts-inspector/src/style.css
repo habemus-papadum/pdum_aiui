@@ -305,3 +305,13 @@
 :where(.prompt-inspector.prompt-inspector-dialog)::backdrop {
   background: var(--prompt-dialog-backdrop, #0006);
 }
+
+/* A chunk decision as a ruler: one row per chunk. */
+:where(.prompt-inspector .prompt-chunk-ruler) {
+  margin: 0 0 0.5rem;
+  padding-left: 1.5rem;
+  font-size: 0.85em;
+}
+:where(.prompt-inspector .prompt-chunk-ruler li) {
+  margin: 0.1rem 0;
+}
