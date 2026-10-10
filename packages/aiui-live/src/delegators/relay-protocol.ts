@@ -3,10 +3,13 @@
  * that hosts its delegator (`remoteDelegator` ↔ `createLiveBackend`). The
  * wire carries delegations OUT and appends BACK; tools the page owns round-
  * trip as `tool` / `tool_result` so a server-side backend (Claude Code) can
- * drive an aiui control surface that only exists in the browser.
+ * drive an aiui control surface that only exists in the browser. A prompt
+ * the server-side backend built travels back as a `record` frame, so the
+ * browser's ledger holds what a hosted backend read exactly as it holds
+ * what an in-page one read.
  */
 
-import type { LiveToolSpec, TranscriptSnapshot } from "../types.ts";
+import type { DelegationPromptRecord, LiveToolSpec, TranscriptSnapshot } from "../types.ts";
 
 export type RelayClientFrame =
   | { type: "hello"; delegator: string; sessionId?: string }
@@ -29,6 +32,8 @@ export type RelayServerFrame =
   | { type: "done"; id: string; result?: string }
   | { type: "failed"; id: string; error: string }
   | { type: "tool"; id: string; callId: string; name: string; arguments: Record<string, unknown> }
+  /** A prompt the hosted delegator built (`DelegationRequest.record`), whole. */
+  | { type: "record"; id: string; entry: DelegationPromptRecord }
   | { type: "error"; message: string };
 
 export function encodeFrame(frame: RelayClientFrame | RelayServerFrame): string {

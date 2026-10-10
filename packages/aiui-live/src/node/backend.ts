@@ -277,6 +277,7 @@ async function serveRelay(
             note: async (text) => send({ type: "note", id: frame.id, text }),
             steer: async (text) => send({ type: "steer", id: frame.id, text }),
             log: (line) => send({ type: "log", id: frame.id, line }),
+            record: (entry) => send({ type: "record", id: frame.id, entry }),
           };
           void Promise.resolve()
             .then(() => active.handle(req))

@@ -4,6 +4,8 @@
  * (`createLiveBackend` in `./node`), and turn its frames back into appends.
  * Page-owned tools round-trip: the server asks, the page executes, the page
  * answers — so Claude Code on the server can move a slider in the browser.
+ * A prompt the server-side backend built comes back as a `record` frame and
+ * lands in the session's ledger through the request's own `record` hook.
  */
 
 import type { DelegationRequest, Delegator } from "../types";
@@ -115,6 +117,10 @@ export function remoteDelegator(options: RemoteDelegatorOptions = {}): Delegator
           }
           case "log":
             item.req.log(frame.line);
+            break;
+          case "record":
+            // A ledger fact, delivered as it happened — never queued behind speech.
+            item.req.record?.(frame.entry);
             break;
           case "tool": {
             const tool = item.req.tools.find((candidate) => candidate.name === frame.name);

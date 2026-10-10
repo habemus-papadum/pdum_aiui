@@ -4,10 +4,11 @@
  * and a page-owned tool call — back, over a real socket on a random port.
  */
 
+import { rehydrate, snapshot } from "@habemus-papadum/aiui-prompts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
 import { remoteDelegator } from "../delegators/remote.ts";
-import type { DelegationRequest, Delegator } from "../types.ts";
+import type { DelegationPromptRecord, DelegationRequest, Delegator } from "../types.ts";
 import { runLiveServer, sessionOutcome } from "./backend.ts";
 
 describe("sessionOutcome", () => {
@@ -56,6 +57,10 @@ describe("relay", () => {
     describe: () => "the test backend",
     async handle(req: DelegationRequest) {
       seenOnServer.push(req.text);
+      // What the backend read, recorded whole — a real semantic record, so the
+      // test proves it crosses the socket intact.
+      const text = `message for: ${req.text}`;
+      req.record?.({ what: "message", text, prompt: snapshot(text) });
       req.log("thinking");
       await req.note("quiet fact");
       const tool = req.tools[0];
@@ -97,6 +102,7 @@ describe("relay", () => {
     const noted: string[] = [];
     const logs: string[] = [];
     const executed: unknown[] = [];
+    const recorded: DelegationPromptRecord[] = [];
     const req: DelegationRequest = {
       id: "item_1",
       text: "set it to five",
@@ -123,9 +129,21 @@ describe("relay", () => {
       log: (line) => {
         logs.push(line);
       },
+      record: (entry) => {
+        recorded.push(entry);
+      },
     };
     const result = await delegator.handle(req);
     expect(result).toBeUndefined();
+    // The hosted backend's prompt reached the browser side as a record frame.
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]).toMatchObject({ what: "message", text: "message for: set it to five" });
+    const prompt = recorded[0]?.prompt;
+    expect(prompt).toBeDefined();
+    if (prompt !== undefined) {
+      const parts = rehydrate(prompt).parts.map((part) => (part.type === "text" ? part.text : ""));
+      expect(parts.join("")).toBe("message for: set it to five");
+    }
     expect(seenOnServer).toEqual(["set it to five"]);
     expect(executed).toEqual([{ value: 5 }]);
     expect(toolResults).toEqual([{ applied: 5 }]);
