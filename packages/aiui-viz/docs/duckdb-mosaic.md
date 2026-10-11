@@ -479,9 +479,9 @@ it unchanged, and so does `duckdbRunner`.
 
 The engine, the token, and the rules live in two packages: the kit's `cf-creds-motherduck`
 (`motherDuckEngine`, the session-species manager, `staticMotherDuckToken`) and this repo's
-`@habemus-papadum/aiui-cf-creds/motherduck` (`standardMotherDuckEngine`: the dev key the aiui Vite
+`@habemus-papadum/aiui-cf-creds/motherduck` (`standardMotherDuckEngine`: a shared pasted token, then the dev key the aiui Vite
 plugin injects under `vite serve`, else the broker route; `motherDuckRunner`). The reference is
-`demos/motherduck-lab` (not in the gallery — it needs a token).
+`demos/motherduck-lab`, available in the gallery with a bring-your-own-token flow.
 
 ```ts
 // store.ts — the durable island

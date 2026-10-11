@@ -8,6 +8,7 @@ export type { BackendAvailability, DockBackend, DockBackendId } from "./backends
 export { availableBackends, DOCK_BACKENDS, probeServer } from "./backends";
 export type { VoiceDockProps } from "./dock";
 export { VoiceDock } from "./dock";
+export { VendorKeyInput, type VendorKeyInputProps } from "./keys";
 export type { DockSurface } from "./project";
 export { activeNamespaces, projectSurface } from "./project";
 export type { SourceBrowserProps } from "./source-browser";

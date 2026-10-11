@@ -60,7 +60,16 @@ describe("types and SQL", () => {
     ]) {
       expect(isNumericType(t)).toBe(true);
     }
-    for (const t of ["VARCHAR", "TIMESTAMP WITH TIME ZONE", "BOOLEAN", "DATE", "INTERVAL"]) {
+    for (const t of [
+      "VARCHAR",
+      "TIMESTAMP WITH TIME ZONE",
+      "BOOLEAN",
+      "DATE",
+      "INTERVAL",
+      "FLOAT[512]",
+      "INTEGER[]",
+      "DECIMAL(18,3)[]",
+    ]) {
       expect(isNumericType(t)).toBe(false);
     }
   });

@@ -8,8 +8,9 @@
  * Pure readers throughout: every number comes through a cell (`CellView`),
  * every choice writes a durable root.
  */
+import { VendorKeyInput } from "@habemus-papadum/aiui-dock";
 import { CellView, ControlSlider } from "@habemus-papadum/aiui-viz";
-import { createMemo, For, Show } from "solid-js";
+import { createMemo, createSignal, For, Show } from "solid-js";
 import { type TableRef, tableRefKey } from "../model/catalog";
 import { graph } from "../model/graph";
 import { store } from "../model/store";
@@ -20,24 +21,27 @@ function Session() {
   return (
     <CellView of={graph().session} label="connecting">
       {(s) => (
-        <p class="lab-session">
+        <div class="lab-session">
           <span>
             <b>{s().username}</b> on DuckDB {s().version}
           </span>
           <span>engine generation {s().generation}</span>
-          <span>
-            {store.attach.mode === "single"
-              ? `single mode on ${store.attach.database}`
-              : "workspace mode"}
-            , current catalog {s().current}; attached: {s().attached.join(" · ")}
-          </span>
-          <span>
-            on the account:{" "}
-            {s()
-              .databases.map((d) => `${d.alias} (${d.type})`)
-              .join(" · ")}
-          </span>
-        </p>
+          <details>
+            <summary>connection details</summary>
+            <p>
+              {store.attach.mode === "single"
+                ? `single mode on ${store.attach.database}`
+                : "workspace mode"}
+              , current catalog {s().current}; attached: {s().attached.join(" · ")}
+            </p>
+            <p>
+              on the account:{" "}
+              {s()
+                .databases.map((d) => `${d.alias} (${d.type})`)
+                .join(" · ")}
+            </p>
+          </details>
+        </div>
       )}
     </CellView>
   );
@@ -129,6 +133,15 @@ function Histograms() {
 }
 
 function LocalSide() {
+  const [error, setError] = createSignal<string>();
+  const run = async (operation: () => Promise<void>) => {
+    setError(undefined);
+    try {
+      await operation();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : String(error));
+    }
+  };
   const materialize = async () => {
     const pick = store.pick.get();
     if (pick === undefined) return;
@@ -144,14 +157,15 @@ function LocalSide() {
         <button
           type="button"
           disabled={store.pick.get() === undefined}
-          onClick={() => void materialize()}
+          onClick={() => void run(materialize)}
         >
           materialize the sample locally
         </button>
-        <button type="button" onClick={() => void store.rebuild("button")}>
+        <button type="button" onClick={() => void run(() => store.rebuild("button"))}>
           rebuild the engine (drops the sample)
         </button>
       </div>
+      <Show when={error()}>{(message) => <p role="alert">{message()}</p>}</Show>
       <CellView of={graph().local} label="counting">
         {(l) => (
           <p class="lab-counts">
@@ -171,19 +185,38 @@ export function App() {
   return (
     <div class="lab">
       <header>
-        <h1>motherduck-lab</h1>
+        <h1>MotherDuck</h1>
         <p class="lab-blurb">
-          one stock DuckDB-WASM engine with the MotherDuck extension attached; the wasm from this
-          origin; Mosaic over the stock connector; the tab's tables beside the cloud's.
+          Explore your cloud tables with linked histograms, pull a sample into this browser, and
+          query local and cloud data together.
         </p>
-        <Session />
       </header>
-      <section class="lab-pick">
-        <TablePicker />
-        <ColumnPicker />
-      </section>
-      <Histograms />
-      <LocalSide />
+      <Show when={store.generation() === 0}>
+        <section class="lab-connect">
+          <h2>connect your data</h2>
+          <p>
+            Use a MotherDuck read-scaling token. It stays in this browser and is shared with the
+            other demos on this site. Your token connects directly to MotherDuck.
+          </p>
+          <VendorKeyInput provider="motherduck" />
+          <div class="lab-buttons">
+            <button type="button" onClick={() => store.connect()}>
+              connect
+            </button>
+          </div>
+        </section>
+      </Show>
+      <Show when={store.connectAttempt.get() > 0}>
+        <Session />
+      </Show>
+      <Show when={store.generation() > 0}>
+        <section class="lab-pick">
+          <TablePicker />
+          <ColumnPicker />
+        </section>
+        <Histograms />
+        <LocalSide />
+      </Show>
     </div>
   );
 }

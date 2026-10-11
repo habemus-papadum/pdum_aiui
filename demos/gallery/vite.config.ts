@@ -48,9 +48,10 @@ export default defineConfig(({ command, isPreview }) => ({
     // so `selection`, `locate`, `source` and `sources` answer on the site as
     // they do here.
     aiui({
-      // devKeys: the dev server injects the OpenAI key for the voice dock
+      // devKeys: shared credentials for the dock and every demo
       // (dev serve only; a production bundle cannot contain it).
-      devKeys: ["openai"],
+      devKeys: ["openai", "motherduck", "elevenlabs"],
+      duckdbAssets: { resolveFrom: fileURLToPath(new URL("../motherduck-lab", import.meta.url)) },
       locator: {
         stampRoots: [fileURLToPath(new URL("..", import.meta.url))],
       },

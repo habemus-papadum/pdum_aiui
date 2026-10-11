@@ -19,9 +19,9 @@ five panes:
   server's Responses and Claude Code. Captions, the task table, the session config as sent.
 - **tools** — the page's ToolLog: every call with who made it, the inventory, the document
   as rendered.
-- **key** — one OpenAI key for both engines. A dev key is used when the dev server injected
-  one (`aiui({ devKeys: ["openai"] })`); otherwise paste one — it stays in this browser's
-  localStorage for the site and goes only to `api.openai.com`.
+- **keys** — OpenAI, MotherDuck and ElevenLabs credentials, shared across demos on the
+  site. Pasted keys persist in localStorage and take precedence over dev-server keys.
+  Clear a field to forget that provider's key; reconnect to use a changed key.
 - **source** — the page's own source files, as a tree, each opening syntax-coloured with line
   numbers. Shown only when the page can read them: a dev server (which lists its workspace), or
   a site built with `aiui({ sources: "ship" })`. The listing and the text are the ones the

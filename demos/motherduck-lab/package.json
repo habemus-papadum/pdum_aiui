@@ -1,8 +1,17 @@
 {
   "name": "@habemus-papadum/demo-motherduck-lab",
   "version": "0.21.0+dev",
-  "description": "In-repo lab (not in the gallery): the in-tab MotherDuck engine — dev key, self-hosted wasm, Mosaic over the stock connector, local tables beside cloud ones, rebuild.",
+  "description": "Explore MotherDuck cloud tables, linked histograms, and local DuckDB samples with your own token.",
   "private": true,
+  "aiui": {
+    "sitePage": {
+      "title": "MotherDuck",
+      "desc": "Cloud tables and local samples in one browser",
+      "order": 85,
+      "entry": "./page",
+      "card": "./card"
+    }
+  },
   "type": "module",
   "license": "MIT",
   "repository": {

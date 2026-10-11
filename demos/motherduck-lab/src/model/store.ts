@@ -8,9 +8,8 @@
  * What the island holds, and what survives what:
  *
  *  - The ENGINE (`standardMotherDuckEngine`): under `vite serve` the aiui
- *    plugin's `devKeys: ["motherduck"]` seeds the page with the OS-vault /
- *    env `MOTHERDUCK_BROWSER_TOKEN` and the engine builds from it; in a built
- *    page the broker route mints a token under the key contract. Either way
+ *    plugin seeds `MOTHERDUCK_BROWSER_TOKEN`; a pasted token from the shared
+ *    key field takes precedence, including on a built page. Either way
  *    ONE stock `AsyncDuckDB` with the MotherDuck extension attached: the tab's
  *    `memory` catalog beside the cloud databases, one statement across both.
  *  - The wasm comes from THIS origin (`duckdbAssets: true` in vite.config.ts
@@ -51,6 +50,7 @@ import {
   type SqlRunner,
 } from "@habemus-papadum/aiui-viz/duckdb";
 import { duckdbConnector } from "@habemus-papadum/aiui-viz/mosaic-connector";
+import { browserVendorKey } from "@habemus-papadum/aiui-viz/vendor-keys";
 import { Coordinator, type Selection } from "@uwdata/mosaic-core";
 import { type Accessor, createSignal } from "solid-js";
 import type { TableRef } from "./catalog";
@@ -58,8 +58,7 @@ import type { TableRef } from "./catalog";
 /** The app's instance scope — qualifies every declaration, names the toolkit. */
 export const appScope = scope("motherduck-lab");
 
-/** The lab's name at a broker (the key contract). No grant exists for it yet:
- * the lab runs on the dev key; the key is what a deployed page would send. */
+/** The lab's name at an optional broker. The gallery uses pasted/dev tokens. */
 export const BROKER_KEY = "motherduck-lab";
 
 /** MotherDuck's public `sample_data` share — attached in single mode so the lab has tables to show. */
@@ -101,7 +100,10 @@ export interface LabStore {
   /** The current handle, wired (coordinator + runner) — builds on first call. */
   ready(): Promise<MotherDuckEngineHandle>;
   /** The agent's SQL runner: stable, delegating to the current generation. */
-  sqlRunner: Promise<SqlRunner>;
+  sqlRunner: SqlRunner;
+  /** Zero until a token is available or the user presses Connect; bump to retry. */
+  connectAttempt: SignalBox<number>;
+  connect(): void;
   /** The cloud (or local) table the histograms and the sample come from. */
   pick: SignalBox<TableRef | undefined>;
   /** The numeric column to bin and to range the hybrid question over. */
@@ -156,7 +158,8 @@ export const store: LabStore = appScope.durable("store", () => {
   // The delegating runner: the tools hold THIS; `current` follows the generation.
   let current: SqlRunner | undefined;
   const runner: SqlRunner = {
-    query(sql, options): Promise<SqlResult> {
+    async query(sql, options): Promise<SqlResult> {
+      await ready();
       if (current === undefined) {
         return Promise.reject(new Error("the MotherDuck engine is not built yet"));
       }
@@ -165,7 +168,8 @@ export const store: LabStore = appScope.durable("store", () => {
     cancel: () => current?.cancel?.() ?? Promise.resolve(),
     // The schema views' DDL (graph.ts puts them in the tab's `memory`
     // catalog): forwarded, so the tools know this runner can hold a view.
-    exec(sql): Promise<void> {
+    async exec(sql): Promise<void> {
+      await ready();
       if (current?.exec === undefined) {
         return Promise.reject(new Error("the MotherDuck engine is not built yet"));
       }
@@ -208,15 +212,25 @@ export const store: LabStore = appScope.durable("store", () => {
     });
     return wiring;
   };
+  let readyTask: Promise<MotherDuckEngineHandle> | undefined;
   const ready = async (): Promise<MotherDuckEngineHandle> => {
-    const handle = await engine.ready();
-    await wire(handle);
-    return handle;
+    if (current === undefined && browserVendorKey("motherduck") === undefined) {
+      throw new Error("Paste a MotherDuck read-scaling token, then connect.");
+    }
+    readyTask ??= (async () => {
+      try {
+        const handle = await engine.ready();
+        await wire(handle);
+        return handle;
+      } catch (error) {
+        // The kit caches failed builds too. Close before retrying with a corrected token.
+        await engine.close();
+        readyTask = undefined;
+        throw error;
+      }
+    })();
+    return readyTask;
   };
-  // A rebuild hands over a new handle: re-wire, and every local table is gone.
-  engine.onRebuild((handle) => {
-    void wire(handle).then(bumpLocal);
-  });
 
   /** Rows pulled into the local sample by `materialize`. */
   const sampleRows = control({
@@ -228,6 +242,10 @@ export const store: LabStore = appScope.durable("store", () => {
     unit: "rows",
   });
 
+  const connectAttempt = appScope.durableSignal(
+    "connectAttempt",
+    browserVendorKey("motherduck") ? 1 : 0,
+  );
   return {
     engine,
     attach,
@@ -235,14 +253,30 @@ export const store: LabStore = appScope.durable("store", () => {
     brush,
     generation,
     ready,
-    sqlRunner: ready().then(() => runner),
+    sqlRunner: runner,
+    connectAttempt,
+    connect: () => connectAttempt.set(connectAttempt.get() + 1),
     pick: durableSignal<TableRef | undefined>(appScope.qualify("pick"), undefined),
     column: durableSignal<string | undefined>(appScope.qualify("column"), undefined),
     sampleRows,
     localVersion,
     bumpLocal,
     rebuild: async (reason) => {
-      await engine.rebuild(reason);
+      current = undefined;
+      readyTask = (async () => {
+        try {
+          const handle = await engine.rebuild(reason);
+          await wire(handle);
+          bumpLocal();
+          return handle;
+        } catch (error) {
+          await engine.close();
+          readyTask = undefined;
+          setGeneration(0);
+          throw error;
+        }
+      })();
+      await readyTask;
     },
   };
 });

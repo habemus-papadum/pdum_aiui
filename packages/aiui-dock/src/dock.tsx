@@ -14,15 +14,15 @@
  *    the vendor-hosted backend, and — when the dev server's live routes
  *    answer — the server's Responses and Claude Code;
  *  - **tools** — the page's ToolLog (calls, inventory, as rendered);
- *  - **key** — one OpenAI key for both engines, pasted into this browser's
- *    localStorage, or the dev server's injected key when there is one;
+ *  - **keys** — OpenAI, MotherDuck and ElevenLabs credentials, shared across
+ *    demos through localStorage, with dev-server keys as the fallback;
  *  - **source** — the page's own source files (source-browser.tsx), shown
  *    only when the page can read them: a dev server, or a build made with
  *    `aiui({ sources: "ship" })`. What a person browses here is what the
  *    `sources`/`source` tools hand an agent.
  *
  * Keys and posture: a pasted key lives in localStorage for this origin and is
- * sent only to api.openai.com by this page — the oracle mints its single-use
+ * sent directly to its provider by this page — the oracle mints its single-use
  * ephemeral secret in the browser, the live session's broker posts the SDP
  * straight to the vendor. Never to a server of ours. Nothing connects until a
  * pill is pressed; the live session closes itself after two idle minutes,
@@ -36,7 +36,6 @@ import {
   backendPrompt,
   browserKey,
   type Delegator,
-  devKey,
   LIVE_SESSION_ADAPTER,
   LiveSession,
   type LiveTool,
@@ -49,7 +48,6 @@ import {
   LIVE_WIDGET_STYLES,
   LiveCaptions,
   LiveControl,
-  LiveKey,
   LiveTasks,
   useLedger,
   useLiveState,
@@ -74,6 +72,7 @@ import { ToolLog, toggleToolLog } from "@habemus-papadum/aiui-viz/site/tool-log"
 import type { JSX } from "@solidjs/web";
 import { createEffect, createSignal, For, onCleanup, Show, untrack } from "solid-js";
 import { availableBackends, type DockBackendId, probeServer } from "./backends";
+import { VendorKeys } from "./keys";
 import { type DockSurface, projectSurface } from "./project";
 import { SourceBrowser } from "./source-browser";
 import { combinedStatus } from "./status";
@@ -439,18 +438,8 @@ export function VoiceDock(props: VoiceDockProps): JSX.Element {
       </Show>
 
       <Show when={pane() === "key"}>
-        <section class="aiui-dock-pane" aria-label="key">
-          <h4>OpenAI key</h4>
-          <LiveKey placeholder="sk-… (used by the oracle and the live session)" />
-          <p class="aiui-dock-note">
-            {devKey("openai") !== undefined
-              ? "A dev key is present (injected by the dev server), so nothing needs pasting here."
-              : "No dev key here; paste one to use the oracle or the live session from this page."}
-          </p>
-          <p class="aiui-dock-note">
-            A pasted key stays in this browser's localStorage for this site and is sent only to
-            api.openai.com, by this page — never to a server of ours. Clear the field to forget it.
-          </p>
+        <section class="aiui-dock-pane" aria-label="keys">
+          <VendorKeys />
         </section>
       </Show>
 
@@ -496,7 +485,7 @@ export function VoiceDock(props: VoiceDockProps): JSX.Element {
             aria-pressed={pane() === "key" ? "true" : "false"}
             onClick={() => openPane("key")}
           >
-            key
+            keys
           </button>
           <Show when={hasSources}>
             <button

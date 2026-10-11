@@ -120,6 +120,34 @@ describe("brokerMotherDuckEngine", () => {
 });
 
 describe("standardMotherDuckEngine", () => {
+  it("uses the shared pasted token before dev/broker and re-reads it on rebuild", async () => {
+    const { setPastedVendorKey } = await import("@habemus-papadum/aiui-viz/vendor-keys");
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        values.set(key, value);
+      },
+      removeItem: (key: string) => {
+        values.delete(key);
+      },
+    };
+    vi.stubGlobal("localStorage", storage);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { client, creates } = fakeClient();
+    const engine = standardMotherDuckEngine({ client }, withDevKey("md_dev"));
+    setPastedVendorKey("motherduck", "md_pasted", storage);
+    await engine.ready();
+    expect(creates[0]?.mdToken).toBe("md_pasted");
+    setPastedVendorKey("motherduck", "md_replacement", storage);
+    await engine.rebuild();
+    expect(creates[1]?.mdToken).toBe("md_replacement");
+    setPastedVendorKey("motherduck", "", storage);
+    await engine.rebuild();
+    expect(creates[2]?.mdToken).toBe("md_dev");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
   it("prefers the dev key when injected, else the broker", async () => {
     const fetchMock = vi.fn(
       async () =>

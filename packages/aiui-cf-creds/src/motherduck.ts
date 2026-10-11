@@ -1,8 +1,8 @@
 /**
  * motherduck.ts — the in-tab MotherDuck engine for aiui apps: the kit's
  * `motherDuckEngine` (`cf-creds-motherduck`) over a token source, composed
- * the way the oracle's key chain is composed — a DEV key injected by the aiui
- * Vite plugin (dev serve only) wins, else the broker route under the key
+ * the way the oracle's key chain is composed — a pasted token, then a DEV
+ * key injected by the aiui Vite plugin, else the broker route under the key
  * contract. The engine it yields is one stock duckdb-wasm `AsyncDuckDB` with
  * the MotherDuck extension attached: hand `db` + a connection to aiui-viz's
  * `duckdbConnector` (Mosaic's `wasmConnector` plus HUGEINT decoded to numbers;
@@ -23,7 +23,7 @@
  * `vite serve` by `aiui({ devKeys: ["motherduck"] })` from
  * `MOTHERDUCK_BROWSER_TOKEN` in the dev server's environment (a `.env` with
  * direnv works) — a READ-SCALING token of your own MotherDuck user, never the
- * admin token. A built page never carries it, so production is the broker.
+ * admin token. A built page uses a pasted token or the broker.
  *
  * One typing seam lives here on purpose. The client vendors its own copy of
  * duckdb-wasm's classes, and TypeScript treats classes with protected members
@@ -51,6 +51,7 @@
  */
 import type { AsyncDuckDB, AsyncDuckDBConnection } from "@duckdb/duckdb-wasm";
 import type { SqlResult, SqlRunner } from "@habemus-papadum/aiui-viz/duckdb";
+import { browserVendorKey, devVendorKey } from "@habemus-papadum/aiui-viz/vendor-keys";
 import {
   createMotherDuckCredentialManager,
   type MotherDuckEngine as KitEngine,
@@ -170,16 +171,12 @@ export interface BrokerMotherDuckOptions extends BrokerOptions, MotherDuckEngine
   source?: TokenSource;
 }
 
-/** The global the aiui Vite plugin seeds (`aiui-viz`'s `__AIUI__`), structurally. */
-type AiuiGlobal = { __AIUI__?: { devKeys?: Record<string, string> } };
-
 /**
  * The dev key the aiui Vite plugin injected (`devKeys: ["motherduck"]`), or
  * undefined — absent in every built page, and in dev unless opted in.
  */
 export function devMotherDuckToken(global: unknown = globalThis): string | undefined {
-  const key = (global as AiuiGlobal).__AIUI__?.devKeys?.motherduck;
-  return typeof key === "string" && key !== "" ? key : undefined;
+  return devVendorKey("motherduck", global);
 }
 
 /**
@@ -218,15 +215,38 @@ export function brokerMotherDuckEngine(options: BrokerMotherDuckOptions = {}): M
 }
 
 /**
- * The standard composition, decided at construction: the dev key when the
- * plugin injected one (dev serve, no broker needed), else the broker. Compose
- * the pieces yourself for a different order.
+ * Pasted token → dev key → broker, resolved on each connect/rebuild. Saving
+ * a new key does not tear down a live engine or discard its local tables.
  */
 export function standardMotherDuckEngine(
   options: BrokerMotherDuckOptions = {},
   global: unknown = globalThis,
 ): MotherDuckEngine {
-  return devMotherDuckToken(global) !== undefined
-    ? devMotherDuckEngine(options, global)
-    : brokerMotherDuckEngine(options);
+  const { source, brokerUrl, key, params, ...engine } = options;
+  let manager = source;
+  const broker = (): TokenSource =>
+    (manager ??= createMotherDuckCredentialManager({
+      url: brokerRoute(MOTHERDUCK_CREDENTIALS_PATH, brokerUrl, key),
+    }));
+  return adapt(
+    motherDuckEngine(
+      {
+        async get() {
+          const token = browserVendorKey("motherduck", undefined, global);
+          if (token !== undefined) return staticMotherDuckToken(token).get();
+          return broker().get();
+        },
+        onRotate(listener) {
+          return (
+            broker().onRotate?.((credentials) => {
+              if (browserVendorKey("motherduck", undefined, global) === undefined)
+                listener(credentials);
+            }) ?? (() => {})
+          );
+        },
+      },
+      params,
+      engine,
+    ),
+  );
 }

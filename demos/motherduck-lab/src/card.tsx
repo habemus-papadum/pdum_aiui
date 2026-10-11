@@ -1,25 +1,26 @@
-/**
- * card.tsx — this app's **landing card** (see aiui-viz's `DemoCard`) for a
- * multi-app shell like a gallery of demos: a blurb and a LIVE preview mini-app.
- *
- * The preview must be self-contained and cheap: a shell mounts every app's
- * preview at once, so it must NOT import this app's `store`/`graph` (their
- * durable graph is heavy). Build it from your pure model only — the starter's
- * `RosePreview` draws straight from `model/rose.ts`. After a reset the scenery
- * is gone and the card falls back to `Placeholder` (the app's name in a box);
- * replace it with your own small live view.
- */
+/** A lightweight illustration of cloud rows becoming a local sample; no engine or credentials. */
+import { chart, TOKENS } from "@habemus-papadum/aiui-design";
 import type { DemoCard } from "@habemus-papadum/aiui-viz";
-import type { Component } from "solid-js";
+import { For } from "solid-js";
 
-/** The app slug (the aiui compiler leaves this token for `create-aiui` to fill;
- * a shell shows it when this app has no live preview yet). */
-const NAME = "motherduck-lab";
-
-const Placeholder: Component = () => <div class="demo-card-placeholder">{NAME}</div>;
+function Preview() {
+  return (
+    <svg viewBox="0 0 240 125" role="img" aria-label="Cloud data flowing into a local histogram">
+      <rect width="240" height="125" fill={TOKENS.plate} />
+      <g fill="none" stroke={chart().blue} stroke-width="1.5">
+        <ellipse cx="54" cy="35" rx="28" ry="9" />
+        <path d="M26 35v46c0 12 56 12 56 0V35 M26 58c0 12 56 12 56 0" />
+        <path d="M96 62h33m-7-6 7 6-7 6" />
+      </g>
+      <For each={[16, 31, 48, 39, 23, 12]}>
+        {(h, i) => <rect x={145 + i() * 11} y={88 - h} width="8" height={h} fill={chart().green} />}
+      </For>
+    </svg>
+  );
+}
 
 export const card: DemoCard = {
   blurb:
-    "A lab, not a gallery page: the in-tab MotherDuck engine — dev key, self-hosted wasm, Mosaic over the stock connector, local tables beside cloud ones, rebuild.",
-  Preview: Placeholder,
+    "Explore your MotherDuck tables with linked histograms. Sample cloud data into this browser and query both together. Bring a read-scaling token.",
+  Preview,
 };

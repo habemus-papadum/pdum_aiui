@@ -41,6 +41,16 @@ export const DOCK_STYLES = `
   color: var(--aiui-surface, Canvas); border-color: var(--aiui-ink, CanvasText); }
 .aiui-dock-backend:disabled { opacity: 0.45; cursor: not-allowed; }
 .aiui-dock-note { color: var(--aiui-ink-muted, color-mix(in srgb, currentColor 75%, transparent)); font-size: 11px; margin: 4px 0; }
+.aiui-dock-keybox { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px;
+  margin: 10px 0 16px; font: 12px/1.4 var(--aiui-sans, ui-sans-serif, system-ui, sans-serif); }
+.aiui-dock-keybox label { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.aiui-dock-keybox input { width: 100%; min-width: 0; box-sizing: border-box;
+  padding: 5px 6px; font: inherit; background: var(--aiui-surface, Canvas); color: inherit;
+  border: 1px solid var(--aiui-hairline, color-mix(in srgb, currentColor 35%, transparent)); }
+.aiui-dock-keybox button { padding: 5px 8px; font: inherit; background: transparent; color: inherit;
+  border: 1px solid var(--aiui-hairline, color-mix(in srgb, currentColor 35%, transparent)); cursor: pointer; }
+.aiui-dock-keybox button:disabled { opacity: 0.45; cursor: default; }
+.aiui-dock-keybox .aiui-dock-note { flex-basis: 100%; }
 .aiui-dock details { margin-top: 8px; }
 .aiui-dock details summary { cursor: pointer; color: var(--aiui-ink-muted, color-mix(in srgb, currentColor 75%, transparent)); }
 .aiui-dock details pre { white-space: pre-wrap;

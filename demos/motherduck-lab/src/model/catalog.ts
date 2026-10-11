@@ -96,8 +96,8 @@ export function sqlRef(ref: TableRef): string {
 
 /** Whether a DuckDB type is one the histograms can bin. */
 export function isNumericType(dataType: string): boolean {
-  return /^(DOUBLE|FLOAT|REAL|DECIMAL|NUMERIC|U?(TINY|SMALL|BIG|HUGE)?INT(EGER)?)\b/i.test(
-    dataType,
+  return /^(DOUBLE|FLOAT|REAL|U?(TINY|SMALL|BIG|HUGE)?INT(EGER)?|(DECIMAL|NUMERIC)(\(\d+,\s*\d+\))?)$/i.test(
+    dataType.trim(),
   );
 }
 

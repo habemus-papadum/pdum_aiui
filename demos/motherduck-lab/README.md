@@ -1,10 +1,15 @@
 # motherduck-lab
 
-An in-repo **lab** for the in-tab MotherDuck engine — deliberately NOT a gallery page (no
-`aiui.sitePage` marker): it needs a MotherDuck token, and the public gallery has none.
+A gallery demo for the in-tab MotherDuck engine, available at `/motherduck-lab`
+(and `/aiui/motherduck-lab` in the published site). Paste your own read-scaling token
+in the page or the dock's **keys** pane, then connect. The token persists in this browser
+and is shared across demos. With no token, the page waits without contacting a broker.
+A saved or dev-injected token connects automatically on your next visit.
 
 What it exercises, end to end, in one page:
 
+- **Shared credentials.** A pasted token takes precedence over the dev key. Rebuild the
+  engine to use a changed token; clearing the field forgets it for future connections.
 - **The dev key.** `aiui({ devKeys: ["motherduck"] })` seeds the page with
   `MOTHERDUCK_BROWSER_TOKEN` under `vite serve` only — a READ-SCALING token of your own
   MotherDuck user, never the admin token. Export it in the dev server's environment (a `.env`

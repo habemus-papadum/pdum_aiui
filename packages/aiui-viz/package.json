@@ -27,6 +27,7 @@
     "./site/tool-log": "./src/site/tool-log.tsx",
     "./tool-brief": "./src/tool-brief.ts",
     "./page-text": "./src/page-text.ts",
+    "./vendor-keys": "./src/vendor-keys.ts",
     "./modal": "./src/modal/index.ts",
     "./testing": "./src/testing.ts",
     "./site/json-view": "./src/site/json-view.tsx",
@@ -120,6 +121,11 @@
         "types": "./dist/tool-brief.d.ts",
         "import": "./dist/tool-brief.js",
         "default": "./dist/tool-brief.js"
+      },
+      "./vendor-keys": {
+        "types": "./dist/vendor-keys.d.ts",
+        "import": "./dist/vendor-keys.js",
+        "default": "./dist/vendor-keys.js"
       },
       "./page-text": {
         "types": "./dist/page-text.d.ts",

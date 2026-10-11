@@ -84,7 +84,10 @@ export const graph = hotCellGraph(
   () => ({
     /** Who the engine is connected as, on which DuckDB, with which databases attached. */
     session: cell(
-      () => ({ generation: store.generation() }),
+      () =>
+        store.connectAttempt.get() === 0
+          ? undefined
+          : { generation: store.generation(), attempt: store.connectAttempt.get() },
       async ({ generation }): Promise<Session> => {
         const [who, ver, dbs, att, cur] = await Promise.all([
           q<{ username: string }>("SELECT username FROM md_user_info()"),
@@ -110,7 +113,14 @@ export const graph = hotCellGraph(
     ),
     /** Every user table across every attached catalog — cloud shares and the tab's own. */
     tables: cell(
-      () => ({ generation: store.generation(), local: store.localVersion() }),
+      () =>
+        store.connectAttempt.get() === 0
+          ? undefined
+          : {
+              generation: store.generation(),
+              local: store.localVersion(),
+              attempt: store.connectAttempt.get(),
+            },
       async (): Promise<TableRef[]> => {
         const rows = await q<TableRow>(
           "SELECT table_catalog, table_schema, table_name, table_type FROM information_schema.tables " +
@@ -156,12 +166,15 @@ export const graph = hotCellGraph(
     ),
     /** The local sample's state, and the hybrid count when a column is picked. */
     local: cell(
-      () => ({
-        version: store.localVersion(),
-        generation: store.generation(),
-        pick: store.pick.get(),
-        column: store.column.get(),
-      }),
+      () =>
+        store.generation() === 0
+          ? undefined
+          : {
+              version: store.localVersion(),
+              generation: store.generation(),
+              pick: store.pick.get(),
+              column: store.column.get(),
+            },
       async ({ pick, column }): Promise<LocalState> => {
         let localRows: number | null;
         try {
@@ -203,6 +216,18 @@ registerSqlTools(kit, {
   catalogs: () => {
     const pick = store.pick.get();
     return pick === undefined ? undefined : ["memory", pick.catalog];
+  },
+});
+
+/** Connect with the saved or dev token, or retry after correcting a token. */
+action({
+  scope: appScope,
+  name: "connect",
+  inputSchema: { type: "object", properties: {}, additionalProperties: false },
+  run: async () => {
+    store.connect();
+    const handle = await store.ready();
+    return { generation: handle.generation };
   },
 });
 

@@ -21,7 +21,7 @@ import { appScope } from "./model/store";
 import { App } from "./ui/App";
 
 export const page: SitePage = {
-  title: "motherduck-lab — the in-tab MotherDuck engine",
+  title: "MotherDuck — cloud and local data",
   App,
   toolsNs: appScope.name,
 };

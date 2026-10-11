@@ -47,9 +47,12 @@ notebooks were built — read it next to the demo packages' code.
 pnpm demo     # from the repo root: this shell, served by plain vite
 ```
 
-Open the printed URL. The voice dock takes its OpenAI key from
-`OPENAI_API_KEY` in the environment (the dev server hands it to the page) or
-from its own key pane. Each demo also runs standalone from its own directory
+Open the printed URL. The dock's **keys** pane saves OpenAI, MotherDuck and ElevenLabs
+credentials across demos and visits on this origin. Pasted keys override the dev server's
+`OPENAI_API_KEY`, `MOTHERDUCK_BROWSER_TOKEN` (read-scaling), and `ELEVEN_LABS_API_KEY`.
+The dev server reads its environment at startup (`.env` with direnv); restart it after
+changing keys. Production builds contain none of these keys. The MotherDuck demo is at
+`/motherduck-lab` and waits for a token before connecting. Each demo also runs standalone from its own directory
 (`pnpm -C demos/<slug> dev`).
 
 ## Publishing the static site

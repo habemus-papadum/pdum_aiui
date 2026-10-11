@@ -17,6 +17,14 @@ function run(plugin: ReturnType<typeof devKeysSeed>, warnings: string[]) {
 }
 
 describe("resolveDevKeys", () => {
+  it("reads MotherDuck browser tokens and ElevenLabs keys", () => {
+    const keys = resolveDevKeys({
+      MOTHERDUCK_BROWSER_TOKEN: " md-browser ",
+      ELEVEN_LABS_API_KEY: " el-key ",
+    });
+    expect(keys.motherduck.value).toBe("md-browser");
+    expect(keys.elevenlabs.value).toBe("el-key");
+  });
   it("reads each provider's own variable; blank counts as absent", () => {
     const keys = resolveDevKeys({
       OPENAI_API_KEY: " sk-dev ",
@@ -40,7 +48,7 @@ describe("devKeysSeed", () => {
   });
 
   it("applies to serve only — a production bundle structurally cannot carry a key", () => {
-    expect(devKeysSeed(["openai"]).apply).toBe("serve");
+    expect(devKeysSeed(["openai", "motherduck", "elevenlabs"]).apply).toBe("serve");
   });
 
   it("seeds __AIUI__.devKeys with the requested keys found in the environment, once", () => {

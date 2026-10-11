@@ -14,11 +14,16 @@
  * The canonical chain is paste → dev → server, the oracle's decided order.
  */
 
+import {
+  browserVendorKey,
+  devVendorKey,
+  vendorKeyStorageKey,
+} from "@habemus-papadum/aiui-viz/vendor-keys";
 import { LIVE_BASE_URL, LIVE_SESSIONS_PATH, type LiveSessionConfig } from "./protocol";
 
 /** The localStorage slot shared with `@habemus-papadum/aiui-oracle`'s key
  * widget — one paste covers every voice front on the origin. */
-export const PASTED_KEY_STORAGE_KEY = "aiui.oracle.key";
+export const PASTED_KEY_STORAGE_KEY = vendorKeyStorageKey("openai");
 
 export interface SessionAnswer {
   sdp: string;
@@ -90,11 +95,7 @@ export function pasteKeyBroker(
 
 /** The dev-serve key at `window.__AIUI__.devKeys[vendor]`. */
 export function devKey(vendor = "openai"): string | undefined {
-  const aiui = (globalThis as Record<string, unknown>).__AIUI__ as
-    | { devKeys?: Record<string, string> }
-    | undefined;
-  const key = aiui?.devKeys?.[vendor];
-  return typeof key === "string" && key !== "" ? key : undefined;
+  return devVendorKey(vendor);
 }
 
 export function devKeyBroker(vendor = "openai", options: DirectBrokerOptions = {}): SessionBroker {
@@ -188,9 +189,5 @@ export function standardBrokers(options: StandardBrokersOptions = {}): SessionBr
 export function browserKey(
   storage: Pick<Storage, "getItem"> | undefined = globalThis.localStorage,
 ): string | undefined {
-  const pasted = storage?.getItem(PASTED_KEY_STORAGE_KEY)?.trim();
-  if (pasted !== undefined && pasted !== "") {
-    return pasted;
-  }
-  return devKey("openai");
+  return browserVendorKey("openai", storage);
 }

@@ -70,6 +70,7 @@ export default defineConfig({
         "tool-brief": "src/tool-brief.ts",
         // Framework-free too: the page as text, math as TeX (read-page's engine).
         "page-text": "src/page-text.ts",
+        "vendor-keys": "src/vendor-keys.ts",
         modal: "src/modal/index.ts",
         testing: "src/testing.ts",
       },

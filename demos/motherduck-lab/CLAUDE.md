@@ -1,6 +1,6 @@
 # demo: motherduck-lab
 
-An in-repo **lab** (deliberately NOT in the gallery — it needs a MotherDuck token), scaffolded by
+An in-repo **gallery demo**, with shared pasted/dev MotherDuck tokens, scaffolded by
 `pnpm new-demo` and reset to a blank canvas, then built as the reference for the in-tab MotherDuck
 engine: see README.md for what it exercises and how to run it. Be bold about the page; be careful
 about the wiring underneath.
@@ -28,7 +28,7 @@ The app has a **dual shape** — it is both a standalone app and a library:
 - `src/card.tsx` is the app's **landing card** (aiui-viz's `DemoCard`, the `./card` export): a
   blurb + a LIVE preview mini-app a gallery shows before you open the app. The preview must be
   self-contained and cheap — build it from your *pure* model only, never `store`/`graph` (a
-  landing mounts every app's preview at once). The lab's card previews a name placeholder (its scenery was reset).
+  landing mounts every app's preview at once). The card illustrates cloud data flowing into a local histogram without loading the engine.
 
 ## Reset to a blank canvas
 
