@@ -68,10 +68,11 @@ jobs:
       - name: Install Chromium for offline browser tests
         run: pnpm -C packages/aiui-audio exec playwright install --with-deps chromium
 
-      - name: Browser audio and STT (no vendor credentials)
+      - name: Browser audio, STT, and screen capture (no vendor credentials)
         run: |
           pnpm -C packages/aiui-audio test:browser
           pnpm -C packages/aiui-stt test:browser
+          pnpm -C packages/aiui-screen-capture test:browser
 
   # Consumability gate: build → pack every publishable package → install the
   # tarballs into a scratch npm project → probe the installed packages the way

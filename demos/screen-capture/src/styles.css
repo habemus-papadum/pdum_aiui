@@ -1,0 +1,159 @@
+/* This demo shares a document with its gallery siblings. */
+.screen-demo {
+  max-width: 72rem;
+  margin-inline: auto;
+  padding: var(--space-md) var(--space-md) var(--space-2xl);
+}
+.screen-demo header {
+  margin-bottom: var(--space-md);
+}
+.screen-demo section {
+  margin-block: var(--space-lg);
+}
+.screen-demo .lede {
+  max-width: var(--measure-lede);
+  font-size: 1.2rem;
+}
+.screen-demo-instructions {
+  font: var(--text-ui) var(--stack-sans);
+  color: var(--ink-muted);
+}
+.screen-demo-eyebrow {
+  font: var(--text-label) var(--stack-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+}
+.screen-demo-controls {
+  padding: var(--space-sm);
+  border: 1px solid var(--hairline);
+  background: var(--surface-raised);
+}
+.screen-demo-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-lg);
+  align-items: start;
+}
+.screen-demo-workspace > section {
+  min-width: 0;
+  margin-block: 0;
+}
+.screen-demo-workspace .aiui-capture-preview {
+  position: sticky;
+  top: var(--space-md);
+}
+.screen-demo-workspace > section:last-child {
+  align-self: stretch;
+}
+.screen-demo-knobs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-md);
+  margin-block: 0;
+}
+.screen-demo-knobs > :first-child {
+  min-width: 12rem;
+  flex: 1;
+}
+.screen-demo-targets {
+  display: grid;
+  gap: var(--space-md);
+}
+.screen-demo-chart-wrap {
+  position: relative;
+  min-width: 0;
+}
+.screen-demo-chart {
+  background: var(--plate);
+  color: var(--plate-ink);
+  padding: var(--space-sm);
+  border: 1px solid var(--hairline);
+}
+.screen-demo-chart svg {
+  display: block;
+  width: 100%;
+}
+.screen-demo-grid {
+  stroke: var(--plate-ink);
+  fill: none;
+  opacity: 0.25;
+}
+.screen-demo-wave {
+  stroke: var(--screen-demo-blue);
+  fill: none;
+  stroke-width: 3;
+}
+.screen-demo-wave.secondary {
+  stroke: var(--screen-demo-green);
+}
+.screen-demo-scan {
+  fill: var(--plate-ink);
+  opacity: 0.7;
+  animation: screen-demo-sweep 4s linear infinite;
+}
+@keyframes screen-demo-sweep {
+  to {
+    transform: translateX(637px);
+  }
+}
+.screen-demo-caption {
+  font: var(--text-ui) var(--stack-sans);
+  color: var(--plate-ink);
+}
+.screen-demo-overlap {
+  position: absolute;
+  left: 30%;
+  top: 35%;
+  padding: var(--space-sm);
+  max-width: 65%;
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  font: var(--text-ui) var(--stack-sans);
+}
+.screen-demo-overlap small {
+  display: block;
+  margin-top: var(--space-xs);
+}
+.screen-demo-notes {
+  background: var(--surface-raised);
+  border: 1px solid var(--hairline);
+  padding: var(--space-md);
+  max-width: var(--measure);
+}
+.screen-demo-state {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-lg);
+}
+.screen-demo-state > div {
+  min-width: 7rem;
+  border-top: 1px solid var(--hairline);
+  padding-top: var(--space-xs);
+}
+.screen-demo-state dt {
+  font: var(--text-label) var(--stack-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.screen-demo-state dd {
+  margin: var(--space-xs) 0 0;
+}
+.screen-demo-footnote {
+  color: var(--ink-muted);
+  max-width: var(--measure-wide);
+}
+@media (max-width: 850px) {
+  .screen-demo-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 600px) {
+  .screen-demo {
+    padding: var(--space-md) var(--space-sm) var(--space-xl);
+  }
+  .screen-demo-overlap {
+    left: 10%;
+    max-width: 85%;
+  }
+}
