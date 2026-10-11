@@ -4,6 +4,10 @@ A provider is an executable that exchanges one JSON request and one JSON respons
 It can be written in any language. It locates CDP endpoints and optionally prepares connectivity;
 the Chrome DevTools MCP process still runs on the agent machine.
 
+For transport choices and authentication flows, see the
+[remote connectivity investigation](investigations/remote-browser-connectivity.md), ordered from
+existing forwards and mesh networks through Cloudflare Tunnel to a custom rendezvous relay.
+
 Register a provider once in user configuration:
 
 ```sh

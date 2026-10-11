@@ -313,6 +313,10 @@ For SSH, mesh networks, rendezvous services, and interactive discovery, see the
 managed tunnels. aibr does not keep a launcher alive to supervise them or close them on agent
 exit. There is no built-in SSH/Tailscale/rendezvous daemon in this version.
 
+The [remote connectivity investigation](docs/investigations/remote-browser-connectivity.md)
+compares existing forwards, mesh networks, Cloudflare Tunnel/Access, and a custom Durable Object
+relay, with source findings, headless login, discovery, and proposed UX improvements.
+
 ## Default MCP configuration outside aibr launches
 
 There are two separate configurations. `aibr config …` saves this tool's user defaults (browser
