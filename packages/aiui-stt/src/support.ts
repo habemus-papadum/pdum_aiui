@@ -33,8 +33,7 @@ export interface SttSocketHandlers {
 /**
  * Builds the socket for one session (the platform WebSocket in production, a
  * fake in tests). `protocols` is the browser's only header-free auth channel
- * (OpenAI's `openai-insecure-api-key.<ek_>` subprotocol rides here; Scribe
- * needs none — its token is a URL param).
+ * (Scribe needs no subprotocol; its token is a URL parameter).
  */
 export type SttSocketFactory = (
   url: string,

@@ -47,21 +47,19 @@ identity anywhere in the page. Against a broker predating the contract, the lega
 trio still works (deprecated): `federatedKeySource({ region, identityProviderId,
 serviceAccountId })`.
 
-### `aiui-cf-creds/stt` — both STT credential flavors
+### `aiui-cf-creds/stt` — ElevenLabs Scribe credentials
 
-**The default engine is ElevenLabs Scribe** (the stack-wide decision — richest word
-data); the OpenAI transcription flavor is the alternate.
+Fresh single-use tokens from a broker or a browser-provided parent key.
 
 ```ts
-import { scribeConnectUrl, transcriptionKeySource } from "@habemus-papadum/aiui-cf-creds/stt";
+import { scribeConnectUrl, standardScribeConnectUrl } from "@habemus-papadum/aiui-cf-creds/stt";
 
-// THE DEFAULT — ElevenLabs scribe: SINGLE-USE. One call = one connect;
-// there is no cache to hold wrong.
-const socket = new WebSocket(await scribeConnectUrl());
-
-// The ALTERNATE — OpenAI transcription-type sessions: an ordinary ek_
-// KeySource whose minted secrets carry the transcription session config.
-const source = transcriptionKeySource({ key: "app" });
+// Broker-only, one fresh single-use token per connection:
+const brokerUrl = () => scribeConnectUrl({ key: "app" });
+// Demo keys (pasted/dev), falling back to an explicitly configured broker:
+const demoUrl = () => standardScribeConnectUrl({ brokerUrl: "https://creds.example.com", key: "app" });
+// Explicit key callback; can read your application's own credential storage:
+const customUrl = () => standardScribeConnectUrl({ apiKey: () => myKey });
 ```
 
 ### `aiui-cf-creds/mosaic` — the credential-installing connector

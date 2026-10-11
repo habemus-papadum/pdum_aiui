@@ -5,6 +5,8 @@
  * tool-surface changes (per-tool toggles → setTools).
  */
 
+import { createAudioHub } from "@habemus-papadum/aiui-audio";
+import { AudioControl } from "@habemus-papadum/aiui-audio/widgets";
 import {
   chainKeySource,
   devKeySource,
@@ -72,6 +74,10 @@ function SentInstructions(props: { session: OracleSession }) {
 }
 
 export function App() {
+  const audio = createAudioHub();
+  const input = audio.streamInput({ id: "oracle", label: "Oracle", icon: "🔮" });
+  const output = audio.output({ id: "oracle", label: "Oracle", icon: "🔮" });
+  onCleanup(() => void audio.dispose());
   // The projection is a deliberate SNAPSHOT of the surface (values feed the
   // schemas) — untracked on purpose; re-projection on surface change is what
   // keeps it live.
@@ -100,7 +106,7 @@ export function App() {
       mintingKeySource("/oracle/mint"),
       devKeySource(),
     ]),
-    transport: webRtcTransport(),
+    transport: webRtcTransport({ input, output }),
   });
   onCleanup(
     onControlSurfaceChange(() =>
@@ -168,7 +174,11 @@ export function App() {
         </button>
       </div>
       <div class="lab-panel">
-        <OracleControl session={session} />
+        <AudioControl hub={audio} />
+        <OracleControl
+          session={session}
+          audio={{ hub: audio, input: input.id, output: output.id }}
+        />
         <OracleParkBanner session={session} />
         <OracleUsage session={session} />
         <div class="lab-composer">

@@ -8,11 +8,13 @@
  * typechecks but throws MISSING_EFFECT_FN at render), cleanup via onCleanup.
  */
 
-import { createEffect, createSignal, onCleanup } from "solid-js";
+import { activateSessionAudio, type SessionAudio } from "@habemus-papadum/aiui-audio";
+import { createSignal, onCleanup } from "solid-js";
 import type { OracleSession, OracleState } from "../session";
 
 export interface OracleControlProps {
   session: OracleSession;
+  audio?: SessionAudio;
 }
 
 /** Subscribe a signal to the session's state. */
@@ -24,44 +26,11 @@ export function useOracleState(session: OracleSession): () => OracleState {
 }
 
 export function OracleControl(props: OracleControlProps) {
+  const start = async () => {
+    if (props.audio) await activateSessionAudio(props.audio);
+    await props.session.start();
+  };
   const state = useOracleState(props.session);
-  const [level, setLevel] = createSignal(0);
-
-  // The "is it hearing me" meter — an AnalyserNode over the mic stream (the
-  // runtime's level() idiom: RMS ×3, clamped). Attached while live/parked;
-  // torn down with the session.
-  createEffect(
-    () => state().status,
-    (status) => {
-      if (status !== "live") {
-        setLevel(0);
-        return;
-      }
-      const stream = props.session.micStream();
-      if (stream === undefined) {
-        return;
-      }
-      const ctx = new AudioContext();
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 512;
-      ctx.createMediaStreamSource(stream).connect(analyser);
-      const bytes = new Uint8Array(analyser.fftSize);
-      const timer = setInterval(() => {
-        analyser.getByteTimeDomainData(bytes);
-        let sum = 0;
-        for (const b of bytes) {
-          const v = (b - 128) / 128;
-          sum += v * v;
-        }
-        setLevel(Math.min(1, Math.sqrt(sum / bytes.length) * 3));
-      }, 100);
-      onCleanup(() => {
-        clearInterval(timer);
-        void ctx.close();
-      });
-    },
-  );
-
   const dot = () => {
     const s = state();
     if (s.status === "live") {
@@ -81,18 +50,19 @@ export function OracleControl(props: OracleControlProps) {
       <span class="aiui-oracle-dot" title={state().status}>
         {dot()}
       </span>
-      <span
-        class="aiui-oracle-level"
-        style={{ opacity: state().status === "live" ? 0.35 + level() * 0.65 : 0.2 }}
-      >
-        🎙
-      </span>
       {state().status === "idle" || state().status === "closed" || state().status === "error" ? (
-        <button type="button" onClick={() => void props.session.start()}>
+        <button type="button" onClick={() => void start().catch(() => {})}>
           start
         </button>
       ) : state().status === "parked" ? (
-        <button type="button" onClick={() => props.session.resume()}>
+        <button
+          type="button"
+          onClick={() => {
+            void (props.audio ? activateSessionAudio(props.audio) : Promise.resolve())
+              .then(() => props.session.resume())
+              .catch(() => {});
+          }}
+        >
           resume
         </button>
       ) : (

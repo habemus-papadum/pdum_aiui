@@ -24,14 +24,14 @@
  *  - **`commit_throttled` is FATAL**: committing with < 0.3 s of uncommitted
  *    audio closes the socket with no recovery, so a local uncommitted-audio
  *    meter gates every commit behind {@link SCRIBE_COMMIT_FLOOR_MS}; an
- *    under-floor commit sends NOTHING and resolves the segment locally.
+ *    short nonempty segment is padded with silence before committing.
  *  - **Idle keepalive**: the server closes an idle socket ~15 s after
  *    `session_started`; an empty chunk every {@link SCRIBE_KEEPALIVE_MS}
  *    resets that timer without touching the buffer or timestamp timeline.
  *  - **Word timestamps are session-cumulative**, not per-segment — each
  *    segment records its audio base and {@link convertScribeWords} rebases.
- *  - **`discard` sends nothing** — Scribe has no buffer-clear and committing
- *    the scrap is fatal; the ≤0.3 s stray stays in the vendor buffer.
+ *  - **Cancellation closes the socket** — Scribe has no buffer-clear. The
+ *    next segment reconnects so discarded audio cannot contaminate it.
  */
 
 import {
@@ -56,7 +56,7 @@ const BYTES_PER_MS = (SCRIBE_SAMPLE_RATE * 2) / 1000;
 
 /**
  * The local floor, in ms of uncommitted audio, below which a commit is
- * REFUSED (resolved locally, nothing on the wire). Scribe's hard minimum is
+ * padded with silence before committing. Scribe's observed hard minimum is
  * 300 ms and violating it kills the whole session (`commit_throttled` +
  * socket close); 500 holds a margin because the penalty is total.
  */
@@ -81,6 +81,7 @@ export const SCRIBE_ERROR_TYPES: ReadonlySet<string> = new Set([
   "resource_exhausted",
   "session_time_limit_exceeded",
   "input_error",
+  "invalid_request",
   "chunk_size_exceeded",
   "insufficient_audio_activity",
   "unaccepted_terms",
@@ -222,9 +223,8 @@ export function scribeTransport(options: ScribeTransportOptions): SttTransport {
       url.searchParams.set("audio_format", `pcm_${SCRIBE_SAMPLE_RATE}`);
       url.searchParams.set("include_timestamps", "true");
       const noVerbatim = options.noVerbatim ?? true;
-      if (noVerbatim) {
-        url.searchParams.set("no_verbatim", "true");
-      }
+      url.searchParams.set("no_verbatim", String(noVerbatim));
+      url.searchParams.set("commit_strategy", "manual");
       if (options.language !== undefined && options.language !== "") {
         url.searchParams.set("language_code", options.language);
       }
@@ -257,11 +257,20 @@ function openScribeConnection(
   callbacks: SttCallbacks,
 ): SttConnection {
   const { now } = config;
+  let resolveReady!: () => void;
+  let rejectReady!: (error: Error) => void;
+  const ready = new Promise<void>((resolve, reject) => {
+    resolveReady = resolve;
+    rejectReady = reject;
+  });
+  void ready.catch(() => {});
+  const handshakeTimer = setTimeout(() => fail("Scribe handshake timed out"), 15_000);
+  (handshakeTimer as { unref?: () => void }).unref?.();
   /** What we asked for — diffed against the `session_started` echo on arrival. */
   const requestedConfig: Record<string, unknown> = {
     model_id: config.modelId,
     include_timestamps: true,
-    ...(config.noVerbatim ? { no_verbatim: true } : {}),
+    no_verbatim: config.noVerbatim,
   };
 
   // onSent arms the idle keepalive from every REAL outbound frame (never a
@@ -415,6 +424,8 @@ function openScribeConnection(
             callbacks.onDiagnostic?.({ kind: "config-mismatch", ...m });
           }
         }
+        clearTimeout(handshakeTimer);
+        resolveReady();
         gate.markReady();
         armKeepalive(); // the arm→talk idle gap must not drop the socket
         return;
@@ -458,6 +469,8 @@ function openScribeConnection(
       return;
     }
     gate.markDead();
+    clearTimeout(handshakeTimer);
+    rejectReady(new Error(message));
     clearKeepalive();
     const stuck = committed.splice(0);
     pending.clear();
@@ -467,6 +480,7 @@ function openScribeConnection(
       stuck.map((entry) => entry.segment),
     );
     drainCtl.settleIfIdle();
+    callbacks.onClose?.(message);
   };
 
   const socket = config.socketFactory(config.url, undefined, {
@@ -482,6 +496,7 @@ function openScribeConnection(
   });
 
   return {
+    ready,
     appendAudio(segment, bytes) {
       if (gate.isDead()) {
         return;
@@ -506,10 +521,8 @@ function openScribeConnection(
       }
       const baseMs = segmentBaseMs.get(segment) ?? cumulativeBytes / BYTES_PER_MS;
       segmentBaseMs.delete(segment);
-      // Under the floor: send NOTHING (the wire commit would be fatal) —
-      // resolve the segment locally so the caller's preview settles. The
-      // final is empty only if Scribe closed nothing inside this segment.
-      if (uncommittedBytes / BYTES_PER_MS < SCRIBE_COMMIT_FLOOR_MS) {
+      // With no buffered audio, settle only the utterances already finalized.
+      if (uncommittedBytes === 0) {
         const slot = pending.get(segment);
         pending.delete(segment);
         const words = slot?.words ?? [];
@@ -521,25 +534,35 @@ function openScribeConnection(
         });
         return;
       }
+      // Pad a short segment with silence to the safe commit floor. Leaving
+      // its samples in the server buffer would prepend them to the next segment.
+      const padding = SCRIBE_COMMIT_FLOOR_MS * BYTES_PER_MS - uncommittedBytes;
+      if (padding > 0) {
+        sendFrame(audioChunk(new Uint8Array(padding), false));
+        cumulativeBytes += padding;
+      }
       committed.push({ segment, committedAt: now(), audioBaseMs: baseMs });
       uncommittedBytes = 0; // a successful commit resets the upstream buffer
       sendFrame(audioChunk(EMPTY_AUDIO, true));
     },
     discard(segment) {
-      // No wire message — Scribe has no buffer-clear, and committing the
-      // scrap is fatal. Drop the local binding; the ≤0.3 s stray stays in the
-      // vendor buffer and counts toward the next utterance's commit floor.
       if (streamingSegment === segment) {
         streamingSegment = undefined;
       }
       segmentBaseMs.delete(segment);
       pending.delete(segment);
+      // Scribe has no clear-buffer operation. A cancelled recording must not
+      // become the next segment's prefix: reconnect before accepting more audio.
+      fail("Dictation cancelled; reconnecting requires a fresh Scribe session");
+      socket.close();
     },
     drain(timeoutMs) {
       return drainCtl.drain(timeoutMs);
     },
     close() {
       gate.markDead();
+      clearTimeout(handshakeTimer);
+      rejectReady(new Error("Scribe connection closed"));
       clearKeepalive();
       try {
         socket.close();

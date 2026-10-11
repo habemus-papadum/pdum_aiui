@@ -45,7 +45,8 @@
     "@solidjs/web": "catalog:solid",
     "highlight.js": "^11.12.0",
     "marked": "^16.4.2",
-    "solid-js": "catalog:solid"
+    "solid-js": "catalog:solid",
+    "@habemus-papadum/aiui-audio": "workspace:^"
   },
   "devDependencies": {
     "@habemus-papadum/aiui-build-config": "workspace:^",

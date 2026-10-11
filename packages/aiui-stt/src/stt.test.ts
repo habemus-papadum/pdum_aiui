@@ -89,7 +89,7 @@ describe("createStt", () => {
     const stt = createStt({ transport: t.transport });
     const segment = stt.beginSegment();
     stt.appendAudio(new Uint8Array(10));
-    stt.endSegment();
+    await stt.endSegment();
     expect(t.ops).toEqual([]); // still minting
     t.settle();
     await tick();
@@ -132,7 +132,7 @@ describe("createStt", () => {
     const segment = stt.beginSegment();
     await tick(); // let the source's start() settle
     audio.emit(new Uint8Array(16));
-    stt.endSegment();
+    await stt.endSegment();
     audio.emit(new Uint8Array(32)); // between segments — dropped
 
     const appends = t.ops.filter((op) => op.op === "append");
@@ -148,16 +148,15 @@ describe("createStt", () => {
   it("cancelSegment during the mint window drops that segment's queued frames", async () => {
     const t = stubTransport();
     const stt = createStt({ transport: t.transport });
-    const first = stt.beginSegment();
+    stt.beginSegment();
     stt.appendAudio(new Uint8Array(10));
     stt.cancelSegment();
     const second = stt.beginSegment();
     stt.appendAudio(new Uint8Array(20));
-    stt.endSegment();
+    await stt.endSegment();
     t.settle();
     await tick();
     expect(t.ops).toEqual([
-      { op: "discard", segment: first },
       { op: "append", segment: second, bytes: 20 },
       { op: "commit", segment: second },
     ]);
@@ -171,7 +170,7 @@ describe("createStt", () => {
       callbacks: { onError: (message, segment) => errors.push([message, segment]) },
     });
     const segment = stt.beginSegment();
-    stt.endSegment();
+    await stt.endSegment();
     t.fail("mint 403");
     await tick();
     expect(stt.status()).toBe("error");
@@ -202,21 +201,6 @@ describe("createStt", () => {
     expect(viaEvents).toEqual(["hello"]);
   });
 
-  it("ends a stale open segment when a new one begins (push-to-talk has one boundary)", async () => {
-    const t = stubTransport();
-    const stt = createStt({ transport: t.transport });
-    const connectPromise = stt.connect();
-    t.settle();
-    await connectPromise;
-    const first = stt.beginSegment();
-    const second = stt.beginSegment(); // the missed key-up
-    stt.endSegment();
-    expect(t.ops).toEqual([
-      { op: "commit", segment: first },
-      { op: "commit", segment: second },
-    ]);
-  });
-
   it("stops the audio source on close", async () => {
     const t = stubTransport();
     const audio = stubAudio();
@@ -225,5 +209,91 @@ describe("createStt", () => {
     await tick();
     stt.close();
     expect(audio.stopped()).toBe(true);
+  });
+});
+
+describe("connection and audio fences", () => {
+  it("closes a connection that arrives after close without resurrecting status", async () => {
+    const t = stubTransport();
+    const stt = createStt({ transport: t.transport });
+    const opening = stt.connect();
+    stt.close();
+    t.settle();
+    await opening;
+    expect(stt.status()).toBe("closed");
+    expect(t.ops).toEqual([{ op: "close" }]);
+  });
+  it("holds drain through credential minting and the final transcript", async () => {
+    const t = stubTransport();
+    const stt = createStt({ transport: t.transport });
+    const id = stt.beginSegment();
+    await stt.endSegment();
+    let drained = false;
+    const drain = stt.drain().then((ids) => {
+      drained = true;
+      return ids;
+    });
+    await tick();
+    expect(drained).toBe(false);
+    t.settle();
+    await tick();
+    expect(drained).toBe(false);
+    t.callbacks()?.onFinal(id, { text: "hello", latencyMs: 1, model: "fixture" });
+    expect(await drain).toEqual([]);
+    stt.close();
+  });
+  it("can reconnect after a remote close", async () => {
+    const t = stubTransport();
+    const stt = createStt({ transport: t.transport });
+    const first = stt.connect();
+    t.settle();
+    await first;
+    t.callbacks()?.onClose?.("network lost");
+    expect(stt.status()).toBe("error");
+    const second = stt.connect();
+    t.settle();
+    await second;
+    expect(stt.status()).toBe("ready");
+    stt.close();
+  });
+  it("close releases a socket still waiting for session_started", async () => {
+    const t = stubTransport();
+    let reject!: (error: Error) => void;
+    t.connection.ready = new Promise((_resolve, r) => {
+      reject = r;
+    });
+    t.connection.close = () => {
+      t.ops.push({ op: "close" });
+      reject(new Error("closed"));
+    };
+    const stt = createStt({ transport: t.transport });
+    const opening = stt.connect();
+    const rejected = expect(opening).rejects.toThrow("closed");
+    t.settle();
+    await tick();
+    stt.close();
+    await rejected;
+    expect(stt.status()).toBe("closed");
+    expect(t.ops.length).toBeGreaterThan(0);
+  });
+  it("cancel while the audio fence is pending does not commit the cancelled segment", async () => {
+    const t = stubTransport();
+    const audio = stubAudio();
+    let flushed!: () => void;
+    audio.flush = () =>
+      new Promise<void>((r) => {
+        flushed = r;
+      });
+    const stt = createStt({ transport: t.transport, audio });
+    stt.beginSegment();
+    const ending = stt.endSegment();
+    stt.cancelSegment();
+    flushed();
+    await ending;
+    t.settle();
+    await tick();
+    expect(t.ops).toEqual([]);
+    expect(await stt.drain()).toEqual([]);
+    stt.close();
   });
 });

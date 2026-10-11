@@ -137,14 +137,23 @@ describe("scribeTransport", () => {
     expect(record.finals[1][1].words).toEqual([{ text: "two", startMs: 200, endMs: 500 }]);
   });
 
-  it("REFUSES an under-floor commit: nothing on the wire, the segment settles locally", async () => {
+  it("pads a short segment and commits it instead of leaking audio into the next segment", async () => {
     const { socket, record, connection } = await openScribe();
     ready(socket);
-    connection.appendAudio(0, pcmMs(200)); // under the 500 ms floor
+    connection.appendAudio(0, pcmMs(200));
     const framesBefore = socket.sent.length;
     connection.commit(0);
-    expect(socket.sent.length).toBe(framesBefore); // no commit frame — fatal upstream
-    expect(record.finals).toEqual([[0, { text: "", latencyMs: 0, model: "scribe_v2_realtime" }]]);
+    expect(socket.sent.length).toBe(framesBefore + 2);
+    const padded = JSON.parse(socket.sent[socket.sent.length - 2]);
+    expect(atob(padded.audio_base_64).length).toBe(pcmMs(300).length);
+    expect(JSON.parse(socket.sent[socket.sent.length - 1]).commit).toBe(true);
+    socket.message({
+      message_type: "committed_transcript_with_timestamps",
+      text: "yes",
+      words: [],
+    });
+    expect(record.finals[0][1].text).toBe("yes");
+    connection.close();
   });
 
   it("accumulates a vendor self-commit and keeps the caller's cumulative-delta contract", async () => {

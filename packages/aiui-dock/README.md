@@ -58,5 +58,13 @@ To add another provider, add its row to `src/keys.tsx` and the source processor'
 `VENDOR_KEYS` table, then opt in with `devKeys`; storage and resolution need no changes.
 The server-side live backends appear only when `/live/sessions` answers.
 
-Props: `mintUrl` (an ephemeral-key endpoint for the oracle, tried after the pasted and dev
+Props: `audio` (shared AudioHub; otherwise inherited from AudioProvider or created locally), `mintUrl` (an ephemeral-key endpoint for the oracle, tried after the pasted and dev
 keys), `serverUrl` (the live routes, default `/live/sessions`), `class`.
+
+## Shared browser audio
+
+Browser WebRTC transports take registered `input` and `output` endpoints from
+[`aiui-audio`](../aiui-audio/README.md). Capture, meters, device selection, and input routing
+live in the hub. Sessions enable or disable their own endpoint without owning the microphone.
+Use `AudioProvider` around a host to share the hub with VoiceDock and demos, or pass the hub in
+the dock's `audio` prop. The dock's audio pane exposes the same controls.

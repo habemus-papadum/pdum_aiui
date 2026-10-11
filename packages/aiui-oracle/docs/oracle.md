@@ -76,21 +76,28 @@ option, above.)
 A minimal integration, in an app whose store declares `control()`s and `action()`s:
 
 ```ts
+import { createAudioHub } from "@habemus-papadum/aiui-audio";
 import {
   OracleSession, standardKeySources, toolsFromControlSurface,
   weaveInstructions, webRtcTransport,
 } from "@habemus-papadum/aiui-oracle";
 import { OracleControl, OracleViewer } from "@habemus-papadum/aiui-oracle/widgets";
 
+const audio = createAudioHub();
 const session = new OracleSession({
   config: {
     instructions: weaveInstructions({ app: "What this app is, in a sentence or two." }),
     tools: toolsFromControlSurface(),
   },
   keySource: standardKeySources(), // or { mintUrl: "/oracle/mint" } when a minter exists
-  transport: webRtcTransport(),
+  transport: webRtcTransport({
+    input: audio.streamInput({ id: "oracle", label: "Oracle", icon: "🔮" }),
+    output: audio.output({ id: "oracle", label: "Oracle", icon: "🔮" }),
+  }),
 });
-// then render <OracleControl session={session} /> and, if wanted, <OracleViewer …/>
+// Render AudioControl for device/routing controls, and:
+// <OracleControl session={session} audio={{ hub: audio, input: "oracle", output: "oracle" }} />
+// <OracleViewer session={session} />
 ```
 
 `toolsFromControlSurface()` synthesizes one typed tool per control — `options` become an

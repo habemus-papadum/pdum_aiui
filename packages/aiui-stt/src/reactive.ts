@@ -7,8 +7,7 @@
  * transcript as a cell lifts these signals itself (and has incidentally
  * made dictation visible to the oracle's tool surface).
  *
- * No throttling: deltas arrive at word rate (Scribe's ~1 s heartbeat, the
- * OpenAI wire's token cadence), orders of magnitude below the pencil's pen
+ * No throttling: deltas arrive at word rate (Scribe's partial transcript updates), orders of magnitude below the pencil's pen
  * frequency — every event can afford to cross into the graph.
  *
  * The display side is `LiveDiffText` (aiui-viz/modal): {@link SttSignals.partial}'s
@@ -51,6 +50,7 @@ export function sttSignals(handle: SttHandle): SttSignals {
     switch (event.type) {
       case "status":
         setStatus(event.status);
+        if (event.status === "closed" || event.status === "error") setPartial(undefined);
         return;
       case "delta":
         setPartial({ segment: event.segment, text: event.text });
@@ -64,6 +64,9 @@ export function sttSignals(handle: SttHandle): SttSignals {
         setLastError(undefined);
         return;
       case "error":
+        setPartial((prev) =>
+          event.segment === undefined || prev?.segment === event.segment ? undefined : prev,
+        );
         setLastError({
           message: event.message,
           ...("segment" in event ? { segment: event.segment } : {}),

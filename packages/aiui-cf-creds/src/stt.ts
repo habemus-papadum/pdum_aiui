@@ -1,44 +1,12 @@
-/**
- * stt.ts — the credential side of both STT engine flavors (the `aiui-stt`
- * component's seam; see the aiui-stt proposal in git history). Its
- * contract with this module is "give me something I can open a socket with" —
- * nothing more.
- *
- * **The DEFAULT engine is ElevenLabs Scribe** ({@link scribeConnectUrl}) —
- * the stack-wide decision (the aiui-stt proposal's primary engine, and the
- * former intent pipeline's default transcriber): word timestamps + logprobs
- * make it the richest engine. The OpenAI `transcription`-type flavor
- * ({@link transcriptionKeySource}) is the ALTERNATE, for apps that want one
- * vendor or `ek_` semantics.
- *
- * Two species, deliberately different shapes (D4 — species semantics are API
- * shape, not documentation):
- *
- *  - ElevenLabs scribe tokens are SINGLE-USE (dead at first connect, fixed
- *    15-minute mint-to-connect TTL). {@link scribeConnectUrl} is one call =
- *    one connect; no caching surface exists here or in the kit, so a future
- *    reader cannot hold a token wrong.
- *  - OpenAI `transcription`-type client secrets are ordinary `ek_`s — one
- *    opens multiple sessions until TTL — so {@link transcriptionKeySource}
- *    is a {@link KeySource} like any other, correct under `cachingKeySource`.
- */
-import type { KeySource, OracleCredential } from "@habemus-papadum/aiui-oracle";
+import { browserVendorKey } from "@habemus-papadum/aiui-viz/vendor-keys";
 import {
   connectUrl,
   ELEVENLABS_CREDENTIALS_PATH,
+  mintScribeToken,
   type ScribeSocketOptions,
+  scribeSocketUrl,
 } from "@habemus-papadum/cf-creds-elevenlabs";
-import { type FederatedMintOptions, federatedKeySource } from "./oracle";
 import { type BrokerOptions, brokerRoute } from "./shared";
-
-/**
- * The ALTERNATE (OpenAI) flavor's default transcription model — the former
- * aiui channel's proven whisper (its `realtime.ts`, now outside this repo).
- * This is an OpenAI
- * model id inside an OpenAI mint; it cannot name the default engine's model
- * (Scribe's `scribe_v2_realtime` rides {@link scribeConnectUrl}'s socket URL).
- */
-export const DEFAULT_TRANSCRIPTION_MODEL = "gpt-realtime-whisper";
 
 export interface ScribeConnectOptions extends BrokerOptions, ScribeSocketOptions {}
 
@@ -53,36 +21,18 @@ export function scribeConnectUrl(options: ScribeConnectOptions = {}): Promise<st
   return connectUrl(brokerRoute(ELEVENLABS_CREDENTIALS_PATH, brokerUrl, key), socket);
 }
 
-export interface TranscriptionKeySourceOptions extends FederatedMintOptions {
-  /** Baked into the minted secret's session config. Default
-   * {@link DEFAULT_TRANSCRIPTION_MODEL}. */
-  transcriptionModel?: string;
-}
-
-/**
- * A {@link KeySource} whose minted secrets carry a `transcription`-type
- * session config — the mint-attached config applies to sessions the `ek_`
- * opens, so the socket connects with a bare URL. A caller-supplied session
- * config is spread over the default (its `audio` block, when present,
- * replaces the default's whole); the session TYPE is this source's one
- * non-negotiable fact.
- */
-export function transcriptionKeySource(options: TranscriptionKeySourceOptions): KeySource {
-  const inner = federatedKeySource(options);
-  return {
-    describe: () => "cf-federation:transcription",
-    async credential(session): Promise<OracleCredential> {
-      const base = {
-        audio: {
-          input: {
-            transcription: {
-              model: options.transcriptionModel ?? DEFAULT_TRANSCRIPTION_MODEL,
-            },
-          },
-        },
-      };
-      const minted = await inner.credential({ ...base, ...session, type: "transcription" });
-      return { ...minted, source: "cf-federation:transcription" };
-    },
-  };
+/** Demo composition: pasted key → dev key → explicitly configured broker.
+ * Resolve afresh for EVERY connect; never persist a single-use token. */
+export async function standardScribeConnectUrl(
+  options: ScribeConnectOptions & { apiKey?: () => string | undefined } = {},
+): Promise<string> {
+  const { apiKey, ...broker } = options;
+  const key = apiKey ? apiKey() : browserVendorKey("elevenlabs");
+  if (key) {
+    const minted = await mintScribeToken(key);
+    return scribeSocketUrl(minted.token, broker);
+  }
+  if (!broker.brokerUrl && !broker.key)
+    throw new Error("Add an ElevenLabs key or configure a credential broker");
+  return scribeConnectUrl(broker);
 }

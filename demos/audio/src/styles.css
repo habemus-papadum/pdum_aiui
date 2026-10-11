@@ -1,0 +1,37 @@
+.audio-demo {
+  max-width: 56rem;
+  margin-inline: auto;
+  padding: var(--space-lg, 2.5rem) var(--space-sm, 1rem);
+}
+.audio-demo section {
+  margin-block: var(--space-lg, 2.5rem);
+}
+.audio-demo-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-block: 1rem;
+}
+.audio-demo-transcript {
+  min-height: 8rem;
+  font-family: var(--font-mono, monospace);
+  line-height: 1.7;
+  padding: 1.25rem;
+  background: var(--surface-raised);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.audio-demo-added {
+  color: var(--ok);
+  text-decoration: underline;
+}
+.audio-demo-deleted {
+  color: var(--alarm);
+  text-decoration: line-through;
+}
+.audio-demo [role="alert"] {
+  color: var(--alarm);
+}
+.audio-demo .aiui-dock-keybox {
+  margin-block: 1rem;
+}

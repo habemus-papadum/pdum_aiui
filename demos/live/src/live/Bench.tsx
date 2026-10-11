@@ -8,6 +8,8 @@
  * delegator; either way the page sees one `session()` accessor.
  */
 
+import { createAudioHub } from "@habemus-papadum/aiui-audio";
+import { AudioControl, useAudioHub } from "@habemus-papadum/aiui-audio/widgets";
 import {
   LIVE_SESSION_ADAPTER,
   LIVE_VOICES,
@@ -70,6 +72,15 @@ export interface BenchProps {
 }
 
 export function Bench(props: BenchProps) {
+  const sharedAudio = useAudioHub();
+  const audio = sharedAudio ?? createAudioHub();
+  const input = audio.streamInput({ id: "live", label: "Live", icon: "◉" });
+  const output = audio.output({ id: "live", label: "Live", icon: "◉" });
+  onCleanup(() => {
+    input.dispose();
+    output.dispose();
+    if (!sharedAudio) void audio.dispose();
+  });
   const choices = () =>
     BACKENDS.filter((choice) => (props.backends ?? BACKENDS.map((b) => b.id)).includes(choice.id));
   const [backend, setBackend] = createSignal<BackendId>(props.initial ?? "scripted");
@@ -81,7 +92,7 @@ export function Bench(props: BenchProps) {
     onLog: (line) => setServerLog((lines) => [...lines.slice(-30), line]),
   });
   const [session, setSession] = createSignal<LiveSession>(
-    untrack(() => createBenchSession(backend(), options())),
+    untrack(() => createBenchSession(backend(), options(), input, output)),
   );
   const [state, setState] = createSignal<LiveState>(untrack(() => session().state()));
   // Follow whichever session object is current (two-arg createEffect; the
@@ -103,7 +114,7 @@ export function Bench(props: BenchProps) {
     const previous = session();
     void previous.close();
     previous.currentDelegator()?.dispose?.();
-    setSession(createBenchSession(backend(), options()));
+    setSession(createBenchSession(backend(), options(), input, output));
   };
 
   const choose = (id: BackendId) => {
@@ -167,7 +178,11 @@ export function Bench(props: BenchProps) {
         {(current) => (
           <>
             <div class="bench-row">
-              <LiveControl session={current} />
+              <AudioControl hub={audio} />
+              <LiveControl
+                session={current}
+                audio={{ hub: audio, input: input.id, output: output.id }}
+              />
             </div>
             {props.children as never}
             <LiveCaptions session={current} />

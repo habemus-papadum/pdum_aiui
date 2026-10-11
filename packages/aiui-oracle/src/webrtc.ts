@@ -1,24 +1,9 @@
-/**
- * webrtc.ts — the WebRTC transport (the browser default, owner decision
- * 2026-07-26): mic as a sender track, reply audio as a remote track on an
- * `<audio>` element, events on the `oai-events` data channel.
- *
- * The three seams, WebRTC-flavored:
- *  - input audio: the live mic track. Gating = `track.enabled = false`, never
- *    teardown (the runtime's lesson: a disabled track keeps the timeline
- *    continuous). No PCM injection — the live mic is THE input (decision).
- *  - output audio: track only. `response.output_audio.delta` is NOT delivered
- *    on this transport (community-found, SDK-corroborated) — hence
- *    `replyAudioData: false`; a level meter taps the element/stream, not data.
- *  - interrupt: server-managed. The vendor auto-truncates on barge-in; a
- *    manual stop is `response.cancel` + `output_audio_buffer.clear` (the
- *    official SDK's exact pair).
- *
- * Caveat carried from research: audio and control ride SEPARATE channels with
- * no mutual ordering — nothing here may assume a control event is ordered
- * against an audio position.
+/** WebRTC borrows stable input/output endpoints from the application's AudioHub.
+ * Device capture, routing, echo constraints, and playback belong to that hub.
+ * Control events and media travel separately; their ordering is not guaranteed.
  */
 
+import { type AudioOutput, claimSessionAudio, type StreamInput } from "@habemus-papadum/aiui-audio";
 import { OPENAI_BASE_URL } from "./keys";
 import type {
   OracleTransport,
@@ -34,151 +19,137 @@ export const WEBRTC_CAPABILITIES: TransportCapabilities = {
   sideband: true,
 };
 
-/**
- * The mic constraints an agent that TALKS BACK through the same device must
- * ask for. Explicit, not defaulted (found live 2026-07-30): a session
- * consistently barged in on ITSELF — the reply played out of the panel, the
- * mic heard it, server-VAD called it user speech, and the vendor truncated its
- * own answer and re-answered. The ledger reads
- * `speech/started · said · response cancelled · conversation.item.truncated`
- * at one timestamp, which is that loop exactly.
- *
- * `{ audio: true }` leaves every processing decision to whatever the browser
- * and the OS happen to default to. For this transport those three are not
- * preferences, they are requirements — so they are stated.
- */
-export const ECHO_SAFE_AUDIO: MediaTrackConstraints = {
-  echoCancellation: true,
-  noiseSuppression: true,
-  autoGainControl: true,
-};
-
 export interface WebRtcTransportOptions {
   baseUrl?: string;
   fetchImpl?: typeof fetch;
-  /** Injected for tests; defaults to `navigator.mediaDevices.getUserMedia`. */
-  getUserMedia?: (constraints: MediaStreamConstraints) => Promise<MediaStream>;
+  /** Registered endpoints from the application's shared AudioHub. */
+  input: StreamInput;
+  output: AudioOutput;
   /** Injected for tests; defaults to the real RTCPeerConnection. */
   createPeerConnection?: () => RTCPeerConnection;
-  /** Override the mic constraints ({@link ECHO_SAFE_AUDIO} by default) — e.g.
-   * to pin a `deviceId` when the human is on a headset. */
-  audio?: MediaTrackConstraints;
 }
 
-export function webRtcTransport(options: WebRtcTransportOptions = {}): OracleTransport {
+export function webRtcTransport(options: WebRtcTransportOptions): OracleTransport {
   return {
     name: "webrtc",
     capabilities: WEBRTC_CAPABILITIES,
     async connect(opts: TransportConnectOptions): Promise<TransportHandle> {
-      const getUserMedia = options.getUserMedia ?? ((c) => navigator.mediaDevices.getUserMedia(c));
       const pc = (options.createPeerConnection ?? (() => new RTCPeerConnection()))();
 
-      const mic = await getUserMedia({ audio: { ...ECHO_SAFE_AUDIO, ...options.audio } });
-      const micTrack = mic.getAudioTracks()[0];
-      if (micTrack === undefined) {
-        pc.close();
-        throw new Error("no audio track — mic permission granted but empty stream");
-      }
-      pc.addTrack(micTrack, mic);
-
-      // Reply playback: autoplay is expected to succeed because connecting is
-      // itself gesture-driven (the start button) — but a blocked `play()` is
-      // surfaced, never swallowed (the SpeechPlayer onBlocked lesson).
-      const audio = opts.audioElement ?? document.createElement("audio");
-      audio.autoplay = true;
-      pc.ontrack = (event) => {
-        audio.srcObject = event.streams[0] ?? new MediaStream([event.track]);
-        audio.play().catch(() => opts.onPlaybackBlocked?.());
-      };
-
-      const channel = pc.createDataChannel("oai-events");
-      channel.onmessage = (event) => {
-        try {
-          opts.onEvent(JSON.parse(String(event.data)) as Record<string, unknown>);
-        } catch {
-          opts.onEvent({ type: "oracle.client.unparseable", raw: String(event.data) });
-        }
-      };
-      channel.onclose = () => opts.onClose("data channel closed");
-      pc.onconnectionstatechange = () => {
-        if (pc.connectionState === "failed" || pc.connectionState === "closed") {
-          opts.onClose(`peer connection ${pc.connectionState}`);
-        }
-      };
-
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      const doFetch = options.fetchImpl ?? fetch;
-      const response = await doFetch(`${options.baseUrl ?? OPENAI_BASE_URL}/v1/realtime/calls`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${opts.credential.ek}`,
-          "Content-Type": "application/sdp",
-        },
-        body: offer.sdp ?? "",
-      });
-      if (!response.ok) {
-        const body = await response.text().catch(() => "");
-        pc.close();
-        for (const track of mic.getTracks()) {
-          track.stop();
-        }
-        throw new Error(`realtime call setup failed (${response.status}): ${body.slice(0, 300)}`);
-      }
-      // The `Location` header carries the call id — CORS-exposed, and the
-      // sideband hook: a server with its own key can join this exact call.
-      const location = response.headers.get("Location") ?? "";
-      const callId = location.split("/").filter(Boolean).pop();
-      const answer = await response.text();
-      await pc.setRemoteDescription({ type: "answer", sdp: answer });
-
-      // The engine sends its opening session.update the moment the channel
-      // opens; queue sends until then rather than racing the SCTP handshake.
-      const pending: string[] = [];
-      channel.onopen = () => {
-        for (const item of pending.splice(0)) {
-          channel.send(item);
-        }
-      };
-
-      const send = (event: Record<string, unknown>): void => {
-        const encoded = JSON.stringify(event);
-        if (channel.readyState === "open") {
-          channel.send(encoded);
-        } else {
-          pending.push(encoded);
-        }
-      };
-
-      return {
-        send,
-        setMicEnabled(on) {
-          micTrack.enabled = on;
-        },
-        interrupt() {
-          send({ type: "response.cancel" });
-          send({ type: "output_audio_buffer.clear" });
-        },
-        micStream: mic,
-        applyAudioConstraints: (constraints) => micTrack.applyConstraints(constraints),
-        audioSettings: () => {
-          try {
-            return micTrack.getSettings() as Record<string, unknown>;
-          } catch {
-            return undefined;
-          }
-        },
-        ...(callId !== undefined && callId !== "" ? { callId } : {}),
-        close() {
+      const audio = claimSessionAudio(options.input, options.output);
+      let channel: RTCDataChannel | undefined;
+      const teardown = () => {
+        if (channel) {
           channel.onclose = null;
-          pc.onconnectionstatechange = null;
-          pc.close();
-          for (const track of mic.getTracks()) {
-            track.stop();
-          }
-          audio.srcObject = null;
-        },
+          channel.onmessage = null;
+          channel.onopen = null;
+        }
+        pc.ontrack = null;
+        pc.onconnectionstatechange = null;
+        pc.close();
+        audio.release();
       };
+      try {
+        const mic = audio.input.stream();
+        const micTrack = mic.getAudioTracks()[0];
+        if (micTrack === undefined) {
+          pc.close();
+          throw new Error("Audio input endpoint returned no track");
+        }
+        pc.addTrack(micTrack, mic);
+
+        // Reply playback: autoplay is expected to succeed because connecting is
+        // itself gesture-driven (the start button) — but a blocked `play()` is
+        // surfaced, never swallowed (the SpeechPlayer onBlocked lesson).
+        pc.ontrack = (event) => {
+          audio.output.attach(
+            event.streams[0] ?? new MediaStream([event.track]),
+            opts.audioElement,
+          );
+        };
+
+        const data = pc.createDataChannel("oai-events");
+        channel = data;
+        data.onmessage = (event) => {
+          try {
+            opts.onEvent(JSON.parse(String(event.data)) as Record<string, unknown>);
+          } catch {
+            opts.onEvent({ type: "oracle.client.unparseable", raw: String(event.data) });
+          }
+        };
+        data.onclose = () => opts.onClose("data channel closed");
+        pc.onconnectionstatechange = () => {
+          if (pc.connectionState === "failed" || pc.connectionState === "closed") {
+            opts.onClose(`peer connection ${pc.connectionState}`);
+          }
+        };
+
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        const doFetch = options.fetchImpl ?? fetch;
+        const response = await doFetch(`${options.baseUrl ?? OPENAI_BASE_URL}/v1/realtime/calls`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${opts.credential.ek}`,
+            "Content-Type": "application/sdp",
+          },
+          body: offer.sdp ?? "",
+        });
+        if (!response.ok) {
+          const body = await response.text().catch(() => "");
+          throw new Error(`realtime call setup failed (${response.status}): ${body.slice(0, 300)}`);
+        }
+        // The `Location` header carries the call id — CORS-exposed, and the
+        // sideband hook: a server with its own key can join this exact call.
+        const location = response.headers.get("Location") ?? "";
+        const callId = location.split("/").filter(Boolean).pop();
+        const answer = await response.text();
+        await pc.setRemoteDescription({ type: "answer", sdp: answer });
+
+        // The engine sends its opening session.update the moment the channel
+        // opens; queue sends until then rather than racing the SCTP handshake.
+        const pending: string[] = [];
+        data.onopen = () => {
+          for (const item of pending.splice(0)) {
+            data.send(item);
+          }
+        };
+
+        const send = (event: Record<string, unknown>): void => {
+          const encoded = JSON.stringify(event);
+          if (data.readyState === "open") {
+            data.send(encoded);
+          } else {
+            pending.push(encoded);
+          }
+        };
+
+        audio.input.setEnabled(true);
+        return {
+          send,
+          setMicEnabled(on) {
+            audio.input.setEnabled(on);
+          },
+          interrupt() {
+            send({ type: "response.cancel" });
+            send({ type: "output_audio_buffer.clear" });
+          },
+          micStream: mic,
+          applyAudioConstraints: (constraints) => options.input.applyConstraints(constraints),
+          audioSettings: () => {
+            try {
+              return options.input.settings() as Record<string, unknown>;
+            } catch {
+              return undefined;
+            }
+          },
+          ...(callId !== undefined && callId !== "" ? { callId } : {}),
+          close: teardown,
+        };
+      } catch (error) {
+        teardown();
+        throw error;
+      }
     },
   };
 }

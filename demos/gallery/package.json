@@ -22,7 +22,8 @@
     "@habemus-papadum/aiui-source-processor": "workspace:^",
     "@habemus-papadum/aiui-viz": "workspace:^",
     "@solidjs/web": "catalog:solid",
-    "solid-js": "catalog:solid"
+    "solid-js": "catalog:solid",
+    "@habemus-papadum/aiui-audio": "workspace:^"
   },
   "devDependencies": {
     "@babel/core": "catalog:",

@@ -10,6 +10,7 @@
  * the session).
  */
 
+import type { AudioOutput, StreamInput } from "@habemus-papadum/aiui-audio";
 import {
   backendPrompt,
   browserKey,
@@ -130,9 +131,18 @@ export function sessionConfigFor(id: BackendId, options: BenchOptions): LiveConf
   };
 }
 
-export function createBenchSession(id: BackendId, options: BenchOptions): LiveSession {
+export function createBenchSession(
+  id: BackendId,
+  options: BenchOptions,
+  input: StreamInput,
+  output: AudioOutput,
+): LiveSession {
   const session = new LiveSession({
-    transport: webRtcTransport({ broker: standardBrokers({ serverUrl: "/live/sessions" }) }),
+    transport: webRtcTransport({
+      broker: standardBrokers({ serverUrl: "/live/sessions" }),
+      input,
+      output,
+    }),
     config: sessionConfigFor(id, options),
     delegator: makeDelegator(id, options),
     tools: options.tools?.() ?? [],

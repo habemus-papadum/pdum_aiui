@@ -1,32 +1,17 @@
-/**
- * webrtc.ts — the browser transport: mic as a sender track, reply audio as
- * a remote track on an `<audio>` element, events on the `oai-events` data
- * channel. The session is CREATED by the SDP exchange (a broker's POST) —
- * nothing is sent on the channel until `session.started` arrives.
- *
- * Vendor sequence (voice-webrtc guide): tracks → data channel and listeners
- * BEFORE the offer → local description → wait for ICE gathering → exchange
- * → remote description → wait for `session.started`.
- *
- * Carried from the oracle (found live 2026-07-30): explicit echo-safe mic
- * constraints. Full duplex makes this MORE important, not less — the model
- * listens while it speaks.
+/** WebRTC borrows stable input/output endpoints from the application's AudioHub.
+ * Device capture, routing, echo constraints, and playback belong to that hub.
+ * Control events and media travel separately; their ordering is not guaranteed.
  */
 
+import { type AudioOutput, claimSessionAudio, type StreamInput } from "@habemus-papadum/aiui-audio";
 import type { SessionBroker } from "./brokers";
 import type { LiveTransport, TransportConnectOptions, TransportHandle } from "./types";
 
-export const ECHO_SAFE_AUDIO: MediaTrackConstraints = {
-  echoCancellation: true,
-  noiseSuppression: true,
-  autoGainControl: true,
-};
-
 export interface WebRtcTransportOptions {
   broker: SessionBroker;
-  getUserMedia?: (constraints: MediaStreamConstraints) => Promise<MediaStream>;
+  input: StreamInput;
+  output: AudioOutput;
   createPeerConnection?: () => RTCPeerConnection;
-  audio?: MediaTrackConstraints;
   /** Cap on waiting for ICE gathering before sending the offer anyway. */
   iceGatherTimeoutMs?: number;
 }
@@ -35,72 +20,76 @@ export function webRtcTransport(options: WebRtcTransportOptions): LiveTransport 
   return {
     name: "webrtc",
     async connect(opts: TransportConnectOptions): Promise<TransportHandle> {
-      const getUserMedia = options.getUserMedia ?? ((c) => navigator.mediaDevices.getUserMedia(c));
       const pc = (options.createPeerConnection ?? (() => new RTCPeerConnection()))();
-      const mic = await getUserMedia({ audio: { ...ECHO_SAFE_AUDIO, ...options.audio } });
-      const micTrack = mic.getAudioTracks()[0];
-      if (micTrack === undefined) {
-        pc.close();
-        throw new Error("no audio track — mic permission granted but empty stream");
-      }
-      pc.addTrack(micTrack, mic);
-
-      const audio = opts.audioElement ?? document.createElement("audio");
-      audio.autoplay = true;
-      pc.ontrack = (event) => {
-        audio.srcObject = event.streams[0] ?? new MediaStream([event.track]);
-        audio.play().catch(() => opts.onPlaybackBlocked?.());
-      };
-
-      const channel = pc.createDataChannel("oai-events");
-      const pending: string[] = [];
-      channel.onmessage = (event) => {
-        try {
-          opts.onEvent(JSON.parse(String(event.data)) as { type: string });
-        } catch {
-          opts.onEvent({ type: "live.client.unparseable", raw: String(event.data) });
-        }
-      };
-      channel.onopen = () => {
-        for (const item of pending.splice(0)) {
-          channel.send(item);
-        }
-      };
-      channel.onclose = () => opts.onClose("data channel closed");
-      pc.onconnectionstatechange = () => {
-        if (pc.connectionState === "failed" || pc.connectionState === "closed") {
-          opts.onClose(`peer connection ${pc.connectionState}`);
-        }
-      };
-
+      const audio = claimSessionAudio(options.input, options.output);
+      let channel: RTCDataChannel | undefined;
       const teardown = () => {
-        channel.onclose = null;
+        if (channel) {
+          channel.onclose = null;
+          channel.onmessage = null;
+          channel.onopen = null;
+        }
+        pc.ontrack = null;
         pc.onconnectionstatechange = null;
         pc.close();
-        for (const track of mic.getTracks()) {
-          track.stop();
-        }
-        audio.srcObject = null;
+        audio.release();
       };
-
       try {
+        const mic = audio.input.stream();
+        const micTrack = mic.getAudioTracks()[0];
+        if (micTrack === undefined) {
+          pc.close();
+          throw new Error("Audio input endpoint returned no track");
+        }
+        pc.addTrack(micTrack, mic);
+
+        pc.ontrack = (event) => {
+          audio.output.attach(
+            event.streams[0] ?? new MediaStream([event.track]),
+            opts.audioElement,
+          );
+        };
+
+        const data = pc.createDataChannel("oai-events");
+        channel = data;
+        const pending: string[] = [];
+        data.onmessage = (event) => {
+          try {
+            opts.onEvent(JSON.parse(String(event.data)) as { type: string });
+          } catch {
+            opts.onEvent({ type: "live.client.unparseable", raw: String(event.data) });
+          }
+        };
+        data.onopen = () => {
+          for (const item of pending.splice(0)) {
+            data.send(item);
+          }
+        };
+        data.onclose = () => opts.onClose("data channel closed");
+        pc.onconnectionstatechange = () => {
+          if (pc.connectionState === "failed" || pc.connectionState === "closed") {
+            opts.onClose(`peer connection ${pc.connectionState}`);
+          }
+        };
+
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
         await waitForIceGathering(pc, options.iceGatherTimeoutMs ?? 1500);
         const sdp = pc.localDescription?.sdp ?? offer.sdp ?? "";
         const answer = await options.broker.create(sdp, opts.session);
         await pc.setRemoteDescription({ type: "answer", sdp: answer.sdp });
+        audio.input.setEnabled(true);
         return {
           send(event) {
             const encoded = JSON.stringify(event);
-            if (channel.readyState === "open") {
-              channel.send(encoded);
+            if (data.readyState === "open") {
+              data.send(encoded);
             } else {
               pending.push(encoded);
             }
           },
           setMicEnabled(on) {
-            micTrack.enabled = on;
+            audio.input.setEnabled(on);
           },
           close: teardown,
           sessionId: answer.sessionId,

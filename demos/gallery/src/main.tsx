@@ -22,8 +22,10 @@
  */
 import { render } from "@solidjs/web";
 import "@habemus-papadum/aiui-design/site.css";
+import { createAudioHub } from "@habemus-papadum/aiui-audio";
+import { AudioProvider } from "@habemus-papadum/aiui-audio/widgets";
 import { VoiceDock } from "@habemus-papadum/aiui-dock";
-import { PageBoundary, setSitePageActive } from "@habemus-papadum/aiui-viz";
+import { PageBoundary, scope, setSitePageActive } from "@habemus-papadum/aiui-viz";
 import { SiteNav } from "@habemus-papadum/aiui-viz/site";
 import { createEffect, createSignal, Show, untrack } from "solid-js";
 import { Landing } from "./site/Landing";
@@ -32,6 +34,7 @@ import { type GalleryPage, loadPage } from "./site/pages";
 import { headOf, interceptLocalLinks, LANDING, type Route, route } from "./site/router";
 
 interceptLocalLinks();
+const audio = scope("gallery").durable("audio", () => createAudioHub());
 
 interface View {
   /** The mounted page's identity: the route's HEAD (demo slug) — a tail
@@ -115,4 +118,11 @@ function Shell() {
   );
 }
 
-render(() => <Shell />, document.getElementById("root") as HTMLElement);
+render(
+  () => (
+    <AudioProvider hub={audio}>
+      <Shell />
+    </AudioProvider>
+  ),
+  document.getElementById("root") as HTMLElement,
+);

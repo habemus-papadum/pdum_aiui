@@ -33,6 +33,13 @@
  * The dock is agent chrome (`data-aiui-chrome`): `read-page` never reads it.
  */
 import {
+  type AudioHub,
+  type AudioOutput,
+  createAudioHub,
+  type StreamInput,
+} from "@habemus-papadum/aiui-audio";
+import { AudioControl, useAudioHub } from "@habemus-papadum/aiui-audio/widgets";
+import {
   backendPrompt,
   browserKey,
   type Delegator,
@@ -79,6 +86,7 @@ import { combinedStatus } from "./status";
 import { DOCK_STYLES } from "./styles";
 
 export interface VoiceDockProps {
+  audio?: AudioHub;
   /** An ephemeral-key mint endpoint for the oracle, when the site has one
    * (tried after a pasted key and a dev key). */
   mintUrl?: string;
@@ -88,7 +96,7 @@ export interface VoiceDockProps {
   class?: string;
 }
 
-type Pane = "none" | "oracle" | "live" | "key" | "source";
+type Pane = "audio" | "none" | "oracle" | "live" | "key" | "source";
 
 const BACKEND_KEY = "aiui.dock.backend";
 const GREETING = "Hi there — I'm connected and listening.";
@@ -116,7 +124,12 @@ function appLine(): string {
   return title === "" ? "an aiui app" : title;
 }
 
-function createOracle(surface: DockSurface, mintUrl: string | undefined): OracleSession {
+function createOracle(
+  surface: DockSurface,
+  mintUrl: string | undefined,
+  input: StreamInput,
+  output: AudioOutput,
+): OracleSession {
   const session = new OracleSession({
     config: {
       // A resolver: the page is named when the session composes, so a tab the
@@ -143,7 +156,7 @@ function createOracle(surface: DockSurface, mintUrl: string | undefined): Oracle
       tools: surface.tools,
     },
     keySource: standardKeySources(mintUrl !== undefined ? { mintUrl } : {}),
-    transport: oracleWebRtcTransport(),
+    transport: oracleWebRtcTransport({ input, output }),
   });
   session.setTools(surface.tools, { brief: surface.brief });
   return session;
@@ -167,11 +180,17 @@ function makeDelegator(id: DockBackendId, app: string): Delegator | undefined {
   }
 }
 
-function createLive(id: DockBackendId, surface: DockSurface, serverUrl: string): LiveSession {
+function createLive(
+  id: DockBackendId,
+  surface: DockSurface,
+  serverUrl: string,
+  input: StreamInput,
+  output: AudioOutput,
+): LiveSession {
   const app = appLine();
   const tools = surface.tools as unknown as LiveTool[];
   const session = new LiveSession({
-    transport: liveWebRtcTransport({ broker: standardBrokers({ serverUrl }) }),
+    transport: liveWebRtcTransport({ broker: standardBrokers({ serverUrl }), input, output }),
     config: {
       instructions: { app },
       ...(id === "hosted"
@@ -234,6 +253,19 @@ function LiveConfigFold(props: { session: LiveSession }): JSX.Element {
 let stylesInjected = false;
 
 export function VoiceDock(props: VoiceDockProps): JSX.Element {
+  const inheritedAudio = props.audio ?? useAudioHub();
+  const audio = inheritedAudio ?? createAudioHub();
+  const oracleInput = audio.streamInput({ id: "dock-oracle", label: "Oracle", icon: "🔮" });
+  const oracleOutput = audio.output({ id: "dock-oracle", label: "Oracle", icon: "🔮" });
+  const liveInput = audio.streamInput({ id: "dock-live", label: "Live", icon: "◉" });
+  const liveOutput = audio.output({ id: "dock-live", label: "Live", icon: "◉" });
+  onCleanup(() => {
+    oracleInput.dispose();
+    oracleOutput.dispose();
+    liveInput.dispose();
+    liveOutput.dispose();
+    if (!inheritedAudio) void audio.dispose();
+  });
   const serverUrl = (): string => props.serverUrl ?? "/live/sessions";
   // Never restored across loads: a pane is only meaningful with the session
   // it shows, and nothing connects until a pill is pressed. The row starts
@@ -270,7 +302,7 @@ export function VoiceDock(props: VoiceDockProps): JSX.Element {
   >(undefined);
   const ensureOracle = (): OracleSession => {
     if (oracleNow !== undefined) return oracleNow;
-    const session = createOracle(untrack(surface), props.mintUrl);
+    const session = createOracle(untrack(surface), props.mintUrl, oracleInput, oracleOutput);
     session.onState((s) => setOracleStatus(s.status));
     session.onLedger((entry) => {
       if (entry.kind === "config" && typeof entry.sent?.instructions === "string") {
@@ -303,7 +335,7 @@ export function VoiceDock(props: VoiceDockProps): JSX.Element {
   };
   const ensureLive = (id: DockBackendId): LiveSession => {
     if (liveNow !== undefined) return liveNow;
-    const session = createLive(id, untrack(surface), serverUrl());
+    const session = createLive(id, untrack(surface), serverUrl(), liveInput, liveOutput);
     session.onState((s) => setLiveStatus(s.status));
     liveNow = session;
     setLive(session);
@@ -357,12 +389,20 @@ export function VoiceDock(props: VoiceDockProps): JSX.Element {
         <style>{DOCK_STYLES + ORACLE_WIDGET_STYLES + LIVE_WIDGET_STYLES}</style>
       ) : null}
 
+      <Show when={pane() === "audio"}>
+        <section class="aiui-dock-pane" aria-label="audio">
+          <AudioControl hub={audio} />
+        </section>
+      </Show>
       <Show when={pane() === "oracle"}>
         <section class="aiui-dock-pane" aria-label="oracle">
           <Show when={oracle()} keyed>
             {(session) => (
               <>
-                <OracleControl session={session} />
+                <OracleControl
+                  session={session}
+                  audio={{ hub: audio, input: oracleInput.id, output: oracleOutput.id }}
+                />
                 <OracleParkBanner session={session} />
                 <OracleViewer session={session} />
                 <OracleUsage session={session} />
@@ -422,7 +462,10 @@ export function VoiceDock(props: VoiceDockProps): JSX.Element {
           <Show when={live()} keyed>
             {(session) => (
               <>
-                <LiveControl session={session} />
+                <LiveControl
+                  session={session}
+                  audio={{ hub: audio, input: liveInput.id, output: liveOutput.id }}
+                />
                 <LiveCaptions session={session} />
                 <h4>tasks</h4>
                 <LiveTasks session={session} />
@@ -451,6 +494,14 @@ export function VoiceDock(props: VoiceDockProps): JSX.Element {
 
       <div class="aiui-dock-row">
         <Show when={expanded()}>
+          <button
+            type="button"
+            class="aiui-dock-pill"
+            aria-pressed={pane() === "audio" ? "true" : "false"}
+            onClick={() => openPane("audio")}
+          >
+            audio
+          </button>
           <button
             type="button"
             class="aiui-dock-pill"

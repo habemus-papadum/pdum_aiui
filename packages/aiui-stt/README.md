@@ -1,69 +1,57 @@
 # @habemus-papadum/aiui-stt
 
-Realtime speech-to-text as a **pencil-shaped component**: start a session, feed it audio, watch a
-stream of cumulative text deltas, and know when a segment is final. Contract of record: the
-aiui-stt proposal (pdum_aiui git history); the wire facts underneath were hard-won in the
-former aiui channel's realtime engines, against both live vendors, and ported verbatim.
-
-**The default engine is ElevenLabs Scribe v2 realtime.** The OpenAI `transcription`-type realtime
-flavor is the alternate. Both sit behind one seam, so the vendor difference is confined to the
-open.
-
-## Install
-
-```sh
-npm install @habemus-papadum/aiui-stt
-```
-
-## The shape
+Browser speech-to-text with ElevenLabs Scribe. Explicit dictation segments produce cumulative
+partial text and final transcripts. Audio capture and controls live in
+[`aiui-audio`](../aiui-audio/README.md); transcription opens a WebSocket directly to ElevenLabs.
+There is no Node audio relay and no OpenAI STT adapter.
 
 ```ts
+import { createAudioHub } from "@habemus-papadum/aiui-audio";
 import { createStt, scribeTransport, sttSignals } from "@habemus-papadum/aiui-stt";
-import { micAudioSource } from "@habemus-papadum/aiui-stt/mic";
-import { scribeConnectUrl } from "@habemus-papadum/aiui-cf-creds/stt"; // or your own mint route
+import { standardScribeConnectUrl } from "@habemus-papadum/aiui-cf-creds/stt";
 
+const audio = createAudioHub();
+const input = audio.pcmInput({ id: "dictation", label: "Dictation", icon: "✍" });
 const stt = createStt({
-  transport: scribeTransport({ connectUrl: scribeConnectUrl }), // one call = one connect
-  audio: micAudioSource(),
+  audio: input,
+  transport: scribeTransport({ connectUrl: () => standardScribeConnectUrl() }),
 });
+const transcript = sttSignals(stt);
 
-// Push-to-talk: the client owns the segment boundary.
-button.onpointerdown = () => stt.beginSegment();
-button.onpointerup = () => stt.endSegment();
-
-// The Solid face — signals over the handle's event stream.
-const { status, partial, finals } = sttSignals(stt);
+// User gesture:
+await audio.startMicrophone();
+await audio.selectInput(input.id);
+await stt.connect();
+stt.beginSegment();
+// Later, finish speaking:
+await stt.endSegment();       // fences the buffered audio tail before committing
+const outstanding = await stt.drain(); // [] means all committed segments settled
 ```
 
-`partial()` is the open segment's **cumulative** text (a partial that gets *shorter* is the vendor
-revising itself, not data loss) — exactly what aiui-viz/modal's `LiveDiffText.update()` wants:
-appends extend, revisions flash and settle. This package ships no renderer.
+`beginSegment()` also connects automatically and queues frames through credential minting.
+Await `endSegment()` before beginning the next segment. `drain(timeoutMs)` reports outstanding
+segment IDs on timeout; errors arrive through callbacks/events. Remote connection failure moves
+the handle to `error`, stops its subscription, and allows a fresh `connect()`. `close()` invalidates
+pending connects and releases the subscription without stopping the shared microphone.
 
-## What's deliberately injected
+Credentials remain an injected `connectUrl(): Promise<string>`. Every connection needs a fresh
+single-use token. `standardScribeConnectUrl` resolves an explicit API-key callback, otherwise the
+shared pasted/dev key, then an explicitly configured broker. `scribeConnectUrl` always uses a
+credential broker, including a same-origin route. Any custom credential minter can supply the URL.
+Keys and tokens do not belong in the audio hub.
 
-- **Credentials** — never owned here. Scribe takes a `connectUrl()` that mints one single-use
-  token per connect (`aiui-cf-creds/stt`'s `scribeConnectUrl` for broker-fronted static apps, or
-  your own mint route). OpenAI takes the oracle's `KeySource` (`transcriptionKeySource`, or any
-  chain) — one `ek_` opens multiple sessions until TTL.
-- **Audio** — an `AudioSource` of 24 kHz PCM16 frames. `aiui-stt/mic` ships the real microphone
-  (getUserMedia → AudioWorklet capture, device picker, level meter); a file player or a test
-  script is the same seam. Both engines take the same format, so one capture path serves either.
+`sttSignals(stt)` exposes status, cumulative partial text, final segments, and errors. Feed text
+into `LiveDiffText` from `aiui-viz/modal` for appended words and visible revisions. That renderer
+remains shared; it is not tied to transcription. The gallery's **Audio** demo combines dictation,
+Oracle editing, routing controls, credential fields, and the diff display.
 
-## The engines' recorded facts (why this port is trustworthy)
+Scribe self-committed utterances are accumulated into the client segment. Short nonempty segments
+are padded with silence to the safe commit floor; empty ones settle locally. Cancellation closes
+the Scribe connection because the protocol has no clear-buffer operation, preventing cancelled
+audio from becoming the next segment's prefix. The next segment reconnects. Parking the audio
+hub keeps the session open, with an idle keepalive. Word timestamps are rebased per segment.
 
-- **Scribe** self-commits utterances (~40 s cap) — this engine accumulates them per segment so a
-  long dictation never loses text; committing under 300 ms of audio is FATAL on that wire, so a
-  local floor refuses it and settles the segment locally; an idle socket dies in ~15 s, so a
-  keepalive holds it; word timestamps ride a session-cumulative timeline and are rebased
-  per-segment.
-- **OpenAI** deltas are incremental and item-correlated (pre-commit deltas bind to the streaming
-  segment); token logprobs fold to word confidences (a word's confidence is its WORST token);
-  `…transcription.failed` resolves its segment loudly instead of hanging a drain.
-- Everything either engine does not understand is **reported** through `onDiagnostic`, never
-  silently dropped — the discipline that would have caught the self-commit months earlier.
-
-## What this package is NOT
-
-Not a prompt pipeline (deltas and finals are the whole product), not the talk lanes, not a
-credential custodian, not a vendor SDK wrapper — raw WebSocket wire, the parts we specifically
-need to control.
+Run `pnpm -C packages/aiui-stt test:browser` for offline browser regression tests (also in CI).
+The opt-in `test:live` suite checks recorded speech against ElevenLabs and reports partial/final
+latency. See [getting started](docs/getting-started.md#repeatable-browser-checks) for setup,
+fixtures, and the evaluation's scope.

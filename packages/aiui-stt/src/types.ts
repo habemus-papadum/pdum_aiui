@@ -1,24 +1,7 @@
 /**
- * types.ts — the package's shared vocabulary: the session seam both engines
- * implement, the callbacks results ride back on, and the injected audio
- * contract. Contract of record: the aiui-stt proposal (pdum_aiui git history).
- *
- * The seam is a browser-side port of the former aiui channel's proven
- * two-engine interface (its `realtime.ts` — `RealtimeSession` /
- * `RealtimeCallbacks`; that package now lives outside this repo), where the
- * wire facts underneath were hard-won and live-verified. The vocabulary is
- * kept deliberately close so the recorded
- * protocol knowledge transfers verbatim: a **segment** is the client's
- * push-to-talk unit (begin → audio frames → commit), identified by ordinal;
- * the vendor's own utterance boundaries are the engines' problem, never the
- * caller's.
- */
-
-/**
  * One transcribed word with its position in the SEGMENT'S OWN AUDIO —
  * milliseconds from the segment's first sample — plus the model's confidence
- * when the vendor reports one. Scribe reports timestamps + logprobs; the
- * OpenAI wire folds token logprobs to words and has no timestamps.
+ * when the vendor reports one. Scribe reports timestamps and logprobs.
  */
 export interface SttWord {
   text: string;
@@ -52,6 +35,8 @@ export type SttDiagnostic =
   | { kind: "unhandled"; messageType: string; raw: string };
 
 export interface SttCallbacks {
+  /** Terminal connection failure; reconnect needs a fresh credential. */
+  onClose?(message: string): void;
   /**
    * A partial transcript for `segment` — CUMULATIVE text, not a raw delta.
    * Every engine re-sends the whole running text, so a partial that gets
@@ -73,11 +58,13 @@ export interface SttCallbacks {
 }
 
 /**
- * A live vendor session. The seam the former channel proved against both engines:
+ * A live transcription session:
  * audio streams in by segment ordinal; results come back through the
  * {@link SttCallbacks} handed to {@link SttTransport.open}.
  */
 export interface SttConnection {
+  /** Resolves on the vendor handshake, rejects on timeout or failed authentication. */
+  readonly ready?: Promise<void>;
   /** Append one PCM16 frame of `segment`. */
   appendAudio(segment: number, bytes: Uint8Array): void;
   /** Commit `segment` (talk-end): its buffered audio becomes one transcript. */
@@ -102,7 +89,7 @@ export interface SttConnection {
 /** What an engine can and cannot do — read so a missing feature is visibly
  * absent, never silently broken (the oracle's capability discipline). */
 export interface SttCapabilities {
-  /** Per-word timestamps on finals (Scribe yes; the OpenAI wire no). */
+  /** Per-word timestamps on finals. */
   wordTimestamps: boolean;
   /** Per-word confidence (both, differently produced). */
   wordLogprobs: boolean;
@@ -125,28 +112,7 @@ export interface SttTransport {
   open(callbacks: SttCallbacks): Promise<SttConnection>;
 }
 
-/**
- * An injected audio producer — the microphone, a file player, a test script.
- * The engine consumes frames the way `SpeechPlayer` consumes an injected
- * sink: same inversion, source instead of sink. Both engines take 24 kHz
- * PCM16 mono, so one capture path serves either.
- */
-export interface AudioSource {
-  /** Samples per second of the produced PCM16. Both engines want 24000. */
-  readonly sampleRate: number;
-  /** Begin producing; each frame is little-endian PCM16 mono bytes. */
-  start(onFrame: (pcm16: Uint8Array) => void): Promise<void>;
-  /** Stop producing (idempotent). Releases the device for a real mic. */
-  stop(): void;
-  /**
-   * Emit the buffered partial frame NOW. The handle calls this at segment
-   * end, before the commit — a warm mic buffering ~100 ms frames would
-   * otherwise clip the segment's tail off every utterance.
-   */
-  flush?(): void;
-  /** Latest frame's level, 0–1 (for meters). Optional. */
-  level?(): number;
-}
+export type { AudioSource } from "@habemus-papadum/aiui-audio";
 
 /** The handle's lifecycle state. */
 export type SttStatus = "idle" | "connecting" | "ready" | "closed" | "error";

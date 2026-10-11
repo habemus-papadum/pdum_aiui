@@ -56,7 +56,7 @@ opt-in and never part of a build. A built page takes a pasted key instead.
 | [`aiui-live`](./packages/aiui-live/README.md) | GPT-Live sessions with pluggable delegation backends (local tools, hosted Responses, the Claude Agent SDK). Its `docs/` carry the measured findings. |
 | [`aiui-dock`](./packages/aiui-dock/README.md) | The voice dock: the oracle and a live session embedded in any aiui page, with the tool log, a key field and a source browser. |
 | [`aiui-audio`](packages/aiui-audio) | Shared microphone capture, exclusive routing, playback, and audio controls. |
-| [`aiui-stt`](./packages/aiui-stt/README.md) | Realtime speech-to-text (ElevenLabs Scribe, OpenAI) behind one component. |
+| [`aiui-stt`](./packages/aiui-stt/README.md) | ElevenLabs realtime dictation with injected audio and credentials. |
 | [`aiui-cf-creds`](./packages/aiui-cf-creds/README.md) | Broker-backed ephemeral credentials for aiui apps. |
 | [`aiui-pencil`](./packages/aiui-pencil/README.md) | A pressure/tilt-driven pencil on a raster surface, with a client surface and a `./sidecar` for a host to mount. |
 | [`aiui-remote-bar`](./packages/aiui-remote-bar/README.md) | A page's mode-engine command bar projected over a websocket to a remote client; also publishes a `./sidecar`. |

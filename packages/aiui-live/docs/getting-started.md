@@ -27,3 +27,11 @@ Claude Code through the Agent SDK (`@habemus-papadum/aiui-live/claude`).
 a synthesized voice as the user, no microphone needed
 ([how that works](./live-api-testing.md)). The voice dock (`@habemus-papadum/aiui-dock`)
 mounts a live session beside any aiui page.
+
+## Shared browser audio
+
+Browser WebRTC transports take registered `input` and `output` endpoints from
+[`aiui-audio`](../../aiui-audio/README.md). Capture, meters, device selection, and input routing
+live in the hub. Sessions enable or disable their own endpoint without owning the microphone.
+Use `AudioProvider` around a host to share the hub with VoiceDock and demos, or pass the hub in
+the dock's `audio` prop. The dock's audio pane exposes the same controls.

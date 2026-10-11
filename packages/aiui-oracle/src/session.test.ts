@@ -446,31 +446,6 @@ describe("the ledger is total", () => {
 });
 
 describe("the mic a talking agent needs, and the VAD it can trip", () => {
-  it("asks for echo cancellation EXPLICITLY — it barged in on itself without it", async () => {
-    const rig = fakeTransport();
-    const asked: MediaStreamConstraints[] = [];
-    const { webRtcTransport } = await import("./webrtc");
-    const transport = webRtcTransport({
-      getUserMedia: async (c) => {
-        asked.push(c);
-        throw new Error("stop here — the constraints are the assertion");
-      },
-      createPeerConnection: () => ({ close: () => {} }) as never,
-    });
-    const session = new OracleSession({
-      config: { instructions: "x" },
-      keySource: testKeys,
-      transport,
-    });
-    await session.start();
-    expect(asked[0]?.audio).toMatchObject({
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true,
-    });
-    expect(rig.sent).toHaveLength(0);
-  });
-
   it("passes VAD tuning through verbatim — ours to send, the vendor's to accept", async () => {
     const rig = fakeTransport();
     const session = new OracleSession({

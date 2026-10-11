@@ -6,7 +6,7 @@ built on the `cf_browser_credentials` kit. Three bridges, one per subpath:
 | Subpath | What it gives you | Credential species |
 | --- | --- | --- |
 | `/oracle` | `federatedKeySource` — browser-side `ek_` minting, no parent key | federated (mint on demand) |
-| `/stt` | `scribeConnectUrl` (ElevenLabs Scribe, **the default engine**) + `transcriptionKeySource` (OpenAI, the alternate) | single-use / federated |
+| `/stt` | `scribeConnectUrl` (broker) + `standardScribeConnectUrl` (pasted/dev key or configured broker) | single-use |
 | `/mosaic` | `brokerConnector` — queries run with credentials installed | session (cached, rotated) |
 | `/motherduck` | `standardMotherDuckEngine` — the in-tab MotherDuck engine (dev key, else the broker) + `motherDuckRunner` | session (a live session outlives its token; rebuild is explicit) |
 

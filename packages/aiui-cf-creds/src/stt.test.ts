@@ -1,22 +1,12 @@
-/**
- * stt.test.ts — both STT credential species, over stubs. Scribe: the broker
- * round-trip happens per call (single-use by construction — the API offers
- * nowhere to hold a token) and the route resolves against an optional broker
- * origin. Transcription: the minted secret carries the `transcription`-type
- * session config, model defaulted from the channel's proven default, the
- * type non-negotiable. Fixture values are invented (D2).
- */
+/** Fresh ElevenLabs credentials from browser keys or a broker. */
+import { browserVendorKey } from "@habemus-papadum/aiui-viz/vendor-keys";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { MintClient } from "./oracle";
-import { DEFAULT_TRANSCRIPTION_MODEL, scribeConnectUrl, transcriptionKeySource } from "./stt";
+import { scribeConnectUrl, standardScribeConnectUrl } from "./stt";
 
-const FIXTURE = {
-  region: "xx-invented-1",
-  identityProviderId: "idp_test_fixture",
-  serviceAccountId: "user-test-fixture",
-};
+vi.mock("@habemus-papadum/aiui-viz/vendor-keys", () => ({ browserVendorKey: vi.fn() }));
 
 afterEach(() => {
+  vi.mocked(browserVendorKey).mockReset();
   vi.unstubAllGlobals();
 });
 
@@ -84,61 +74,29 @@ describe("scribeConnectUrl", () => {
   });
 });
 
-describe("transcriptionKeySource", () => {
-  function stubClient() {
-    const calls: Array<Record<string, unknown>> = [];
-    const client: MintClient = {
-      realtime: {
-        clientSecrets: {
-          create: async (body) => {
-            calls.push(body);
-            return { value: "ek_test_fixture", expires_at: 1_999_999 };
-          },
-        },
-      },
-    };
-    return { client, calls };
-  }
-
-  it("bakes a transcription session with the channel's default model", async () => {
-    const { client, calls } = stubClient();
-    const credential = await transcriptionKeySource({ ...FIXTURE, client }).credential({});
-    expect(calls[0]?.session).toEqual({
-      type: "transcription",
-      audio: { input: { transcription: { model: DEFAULT_TRANSCRIPTION_MODEL } } },
-    });
-    expect(credential.source).toBe("cf-federation:transcription");
-    expect(credential.ek).toBe("ek_test_fixture");
-  });
-
-  it("honours transcriptionModel and keeps the session type non-negotiable", async () => {
-    const { client, calls } = stubClient();
-    const source = transcriptionKeySource({
-      ...FIXTURE,
-      client,
-      transcriptionModel: "whisper-test-model",
-    });
-    await source.credential({ type: "realtime", include: ["fixture.flag"] });
-    expect(calls[0]?.session).toEqual({
-      // The caller's stray type is overridden; its other keys survive. The
-      // caller supplied no audio block, so the default (and its model) stands.
-      type: "transcription",
-      include: ["fixture.flag"],
-      audio: { input: { transcription: { model: "whisper-test-model" } } },
-    });
-  });
-
-  it("lets a caller-supplied audio block replace the default whole", async () => {
-    const { client, calls } = stubClient();
-    const audio = { input: { transcription: { model: "caller-model" }, format: "pcm" } };
-    await transcriptionKeySource({ ...FIXTURE, client }).credential({ audio });
-    expect(calls[0]?.session).toEqual({ type: "transcription", audio });
-  });
-
-  it("describes itself distinctly from the realtime source", () => {
-    const { client } = stubClient();
-    expect(transcriptionKeySource({ ...FIXTURE, client }).describe()).toBe(
-      "cf-federation:transcription",
+describe("standardScribeConnectUrl", () => {
+  it("mints freshly from the shared browser key for every connection", async () => {
+    vi.mocked(browserVendorKey).mockReturnValue("fixture-elevenlabs-key");
+    const seen = stubScribeBroker();
+    const first = await standardScribeConnectUrl();
+    const second = await standardScribeConnectUrl();
+    expect(seen).toHaveLength(2);
+    expect(seen[0].url).toBe("https://api.elevenlabs.io/v1/single-use-token/realtime_scribe");
+    expect(seen[0].init?.headers).toEqual({ "xi-api-key": "fixture-elevenlabs-key" });
+    expect(new URL(first).searchParams.get("token")).not.toBe(
+      new URL(second).searchParams.get("token"),
     );
+  });
+  it("uses an explicit key callback instead of browser storage", async () => {
+    const seen = stubScribeBroker();
+    await standardScribeConnectUrl({ apiKey: () => "explicit-fixture", audioFormat: "pcm_24000" });
+    expect(seen[0].init?.headers).toEqual({ "xi-api-key": "explicit-fixture" });
+    expect(browserVendorKey).not.toHaveBeenCalled();
+  });
+  it("falls back to a configured broker and reports missing credentials", async () => {
+    const seen = stubScribeBroker();
+    await standardScribeConnectUrl({ brokerUrl: "https://creds.example.test", key: "app" });
+    expect(seen[0].url).toBe("https://creds.example.test/api/credentials/elevenlabs?key=app");
+    await expect(standardScribeConnectUrl()).rejects.toThrow("Add an ElevenLabs key");
   });
 });

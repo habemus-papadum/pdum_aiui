@@ -164,4 +164,4 @@ export type {
 } from "./types";
 export { backendToolFor, runTool, taskTimings, toolSpec } from "./types";
 export type { WebRtcTransportOptions } from "./webrtc";
-export { ECHO_SAFE_AUDIO, webRtcTransport } from "./webrtc";
+export { webRtcTransport } from "./webrtc";
