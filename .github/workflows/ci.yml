@@ -65,6 +65,13 @@ jobs:
       - name: Test
         run: pnpm run test
 
+      - name: Install Chromium for offline browser tests
+        run: pnpm -C packages/aiui-audio exec playwright install --with-deps chromium
+
+      - name: Browser audio (no vendor credentials)
+        run: |
+          pnpm -C packages/aiui-audio test:browser
+
   # Consumability gate: build → pack every publishable package → install the
   # tarballs into a scratch npm project → probe the installed packages the way
   # a consumer would. Catches missing `files` entries (a package shipping
