@@ -2,6 +2,9 @@
 
 Self-contained spikes, outside the published pnpm workspace and release pipeline.
 
+The [application patterns](../docs/application-patterns/README.md) connect these
+experiments to the toolkit's intended application and development workflows.
+
 [Architecture review](./architecture-review.md): findings, corrected integration
 bugs, reusable boundaries, and what the Mac packaging checks actually prove.
 
@@ -14,3 +17,7 @@ bugs, reusable boundaries, and what the Mac packaging checks actually prove.
   Electron app and bundled runtimes, reusable Keychain credentials, and resumable
   DMG submission/stapling with artifact receipts.
   [Apple development cheat sheet](../docs/macOS-noterization-cheat-sheet/README.md).
+
+Planned for a future session:
+[public site with optional login](../docs/application-patterns/public-site-optional-login-spike.md),
+enabling funded services and credentials while retaining anonymous public access.

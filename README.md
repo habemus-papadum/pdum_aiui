@@ -19,6 +19,10 @@ Claude Code plugin carrying reusable skills:
   Vite consumes sibling TypeScript packages directly, with compiled artifacts for publication.
   Works without AIUI; see the [setup guide](./packages/aiui-build-config/docs/source-first-workspaces.md).
 
+The [application patterns](./docs/application-patterns/README.md) describe static sites,
+SaaS and custom backends, Electron delivery, companion devices, and AI workflows.
+The [experiments](./experiments/README.md) provide runnable examples of the infrastructure.
+
 ## Requirements
 
 - Node 24.5+ (24.4.0 exactly cannot install the workspace: a Node bug OOMs on one 210 MB tarball).
@@ -125,7 +129,9 @@ so a stray publish cannot overwrite a released one. The guardrails are in
 ```
 packages/*               the published libraries (one lockstep version)
 demos/*                  the notebooks, the gallery shell, and two demo-only libraries
+docs/application-patterns/ application recipes, shared principles, and planned spikes
 docs/proposals/          finished proposals, kept as a record (status in each header)
+experiments/             standalone infrastructure spikes outside the published workspace
 skills/*                 reusable skills of the repo-root Claude plugin (.claude-plugin/)
 scripts/                 versioning (CI-managed), new-package / new-demo, the packaging and
                          template gates, npm name reservation, the skill-link check
