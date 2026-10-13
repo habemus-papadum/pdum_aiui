@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>One site, three backends</title>
+    <script type="module" src="/main.js"></script>
+    <style>
+      body { margin: 0; background: #f6f4ee; color: #22312d; font: 17px/1.5 system-ui, sans-serif; }
+      main { max-width: 1050px; margin: 60px auto; padding: 0 24px; }
+      h1 { font-size: clamp(2rem, 5vw, 3rem); line-height: 1.1; }
+      .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
+      article { background: white; padding: 24px; border: 1px solid #d4dad6; border-radius: 12px; }
+      button { background: #225e50; color: white; border: 0; border-radius: 5px; padding: 10px 16px; font: inherit; cursor: pointer; }
+      pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; min-height: 160px; }
+      .route { font-family: monospace; font-size: 14px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p>DEV STACK EXPERIMENT</p>
+      <h1>One site, three backends.</h1>
+      <p>Each button calls a backend through this site's own address.</p>
+      <div class="cards">
+        <article><h2>Express</h2><p class="route">/api/express/info</p><button type="button" data-backend="express">Call Express</button><pre aria-live="polite"></pre></article>
+        <article><h2>Python</h2><p class="route">/api/python/info</p><button type="button" data-backend="python">Call Python</button><pre aria-live="polite"></pre></article>
+        <article><h2>Cloudflare Worker</h2><p class="route">/api/worker/info</p><button type="button" data-backend="worker">Call Worker</button><pre aria-live="polite"></pre></article>
+      </div>
+    </main>
+  </body>
+</html>
