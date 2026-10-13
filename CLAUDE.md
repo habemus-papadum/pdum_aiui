@@ -19,9 +19,9 @@ it, and the notebooks that demonstrate both. Three pillars:
    contract), `aiui-oracle` (the app's cells as tools over OpenAI Realtime), `aiui-live`
    (GPT-Live with pluggable delegation backends; its `docs/` carry the measured findings),
    `aiui-dock` (both voice engines in any aiui page), `aiui-stt`, `aiui-cf-creds`, `aiui-pencil`,
-   `aiui-remote-bar`, `aiui-room-relay`, `aiui-util` (the sidecar contract + client-surface
-   serving). The sidecar packages publish a `./sidecar` subpath for a host *outside this repo*
-   to mount — nothing in here mounts them.
+   and `aiui-audio` / `aiui-screen-capture`. Pencil owns local drawing and input;
+   the former host/client sessions, sidecars, and room relay are extracted to the
+   staging repository. See pencil's `docs/architecture-review.md`.
 3. **The demo notebooks and the gallery** — `demos/*`, composed into the published static site.
 
 **House rules for prose.** Design notes live in the owning package's `docs/`. `docs/proposals/`
@@ -29,19 +29,23 @@ keeps the finished proposals as a record — not wired into any build or site, e
 status. Pre-implementation explorations retire outright — git history is the archive (no
 `archive/`, no root docs site). The README is the repo's index.
 
-## The repo IS the Claude plugin (one skill at the root)
+## The repo IS the Claude plugin (skills at the root)
 
 The repo root carries `.claude-plugin/plugin.json` (one plugin, `aiui`) plus a one-entry
-self-catalog `.claude-plugin/marketplace.json` (marketplace `pdum-aiui`, source `./`); the one
-skill lives in `skills/aiui-architecture`. Because the plugin is the whole repo, the skill links
-straight into `packages/*/docs/` with ordinary relative links — installs get the live docs,
-nothing is bundled or generated. `pnpm skills:check` (CI) is the only guard: manifests parse,
+self-catalog `.claude-plugin/marketplace.json` (marketplace `pdum-aiui`, source `./`). Its skills
+live in `skills/aiui-architecture` and `skills/source-first-workspaces`. Because the plugin is
+the whole repo, the skills link straight into `packages/*/docs/` with ordinary relative links.
+Installs get the docs from the same snapshot; nothing is bundled or generated.
+`pnpm skills:check` (CI) is the only guard: manifests parse,
 every relative link resolves. The plugin manifest's `version` is **lockstep** (stamped by
 `scripts/versioning.mjs`; never hand-edit — AGENTS.md), which pins marketplace updates to
 release bumps. Install: `claude plugin marketplace add habemus-papadum/pdum_aiui` +
 `claude plugin install aiui@pdum-aiui`; a checkout loads with `claude --plugin-dir <repo root>`.
 
 ## Workspace dependencies are editable (source-first) — the convention
+
+For setting this up in another repository, use [the portable setup guide](./packages/aiui-build-config/docs/source-first-workspaces.md)
+through `aiui:source-first-workspaces`. The rules below are this repository's conventions.
 
 Every package's dev manifest points at **source**, and the `dist/` mapping lives in
 `publishConfig`, which `pnpm pack`/`pnpm publish` swap in at publish time:
@@ -61,7 +65,7 @@ Every package's dev manifest points at **source**, and the `dist/` mapping lives
 Every conditional-exports object in `publishConfig` must end with a `"default"` condition.
 Without it, `require.resolve()` on the *installed* package throws
 `ERR_PACKAGE_PATH_NOT_EXPORTED` — and source-first dev masks this completely, because the dev
-`exports` are bare strings that match any condition (this silently broke a sidecar subpath for
+`exports` are bare strings that match any condition (this silently broke a subpath for
 installed consumers once; `pnpm test:packaging` now asserts it).
 
 So `workspace:^` deps behave like Python *editable installs*: edit a package, and every
@@ -70,7 +74,7 @@ in-workspace consumer (a demo's dev server, sibling tests, tsx-run scripts) pick
 
 - **New packages get the shape from the skeleton** (`scripts/_skeleton/package.json.tmpl`) via
   `pnpm new-package`; keep dev fields and `publishConfig` overrides in sync when adding entry
-  points (subpath exports go in *both*, like `aiui-pencil`'s `./sidecar`). **`bin` stays on
+  points (subpath exports go in *both*, like `aiui-audio`'s `./widgets`). **`bin` stays on
   `dist/`** in both forms — bins run under plain `node` from installed tarballs.
 - **`pnpm test:packaging` is the guard for the published (dist) shape** — pack applies the
   `publishConfig` swap, so it tests what consumers install; run it whenever packaging fields

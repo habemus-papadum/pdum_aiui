@@ -30,6 +30,15 @@ try {
   });
   if (interrupted) await stack.stop();
   else {
+    console.log(
+      JSON.stringify({
+        type: "stack-ready",
+        instance: stack.instance,
+        stateDir: stack.stateDir,
+        frontend: stack.server.resolvedUrls,
+        backends: stack.backends.map(({ name, url, pid }) => ({ name, url, pid })),
+      }),
+    );
     console.log(`\nDev instance: ${stack.instance}`);
     stack.server.printUrls();
     console.log("\nBrowser routes: /api/express, /api/python, /api/worker");

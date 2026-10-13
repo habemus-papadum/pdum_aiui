@@ -12,7 +12,12 @@ scientific notebooks composed into one gallery, published at
 A pnpm + TypeScript monorepo. Packages live under `packages/*` in the `@habemus-papadum` scope,
 versioned in **lockstep** (one shared version across the whole repo); every package declares a
 publication level when it is created (see [CLAUDE.md](./CLAUDE.md)). The repo root is also a
-Claude Code plugin carrying one skill, `aiui-architecture`.
+Claude Code plugin carrying reusable skills:
+
+- [`aiui:aiui-architecture`](./skills/aiui-architecture/SKILL.md) — the aiui frontend methodology.
+- [`aiui:source-first-workspaces`](./skills/source-first-workspaces/SKILL.md) — set up a repo so
+  Vite consumes sibling TypeScript packages directly, with compiled artifacts for publication.
+  Works without AIUI; see the [setup guide](./packages/aiui-build-config/docs/source-first-workspaces.md).
 
 ## Requirements
 
@@ -59,10 +64,7 @@ opt-in and never part of a build. A built page takes a pasted key instead.
 | [`aiui-screen-capture`](packages/aiui-screen-capture) | Browser screen capture, native element cropping, and Solid preview controls. |
 | [`aiui-stt`](./packages/aiui-stt/README.md) | ElevenLabs realtime dictation with injected audio and credentials. |
 | [`aiui-cf-creds`](./packages/aiui-cf-creds/README.md) | Broker-backed ephemeral credentials for aiui apps. |
-| [`aiui-pencil`](./packages/aiui-pencil/README.md) | A pressure/tilt-driven pencil on a raster surface, with a client surface and a `./sidecar` for a host to mount. |
-| [`aiui-remote-bar`](./packages/aiui-remote-bar/README.md) | A page's mode-engine command bar projected over a websocket to a remote client; also publishes a `./sidecar`. |
-| [`aiui-room-relay`](./packages/aiui-room-relay/README.md) | A host-neutral websocket room relay pairing a browser host with remote clients. |
-| [`aiui-util`](./packages/aiui-util/README.md) | The sidecar contract a host mounts, and client-surface serving for sidecar packages. |
+| [`aiui-pencil`](./packages/aiui-pencil/README.md) | A pressure/tilt-driven pencil with local input policies, programmatic strokes, a raster surface, and a Solid adapter. |
 | `aiui-build-config` | *Internal, never published.* The one home of the externalize-deps matcher and the Solid-under-Vitest configuration every package shares. |
 | `aiui-prompts/spikes/*` | *Internal, never published.* Two prompt-authoring spikes kept beside their future foundation package (`authoring`, `inspector`). |
 
@@ -124,7 +126,7 @@ so a stray publish cannot overwrite a released one. The guardrails are in
 packages/*               the published libraries (one lockstep version)
 demos/*                  the notebooks, the gallery shell, and two demo-only libraries
 docs/proposals/          finished proposals, kept as a record (status in each header)
-skills/aiui-architecture the one skill of the repo-root Claude plugin (.claude-plugin/)
+skills/*                 reusable skills of the repo-root Claude plugin (.claude-plugin/)
 scripts/                 versioning (CI-managed), new-package / new-demo, the packaging and
                          template gates, npm name reservation, the skill-link check
 .github/workflows/       ci.yml (gate) + release.yml (publish + gallery deploy)

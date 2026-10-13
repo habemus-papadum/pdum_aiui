@@ -1,5 +1,5 @@
 /**
- * `aiui-pencil` — one instrument, three surfaces.
+ * `aiui-pencil` — local pencil input, rendering, and drawing data.
  *
  * A pencil whose range lives in your hand: pressure darkens and broadens it,
  * laying it over turns the contact patch elliptical and it becomes charcoal.
@@ -11,9 +11,8 @@
  *
  * **The core is layer 1: the pure stroke pipeline** — everything from a
  * `PointerEvent` to a list of dabs, with no DOM anywhere in it. Layered on top,
- * and exported below: the renderer (`PencilSurface`, surface.ts), the remote
- * wire and its endpoint cores (protocol.ts, remote.ts, the sessions); the
- * command bus ships as its own channel (`aiui-remote-bar`).
+ * and exported below: the renderer (`PencilSurface`, surface.ts), local input
+ * policy (`input/`), and the Solid adapter (`reactive.ts`).
  *
  * The pipeline, end to end:
  *
@@ -37,7 +36,6 @@
  * @packageDocumentation
  */
 
-export { ClientSession, type ClientSessionOptions } from "./client-session";
 export { type CuspConfig, detectCusps } from "./corners";
 export { type Dab, dabAt, filterSamples, planStroke, type StrokePlan } from "./dabs";
 export type { OneEuroConfig } from "./filter";
@@ -48,16 +46,15 @@ export {
   resampleByArcLength,
   type Vec,
 } from "./geom";
-// host-session.ts / client-session.ts — the two ends of the remote pencil as
-// consumables: relay socket, WebRTC lifecycle, videoStatus. An integrator
-// constructs one of these instead of ever touching an RTCPeerConnection.
+export { guardPenControls, penWriting } from "./input/controls";
 export {
-  clientRelayUrl,
-  HostSession,
-  type HostSessionOptions,
-  type HostSessionStatus,
-  hostRelayUrl,
-} from "./host-session";
+  bindPenInput,
+  type InputBounds,
+  type PenActivity,
+  type PenInputBinding,
+  type PenInputOptions,
+  type PenSink,
+} from "./input/pointer";
 export {
   NEW_STROKE,
   type PencilMode,
@@ -68,46 +65,9 @@ export {
   type StrokeContext,
   WRITE,
 } from "./pencil";
-// protocol.ts — the remote-pencil wire: ink intent up, the mode engine's bar
-// down, WebRTC signaling across (D1: video is a track, never JPEG; D3: no frame
-// metadata of any kind). Pure, shared by the relay (node) and both browsers.
-export {
-  type CaptureState,
-  type ClientToRelay,
-  decode,
-  encode,
-  fromNorm,
-  type HostToRelay,
-  type InkIntent,
-  isInkIntent,
-  type PointerKind,
-  type RelayToClient,
-  type RelayToHost,
-  type RemotePresentation,
-  type SessionInfo,
-  type Signal,
-  type StrokeOverrides,
-  type Surface,
-  toNorm,
-  type VideoStatus,
-  type WireMessage,
-  type WirePoint,
-} from "./protocol";
 // reactive.ts — the Solid face of a surface: the drawing as signals (committed
 // immediately; the live stroke throttled but LOSSLESS — cumulative snapshots).
 export { type InkSignals, type InkSource, inkSignals } from "./reactive";
-// remote.ts — the endpoint cores (no socket in them), and the preview fade
-// window: ~500 ms from pen-up (the policy retired paint v1 proved, D3), sized
-// from the receiver's measured delays when stats are available.
-export {
-  fadeWindowMs,
-  type LinkStats,
-  PREVIEW_FADE_MS,
-  RemoteClient,
-  type RemoteClientOptions,
-  RemoteHost,
-  type RemoteHostOptions,
-} from "./remote";
 export { type DensifyConfig, densify } from "./spline";
 export {
   type InkEvent,

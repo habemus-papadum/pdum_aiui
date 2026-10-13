@@ -296,9 +296,9 @@ core in `aiui-viz/modal`, regions built with `ladder`/`toggle`/`choice`):
 - Regions with `agent:` auto-register a `control()` whose setter dispatches — never mirror
   engine state into separate controls or signals.
 - Imperative events from outside (global shortcuts, sockets) cross in as sequential idempotent
-  dispatches, re-reading committed state between steps — worked example:
-  `packages/aiui-remote-bar/src/solid.ts` (a remote tap arrives over a socket and lands as the
-  same dispatch a key would). Keymap worked example: `packages/aiui-slides/src/keys.ts` (a pure
+  dispatches, re-reading committed state between steps — see
+  `packages/aiui-viz/src/mode-solid.test.ts` for the flush-committed adapter contract.
+  Keymap worked example: `packages/aiui-slides/src/keys.ts` (a pure
   table, tested); rationale: the mode-engine design note (git history).
 
 ## Solid 2.0 (release candidate) instant-bite gotchas

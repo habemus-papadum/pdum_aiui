@@ -11,18 +11,14 @@
   },
   "sideEffects": false,
   "exports": {
-    ".": "./src/index.ts",
-    "./client": "./src/client/index.ts",
-    "./server": "./src/backend.ts",
-    "./sidecar": "./src/sidecar.ts"
+    ".": "./src/index.ts"
   },
   "main": "./src/index.ts",
   "module": "./src/index.ts",
   "types": "./src/index.ts",
   "files": [
     "dist",
-    "src",
-    "assets"
+    "src"
   ],
   "publishConfig": {
     "access": "public",
@@ -34,51 +30,28 @@
         "types": "./dist/index.d.ts",
         "import": "./dist/index.js",
         "default": "./dist/index.js"
-      },
-      "./client": {
-        "types": "./dist/client/index.d.ts",
-        "import": "./dist/client.js",
-        "default": "./dist/client.js"
-      },
-      "./server": {
-        "types": "./dist/backend.d.ts",
-        "import": "./dist/backend.js",
-        "default": "./dist/backend.js"
-      },
-      "./sidecar": {
-        "types": "./dist/sidecar.d.ts",
-        "import": "./dist/sidecar.js",
-        "default": "./dist/sidecar.js"
       }
     }
   },
   "scripts": {
-    "build": "tsc --emitDeclarationOnly -p tsconfig.json && tsc --emitDeclarationOnly -p tsconfig.node.json && vite build && pnpm build:client",
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p lab/tsconfig.json && tsc --noEmit -p client/tsconfig.json",
+    "build": "vite build && tsc --emitDeclarationOnly -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p lab/tsconfig.json",
     "test": "vitest run",
     "lab": "vite --config lab/vite.config.ts",
-    "build:client": "vite build --config client/vite.config.ts",
-    "dev:client": "vite client"
+    "test:browser": "playwright test"
   },
   "devDependencies": {
     "@babel/core": "catalog:",
     "@habemus-papadum/aiui-build-config": "workspace:^",
     "@habemus-papadum/aiui-source-processor": "workspace:^",
-    "@types/express": "catalog:",
-    "@types/ws": "catalog:",
-    "express": "catalog:",
     "jsdom": "catalog:",
     "vite": "catalog:",
     "vite-plugin-solid": "catalog:solid",
-    "ws": "catalog:"
+    "@playwright/test": "^1.64.0",
+    "@solidjs/web": "catalog:solid"
   },
   "dependencies": {
-    "@habemus-papadum/aiui-design": "workspace:^",
-    "@habemus-papadum/aiui-remote-bar": "workspace:^",
-    "@habemus-papadum/aiui-room-relay": "workspace:^",
-    "@habemus-papadum/aiui-util": "workspace:^",
     "@habemus-papadum/aiui-viz": "workspace:^",
-    "@solidjs/web": "catalog:solid",
     "solid-js": "catalog:solid"
   }
 }

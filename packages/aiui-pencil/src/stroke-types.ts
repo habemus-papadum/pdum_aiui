@@ -5,7 +5,7 @@
  * a stroke's raster state — the baked tile, the wet buffer, how much is stamped —
  * and are used only inside `PencilSurface`. The PUBLIC face (`InkStroke`,
  * `InkState`, `InkEvent`, `StrokeEnd`, `PencilSurfaceOptions`, `Tool`) is the
- * reactive/config contract that `reactive.ts`, `remote.ts`, and the barrel
+ * reactive/config contract that `reactive.ts` and the barrel
  * consume; `surface.ts` re-exports those names so no import site has to change.
  */
 
@@ -47,7 +47,8 @@ export interface LiveStroke {
   wet: Layer | undefined;
   /** How many dabs are already baked into `wet`. */
   stamped: number;
-  pointerId: number | undefined;
+  /** Whether this stroke emits application start/end callbacks. */
+  notify: boolean;
 }
 
 export interface StrokeEnd {
@@ -108,10 +109,8 @@ export interface PencilSurfaceOptions {
   fadeSec?: () => number;
   /**
    * Which exit a fading stroke takes. `"warp"` (default) is the gesture curve —
-   * hold, charge, pop: a stroke ANNOUNCING its death. `"crossfade"` is the
-   * remote preview's handoff (D3): a gentle dissolve that hides the moment the
-   * video's copy takes over — width never stretches, so the preview never warps
-   * away from the truth beneath it, and the baked tile is reused throughout.
+   * hold, charge, pop: a stroke ANNOUNCING its death. `"crossfade"` is a
+   * gentle dissolve: width never stretches and the baked tile is reused throughout.
    */
   fadeCurve?: () => "warp" | "crossfade";
   /** Capture local pointer input. Default true. */
@@ -145,8 +144,12 @@ export interface PencilSurfaceOptions {
   resize?: "keep" | "rescale";
   onStrokeStart?: (id: string, tool: Tool) => void;
   onStrokeEnd?: (stroke: StrokeEnd) => void;
-  /** A REMOTE stroke completed — the iPad's pen, fed through `remote*`. */
-  onRemoteStrokeEnd?: (stroke: StrokeEnd) => void;
+  /** An in-flight stroke was discarded, rather than committed. */
+  onStrokeCancel?: (id: string) => void;
+  /** Two-finger pan, normalized by the canvas size; applications apply the view change. */
+  onPan?: (du: number, dv: number) => void;
+  /** Two-finger pinch: normalized centre and incremental scale. */
+  onZoom?: (centerU: number, centerV: number, scale: number) => void;
   /** Every stroke faded away on its own; nothing is left. */
   onAutoClear?: () => void;
   className?: string;

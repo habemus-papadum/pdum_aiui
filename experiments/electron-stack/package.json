@@ -1,0 +1,37 @@
+{
+  "name": "electron-stack-spike",
+  "private": true,
+  "type": "module",
+  "main": "out/main/index.cjs",
+  "description": "Concurrent Electron development with independently bundled backend runtimes",
+  "author": "AIUI experiments",
+  "scripts": {
+    "setup:electron": "node node_modules/electron/install.js",
+    "dev": "node --import tsx scripts/dev.ts",
+    "build": "electron-vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node --import tsx --test test/*.test.ts",
+    "test:packaged": "node --import tsx --test test/packaged.smoke.ts",
+    "test:dmg": "node scripts/test-dmg.mjs",
+    "runtimes": "node scripts/stage-runtimes.mjs",
+    "package:prepare": "npm run build && npm run runtimes && node scripts/prepare-package.mjs",
+    "package:dir": "npm run package:prepare && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --dir --config electron-builder.config.cjs",
+    "package:dmg": "npm run package:prepare && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac dmg --config electron-builder.config.cjs",
+    "package:signed": "npm run package:prepare && electron-builder --mac dmg --config electron-builder.config.cjs"
+  },
+  "dependencies": {
+    "express": "5.3.0"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "1.63.2",
+    "@playwright/test": "1.64.0",
+    "@types/node": "26.6.5",
+    "electron": "44.7.0",
+    "electron-builder": "26.15.3",
+    "electron-vite": "5.0.0",
+    "tsx": "4.22.5",
+    "typescript": "5.9.3",
+    "vite": "7.3.7",
+    "wrangler": "4.150.0"
+  }
+}

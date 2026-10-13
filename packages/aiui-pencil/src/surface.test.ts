@@ -41,8 +41,8 @@ describe("PencilSurface.popCompleted", () => {
     const s = new PencilSurface({ params: () => WRITE, localInput: false, fadeSec });
     // A stroke in flight — the exact state `onStrokeStart` sees when it calls
     // popCompleted (the new stroke has already joined `live`).
-    s.remoteBegin("s1", { tool: "draw", params: WRITE, point: sample(10, 10) });
-    s.remotePoint("s1", sample(20, 20));
+    s.beginStroke("s1", { tool: "draw", params: WRITE, point: sample(10, 10) });
+    s.appendPoints("s1", [sample(20, 20)]);
     return s;
   }
 

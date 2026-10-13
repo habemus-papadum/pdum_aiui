@@ -5,6 +5,10 @@ Cloudflare Worker with one command. Each launch owns its processes, ports, Vite
 caches, and temporary Worker storage. The frontend uses the same relative API
 paths in development and production.
 
+See the [cross-spike architecture review](../architecture-review.md) for the
+reusable contracts, integration-test findings, and deployment boundaries shared
+with the Electron experiment.
+
 ## Run it
 
 Requires Node 24.5+ and Python 3.10+ on macOS or Linux. No Cloudflare account or
@@ -37,6 +41,12 @@ state. A backend crash closes the stack and makes the CLI exit unsuccessfully.
 Startup failures and interrupted startup also clean up owned backends. Cleanup
 signals only the process groups created by this launch; it never finds and kills
 an arbitrary process by port.
+
+Vite 8's final `closeServer` hook also awaits backend/state cleanup when Vite
+initiates shutdown; a Vite restart preserves the existing backends. The CLI emits
+a `stack-ready` JSON record with the instance, state directory, frontend URLs and
+backend PIDs/URLs so agents can observe their own launch without probing shared
+ports. Tests exercise the actual CLI's SIGTERM path as well as direct Vite close.
 
 This experiment uses its own npm lockfile. It is deliberately outside the root
 pnpm workspace: installing it does not change root dependencies, workspace

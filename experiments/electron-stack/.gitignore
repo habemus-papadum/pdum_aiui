@@ -1,0 +1,7 @@
+vendor/
+out/
+artifacts/
+release/
+.wrangler/
+__pycache__/
+*.dmg

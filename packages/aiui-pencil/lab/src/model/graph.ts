@@ -46,6 +46,7 @@ import {
   flow,
   grain,
   ink,
+  labScope,
   minCutoff,
   paper,
   preset,
@@ -97,7 +98,7 @@ const VERDICT_TEXT: Record<TiltVerdict, string> = {
 };
 
 export const graph = hotCellGraph(
-  "lab",
+  labScope.name,
   () => ({
     /**
      * Every completed stroke, re-planned under the current knobs. Both inputs
@@ -109,6 +110,7 @@ export const graph = hotCellGraph(
     plans: cell(
       () => ({ recorded: ink.strokes(), params: currentParams() }),
       (deps): StrokePlan[] => deps.recorded.map((r) => planStroke(r.points, deps.params)),
+      { scope: labScope },
     ),
 
     /**
@@ -139,6 +141,7 @@ export const graph = hotCellGraph(
           enclosedPx2: enclosed,
         };
       },
+      { scope: labScope },
     ),
 
     /** Does this device's pen report a usable orientation? Phase 1's whole question. */
@@ -153,6 +156,7 @@ export const graph = hotCellGraph(
           input: inputReport(deps.t),
         };
       },
+      { scope: labScope },
     ),
   }),
   import.meta.hot,
@@ -174,6 +178,7 @@ registerStandardTools(kit);
 
 /** Load the selected preset's numbers into every knob. They are yours to tweak afterwards. */
 export const loadPreset = action({
+  scope: labScope,
   run: () => {
     const p = resolveParams(preset.get());
     minCutoff.set(p.filter.minCutoff);
@@ -197,6 +202,7 @@ export const loadPreset = action({
 
 /** Throw away every drawn stroke — the real paper AND the diagnostic overlay. */
 export const clearStrokes = action({
+  scope: labScope,
   run: () => {
     paper.clear(); // ink.strokes() follows by itself — the surface owns the record
     return "cleared";
@@ -209,6 +215,7 @@ export const clearStrokes = action({
  * it at once. Also D4's retire move for an overlay whose viewport changed.
  */
 export const clearAnimated = action({
+  scope: labScope,
   run: () => {
     paper.clearAnimated();
     return "clearing — watch it pop";
@@ -221,6 +228,7 @@ export const clearAnimated = action({
  * horizon are the same number by construction (see surface.ts).
  */
 export const undo = action({
+  scope: labScope,
   run: () => {
     return paper.undo()
       ? "undone"
@@ -237,10 +245,11 @@ export const undo = action({
  * the pipeline. Tuning a pencil by re-drawing a stroke you can never draw the
  * same way twice is not tuning, it is guessing.
  *
- * It replays through the REMOTE feed — the same path an iPad's pen will take in
- * phase 5 — so the remote surface is exercised every time a slider moves.
+ * It uses programmatic stroke input with callbacks suppressed: rebuilding
+ * pixels is not a new user stroke. Drawing subscriptions still update.
  */
 export const rebake = action({
+  scope: labScope,
   run: () => {
     // Snapshot BEFORE clearing: `ink.strokes()` is the surface's own record, and
     // clear() empties it. The captured array is ours — fresh per ink() call.
@@ -257,11 +266,9 @@ export const rebake = action({
       // here instead replayed three pencil strokes as three eraser strokes and
       // wiped the page; the eraser was working perfectly, and the bug was that a
       // stroke did not remember what it was.
-      paper.remoteBegin(id, { tool: stroke.tool, params, point: stroke.points[0] });
-      for (const s of stroke.points.slice(1)) {
-        paper.remotePoint(id, s);
-      }
-      paper.remoteEnd(id);
+      paper.beginStroke(id, { tool: stroke.tool, params, point: stroke.points[0], notify: false });
+      paper.appendPoints(id, stroke.points.slice(1));
+      paper.endStroke(id);
     });
     return `re-baked ${recorded.length} stroke(s)`;
   },
@@ -269,9 +276,12 @@ export const rebake = action({
 
 /** Wipe the measured telemetry, so the next tilt of the pen is measured from scratch. */
 export const resetTelemetry = action({
+  scope: labScope,
   run: () => {
     recorder.resetTelemetry();
     telemetry.set(PenRecorder.emptySnapshot());
     return "telemetry reset — now tilt the pen and watch the ranges move";
   },
 });
+
+if (import.meta.hot) import.meta.hot.accept();

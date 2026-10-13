@@ -1,0 +1,4 @@
+{
+  "mode": "web",
+  "workerUrl": "https://dev-stack-backend.example.workers.dev"
+}

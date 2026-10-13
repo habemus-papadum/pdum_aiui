@@ -191,7 +191,7 @@ intercepts same-origin anchors app-wide, which makes the safe idiom the default 
 This layer is deliberately late because it's the most tasteful and least testable — but not
 untestable: the modal kit keeps keymaps as pure tables (unit-test the bindings and the Esc
 ladder — and a mode-engine spec is pure data plus a pure reducer, testable the same way;
-`packages/aiui-remote-bar`'s tests are the in-repo example), and the whole app is
+`packages/aiui-viz/src/modal/` contains the engine's tests), and the whole app is
 drivable through its own tool surface — which is the layer's
 definition of done: `report` is sane, every knob is a declared control and every verb a declared
 action, and the agent can verify a feature by calling it rather than squinting at pixels.

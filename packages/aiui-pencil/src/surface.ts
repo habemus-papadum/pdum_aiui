@@ -14,9 +14,9 @@
  *
  * The fade window is *finite*. Let that one fact size everything:
  *
- *   > A stroke stays an individual object until it falls past a horizon. Past it,
- *   > it is flattened into one bitmap and forgotten. **The fade window, the undo
- *   > depth, and the retention horizon are the same number.**
+ *   > Permanent ink keeps a bounded number of undoable raster tiles. Older
+ *   > pixels flatten into a bitmap; raw stroke data remains. Temporary ink
+ *   > expires by age instead, and is not flattened into that bitmap.
  *
  * ```text
  *   display  =  settled  ∘  retained[0..n]  ∘  live
@@ -42,8 +42,9 @@
  *    stretch, which no baked bitmap can do. Affordable because the fading set is
  *    bounded by definition.
  *
- * With `fadeSec > 0` strokes never reach `settled` at all: they are born, they
- * warp, they pop, they are discarded, and the surface costs nothing over time.
+ * With `fadeSec > 0` new strokes do not reach `settled`: they are born, they
+ * warp, they pop, and they are discarded. Memory still depends on how much ink
+ * is live within that time window.
  * That is the overlay's gesture ink, exactly as it behaves today.
  *
  * ## Why it is also FASTER than the vector surface it replaced
@@ -67,6 +68,7 @@ import {
 } from "./fade";
 import type { Rect } from "./geom";
 import { GrainCache } from "./grain";
+import { bindPenInput, type PenInputBinding } from "./input/pointer";
 import { clearLayer, growLayer, type Layer, makeLayer } from "./layer";
 import type { PencilParams } from "./pencil";
 import { applyGrain, boundsOfDabs, grainOf, stampDabs, styleKey, unstableTail } from "./stamp";
@@ -81,7 +83,7 @@ import {
   type StrokeRecord,
   type Tool,
 } from "./stroke-types";
-import { type PenSample, penSample } from "./telemetry";
+import type { PenSample } from "./telemetry";
 
 // Re-exported so every `from "./surface"` import site and the package barrel
 // keep resolving the public data-face types unchanged.
@@ -107,7 +109,8 @@ export class PencilSurface {
    */
   private flattened: (InkStroke & { params: PencilParams })[] = [];
   private listeners = new Set<(event: InkEvent) => void>();
-  private localId: string | undefined;
+  /** Local input policy and activity; absent when localInput is false. */
+  readonly input: PenInputBinding | undefined;
   /** Reused each frame to composite a live stroke's stable prefix + unstable tail. */
   private scratch: Layer | undefined;
 
@@ -140,15 +143,8 @@ export class PencilSurface {
     this.target.append(this.canvas);
     this.resize();
     window.addEventListener("resize", this.onResize);
-    // The TARGET's size is the coordinate truth, and it can change without a
-    // window resize — the remote client's plane div re-fits on every VIDEO
-    // resize (WebRTC ramps resolution; aspect changes on a tab switch). Found
-    // live (2026-07-17): the preview surface kept its creation-time system
-    // (the plane had no size yet, so the window fallback), its canvas was
-    // CSS-stretched into the real plane, and preview ink landed scaled by the
-    // difference — the further the stage's aspect from the video's, the
-    // farther the preview from where the echoed stroke would land. Observe the
-    // canvas itself; guard so an unchanged layout tick never clears the paper.
+    // Layout can change without a window resize, including after adoption by
+    // a different component. Observe the canvas; unchanged geometry keeps ink.
     if (typeof ResizeObserver === "function") {
       this.ro = new ResizeObserver(() => {
         const w = this.canvas.clientWidth || window.innerWidth;
@@ -161,7 +157,7 @@ export class PencilSurface {
     }
 
     if (opts.localInput ?? true) {
-      this.bindLocalInput();
+      this.input = this.bindLocalInput();
     }
     if (this.ctx !== null && typeof requestAnimationFrame === "function") {
       const tick = (): void => {
@@ -175,12 +171,7 @@ export class PencilSurface {
   // ── public surface (shape kept from retired aiui-ink's InkSurface) ──────────
 
   setActive(on: boolean): void {
-    // A surface with no local input never owns the pointer: its canvas exists to
-    // SHOW ink (a preview, a remote-markup overlay), and pointer-events: auto
-    // would only block the page beneath it. Which is exactly what happened once:
-    // the Lab's tab-mode overlay — full-viewport, z-index 2000 — was setActive'd
-    // out of habit and swallowed every click on the page. There were no
-    // listeners to arm; the only effect was the blocking.
+    // A programmatically driven surface must not intercept the page's pointers.
     if (this.opts.localInput === false) {
       return;
     }
@@ -213,20 +204,6 @@ export class PencilSurface {
       w: Math.max(a.x + a.w, b.x + b.w) - Math.min(a.x, b.x),
       h: Math.max(a.y + a.h, b.y + b.h) - Math.min(a.y, b.y),
     }));
-  }
-
-  /**
-   * Force the next frame to redraw, even though nothing changed.
-   *
-   * Exists for one consumer: a `captureStream()` of this canvas. The stream
-   * emits a frame only when the canvas REPAINTS, and this surface deliberately
-   * paints nothing when still ("free battery on an iPad") — so a viewer joining
-   * a quiet host would stare at a stream that has never produced a frame. The
-   * host keeps the stream warm by calling this on a slow tick while anyone is
-   * watching; the cost is a few `drawImage` calls per tick.
-   */
-  repaint(): void {
-    this.dirty = true;
   }
 
   /**
@@ -298,7 +275,6 @@ export class PencilSurface {
     this.flattened = [];
     this.settled = undefined;
     this.live.clear();
-    this.localId = undefined;
     this.clearing = undefined;
     this.dirty = true;
     if (had && auto) {
@@ -379,7 +355,6 @@ export class PencilSurface {
       record.bornAt = now - INK_HOLD * fadeMs;
     }
     this.live.clear();
-    this.localId = undefined;
     this.clearing = { startedAt: now, fadeMs };
     this.dirty = true;
     this.emit("live");
@@ -399,22 +374,34 @@ export class PencilSurface {
     this.dirty = true;
   }
 
-  // ── the remote pen (an iPad, over the pencil wire) ──────────────────────────
+  // ── programmatic stroke input ─────────────────────────────────────────────
 
-  remoteBegin(id: string, init: { tool: Tool; params: PencilParams; point: PenSample }): void {
-    this.beginStroke(id, init.tool, init.params, init.point, undefined);
+  /** Start a stroke in canvas CSS px. Set notify:false for silent replay;
+   * drawing subscriptions still update, but stroke callbacks do not fire. */
+  beginStroke(
+    id: string,
+    init: {
+      tool: Tool;
+      params: PencilParams;
+      point: PenSample;
+      notify?: boolean;
+    },
+  ): void {
+    this.startStroke(id, init.tool, init.params, init.point, init.notify ?? true);
   }
 
-  remotePoint(id: string, point: PenSample): void {
+  /** Append a batch of samples without dropping coalesced pointer input. */
+  appendPoints(id: string, points: readonly PenSample[]): void {
     const stroke = this.live.get(id);
     if (stroke !== undefined) {
-      stroke.samples.push(point);
+      for (const point of points) stroke.samples.push(point);
       this.dirty = true;
       this.emit("live");
     }
   }
 
-  remoteEnd(id: string, point?: PenSample): void {
+  /** Commit a stroke, optionally including its final sample. */
+  endStroke(id: string, point?: PenSample): void {
     const stroke = this.live.get(id);
     if (stroke === undefined) {
       return;
@@ -422,16 +409,21 @@ export class PencilSurface {
     if (point !== undefined) {
       stroke.samples.push(point);
     }
-    this.commit(stroke, true);
+    this.commit(stroke);
   }
 
-  remoteCancel(id: string): void {
+  /** Discard an in-flight stroke. */
+  cancelStroke(id: string): void {
+    const stroke = this.live.get(id);
+    if (!stroke) return;
     this.live.delete(id);
     this.dirty = true;
     this.emit("live");
+    if (stroke.notify) this.opts.onStrokeCancel?.(id);
   }
 
   dispose(): void {
+    this.input?.dispose();
     if (this.raf !== 0 && typeof cancelAnimationFrame === "function") {
       cancelAnimationFrame(this.raf);
     }
@@ -460,12 +452,12 @@ export class PencilSurface {
     }
   }
 
-  private beginStroke(
+  private startStroke(
     id: string,
     tool: Tool,
     params: PencilParams,
     first: PenSample,
-    pointerId: number | undefined,
+    notify: boolean,
   ): void {
     this.live.set(id, {
       id,
@@ -476,15 +468,15 @@ export class PencilSurface {
       dabs: [],
       wet: undefined,
       stamped: 0,
-      pointerId,
+      notify,
     });
     this.dirty = true;
-    this.opts.onStrokeStart?.(id, tool);
+    if (notify) this.opts.onStrokeStart?.(id, tool);
     this.emit("live");
   }
 
   /** Pen-up: bake the wet buffer into a retained tile. */
-  private commit(stroke: LiveStroke, remote: boolean): void {
+  private commit(stroke: LiveStroke): void {
     this.live.delete(stroke.id);
     this.dirty = true;
     this.emit("live"); // the stroke left the live set, whatever happens next
@@ -535,11 +527,7 @@ export class PencilSurface {
       points: stroke.samples,
       bounds,
     };
-    if (remote) {
-      this.opts.onRemoteStrokeEnd?.(end);
-    } else {
-      this.opts.onStrokeEnd?.(end);
-    }
+    if (stroke.notify) this.opts.onStrokeEnd?.(end);
   }
 
   /**
@@ -772,11 +760,11 @@ export class PencilSurface {
           : { ...stroke.params, size: stroke.params.size * sizeScale };
       const mapped = stroke.points.map(map);
       const id = `rebuild-${this.seq++}`;
-      this.beginStroke(id, stroke.tool, params, mapped[0], undefined);
+      this.startStroke(id, stroke.tool, params, mapped[0], false);
       const live = this.live.get(id);
       if (live !== undefined) {
         live.samples.push(...mapped.slice(1));
-        this.commit(live, true);
+        this.commit(live);
         if (keepAge) {
           const record = this.retained[this.retained.length - 1];
           if (record !== undefined && record.id === id) {
@@ -810,11 +798,7 @@ export class PencilSurface {
     if (ctx === null) {
       return;
     }
-    // BOTH axes, deliberately: this used to check width alone, and a canvas whose
-    // container changed height-only (the remote client's plane, shrinking when the
-    // video's letterbox arrives) kept its tall backing store while CSS squeezed it
-    // — every preview stroke rendered at y × (displayHeight / backingHeight),
-    // dead-on at the top of the canvas and further off the lower you drew.
+    // Track both axes: stretching a stale backing store distorts stroke positions.
     const dpr = this.dpr();
     if (
       (this.canvas.clientWidth > 0 &&
@@ -905,102 +889,22 @@ export class PencilSurface {
     }
   }
 
-  private localPoint(e: PointerEvent): PenSample {
-    const rect = this.canvas.getBoundingClientRect();
-    const s = penSample(e);
-    return { ...s, x: s.x - rect.left, y: s.y - rect.top };
-  }
-
-  private bindLocalInput(): void {
-    // iPadOS Safari drops the POINTERDOWN of a fast second pen contact after
-    // a lift (measured live 2026-07-25: the second diagonal of a quickly-drawn
-    // X, on the Lab's own paper — no remote machinery anywhere; native apps
-    // unaffected, so it is Safari's pencil gesture recognition claiming the
-    // contact). Cancelling the STYLUS touch stream at the canvas opts out of
-    // that recognition; per spec it never suppresses pointer events (they are
-    // dispatched before the corresponding touch events). Stylus-only on
-    // purpose: the bug is a pencil phenomenon, and cancelling finger touches
-    // wholesale starved multi-finger gestures elsewhere (measured same day).
-    const swallowStylus = (e: TouchEvent): void => {
-      for (const touch of Array.from(e.changedTouches)) {
-        if ((touch as Touch & { touchType?: string }).touchType === "stylus") {
-          e.preventDefault();
-          return;
-        }
-      }
-    };
-    this.canvas.addEventListener("touchstart", swallowStylus, { passive: false });
-    this.canvas.addEventListener("touchmove", swallowStylus, { passive: false });
-
-    this.canvas.addEventListener("pointerdown", (e) => {
-      if (e.pointerType === "mouse" && e.button !== 0) {
-        return;
-      }
-      if (this.opts.shouldCapture !== undefined && !this.opts.shouldCapture(e)) {
-        return;
-      }
-      try {
-        this.canvas.setPointerCapture(e.pointerId);
-      } catch {
-        // Synthetic pointers have no capturable id; inking works anyway.
-      }
-      const id = `local-${this.seq++}`;
-      this.localId = id;
-      this.beginStroke(
-        id,
-        this.opts.tool?.() ?? "draw",
-        this.opts.params(),
-        this.localPoint(e),
-        e.pointerId,
-      );
+  private bindLocalInput(): PenInputBinding {
+    return bindPenInput(this.canvas, {
+      shouldCapture: this.opts.shouldCapture,
+      onPan: this.opts.onPan,
+      onZoom: this.opts.onZoom,
+      sink: {
+        begin: (id, point) =>
+          this.beginStroke(id, {
+            tool: this.opts.tool?.() ?? "draw",
+            params: this.opts.params(),
+            point,
+          }),
+        points: (id, points) => this.appendPoints(id, points),
+        end: (id, point) => this.endStroke(id, point),
+        cancel: (id) => this.cancelStroke(id),
+      },
     });
-
-    this.canvas.addEventListener("pointermove", (e) => {
-      const id = this.localId;
-      if (id === undefined) {
-        return;
-      }
-      const stroke = this.live.get(id);
-      if (stroke === undefined || stroke.pointerId !== e.pointerId) {
-        return;
-      }
-      for (const raw of coalesced(e)) {
-        stroke.samples.push(this.localPoint(raw));
-      }
-      this.dirty = true;
-      this.emit("live");
-    });
-
-    const finish = (e: PointerEvent): void => {
-      const id = this.localId;
-      if (id === undefined) {
-        return;
-      }
-      const stroke = this.live.get(id);
-      if (stroke === undefined || stroke.pointerId !== e.pointerId) {
-        return;
-      }
-      this.localId = undefined;
-      this.commit(stroke, false);
-    };
-    this.canvas.addEventListener("pointerup", finish);
-    this.canvas.addEventListener("pointercancel", finish);
   }
-}
-
-/**
- * The high-frequency samples a pen emits between animation frames — where the
- * signal lives, on the browsers that offer it. iPadOS Safari does not (measured,
- * July 2026), so there it falls back to the single event and the pipeline's
- * spline does the reconstructing instead.
- */
-function coalesced(e: PointerEvent): PointerEvent[] {
-  const fn = (e as PointerEvent & { getCoalescedEvents?: () => PointerEvent[] }).getCoalescedEvents;
-  if (typeof fn === "function") {
-    const events = fn.call(e);
-    if (events.length > 0) {
-      return events;
-    }
-  }
-  return [e];
 }

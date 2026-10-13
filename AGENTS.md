@@ -88,5 +88,5 @@ join version lockstep like everything else — see [CLAUDE.md](./CLAUDE.md) → 
   CLAUDE.md → *Workspace dependencies are editable* for the rules.
 - Build: Vite library mode (ESM) + `tsc --emitDeclarationOnly` for `.d.ts` — the *published*
   artifact; the workspace dev loop doesn't consume it.
-- The repo root is a Claude Code plugin (`.claude-plugin/`, one skill in `skills/`); its
+- The repo root is a Claude Code plugin (`.claude-plugin/`, reusable skills in `skills/`); its
   manifest version is part of the lockstep above.

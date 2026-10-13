@@ -1,41 +1,21 @@
 import { readFileSync } from "node:fs";
 import { externalizeDeps, SOLID_TEST_OXC } from "@habemus-papadum/aiui-build-config";
 import { defineConfig } from "vite";
-import solid from "vite-plugin-solid";
 
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
 
 export default defineConfig({
-  // The client kit's components are Solid `.tsx` — and ONLY `.tsx`: scoping
-  // the transform keeps it off the plain `.ts` cores (an unscoped solid plugin
-  // rewrites import.meta in pure-Node code — a lesson learned the hard way).
-  // And OFF under Vitest entirely: the plugin flips resolve conditions toward
-  // the browser, which hands the node-side relay tests a stub `ws` ("not a
-  // constructor"). This suite has no .tsx tests; if the kit grows some, adopt
-  // the recipe aiui-viz/vite.config.ts records (inline solid + pinned
-  // conditions) instead.
-  plugins: process.env.VITEST ? [] : [solid({ include: ["src/**/*.tsx"] })],
   // Vite 8 honours `jsx: preserve`; a plugin-less test run still loads .tsx.
   oxc: process.env.VITEST ? SOLID_TEST_OXC : undefined,
   build: {
     lib: {
-      // Four entrypoints mirroring the exports map: the library (`.`), the
-      // Solid client kit (`./client`), the host-neutral Node backend
-      // (`./server`), and the channel sidecar (`./sidecar`, imported by the
-      // channel's standard-sidecars.ts). The Node entries' ws graph stays out
-      // of the `index` bundle by being separate.
-      entry: {
-        index: "src/index.ts",
-        client: "src/client/index.ts",
-        backend: "src/backend.ts",
-        sidecar: "src/sidecar.ts",
-      },
+      entry: { index: "src/index.ts" },
       formats: ["es"],
       fileName: (_format, entryName) => `${entryName}.js`,
     },
     outDir: "dist",
     sourcemap: true,
-    emptyOutDir: false, // keep the tsc-emitted .d.ts (build runs tsc first)
+    emptyOutDir: true, // remove retired entrypoints; declarations are emitted after Vite
     rollupOptions: {
       external: externalizeDeps(pkg),
     },

@@ -1,22 +1,23 @@
-# Getting Started with @habemus-papadum/aiui-pencil
+# Getting started
 
-> This page lives at `packages/aiui-pencil/docs/getting-started.md`. It's picked up automatically by the
-> docs site as a guide under this package — edit or delete it, and add more `*.md` files here for
-> additional per-package guides. The package overview comes from the `README.md`; the API
-> reference is generated from `src/index.ts`.
+The [package README](../README.md) describes the current API, input policies,
+programmatic strokes, and lifecycle. The package is now a local drawing toolkit;
+it has no server, relay, pairing, remote application, or transport configuration.
 
-A pencil: pressure/tilt/azimuth-driven textured strokes, erasing, and vanishing ink, on a three-tier raster surface.
+Run `pnpm -C demos/circle dev` for the gallery's drawing example. Run
+`pnpm -C packages/aiui-pencil lab` for the tuning rig. It listens on all network
+interfaces and asks which IPv4 interface shares your iPad's network. Copy the
+printed iPad URL and paste it into Safari using Universal Clipboard. To skip the
+picker, run `LAB_INTERFACE=en0 pnpm -C packages/aiui-pencil lab` (substitute your
+interface name or IPv4 address). The Mac and iPad should be on the same network.
 
-## Install
+The applications demonstrate different uses of one instrument:
 
-```sh
-npm install @habemus-papadum/aiui-pencil
-```
+- Circle retains frozen samples for scoring after the rendered ink fades.
+- The lab retains stroke data and replays it under changed brush parameters.
+- Both consume `PencilSurface`; its pointer binding now includes the former
+  client's pencil priority and palm rules.
 
-## Usage
-
-```ts
-import { greet } from "@habemus-papadum/aiui-pencil";
-
-greet("world"); // "Hello, world!"
-```
+The [architecture review](./architecture-review.md) records the feature inventory,
+current structure, extraction decisions, and proposed next changes. Those proposals
+are review material, not a commitment to retain the current classes or API shape.

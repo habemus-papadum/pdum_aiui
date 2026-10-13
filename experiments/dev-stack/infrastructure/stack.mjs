@@ -24,20 +24,29 @@ export async function startStack({
   let server;
   let stopping = false;
   let stopPromise;
+  let cleanupPromise;
   let ready = false;
   let startupError;
-  const stop = () => {
-    stopPromise ??= (async () => {
+  const cleanupResources = () => {
+    cleanupPromise ??= (async () => {
       stopping = true;
-      const results = await Promise.allSettled([
-        server?.close(),
-        ...backends.map((backend) => backend.stop()),
-      ]);
+      const results = await Promise.allSettled([...backends.map((backend) => backend.stop())]);
       await rm(stateDir, { recursive: true, force: true });
       const errors = results
         .filter((result) => result.status === "rejected")
         .map((result) => result.reason);
       if (errors.length) throw new AggregateError(errors, "Stack cleanup failed");
+    })();
+    return cleanupPromise;
+  };
+  const stop = () => {
+    stopPromise ??= (async () => {
+      stopping = true;
+      // Vite's close hook awaits resource disposal. Never call stop from that
+      // hook: doing so would recursively wait on the same server.close promise.
+      const results = await Promise.allSettled([server?.close()]);
+      await cleanupResources();
+      if (results[0].status === "rejected") throw results[0].reason;
     })();
     return stopPromise;
   };
@@ -85,6 +94,15 @@ export async function startStack({
       configFile: join(root, "vite.config.mjs"),
       cacheDir: join(stateDir, "vite-frontend"),
       plugins: [
+        {
+          name: "dev-stack-lifecycle",
+          async closeServer({ reason }) {
+            // A config restart replaces Vite, not the supervised compute stack.
+            // On final close this runs after Vite's caches/watchers have closed,
+            // including when Vite itself owns the signal-triggered exit path.
+            if (reason === "close") await cleanupResources();
+          },
+        },
         backendPlugin({
           instance,
           middleware: { express: createApp(instance) },

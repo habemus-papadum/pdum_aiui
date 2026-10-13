@@ -70,19 +70,9 @@ export function fadeStyle(ageMs: number, fadeMs: number): FadeStyle {
 }
 
 /**
- * The PREVIEW handoff curve (plan decision D3): a gentle, monotonic dissolve.
- *
- * Deliberately none of {@link fadeStyle}'s theatrics — no hold, no charge, no
- * pop. That curve announces a stroke's death; this one hides a handoff: the
- * remote client's preview dissolves over the fade window while the video's copy
- * of the same stroke arrives underneath, and the LESS the eye is told about it
- * the better. Smoothstepped so both ends are soft — a linear ramp visibly
- * "starts" and "stops", which reads as two small pops instead of none.
- *
- * Width and glow stay identity, which matters twice: the preview never warps
- * away from the truth it overlays, and {@link isFullStyle} stays true, so a
- * crossfading stroke re-uses its baked tile forever (alpha is applied at blit)
- * and the fade costs nothing.
+ * A gentle monotonic dissolve, without the hold, charge, or pop of fadeStyle.
+ * Smoothstep softens both ends. Width and glow stay constant, so the baked
+ * tile can be reused throughout; alpha is applied while compositing.
  */
 export function crossfadeStyle(ageMs: number, fadeMs: number): FadeStyle {
   if (fadeMs <= 0) {

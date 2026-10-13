@@ -175,7 +175,7 @@ The deep rationale — including what was deliberately left out (entry/exit effe
 states, XState) — is the mode-engine design note (git history); the worked example was the
 intent client's spec (its `spec.ts`, now outside this repo): a real machine as one data
 structure — regions, commands, excludes, the Esc order, and availability overrides. In-repo,
-`packages/aiui-remote-bar` drives the same engine from a remote command bar.
+`packages/aiui-viz/src/mode-solid.test.ts` exercises the adapter and its dispatch boundary.
 
 ### Many notebooks, one lab
 
@@ -222,8 +222,8 @@ better instrumented than a human team would ever bother to make it.
 - **Reference apps** — `demos/gallery`: morphogen (reaction-diffusion) and aztec (domino
   tilings), each a full notebook built the intended way; `PRINCIPLES.md` there maps file layout
   to methodology.
-- **Mode-engine reference** — `packages/aiui-remote-bar` (the engine driven from a remote
-  command bar) and the kit's own tests under `src/modal/`. The first full consumer — the intent
+- **Mode-engine reference** — the kit's own tests under `src/modal/` and
+  `src/mode-solid.test.ts`. The first full consumer — the intent
   client's machine as data, claims, bar caps, and the imperative-boundary reference, each rule
   of its `BEHAVIOR.md` pinned by a test — now lives outside this repo.
 - **Design choices** — [the level-2 page](./frontend-design-choices.md); **ledger** —

@@ -5,7 +5,7 @@
  *
  * The component draws nothing itself. Its job is the pushes:
  *
- *   graph → island   createEffect(source, handler) → a plain setter. The handler
+ *   graph → island   bridgeEffect(source, handler) → a plain setter. The handler
  *                    is untracked for reads too, so it consumes the value the
  *                    source computed and never re-reads a signal.
  *   island → graph   ONE write per completed stroke, and a telemetry snapshot
@@ -15,9 +15,9 @@
  * above it with `pointer-events: none` and merely reports.
  */
 
-import { adopt } from "@habemus-papadum/aiui-viz";
+import { adopt, bridgeEffect } from "@habemus-papadum/aiui-viz";
 import type { JSX } from "@solidjs/web";
-import { createEffect, untrack } from "solid-js";
+import { untrack } from "solid-js";
 import { currentParams, graph, rebake } from "../model/graph";
 import {
   fadeSec,
@@ -34,17 +34,17 @@ import {
 
 export function PenPad(): JSX.Element {
   // ── graph → the diagnostic overlay ─────────────────────────────────────────
-  createEffect(
+  bridgeEffect(
     () => graph().plans.latest(),
     (plans) => pad.setPlans(plans ?? []),
   );
 
-  createEffect(
+  bridgeEffect(
     () => currentParams(),
     (params) => pad.setParams(params),
   );
 
-  createEffect(
+  bridgeEffect(
     () => ({
       raw: showRaw.get(),
       filtered: showFiltered.get(),
@@ -72,7 +72,7 @@ export function PenPad(): JSX.Element {
   //    read when a stroke BEGINS and remembered. Depending on it here is what made
   //    switching to the eraser retroactively turn every existing pencil stroke into
   //    an eraser stroke, and wipe the page.
-  createEffect(
+  bridgeEffect(
     () => ({ params: currentParams(), fade: fadeSec.get() }),
     () => {
       // `untrack` because re-baking READS the whole store (every stroke, every

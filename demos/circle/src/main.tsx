@@ -9,6 +9,7 @@
  */
 import "@habemus-papadum/aiui-design/site.css";
 import { VoiceDock } from "@habemus-papadum/aiui-dock";
+import { PageBoundary } from "@habemus-papadum/aiui-viz";
 import { render } from "@solidjs/web";
 import { page } from "./page";
 
@@ -16,10 +17,10 @@ document.title = page.title;
 page.activate?.();
 render(
   () => (
-    <>
+    <PageBoundary name="Circle">
       <page.App />
       <VoiceDock />
-    </>
+    </PageBoundary>
   ),
   document.getElementById("root") as HTMLElement,
 );

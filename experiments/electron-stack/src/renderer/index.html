@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws:; img-src 'self' data:" />
+    <title>Electron stack experiment</title>
+    <script type="module" src="./src/main.ts"></script>
+  </head>
+  <body>
+    <header><span>●</span> Electron stack <button type="button" id="hide" hidden>Hide</button></header>
+    <main>
+      <p class="eyebrow">ONE APP · THREE BACKENDS</p>
+      <h1>Compute travels with you.</h1>
+      <p>Python and Express run on this computer. The Worker can run locally in development or on Cloudflare.</p>
+      <div class="cards">
+        <article><h2>Express</h2><button type="button" data-backend="express">Call Express</button><pre aria-live="polite"></pre></article>
+        <article><h2>Python</h2><button type="button" data-backend="python">Call Python</button><pre aria-live="polite"></pre></article>
+        <article><h2>Worker</h2><button type="button" data-backend="worker">Call Worker</button><pre aria-live="polite"></pre></article>
+      </div>
+      <section id="desktop" hidden>
+        <h2>Desktop capabilities</h2>
+        <p>These actions use a typed bridge to the main process.</p>
+        <button type="button" id="choose-file">Choose a file</button>
+        <button type="button" id="pin">Toggle floating panel</button>
+        <pre id="desktop-result" aria-live="polite"></pre>
+      </section>
+      <section id="node-direct" hidden><h2>Direct renderer Node</h2><p>This experimental mode turns off the renderer sandbox and isolation.</p><pre id="node-result"></pre></section>
+      <footer id="runtime" aria-live="polite">Connecting to this instance…</footer>
+    </main>
+  </body>
+</html>

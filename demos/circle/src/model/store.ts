@@ -150,6 +150,7 @@ export const paper = circleScope.durable(
         frozenPoints.set([]);
         turnPhase.set("drawing");
       },
+      onStrokeCancel: () => resetTurn(),
       onStrokeEnd: (end) => {
         // Pen up: freeze the final points (they outlive the ink's fade) and log
         // this turn's score to the history ring behind the sparkline.

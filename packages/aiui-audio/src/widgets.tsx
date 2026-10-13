@@ -248,11 +248,12 @@ export function AudioControl(props: { hub: AudioHub; class?: string }) {
   );
 }
 
-const AudioContext = createContext<AudioHub>();
+// Solid 2 requires an explicit default for an optional provider.
+const AudioContext = createContext<AudioHub | null>(null);
 /** The application owns the hub; provider unmount does not dispose it. */
 export function AudioProvider(props: { hub: AudioHub; children: JSX.Element }) {
   return <AudioContext value={props.hub}>{props.children}</AudioContext>;
 }
 export function useAudioHub(): AudioHub | undefined {
-  return useContext(AudioContext);
+  return useContext(AudioContext) ?? undefined;
 }

@@ -6,12 +6,14 @@
  * can never draw the same way twice is not tuning, it is guessing.
  */
 
+import { guardPenControls } from "@habemus-papadum/aiui-pencil";
+import { adopt } from "@habemus-papadum/aiui-viz";
 import type { JSX } from "@solidjs/web";
+import { paper } from "../model/store";
 import { InkData } from "./InkData";
 import { Params } from "./Params";
 import { PenPad } from "./PenPad";
 import { Readout } from "./Readout";
-import { Remote } from "./Remote";
 
 export function App(): JSX.Element {
   return (
@@ -28,9 +30,11 @@ export function App(): JSX.Element {
 
       <div class="lab-body">
         <PenPad />
-        <aside class="lab-side">
+        <aside
+          class="lab-side"
+          ref={adopt((element) => guardPenControls(element, () => paper.input))}
+        >
           <Readout />
-          <Remote />
           <InkData />
           <Params />
         </aside>

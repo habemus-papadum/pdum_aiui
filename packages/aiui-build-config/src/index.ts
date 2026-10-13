@@ -19,7 +19,7 @@ export interface PackageDeps {
  * plus everything the package declares as a runtime/peer dependency — so the
  * bundle never inlines a consumer-provided module — plus any `extras` (modules
  * imported LAZILY that must stay out of the bundle even though they are not
- * declared deps, e.g. aiui-util's dev-only `vite` import).
+ * declared deps, e.g. a dev-only `vite` import).
  */
 export function externalizeDeps(pkg: PackageDeps, extras: string[] = []): (id: string) => boolean {
   const external = [
@@ -60,7 +60,7 @@ export const solidTestDeps = {
  * meaningful under Vitest — a lib build's externals never resolve, and app
  * consumers bring their own config. (Packages mixing node `ws` tests with
  * jsdom Solid tests must also pin `ws` to its node entry — see
- * aiui-remote-bar/aiui-intent-client's configs.)
+ * packages with separate browser and Node test configs.)
  */
 export const SOLID_TEST_CONDITIONS = ["browser", "development", "import", "module", "default"];
 

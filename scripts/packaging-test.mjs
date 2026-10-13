@@ -29,7 +29,7 @@ import {
 } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, join, resolve, sep } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -88,8 +88,7 @@ const env = {
 };
 
 // Every conditional-exports object in a PACKED manifest must carry a "default"
-// condition: require.resolve() (which a consuming host uses on subpaths such
-// as `/sidecar`) matches CJS conditions and throws ERR_PACKAGE_PATH_NOT_EXPORTED
+// condition: require.resolve() matches CJS conditions and throws ERR_PACKAGE_PATH_NOT_EXPORTED
 // without it. Dev never catches this — the source-first exports are bare
 // strings that match anything.
 const scopeDir = join(scratch, "node_modules", "@habemus-papadum");
@@ -108,42 +107,31 @@ check(
   conditionalWithoutDefault.join(", "),
 );
 
-// Every published `./sidecar` subpath must resolve, from the installed
-// package, to a BUILT dist file. This is the dev/installed seam that
-// source-first masks: in the workspace these subpaths resolve to src/*.ts
-// under tsx; installed they must resolve to dist/*.js — and resolve at all,
-// which is what the "default" condition above is about. The package set is
-// DERIVED from the publishConfig exports (any package publishing a
-// "./sidecar" subpath is in), so a new sidecar package is probed
-// automatically. Resolution only: mounting a sidecar is the consuming host's
-// job, not this repo's.
-console.log("resolving the installed sidecar subpaths…");
-const sidecarPackages = publishable
-  .map((dir) => JSON.parse(readFileSync(join(dir, "package.json"), "utf8")))
-  .filter((pkg) => pkg.publishConfig?.exports?.["./sidecar"] !== undefined)
-  .map((pkg) => pkg.name)
-  .sort();
-if (sidecarPackages.length === 0) throw new Error("no packages publish a ./sidecar subpath");
+// Every published entry must resolve to a file that actually ships. Keep this
+// generic: packages need no particular subpath (or any sidecar infrastructure).
+console.log("resolving installed package exports…");
 const requireFromScratch = createRequire(join(scratch, "package.json"));
-const sidecarProblems = [];
-for (const name of sidecarPackages) {
-  try {
-    const resolved = requireFromScratch.resolve(`${name}/sidecar`);
-    if (!resolved.endsWith(".js")) {
-      sidecarProblems.push(`${name}/sidecar: expected a dist .js path, got ${resolved}`);
-    } else if (!resolved.split(sep).includes("dist")) {
-      sidecarProblems.push(`${name}/sidecar: resolved outside dist/: ${resolved}`);
-    } else if (!existsSync(resolved)) {
-      sidecarProblems.push(`${name}/sidecar: resolved to a file that did not ship: ${resolved}`);
+const exportProblems = [];
+let exportCount = 0;
+for (const dir of publishable) {
+  const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
+  for (const subpath of Object.keys(pkg.publishConfig?.exports ?? pkg.exports ?? {})) {
+    if (subpath.includes("*")) continue; // patterns require a concrete asset name
+    const specifier = subpath === "." ? pkg.name : `${pkg.name}${subpath.slice(1)}`;
+    exportCount += 1;
+    try {
+      const resolved = requireFromScratch.resolve(specifier);
+      if (!existsSync(resolved))
+        exportProblems.push(`${specifier}: file did not ship: ${resolved}`);
+    } catch (err) {
+      exportProblems.push(`${specifier}: ${err?.message ?? err}`);
     }
-  } catch (err) {
-    sidecarProblems.push(`${name}/sidecar: ${err?.message ?? err}`);
   }
 }
 check(
-  `every published /sidecar subpath (${sidecarPackages.length}: ${sidecarPackages.join(", ")}) resolves to a shipped dist file`,
-  sidecarProblems.length === 0,
-  sidecarProblems.join("; "),
+  `published entrypoints (${exportCount}) resolve to shipped files`,
+  exportCount > 0 && exportProblems.length === 0,
+  exportProblems.join("; "),
 );
 
 // The create-aiui scaffolder, from its own installed bin: templates/ shipped,
