@@ -21,6 +21,11 @@ Claude Code plugin carrying reusable skills:
 
 The [application patterns](./docs/application-patterns/README.md) describe static sites,
 SaaS and custom backends, Electron delivery, companion devices, and AI workflows.
+The [agentic patterns proposal](./docs/proposals/agentic-patterns-and-use-cases.md) describes
+the next-generation agent client boundary, collaboration interfaces, and pencil/voice workflows.
+The [three-application master proposal](./docs/proposals/three-applications-and-development-process.md)
+describes the mathematical workspace, VACASK circuit tool, and prompting tool, with an adaptive
+development process and a shared capability inventory.
 The [experiments](./experiments/README.md) provide runnable examples of the infrastructure.
 
 ## Requirements
