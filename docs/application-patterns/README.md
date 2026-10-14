@@ -13,8 +13,8 @@ application in this repository.
 
 The conventions below record the current direction. Links identify existing
 implementations and experiments. The
-[public site with optional login spike](./public-site-optional-login-spike.md)
-is a brief for a future session.
+[public site with optional login](./public-site-optional-login.md) playbook
+records a proven arrangement for public pages that offer an explicit sign-in.
 
 ## Application patterns at a glance
 
@@ -328,7 +328,7 @@ reload.
 | Desktop delivery | Electron Stack and notarization experiment | Reuse runtime packaging, desktop bridges, and distribution recipes |
 | Companion devices | Agreed host-browser model and local input primitives | Develop reusable pairing and transport with optional rich-input examples |
 | AI and prompt workflows | Agent tool surface, oracle/live/dock, structured prompts | Compose development, analysis, and prompt preparation around application needs |
-| Public sites with optional login | Agreed use case | Run the [separate spike](./public-site-optional-login-spike.md) |
+| Public sites with optional login | [Playbook](./public-site-optional-login.md) proven by a spike: path-scoped Access, `/api/me` discovery, credential manager, local Vite dev against deployed services (Chrome) | Add a test provider to the credential kit |
 
 Examples should make a pattern easy to copy into an independent application.
 Extract a library when a stable shared contract earns it; otherwise a small

@@ -18,6 +18,6 @@ bugs, reusable boundaries, and what the Mac packaging checks actually prove.
   DMG submission/stapling with artifact receipts.
   [Apple development cheat sheet](../docs/macOS-noterization-cheat-sheet/README.md).
 
-Planned for a future session:
-[public site with optional login](../docs/application-patterns/public-site-optional-login-spike.md),
-enabling funded services and credentials while retaining anonymous public access.
+The [public site with optional login](../docs/application-patterns/public-site-optional-login.md)
+spike ran outside this repository; its playbook records the arrangement, the
+Access settings, and the results.

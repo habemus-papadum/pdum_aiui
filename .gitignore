@@ -27,3 +27,4 @@ pnpm-debug.log*
 
 # Other developers' agent worktrees (each is its own checkout)
 .claude/worktrees/
+.aiui-cache/
