@@ -1,7 +1,7 @@
 {
   "name": "@habemus-papadum/aiui-pencil",
   "version": "0.21.0+dev",
-  "description": "A pencil: pressure/tilt/azimuth-driven textured strokes, erasing, and vanishing ink, on a three-tier raster surface.",
+  "description": "Editable stroke input, pure geometry, Canvas views, fading, and reactive observation.",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -11,7 +11,11 @@
   },
   "sideEffects": false,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./core": "./src/core.ts",
+    "./input": "./src/input/index.ts",
+    "./canvas": "./src/canvas.ts",
+    "./solid": "./src/solid.ts"
   },
   "main": "./src/index.ts",
   "module": "./src/index.ts",
@@ -30,6 +34,26 @@
         "types": "./dist/index.d.ts",
         "import": "./dist/index.js",
         "default": "./dist/index.js"
+      },
+      "./core": {
+        "types": "./dist/core.d.ts",
+        "import": "./dist/core.js",
+        "default": "./dist/core.js"
+      },
+      "./input": {
+        "types": "./dist/input/index.d.ts",
+        "import": "./dist/input.js",
+        "default": "./dist/input.js"
+      },
+      "./canvas": {
+        "types": "./dist/canvas.d.ts",
+        "import": "./dist/canvas.js",
+        "default": "./dist/canvas.js"
+      },
+      "./solid": {
+        "types": "./dist/solid.d.ts",
+        "import": "./dist/solid.js",
+        "default": "./dist/solid.js"
       }
     }
   },

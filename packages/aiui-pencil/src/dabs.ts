@@ -29,11 +29,10 @@
  * can only tell you *that* a stroke looks wrong, never *where* it went wrong.
  */
 
-import { detectCusps } from "./corners";
-import { PointFilter } from "./filter";
 import { dist, resampleByArcLength } from "./geom";
 import type { PencilParams, Ramp } from "./pencil";
-import { blendSample, densify } from "./spline";
+import { blendSample } from "./spline";
+import { processStrokeGeometry, type StrokeGeometry } from "./stroke-geometry";
 import type { PenSample } from "./telemetry";
 
 const HALF_PI = Math.PI / 2;
@@ -64,40 +63,35 @@ export interface Dab {
  * Every stage of the pipeline, kept. The Lab renders these on top of each other;
  * the tests assert on them individually; the renderer only wants `.dabs`.
  */
-export interface StrokePlan {
-  raw: PenSample[];
-  /** After the One-Euro causal low-pass. */
-  filtered: PenSample[];
-  /** Per-point: is this a corner the spline must NOT smooth through? */
-  cusps: boolean[];
-  /** After centripetal Catmull-Rom, broken at the cusps. */
-  densified: PenSample[];
+export interface StrokePlan extends StrokeGeometry {
   /** After arc-length resampling to the dab grid. */
   spaced: PenSample[];
-  /** Speed at each spaced sample, px/ms — kept because it is invisible otherwise. */
+  /** Speed at each spaced sample, ink units/ms. */
   speeds: number[];
   dabs: Dab[];
+}
+
+/** Brush appearance and sampling, independent of centerline processing. */
+export interface BrushParams {
+  size: number;
+  spacing: number;
+  flow: number;
+  color: string;
+  pressureToRadius: Ramp;
+  pressureToAlpha: Ramp;
+  tiltToEccentricity: number;
+  tiltToRadius: Ramp;
+  tiltToAlpha: Ramp;
+  velocityToAlpha: Ramp;
+  velocityRef: number;
+  grain: number;
+  grainScale: number;
 }
 
 /** Interpolate a ramp: `t` 0..1 maps across `[at zero, at one]`. */
 export function ramp(r: Ramp, t: number): number {
   const u = t < 0 ? 0 : t > 1 ? 1 : t;
   return r[0] + (r[1] - r[0]) * u;
-}
-
-/**
- * Run the causal filter over a whole list. The live surface feeds its filter one
- * point at a time as they arrive — that is what "causal" is for — but a fresh
- * filter driven over a recorded list produces exactly the same sequence, which
- * is what makes the pipeline testable and what lets the Lab re-run a captured
- * stroke through new parameters without re-drawing it.
- */
-export function filterSamples(samples: readonly PenSample[], params: PencilParams): PenSample[] {
-  const filter = new PointFilter(params.filter);
-  return samples.map((s) => {
-    const { x, y } = filter.filter(s.x, s.y, s.t);
-    return { ...s, x, y };
-  });
 }
 
 /** Speed (px/ms) at each point, from its own spacing and timing. */
@@ -122,11 +116,9 @@ export function speedsOf(samples: readonly PenSample[]): number[] {
  * A pen that reports pressure is believed. Everything else — a mouse (which
  * reports a flat 0.5 while held down), a finger, a stylus whose browser tells us
  * nothing — gets pressure **simulated from speed**: slow means heavy. It is a
- * genuinely good approximation of how people press, it is what every serious
- * freehand renderer does, and without it a mouse draws a dead constant-width
- * line, which is exactly the failure the current ink surface has.
+ * configurable approximation for pressure-less input.
  */
-export function effectivePressure(sample: PenSample, speed: number, params: PencilParams): number {
+export function effectivePressure(sample: PenSample, speed: number, params: BrushParams): number {
   if (sample.kind === "pen" && sample.pressure > 0) {
     return sample.pressure;
   }
@@ -143,7 +135,7 @@ export function effectivePressure(sample: PenSample, speed: number, params: Penc
  * term multiplies by its identity and quietly vanishes. The pencil degrades to
  * pressure-and-velocity without a single branch.
  */
-export function dabAt(sample: PenSample, speed: number, params: PencilParams): Dab {
+export function dabAt(sample: PenSample, speed: number, params: BrushParams): Dab {
   const pressure = effectivePressure(sample, speed, params);
   const flatness = 1 - Math.min(1, Math.max(0, sample.altitude / HALF_PI));
 
@@ -183,18 +175,38 @@ export function dabAt(sample: PenSample, speed: number, params: PencilParams): D
  * is the assumption that broke.
  */
 export function planStroke(raw: readonly PenSample[], params: PencilParams): StrokePlan {
-  const filtered = filterSamples(raw, params);
-  const cusps = detectCusps(filtered, {
-    window: params.cuspWindow,
-    threshold: params.cuspThreshold,
-  });
-  const densified = densify(filtered, cusps, { maxStep: params.maxStep });
+  return planBrush(processStrokeGeometry(raw, params), params);
+}
 
+/** Plan brush dabs from reusable geometry. A brush change does not require refiltering. */
+export function planBrush(geometry: StrokeGeometry, params: BrushParams): StrokePlan {
   const spacing = Math.max(0.05, params.size * params.spacing);
-  const spaced = resampleByArcLength(densified, spacing, blendSample);
-
+  const spaced = resampleByArcLength(geometry.densified, spacing, blendSample);
   const speeds = speedsOf(spaced);
-  const dabs = spaced.map((s, i) => dabAt(s, speeds[i], params));
+  const dabs = spaced.map((sample, i) => dabAt(sample, speeds[i], params));
+  return { ...geometry, spaced, speeds, dabs };
+}
 
-  return { raw: [...raw], filtered, cusps, densified, spaced, speeds, dabs };
+/**
+ * Verified unchanged dab prefix between two batch plans. A renderer may retain
+ * only this prefix and must invalidate everything after it, including deleted
+ * trailing dabs. The result says nothing about a future sample or a changed
+ * color, grain setting, view, or erasure mask; those invalidate their own cache.
+ */
+export function earliestChangedDab(previous: readonly Dab[], next: readonly Dab[]): number {
+  const shared = Math.min(previous.length, next.length);
+  for (let i = 0; i < shared; i++) {
+    const a = previous[i];
+    const b = next[i];
+    if (
+      a.x !== b.x ||
+      a.y !== b.y ||
+      a.rx !== b.rx ||
+      a.ry !== b.ry ||
+      a.angle !== b.angle ||
+      a.alpha !== b.alpha
+    )
+      return i;
+  }
+  return shared;
 }

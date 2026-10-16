@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { crossfadeStyle, FULL_STYLE, fadeStyle, heat, INK_HOLD, isFullStyle } from "./fade";
+import { crossfadeStyle, FULL_STYLE, fadeStyle, heat, INK_HOLD } from "./fade";
 
 describe("fadeStyle — the warp curve", () => {
   it("is permanent ink when fadeMs <= 0", () => {
@@ -37,22 +37,19 @@ describe("fadeStyle — the warp curve", () => {
       expect(widths[i]).toBeGreaterThanOrEqual(widths[i - 1]);
     }
   });
-});
-
-describe("isFullStyle — the cache key that keeps fading affordable", () => {
-  it("is true during the hold, so a fading stroke re-stamps NOTHING for 80% of its life", () => {
-    expect(isFullStyle(fadeStyle(0.5 * 1000, 1000))).toBe(true);
-    expect(isFullStyle(FULL_STYLE)).toBe(true);
-  });
-
-  it("is false once the warp begins — the tile must be rebuilt", () => {
-    // The width stretch is why a baked tile cannot simply be blitted: warping
-    // thickens the LINE, and scaling a raster moves the geometry instead.
-    expect(isFullStyle(fadeStyle(0.9 * 1000, 1000))).toBe(false);
+  it("opens the middle as the spreading ink approaches its final pop", () => {
+    expect(fadeStyle(800, 1000).hollow).toBe(0);
+    const late = [880, 920, 960, 1000].map((at) => fadeStyle(at, 1000));
+    for (let i = 1; i < late.length; i++)
+      expect(late[i].hollow).toBeGreaterThan(late[i - 1].hollow);
+    expect(late[2].hollow).toBeGreaterThan(0.5);
+    expect(late[2].alpha).toBeGreaterThan(0);
+    expect(late[3].widthScale).toBeCloseTo(2.425);
+    expect(late[3].hollow).toBe(1);
   });
 });
 
-describe("crossfadeStyle — the preview's handoff (D3)", () => {
+describe("crossfadeStyle", () => {
   it("is permanent ink when fadeMs <= 0", () => {
     expect(crossfadeStyle(500, 0)).toEqual(FULL_STYLE);
   });
@@ -69,11 +66,11 @@ describe("crossfadeStyle — the preview's handoff (D3)", () => {
     expect(alphas[5]).toBeLessThan(0.05);
   });
 
-  it("never warps — so the fading tile is reused as-is, and the fade is free", () => {
+  it("keeps geometry and color unchanged while alpha fades", () => {
     const mid = crossfadeStyle(250, 500);
     expect(mid.widthScale).toBe(1);
     expect(mid.glow).toBe(0);
-    expect(isFullStyle(mid)).toBe(true); // alpha applies at blit; no re-bake ever
+    expect(mid.hollow).toBe(0);
   });
 });
 

@@ -19,9 +19,8 @@ it, and the notebooks that demonstrate both. Three pillars:
    contract), `aiui-oracle` (the app's cells as tools over OpenAI Realtime), `aiui-live`
    (GPT-Live with pluggable delegation backends; its `docs/` carry the measured findings),
    `aiui-dock` (both voice engines in any aiui page), `aiui-stt`, `aiui-cf-creds`, `aiui-pencil`,
-   and `aiui-audio` / `aiui-screen-capture`. Pencil owns local drawing and input;
-   the former host/client sessions, sidecars, and room relay are extracted to the
-   staging repository. See pencil's `docs/architecture-review.md`.
+   and `aiui-audio` / `aiui-screen-capture`. Pencil owns editable stroke data, input, geometry, and presentation.
+   See pencil's `docs/architecture.md`.
 3. **The demo notebooks and the gallery** — `demos/*`, composed into the published static site.
 
 **House rules for prose.** Design notes live in the owning package's `docs/`. `docs/proposals/`

@@ -9,13 +9,19 @@ export default defineConfig({
   oxc: process.env.VITEST ? SOLID_TEST_OXC : undefined,
   build: {
     lib: {
-      entry: { index: "src/index.ts" },
+      entry: {
+        index: "src/index.ts",
+        core: "src/core.ts",
+        input: "src/input/index.ts",
+        canvas: "src/canvas.ts",
+        solid: "src/solid.ts",
+      },
       formats: ["es"],
       fileName: (_format, entryName) => `${entryName}.js`,
     },
     outDir: "dist",
     sourcemap: true,
-    emptyOutDir: true, // remove retired entrypoints; declarations are emitted after Vite
+    emptyOutDir: true,
     rollupOptions: {
       external: externalizeDeps(pkg),
     },

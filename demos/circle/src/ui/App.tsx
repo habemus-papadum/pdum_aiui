@@ -1,18 +1,9 @@
-/**
- * App.tsx — the circle notebook, arranged as a paper. A short intro, then the
- * interactive **drawing board** (a self-contained dark figure — the same
- * "journal plate" convention the sim canvases use, framed by the panel border),
- * then the scoring theory.
- *
- * Unlike the standalone demo this is NOT fixed to the viewport: the board is a
- * relatively-positioned box under the gallery header, and every panel that was
- * `fixed` there is `absolute` within `.circle-board` here (page.css). The stage
- * ref adopts the durable pencil canvas and arms it for local input — the one
- * imperative bridge; everything else is a pure reader of the cells and signals.
- */
+/** The circle meter composes the ink view, fit overlays, and controls. */
 
+import { adopt, bridgeEffect } from "@habemus-papadum/aiui-viz";
 import type { JSX } from "@solidjs/web";
-import { paper } from "../model/store";
+import { untrack } from "solid-js";
+import { fadeSeconds, paper } from "../model/store";
 import { CenterGhostLayer } from "./CenterGhostLayer";
 import { Dock } from "./Dock";
 import { FitOverlay } from "./FitOverlay";
@@ -21,10 +12,19 @@ import { MathSection } from "./MathSection";
 import { StatsPanel } from "./StatsPanel";
 
 export function App(): JSX.Element {
-  const adoptStage = (el: HTMLDivElement): void => {
-    el.append(paper.canvas);
+  bridgeEffect(
+    () => fadeSeconds.get(),
+    () => untrack(() => paper.refresh()),
+  );
+  const adoptStage = adopt((host) => {
+    host.append(paper.canvas);
     paper.setActive(true);
-  };
+    return () => {
+      if (paper.canvas.parentElement !== host) return;
+      paper.setActive(false);
+      paper.canvas.remove();
+    };
+  });
 
   return (
     <div class="app circle-page">

@@ -11,7 +11,7 @@ import { brushSize, fadeSeconds, paper, resetTurn } from "../model/store";
 
 export function Dock(): JSX.Element {
   const clear = (): void => {
-    paper.clearAnimated();
+    paper.fadeCompleted();
     resetTurn();
   };
   return (

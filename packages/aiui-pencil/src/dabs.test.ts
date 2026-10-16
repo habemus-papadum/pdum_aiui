@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { dabAt, effectivePressure, planStroke, ramp, speedsOf } from "./dabs";
+import {
+  dabAt,
+  earliestChangedDab,
+  effectivePressure,
+  planBrush,
+  planStroke,
+  ramp,
+  speedsOf,
+} from "./dabs";
 import { type PencilParams, SKETCH, WRITE } from "./pencil";
+import { type GeometryParams, processStrokeGeometry } from "./stroke-geometry";
 import type { PenSample } from "./telemetry";
 
 const HALF_PI = Math.PI / 2;
@@ -61,8 +70,6 @@ describe("effectivePressure", () => {
   });
 
   it("simulates pressure from speed for a mouse — slow means heavy", () => {
-    // Without this a mouse draws a dead constant-width line, which is exactly the
-    // failure the old ink surface has.
     const mouse = sample(0, 0, { kind: "mouse", pressure: 0.5 });
     const slow = effectivePressure(mouse, 0, WRITE);
     const fast = effectivePressure(mouse, WRITE.velocityRef, WRITE);
@@ -193,5 +200,79 @@ describe("planStroke — the whole pipeline, every stage kept", () => {
     const sketched = planStroke(stroke(40), SKETCH);
     expect(sketched.dabs.length).toBeLessThan(written.dabs.length);
     expect(sketched.dabs[5].ry).toBeGreaterThan(written.dabs[5].ry);
+  });
+});
+
+describe("geometry and brush boundaries", () => {
+  it("processes a centerline without brush parameters and reuses it for different appearances", () => {
+    const geometryParams: GeometryParams = {
+      filter: WRITE.filter,
+      cuspThreshold: WRITE.cuspThreshold,
+      cuspWindow: WRITE.cuspWindow,
+      maxStep: WRITE.maxStep,
+    };
+    const geometry = processStrokeGeometry(stroke(30), geometryParams);
+    const small = planBrush(geometry, WRITE);
+    const broad = planBrush(geometry, { ...WRITE, size: 10 });
+    expect(small.densified).toBe(geometry.densified);
+    expect(broad.densified).toBe(geometry.densified);
+    expect(broad.dabs.length).toBeLessThan(small.dabs.length);
+    expect(broad.dabs[0].rx).toBeGreaterThan(small.dabs[0].rx);
+    expect(small).toEqual(planStroke(stroke(30), WRITE));
+  });
+
+  it("retains source telemetry while conditioning position", () => {
+    const raw = stroke(30, 0.5, { pressure: 0.7, altitude: 0.4, twist: 25 });
+    const geometry = processStrokeGeometry(raw, WRITE);
+    expect(geometry.raw).toEqual(raw);
+    expect(geometry.raw[0]).not.toBe(raw[0]);
+    geometry.filtered.forEach((point, index) => {
+      expect(point.t).toBe(raw[index].t);
+      expect(point.pressure).toBe(raw[index].pressure);
+      expect(point.altitude).toBe(raw[index].altitude);
+      expect(point.twist).toBe(raw[index].twist);
+    });
+  });
+});
+
+describe("verified dab invalidation", () => {
+  it("detects a changed opening dab when a mouse gains its first velocity estimate", () => {
+    const raw = stroke(2, 1, { kind: "mouse" });
+    const dot = planStroke(raw.slice(0, 1), WRITE);
+    const line = planStroke(raw, WRITE);
+    expect(earliestChangedDab(dot.dabs, line.dabs)).toBe(0);
+  });
+
+  it("invalidates deleted suffixes and every changed dab field", () => {
+    const before = planStroke(stroke(10), WRITE).dabs;
+    for (const field of ["x", "y", "rx", "ry", "angle", "alpha"] as const) {
+      const after = before.map((dab) => ({ ...dab }));
+      after[2][field] += 0.001;
+      expect(earliestChangedDab(before, after)).toBe(2);
+    }
+    expect(earliestChangedDab(before, before.slice(0, 3))).toBe(3);
+    expect(earliestChangedDab(before, before)).toBe(before.length);
+    expect(earliestChangedDab([], before)).toBe(0);
+  });
+
+  it("reconstructs batch reference prefixes across cusps, reversals, duplicates and irregular time", () => {
+    const raw = Array.from({ length: 70 }, (_, i) =>
+      sample(
+        i < 25 ? i * 2 : i < 45 ? 50 : 50 - (i - 45) * 2,
+        i < 25 ? 0 : Math.min(i - 25, 20) * 2,
+        { t: Math.floor(i / 2) * 13, kind: "mouse" },
+      ),
+    );
+    raw.splice(17, 0, { ...raw[16] });
+    for (const batchSize of [1, 3, 8]) {
+      let retained = planStroke([], WRITE).dabs;
+      for (let end = batchSize; end < raw.length + batchSize; end += batchSize) {
+        const reference = planStroke(raw.slice(0, Math.min(end, raw.length)), WRITE).dabs;
+        const changed = earliestChangedDab(retained, reference);
+        retained = [...retained.slice(0, changed), ...reference.slice(changed)];
+        expect(retained).toEqual(reference);
+      }
+      expect(retained).toEqual(planStroke(raw, WRITE).dabs);
+    }
   });
 });

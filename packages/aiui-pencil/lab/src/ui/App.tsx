@@ -10,10 +10,12 @@ import { guardPenControls } from "@habemus-papadum/aiui-pencil";
 import { adopt } from "@habemus-papadum/aiui-viz";
 import type { JSX } from "@solidjs/web";
 import { paper } from "../model/store";
+import { CaptureReview } from "./CaptureReview";
 import { InkData } from "./InkData";
 import { Params } from "./Params";
 import { PenPad } from "./PenPad";
 import { Readout } from "./Readout";
+import { SceneControls } from "./SceneControls";
 
 export function App(): JSX.Element {
   return (
@@ -21,21 +23,24 @@ export function App(): JSX.Element {
       <header class="lab-header">
         <h1>Pencil Lab</h1>
         <p>
-          One instrument. Pressure darkens and broadens it; laying it over turns the contact patch
-          elliptical and it becomes charcoal. This page is the tuning rig — and, first,{" "}
-          <b>the measurement</b>: open it on the iPad and find out what an Apple Pencil in Safari
-          actually reports.
+          Draw over the reference page, then move the page and the ink together. Compare scrolling,
+          pinch zoom, rotation, and content reflow. The controls and measurements scroll separately.
         </p>
       </header>
 
       <div class="lab-body">
         <PenPad />
+        {/* Keyboard focus enables native PageDown/End scrolling within this pane. */}
         <aside
           class="lab-side"
+          aria-label="Pencil controls and measurements"
+          tabindex={0}
           ref={adopt((element) => guardPenControls(element, () => paper.input))}
         >
+          <SceneControls />
           <Readout />
           <InkData />
+          <CaptureReview />
           <Params />
         </aside>
       </div>

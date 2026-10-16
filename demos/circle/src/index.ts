@@ -38,6 +38,7 @@ export {
   guideMode,
   HISTORY_LEN,
   ink,
+  inkDocument,
   paper,
   recordTurn,
   resetTurn,

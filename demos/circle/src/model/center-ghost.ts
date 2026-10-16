@@ -36,6 +36,7 @@ export class CenterGhost {
   private armed = false;
   private cssW = 0;
   private cssH = 0;
+  private density = 0;
 
   constructor(opts: { source: () => readonly Vec[]; className?: string }) {
     this.source = opts.source;
@@ -49,24 +50,20 @@ export class CenterGhost {
       pointerEvents: "none",
     } satisfies Partial<CSSStyleDeclaration>);
     this.ctx = this.canvas.getContext("2d");
-    if (typeof requestAnimationFrame === "function") {
-      const tick = (): void => {
-        this.frame();
-        this.raf = requestAnimationFrame(tick);
-      };
-      this.raf = requestAnimationFrame(tick);
-    }
   }
 
   /** Begin tracking the live centre (Zen mode, pen down). Starts a fresh trail. */
   arm(): void {
     this.armed = true;
     this.trail = [];
+    this.schedule();
   }
 
   /** Stop and wipe — pen up (the full fit takes over) or a mode change. */
   disarm(): void {
     this.armed = false;
+    if (this.raf) cancelAnimationFrame(this.raf);
+    this.raf = 0;
     this.trail = [];
     this.clear();
   }
@@ -76,6 +73,16 @@ export class CenterGhost {
       cancelAnimationFrame(this.raf);
     }
     this.canvas.remove();
+  }
+
+  private schedule(): void {
+    if (!this.armed || this.raf || typeof requestAnimationFrame !== "function") return;
+    this.raf = requestAnimationFrame(() => {
+      this.raf = 0;
+      if (!this.canvas.isConnected) return;
+      this.frame();
+      this.schedule();
+    });
   }
 
   private now(): number {
@@ -97,12 +104,13 @@ export class CenterGhost {
   private resize(): void {
     const w = this.canvas.clientWidth;
     const h = this.canvas.clientHeight;
-    if (w === this.cssW && h === this.cssH) {
+    const dpr = this.dpr();
+    if (w === this.cssW && h === this.cssH && dpr === this.density) {
       return;
     }
     this.cssW = w;
     this.cssH = h;
-    const dpr = this.dpr();
+    this.density = dpr;
     this.canvas.width = Math.round(w * dpr);
     this.canvas.height = Math.round(h * dpr);
   }

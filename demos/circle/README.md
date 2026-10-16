@@ -16,3 +16,9 @@ Open the printed URL. The voice dock in the corner drives the page's own tools;
 it takes an OpenAI key from `OPENAI_API_KEY` in the environment (the dev server
 hands it to the page) or from its own key pane. See the
 [user guide](../../packages/aiui-viz/docs/frontend-user-guide.md).
+
+The ink document owns strokes. A disposable `PencilSurface` renders it and accepts
+input; `inkSignals(document)` supplies live measurements. Completed ink fades
+before its working records expire, while the measured score remains in the turn
+state. Component replacement adopts the current view; dependency edits recreate
+views over the retained document, and unmounting releases input ownership.

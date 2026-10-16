@@ -2,10 +2,8 @@
  * store.ts — the durable roots (playbook layer 2, state side) and the control
  * surface for the circle-drawing meter.
  *
- * The one genuinely durable, imperative object here is the {@link paper}: a
- * `PencilSurface` from `@habemus-papadum/aiui-pencil`, with **vanishing ink** —
- * a stroke fades and pops a few seconds after you lift the pen. It is a
- * `durable()` so a hot edit to a component never wipes what you just drew.
+ * The ink document and turn state survive hot edits. The surface, reactive
+ * adapters, and guide renderer are replaceable views over those durable roots.
  *
  * A **turn** begins the instant a new stroke starts. Its whole lifecycle is
  * three durable signals the surface's own callbacks drive:
@@ -21,6 +19,7 @@
  */
 
 import {
+  createInkDocument,
   inkSignals,
   type PencilParams,
   PencilSurface,
@@ -36,6 +35,10 @@ import { summarize, type Vec } from "./circle";
  * and the toolkit namespace (window.__circle). New declarations MUST thread
  * it (see aiui-viz scope.ts; user guide, "Composing bigger apps"). */
 export const circleScope = scope("circle");
+
+/** Dispose prior view logic when Vite reevaluates this dependency module. */
+const runtime = circleScope.durable<{ dispose?: () => void }>("runtime", () => ({}));
+runtime.dispose?.();
 
 // ── the control surface ──────────────────────────────────────────────────────
 
@@ -117,73 +120,56 @@ export function currentParams(): PencilParams {
   return { ...SKETCH, size: brushSize.get(), color: "#ff6b6b" };
 }
 
-/**
- * The drawing surface itself — the three-tier `PencilSurface` with vanishing
- * ink. Constructed against `document.body`; the drawing component re-parents
- * its canvas into the stage and calls `setActive(true)` so it owns the pointer.
- *
- * The turn lifecycle lives entirely in these two callbacks — no separate
- * recorder, because the surface is already the one place a stroke's points are
- * captured (`onStrokeEnd` hands us the committed samples).
- */
-export const paper = circleScope.durable(
-  "paper",
-  () =>
-    new PencilSurface({
-      className: "circle-paper",
-      params: () => currentParams(),
-      fadeSec: () => fadeSeconds.get(),
-      // Transparent: the page's dark ground shows through, ink floats on it.
-      background: () => undefined,
-      onStrokeStart: () => {
-        // One mark at a time: starting a new stroke sends the previous one into
-        // the tail of the vanishing curve so it POPS OUT (rather than snapping
-        // away). `popCompleted` re-times the finished strokes onto the pop but
-        // leaves THIS just-begun stroke (already in the live set) untouched — a
-        // plain clearAnimated() here would wipe it. Idle strokes still pop on
-        // their own fadeSec clock; this only brings a new stroke's arrival
-        // forward as the trigger.
-        paper.popCompleted();
-        // A new stroke IS a new turn: bump the counter, drop the last turn's
-        // frozen stats, and enter the live phase.
-        turnCount.set((n) => n + 1);
-        frozenPoints.set([]);
-        turnPhase.set("drawing");
-      },
-      onStrokeCancel: () => resetTurn(),
-      onStrokeEnd: (end) => {
-        // Pen up: freeze the final points (they outlive the ink's fade) and log
-        // this turn's score to the history ring behind the sparkline.
-        frozenPoints.set(end.points);
-        turnPhase.set("settled");
-        recordTurn(end.points);
-      },
-    }),
-);
+/** The document owns ink; presentation fades it, then explicitly expires working records. */
+export const inkDocument = circleScope.durable("document", () => createInkDocument());
+export const paper = new PencilSurface({
+  document: inkDocument,
+  className: "circle-paper",
+  // The exercise's fitted overlays and centre guide share a fixed screen coordinate frame.
+  navigation: false,
+  params: () => currentParams(),
+  fadeSec: () => fadeSeconds.get(),
+  expireFadedInk: true,
+  // Transparent: the page's dark ground shows through, ink floats on it.
+  background: () => undefined,
+  onStrokeStart: () => {
+    // Fade only completed records; the new draft remains under the pen.
+    paper.fadeCompleted();
+    // A new stroke IS a new turn: bump the counter, drop the last turn's
+    // frozen stats, and enter the live phase.
+    turnCount.set((n) => n + 1);
+    frozenPoints.set([]);
+    turnPhase.set("drawing");
+  },
+  onStrokeCancel: () => resetTurn(),
+  onStrokeEnd: (end) => {
+    // Pen up: freeze the final points (they outlive the ink's fade) and log
+    // this turn's score to the history ring behind the sparkline.
+    frozenPoints.set(end.points);
+    turnPhase.set("settled");
+    recordTurn(end.points);
+  },
+});
 
 /**
  * The drawing as Solid signals: `ink.strokes()` (committed, immediate) and
  * `ink.live()` (the in-flight stroke, cumulative points at ~15 Hz — lossless).
  * The `stats` cell reads `live()` during the drawing phase.
  */
-export const ink = circleScope.durable("ink", () => inkSignals(paper));
+export const ink = inkSignals(inkDocument);
 
 /**
- * The Zen guide's centre-ghost renderer (imperative rAF island). It reads the
+ * The Zen guide's centre-ghost renderer. It reads the
  * live stroke's points STRAIGHT from the surface every frame — not through the
  * throttled `ink.live()` — so the focus dot tracks at 60 Hz, not 15. A
  * component adopts its canvas and arms/disarms it by mode + phase.
  */
-export const centerGhost = circleScope.durable(
-  "centerGhost",
-  () =>
-    new CenterGhost({
-      source: () => {
-        const live = paper.ink().live;
-        return live.length > 0 ? live[live.length - 1].points : [];
-      },
-    }),
-);
+export const centerGhost = new CenterGhost({
+  source: () => {
+    const live = paper.document.snapshot().live;
+    return live.length > 0 ? live[live.length - 1].points : [];
+  },
+});
 
 /**
  * The points the statistics are measured over RIGHT NOW: the live stroke while
@@ -205,3 +191,20 @@ export function resetTurn(): void {
   frozenPoints.set([]);
   turnPhase.set("idle");
 }
+
+let disposed = false;
+const disposeRuntime = () => {
+  if (disposed) return;
+  disposed = true;
+  const errors: unknown[] = [];
+  for (const release of [() => ink.dispose(), () => paper.dispose(), () => centerGhost.dispose()]) {
+    try {
+      release();
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+  if (errors.length) throw new AggregateError(errors, "Unable to dispose all drawing views");
+};
+runtime.dispose = disposeRuntime;
+if (import.meta.hot) import.meta.hot.dispose(disposeRuntime);

@@ -29,8 +29,8 @@ pnpm dev      # Vite; the voice dock takes OPENAI_API_KEY from the environment
   `cell(deps, compute, { scope: circleScope })`,
   `action({ scope: circleScope, … })`. See the user guide's "Composing bigger
   apps".
-- **Keep the split.** `src/model/store.ts` = the durable pencil surface + turn
-  signals + curated controls (rarely edited). `src/model/graph.ts` = the
+- **Keep the split.** `src/model/store.ts` = durable ink document + turn
+  signals + curated controls, with disposable rendering/input adapters. `src/model/graph.ts` = the
   disposable `stats` cell + agent tools. `src/ui/` = pure readers.
   `src/model/circle.ts` = pure layer-1 fitting math with headless tests.
 - **Don't remove the integration.** The `aiui()` plugin in vite.config.ts
