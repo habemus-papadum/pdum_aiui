@@ -6,7 +6,10 @@ description: How an aiui app is architected — the four-layer playbook (pure fu
 # aiui architecture
 
 **Sources of truth** (read when depth is needed; if this digest ever disagrees, trust them and
-say so): [frontend-playbook.md](../../packages/aiui-viz/docs/frontend-playbook.md)
+say so): [CATALOG.md](../../packages/aiui-viz/CATALOG.md) (the INVENTORY: every piece —
+substrate, components, containers, the agent surface, sister packages — with its state, shipped /
+spike / proposed, and where it is used; check it before writing a component that may already
+exist) → [frontend-playbook.md](../../packages/aiui-viz/docs/frontend-playbook.md)
 (the BUILD ORDER: pure functions → cells → components → application, a definition of done per
 layer, vertical slices — follow it when creating or extending an app) →
 [frontend-user-guide.md](../../packages/aiui-viz/docs/frontend-user-guide.md)

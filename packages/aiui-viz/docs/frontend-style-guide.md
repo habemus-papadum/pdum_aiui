@@ -26,7 +26,8 @@ wants it. `TeX`, `TocRail`, `SiteNav`, the Mosaic/DuckDB pair (proven in seismos
 (proven in a deck, then copied verbatim into a plain notes site — promoted from aiui-slides to
 `aiui-viz/site`), and the scrub pill and select widgets (three and five hand-rolled copies) all
 followed that path. One package holds both layers for now — if porcelain ever outgrows it, the
-seam is already drawn.
+seam is already drawn. The [catalog](../CATALOG.md) lists every piece that has arrived — and the
+ones still in the lab — with its state and where it is used.
 
 ## Document structure: the page is a short paper
 

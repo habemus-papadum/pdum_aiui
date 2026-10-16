@@ -61,7 +61,7 @@ opt-in and never part of a build. A built page takes a pasted key instead.
 
 | Package | What it is |
 | --- | --- |
-| [`aiui-viz`](./packages/aiui-viz/README.md) | The framework: async cells for SolidJS 2.0, controls/actions, durable HMR structure, scopes, worker streaming, the agent toolkit, site pages and cards, Plot/Mosaic/DuckDB porcelain. Its [`docs/`](./packages/aiui-viz/docs) hold the methodology, starting at [frontend-for-agents.md](./packages/aiui-viz/docs/frontend-for-agents.md). |
+| [`aiui-viz`](./packages/aiui-viz/README.md) | The framework: async cells for SolidJS 2.0, controls/actions, durable HMR structure, scopes, worker streaming, the agent toolkit, site pages and cards, Plot/Mosaic/DuckDB porcelain. Start at its [catalog](./packages/aiui-viz/CATALOG.md) — every piece, its state, where it is used; its [`docs/`](./packages/aiui-viz/docs) hold the methodology, starting at [frontend-for-agents.md](./packages/aiui-viz/docs/frontend-for-agents.md). |
 | [`aiui-source-processor`](./packages/aiui-source-processor/README.md) | The Vite/Babel pass: identity injection for cells/controls/actions, JSX source locators, the dev server's source listing, `devKeys`. |
 | [`aiui-design`](./packages/aiui-design/README.md) | The design system: tokens, fonts, a skin for every stable aiui-viz class, the notebook chrome. `DESIGN.md` is the language. |
 | [`aiui-slides`](./packages/aiui-slides/README.md) | A deck of viewport slides as an ordinary aiui app: current slide as a control, HUD overview, URL binding, the Lens component. |

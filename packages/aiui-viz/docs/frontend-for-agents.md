@@ -13,7 +13,10 @@ pages go deeper: [Design choices](./frontend-design-choices.md) explains, at
 framework-designer level, exactly what we built and why; [Hard-won details](./frontend-hard-won.md)
 is the ledger of paid-for technical knowledge underneath it; the
 [Style guide](./frontend-style-guide.md) is the authoring conventions — page structure, TOC,
-plotting, math — that make every notebook in a lab read as one publication.
+plotting, math — that make every notebook in a lab read as one publication. The
+[catalog](../CATALOG.md) is the inventory: every piece the library provides — substrate,
+components, containers, the agent surface — with its state and where it is used. This page
+explains the pieces; the catalog lists them.
 
 If you just want to *use* the library — write a cell, depend on another cell, stream a computation,
 display it — start at the [User guide](./frontend-user-guide.md) instead; when you're building a whole
@@ -218,7 +221,9 @@ better instrumented than a human team would ever bother to make it.
 
 - **Library** — `@habemus-papadum/aiui-viz` (`packages/aiui-viz`): cells, the CellView wrapper,
   the worker protocol, the durable registry, the tool surface, and the modal kit + mode engine
-  (`src/modal/`; the Solid adapter is `src/mode-solid.ts`).
+  (`src/modal/`; the Solid adapter is `src/mode-solid.ts`). The [catalog](../CATALOG.md) lists
+  every piece — substrate, components, containers, the agent surface — with its state and where
+  it is used.
 - **Reference apps** — `demos/gallery`: morphogen (reaction-diffusion) and aztec (domino
   tilings), each a full notebook built the intended way; `PRINCIPLES.md` there maps file layout
   to methodology.
