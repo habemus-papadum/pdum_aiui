@@ -14,7 +14,6 @@ import { type GradientRow, type GradientView, gradientRows, gradientView } from 
 import { type StageState, schedule, stagesOf } from "./pipeline";
 import { evaluateStep, STEPS, type StepEvaluation } from "./quadratic";
 import {
-  beta,
   clock,
   epochs,
   harmonics,

@@ -1,11 +1,11 @@
-/** Durable roots and the control surface of the RichTeX lab. */
+/** Durable roots and the control surface of the aiui-viz lab. */
 
 import { control, scope } from "@habemus-papadum/aiui-viz";
 import { MAX_HARMONICS } from "./fourier";
 import { STEPS } from "./quadratic";
 import { initialStep, stepTraining, type TrainStep } from "./training";
 
-export const labScope = scope("rich-tex-lab");
+export const labScope = scope("viz-lab");
 
 // ── training: the fake run and its knobs ────────────────────────────────────
 

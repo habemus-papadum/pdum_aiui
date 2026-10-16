@@ -45,7 +45,7 @@ export function Anatomy(): JSX.Element {
   };
 
   return (
-    <article class="rtx-lab-page">
+    <article class="lab-page">
       <header>
         <p class="eyebrow">anatomy</p>
         <h1>What a diagram makes addressable</h1>

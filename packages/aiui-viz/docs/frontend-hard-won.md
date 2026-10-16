@@ -20,7 +20,7 @@ Versions these were established against: `solid-js@2.0.0-beta.15`, `@solidjs/web
 - **`UNSTABLE_MEMO_OUTPUT` means an identity gate that never closes.** Solid's dev build warns
   when a memo commits a new-but-shallow-equal object or array four runs in a row: every
   subscriber then re-runs on every upstream change. The first offender was `cell()` itself
-  (2026-10-16, under the RichTeX lab's 12 Hz trainer): its state box — the value of the error
+  (2026-10-16, under the aiui-viz lab's 12 Hz trainer): its state box — the value of the error
   boundary's internal `children` / `boundary` / `value` computeds — was a fresh `{ state }` per
   run, so every CellView re-ran on every commit of a ticking cell. The box is interned per state
   now, and `cell()` takes an `equals` option for the value itself (one gate for the graph read

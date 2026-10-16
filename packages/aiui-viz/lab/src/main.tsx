@@ -1,27 +1,32 @@
 /**
- * RichTeX Lab — the rig for `RichTeX` (`@habemus-papadum/aiui-viz/site`):
- * an equation built from pieces, every piece styled, hovered, annotated and
- * reactive after KaTeX has drawn it — and, since the Mermaid spike, for
- * `Mermaid` (`@habemus-papadum/aiui-viz/site/mermaid`): a diagram whose
- * nodes and edges are the same kind of addressable pieces.
+ * The aiui-viz lab — the rig for the site components whose pieces stay
+ * addressable after a library has drawn them: `RichTeX`
+ * (`@habemus-papadum/aiui-viz/site`, an equation built from pieces) and
+ * `Mermaid` (`@habemus-papadum/aiui-viz/site/mermaid`, a diagram as a
+ * control surface). The SVG work (docs/proposals/semantic-svg.md) is meant
+ * to join them here.
  *
  *   pnpm -C packages/aiui-viz lab
  *
  * Pages (one document, routed on the pathname):
+ *   RichTeX
  *   /fidelity    the proof — marked and plain renders, pixel-diffed and measured
  *   /training    an RL objective whose terms breathe with a (fake) training run
  *   /derivation  completing the square, step by step, every term evaluated live
  *   /fourier     a square wave's harmonics: hover a term, see its wave; click to mute
+ *   Mermaid
  *   /pipeline    a build pipeline as a flowchart: click a stage, drag the train node
  *   /anatomy     any Mermaid source, rendered: what became addressable, at what cost
  *
  * Layer map, per the frontend playbook:
- *   ../../src/site/rich-tex.tsx   the component under test (the library itself)
- *   ../../src/site/mermaid.tsx    the Mermaid component (same layer)
- *   src/model/{training,quadratic,fourier,pipeline}.ts   layer 1 — pure, unit-tested
- *   src/model/store.ts            durable roots + the control surface
+ *   ../../src/site/rich-tex.tsx   the components under test (the library itself)
+ *   ../../src/site/mermaid.tsx
+ *   src/model/{training,quadratic,fourier,gradients,pipeline}.ts   layer 1 — pure, unit-tested
+ *   src/model/store.ts            durable roots + the control surface (scope `viz-lab`)
  *   src/model/graph.ts            the cell graph, the bridges, the agent tools
- *   src/ui/                       components
+ *   src/ui/                       components; styles.css is the shared chrome (`lab-`)
+ *                                 + the RichTeX pages (`rtx-lab-`), mermaid.css the
+ *                                 Mermaid pages (`mmd-lab-`)
  */
 import "@habemus-papadum/aiui-design/site.css";
 import "./styles.css";
@@ -38,7 +43,7 @@ configureMermaid(LAB_MERMAID);
 
 render(
   () => (
-    <PageBoundary name="RichTeX Lab">
+    <PageBoundary name="aiui-viz lab">
       <App />
     </PageBoundary>
   ),

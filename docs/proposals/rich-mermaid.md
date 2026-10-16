@@ -229,5 +229,7 @@ Conventions the lab settled on:
 4. A Playwright test over the real Mermaid pinning the markup facts above.
 5. Keyboard access for clickable nodes; a note collision pass.
 6. FLIP transitions across re-renders keyed by id, if a demo wants animated relayout.
-7. The lab is still named "RichTeX lab" and scoped `rich-tex-lab`; with two Mermaid pages it
-   is the site lab — a rename is the owner's call.
+
+The lab became the uniform aiui-viz lab with this spike (scope `viz-lab`; shared `lab-`
+chrome, `rtx-lab-` for the RichTeX pages, `mmd-lab-` for the Mermaid pages), the place the
+SVG work is meant to join.

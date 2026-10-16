@@ -144,7 +144,7 @@ export function Pipeline(): JSX.Element {
   };
 
   return (
-    <article class="rtx-lab-page">
+    <article class="lab-page">
       <header>
         <p class="eyebrow">pipeline</p>
         <h1>A diagram as a control surface</h1>
@@ -157,7 +157,7 @@ export function Pipeline(): JSX.Element {
         </p>
       </header>
 
-      <div class="rtx-lab-toolbar">
+      <div class="lab-toolbar">
         <ControlToggle of={running} label="run" />
         <ControlSlider
           of={clock}
@@ -167,7 +167,7 @@ export function Pipeline(): JSX.Element {
         />
         <ControlSlider of={epochs} label="epochs" class="slider-compact" />
         <ControlToggle of={withEval} label="evaluate stage" />
-        <span class="small muted rtx-lab-step">run length {totalCost(params()).toFixed(1)} s</span>
+        <span class="small muted lab-aside">run length {totalCost(params()).toFixed(1)} s</span>
       </div>
 
       <Mermaid

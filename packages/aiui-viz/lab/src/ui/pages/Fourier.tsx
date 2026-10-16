@@ -41,7 +41,7 @@ export function Fourier(): JSX.Element {
   const indices = () => Array.from({ length: n() }, (_, i) => i + 1);
 
   return (
-    <article class="rtx-lab-page">
+    <article class="lab-page">
       <header>
         <p class="eyebrow">fourier</p>
         <h1>Hover a term, see its wave</h1>
@@ -52,7 +52,7 @@ export function Fourier(): JSX.Element {
         </p>
       </header>
 
-      <div class="rtx-lab-toolbar">
+      <div class="lab-toolbar">
         <ControlSlider of={harmonics} label="harmonics" class="slider-compact" />
         <span class="small muted">
           rms error {rmsError(samples()).toFixed(3)}

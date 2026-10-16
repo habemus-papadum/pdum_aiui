@@ -1,18 +1,20 @@
-/* RichTeX Lab — page chrome over the design system (site.css carries the
-   tokens, fonts, the sidebar, the control widgets, the math skin). Everything
-   here is prefixed `rtx-lab-` so nothing leaks onto a sibling page. */
+/* The aiui-viz lab — page chrome over the design system (site.css carries the
+   tokens, fonts, the sidebar, the control widgets, the math skin). Prefixes:
+   `lab-` is the chrome every page shares (page, toolbar, aside); `rtx-lab-` is
+   the RichTeX pages (this file); `mmd-lab-` the Mermaid pages (mermaid.css).
+   Nothing leaks onto a sibling page. */
 
-.rtx-lab-page {
+.lab-page {
   max-width: 64rem;
   margin: 0 auto;
   padding: var(--space-lg, 32px) var(--space-md, 20px) var(--space-xl, 64px);
 }
 
-.rtx-lab-page > header {
+.lab-page > header {
   margin-bottom: var(--space-md, 20px);
 }
 
-.rtx-lab-toolbar {
+.lab-toolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -20,7 +22,7 @@
   margin: var(--space-md, 20px) 0;
 }
 
-.rtx-lab-toolbar .slider-compact {
+.lab-toolbar .slider-compact {
   min-width: 11rem;
 }
 
@@ -137,7 +139,7 @@
 
 /* ── training ───────────────────────────────────────────────────────────── */
 
-.rtx-lab-step {
+.lab-aside {
   margin-left: auto;
   color: var(--ink-muted);
 }

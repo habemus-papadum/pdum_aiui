@@ -163,7 +163,7 @@ export function Training(): JSX.Element {
   const above = () => clip()?.high ?? 0;
 
   return (
-    <article class="rtx-lab-page">
+    <article class="lab-page">
       <header>
         <p class="eyebrow">training</p>
         <h1>An objective that breathes</h1>
@@ -175,7 +175,7 @@ export function Training(): JSX.Element {
         </p>
       </header>
 
-      <div class="rtx-lab-toolbar">
+      <div class="lab-toolbar">
         <ControlToggle of={playing} label="run" />
         <ControlSlider of={speed} label="speed" class="slider-compact" />
         <span class="rtx-lab-segmented" data-control={lens.name} title={lens.description}>
@@ -195,7 +195,7 @@ export function Training(): JSX.Element {
         <button type="button" class="btn btn-outline" onClick={() => resetTraining.run?.()}>
           reset
         </button>
-        <span class="rtx-lab-step numeric">step {latest()?.step.step ?? 0}</span>
+        <span class="lab-aside numeric">step {latest()?.step.step ?? 0}</span>
       </div>
 
       <RichTeX display class="rtx-lab-eq">

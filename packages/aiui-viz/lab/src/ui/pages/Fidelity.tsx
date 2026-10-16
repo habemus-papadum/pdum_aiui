@@ -35,7 +35,7 @@ export function Fidelity(): JSX.Element {
 
   return (
     <article
-      class={outline() ? "rtx-lab-page rtx-lab-outline" : "rtx-lab-page"}
+      class={outline() ? "lab-page rtx-lab-outline" : "lab-page"}
       ref={(el) => {
         page = el;
         // Measure once laid out, and again when the web fonts land.
@@ -53,7 +53,7 @@ export function Fidelity(): JSX.Element {
         </p>
       </header>
 
-      <div class="rtx-lab-toolbar">
+      <div class="lab-toolbar">
         <button type="button" class="btn btn-outline" onClick={measure}>
           measure again
         </button>

@@ -34,7 +34,7 @@ export function Derivation(): JSX.Element {
   );
 
   return (
-    <article class="rtx-lab-page">
+    <article class="lab-page">
       <header>
         <p class="eyebrow">derivation</p>
         <h1>Every step evaluated</h1>
@@ -45,7 +45,7 @@ export function Derivation(): JSX.Element {
         </p>
       </header>
 
-      <div class="rtx-lab-toolbar">
+      <div class="lab-toolbar">
         <button
           type="button"
           class="btn btn-outline"

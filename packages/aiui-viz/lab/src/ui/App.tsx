@@ -28,7 +28,7 @@ export function App(): JSX.Element {
   const route = createMemo(() => pathname().replace(/^\/+/, "").split("/")[0] ?? "");
   createEffect(route, (r) => {
     const item = NAV.find((n) => n.id === r);
-    document.title = item ? `${item.name} · RichTeX Lab` : "RichTeX Lab";
+    document.title = item ? `${item.name} · aiui-viz lab` : "aiui-viz lab";
   });
 
   const intercept = (e: MouseEvent): void => {
@@ -52,12 +52,12 @@ export function App(): JSX.Element {
   return (
     <div class="app-frame">
       <SiteNav
-        brand={{ name: "RichTeX", suffix: "lab", href: "/" }}
+        brand={{ name: "aiui-viz", suffix: "lab", href: "/" }}
         items={[...NAV]}
         active={route()}
         links={{ github: "https://github.com/habemus-papadum/pdum_aiui" }}
       />
-      <main class="app-content rtx-lab">
+      <main class="app-content viz-lab">
         <Dynamic component={PAGES[route()] ?? Landing} />
       </main>
     </div>
