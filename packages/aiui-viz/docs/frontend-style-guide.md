@@ -128,6 +128,24 @@ at `packages/aiui-viz/lab`, `pnpm -C packages/aiui-viz lab`, is the worked examp
   (`installMathCopy`, installed by `ensureAiuiGlobal` on every aiui page; the `selection` tool
   answers from the same resolver).
 
+**Diagrams: `Mermaid`** (`aiui-viz/site/mermaid`, its own subpath — `mermaid` is an optional
+peer loaded on first use; the lab's `/pipeline` and `/anatomy` pages are the worked examples,
+[the spike](../../../docs/proposals/rich-mermaid.md) the record):
+
+- The diagram text comes from the pure model (a `pipelineText(params)` function), never from
+  string edits in a component; its ids are the model's ids, and Mermaid writes them into the
+  SVG, so every node, edge and subgraph is addressable by the name the author wrote. Name edges
+  (`feat e_feat_train@--> train`) when the app will address them.
+- `marks` keyed by id are the decorations (`color`, `fill`, `class`, `active`, a `note`, a
+  `control` to drag): inline attributes, no re-render. A change to `text` re-renders — the
+  layout IS the cost — asynchronously, latest-wins, the previous drawing staying put.
+- Never style state through Mermaid's `style`/`classDef` directives: each change is a full
+  re-render and lands as `!important`. Theme through `configureMermaid` (the base theme with
+  the design tokens as `themeVariables`, `look: "classic"`); skin the rest with ordinary
+  selectors — the component drops Mermaid's id-scoped specificity for you.
+- The root carries `data-mermaid` with the source; elements carry `data-aiui-id` /
+  `data-aiui-kind`; a knob carries `data-control` like every control widget.
+
 ## Plotting
 
 **Observable Plot is the default** for statistical graphics, always through the `PlotFigure`

@@ -132,3 +132,105 @@ export function toggleMuted(k: number): boolean {
   muted.set([...mutedBox].sort((x, y) => x - y));
   return mutedBox.has(k);
 }
+
+// ── pipeline: the run clock and the diagram's knobs ─────────────────────────
+
+/** Seconds into the pipeline run — drag it, or let `running` drive it. */
+export const clock = control({ scope: labScope, value: 0, min: 0, max: 40, step: 0.1, unit: " s" });
+
+/** Advance the run clock in real time (stops at the end of the run). */
+export const running = control({ scope: labScope, value: false });
+
+/** Training epochs — drag the `train` node sideways to change it. */
+export const epochs = control({ scope: labScope, value: 5, min: 1, max: 20, step: 1 });
+
+/** Draw the evaluate stage (a structural change: the diagram re-renders). */
+export const withEval = control({ scope: labScope, value: true });
+
+/** The selected stage (clicked in the diagram), or none. */
+export const selected = labScope.durableSignal<string | undefined>("selected", undefined);
+
+/** Select a stage, or clear with `undefined`. */
+export function select(id: string | undefined): void {
+  selected.set(id === selected.get() ? undefined : id);
+}
+
+export interface Runner {
+  start(): void;
+  stop(): void;
+}
+
+/** The clock's driver while `running`: real time from the moment it started,
+ * published to the control each tick (the control is the mirror, as with the
+ * trainer). */
+export const runner = labScope.durable<Runner>("runner", () => {
+  let timer: ReturnType<typeof setInterval> | undefined;
+  const stop = () => {
+    if (timer !== undefined) clearInterval(timer);
+    timer = undefined;
+  };
+  return {
+    start() {
+      stop();
+      const base = clock.get() >= (clock.meta.max ?? 40) ? 0 : clock.get();
+      const t0 = performance.now();
+      timer = setInterval(() => {
+        const t = base + (performance.now() - t0) / 1000;
+        const max = clock.meta.max ?? 40;
+        if (t >= max) {
+          clock.set(max);
+          running.set(false);
+          return;
+        }
+        clock.set(Math.round(t * 10) / 10);
+      }, 100);
+    },
+    stop,
+  };
+});
+
+// ── anatomy: the source under the microscope ────────────────────────────────
+
+export const ANATOMY_PRESETS: Record<string, string> = {
+  flowchart: `flowchart TD
+  start([request]) --> auth{authenticated?}
+  auth -->|no| login[login page]
+  auth -->|yes| load[load profile]
+  login --> auth
+  subgraph api[api]
+    load --> cache[(cache)]
+    cache --> render[render]
+  end
+  render --> done([response])`,
+  state: `stateDiagram-v2
+  [*] --> Idle
+  Idle --> Running : start
+  Running --> Idle : stop
+  Running --> Failed : error
+  Failed --> Idle : reset
+  state Running {
+    Warm --> Steady
+  }`,
+  sequence: `sequenceDiagram
+  participant U as User
+  participant P as Page
+  participant A as Agent
+  U->>P: clicks a node
+  P->>A: tool call: select-stage
+  A-->>P: result
+  Note over P: the diagram re-marks`,
+  class: `classDiagram
+  class Cell {
+    +state
+    +latest()
+  }
+  class Control {
+    +get()
+    +set()
+  }
+  Cell <|-- AsyncCell
+  Control --> Cell : feeds`,
+};
+
+/** The anatomy page's Mermaid source. */
+export const source = labScope.durableSignal<string>("source", ANATOMY_PRESETS.flowchart as string);

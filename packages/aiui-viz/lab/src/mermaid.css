@@ -1,0 +1,234 @@
+/* The Mermaid pages' chrome — `mmd-lab-` prefixed, over the design system.
+
+   Mermaid's own stylesheet is id-scoped (`#svgId .node rect {…}`), which
+   would beat any class rule here — the component wraps that id in :where()
+   after each render, so these ordinary selectors win. The PALETTE still goes
+   in through the config (ui/mermaid-theme.ts): arrowheads and label
+   backgrounds are painted from it, not from any stylesheet. */
+
+.mmd-lab-diagram {
+  margin: var(--space-md, 20px) 0;
+  padding: var(--space-sm, 12px) 0 var(--space-md, 20px);
+}
+
+.mmd-lab-diagram svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* transitions are uncontested — Mermaid sets none */
+.mmd-lab-diagram .node > rect,
+.mmd-lab-diagram .node > polygon,
+.mmd-lab-diagram .node > circle,
+.mmd-lab-diagram .node > path,
+.mmd-lab-diagram .cluster > rect,
+.mmd-lab-diagram path[data-edge] {
+  transition:
+    fill 250ms ease,
+    stroke 250ms ease,
+    stroke-width 150ms ease;
+}
+
+.mmd-lab-diagram .node,
+.mmd-lab-diagram .aiui-mmd-hit,
+.mmd-lab-diagram .edgeLabel {
+  cursor: pointer;
+}
+
+/* the selected element: a heavier edge */
+.mmd-lab-diagram [data-active="true"] > rect,
+.mmd-lab-diagram [data-active="true"] > polygon,
+.mmd-lab-diagram [data-active="true"] > circle,
+.mmd-lab-diagram [data-active="true"] > path,
+.mmd-lab-diagram path[data-edge][data-active="true"] {
+  stroke-width: 2.5px;
+}
+
+/* the hovered element: the accent, over whatever the mark painted */
+.mmd-lab-diagram [data-hover="true"] > rect,
+.mmd-lab-diagram [data-hover="true"] > polygon,
+.mmd-lab-diagram [data-hover="true"] > circle,
+.mmd-lab-diagram [data-hover="true"] > path,
+.mmd-lab-diagram path[data-edge][data-hover="true"] {
+  stroke: var(--accent);
+}
+
+/* the running stage breathes */
+.mmd-lab-running {
+  animation: mmd-lab-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes mmd-lab-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* an edge whose source is done carries rows: a marching dash */
+.mmd-lab-diagram path.mmd-lab-flowing {
+  stroke-dasharray: 6 4;
+  animation: mmd-lab-flow 0.8s linear infinite;
+}
+
+@keyframes mmd-lab-flow {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+
+/* the knob while scrubbed */
+.mmd-lab-diagram [data-scrubbing="true"] > rect {
+  stroke: var(--accent);
+  stroke-width: 2.5px;
+}
+
+/* notes: chips under the stages */
+.mmd-lab-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 1px 7px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  font-family: var(--font-sans, system-ui, sans-serif);
+  font-size: 0.68rem;
+  line-height: 1.5;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+
+.mmd-lab-chip b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.aiui-mmd-note[data-active="true"] .mmd-lab-chip {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+/* the details panel beside the diagram */
+.mmd-lab-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--space-sm, 12px) var(--space-md, 20px);
+  margin: 0;
+}
+
+.mmd-lab-details dt {
+  font-family: var(--font-sans, system-ui, sans-serif);
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.mmd-lab-details dd {
+  margin: 2px 0 0;
+  font-size: 1rem;
+}
+
+.mmd-lab-status {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 3px;
+  font-family: var(--font-sans, system-ui, sans-serif);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.mmd-lab-status-done {
+  background: var(--ok-wash);
+  color: var(--ok);
+}
+.mmd-lab-status-active {
+  background: var(--accent-wash);
+  color: var(--accent);
+}
+.mmd-lab-status-pending {
+  background: var(--ghost);
+  color: var(--ink-muted);
+}
+
+/* ── anatomy ────────────────────────────────────────────────────────────── */
+
+.mmd-lab-anatomy-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-md, 20px);
+  align-items: start;
+}
+
+.mmd-lab-source {
+  width: 100%;
+  min-height: 16rem;
+  box-sizing: border-box;
+  padding: var(--space-xs, 8px);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius, 4px);
+  background: var(--surface-raised);
+  color: var(--ink);
+  font-family: var(--stack-mono, ui-monospace, monospace);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.mmd-lab-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 var(--space-xs, 8px);
+}
+
+.mmd-lab-readout {
+  font-family: var(--font-sans, system-ui, sans-serif);
+  font-size: 0.78rem;
+  color: var(--ink-muted);
+  min-height: 1.4em;
+}
+
+.mmd-lab-readout b {
+  color: var(--ink);
+}
+
+.mmd-lab-ids {
+  columns: 2;
+  column-gap: var(--space-md, 20px);
+  margin: var(--space-xs, 8px) 0 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--stack-mono, ui-monospace, monospace);
+  font-size: 0.74rem;
+  line-height: 1.6;
+}
+
+.mmd-lab-ids li {
+  break-inside: avoid;
+  cursor: default;
+}
+
+.mmd-lab-ids li[data-hot="true"] {
+  color: var(--accent);
+}
+
+.mmd-lab-ids .mmd-lab-kind {
+  display: inline-block;
+  width: 4.2em;
+  color: var(--ink-muted);
+}
+
+.mmd-lab-show-hits .aiui-mmd-hit {
+  stroke: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+@media (max-width: 900px) {
+  .mmd-lab-anatomy-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .mmd-lab-ids {
+    columns: 1;
+  }
+}

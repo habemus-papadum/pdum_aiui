@@ -7,10 +7,12 @@ import { navigateTo, pathname, SiteNav } from "@habemus-papadum/aiui-viz/site";
 import { Dynamic, type JSX } from "@solidjs/web";
 import { createEffect, createMemo, onCleanup } from "solid-js";
 import { NAV } from "./nav";
+import { Anatomy } from "./pages/Anatomy";
 import { Derivation } from "./pages/Derivation";
 import { Fidelity } from "./pages/Fidelity";
 import { Fourier } from "./pages/Fourier";
 import { Landing } from "./pages/Landing";
+import { Pipeline } from "./pages/Pipeline";
 import { Training } from "./pages/Training";
 
 const PAGES: Record<string, () => JSX.Element> = {
@@ -18,6 +20,8 @@ const PAGES: Record<string, () => JSX.Element> = {
   training: Training,
   derivation: Derivation,
   fourier: Fourier,
+  pipeline: Pipeline,
+  anatomy: Anatomy,
 };
 
 export function App(): JSX.Element {

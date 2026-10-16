@@ -11,8 +11,12 @@ import {
 import { measureFidelity } from "./fidelity";
 import { type FourierSample, sampleSeries } from "./fourier";
 import { type GradientRow, type GradientView, gradientRows, gradientView } from "./gradients";
+import { type StageState, schedule, stagesOf } from "./pipeline";
 import { evaluateStep, STEPS, type StepEvaluation } from "./quadratic";
 import {
+  beta,
+  clock,
+  epochs,
   harmonics,
   labScope,
   lens,
@@ -22,11 +26,16 @@ import {
   qa,
   qb,
   qc,
+  runner,
+  running,
+  select,
+  selected,
   speed,
   step,
   toggleMuted,
   train,
   trainer,
+  withEval,
 } from "./store";
 import {
   type ClipMeans,
@@ -59,6 +68,15 @@ export const graph = hotCellGraph(
         else trainer.stop();
       },
       { scope: labScope, name: "trainer" },
+    );
+    // The pipeline's clock driver, the same way.
+    bridgeEffect(
+      () => running.get(),
+      (on) => {
+        if (on) runner.start();
+        else runner.stop();
+      },
+      { scope: labScope, name: "runner" },
     );
 
     return {
@@ -127,6 +145,13 @@ export const graph = hotCellGraph(
         (deps): FourierSample[] => sampleSeries(deps.n, new Set(deps.muted)),
         { scope: labScope },
       ),
+
+      /** Where the pipeline run stands: every stage's status, progress, rows. */
+      pipeline: cell(
+        () => ({ p: { epochs: epochs.get(), withEval: withEval.get() }, t: clock.get() }),
+        (deps): Record<string, StageState> => schedule(deps.p, deps.t),
+        { scope: labScope },
+      ),
     };
   },
   import.meta.hot,
@@ -138,13 +163,16 @@ export type LabGraph = ReturnType<typeof graph>;
 
 const kit = agentToolkit(labScope.name, {
   brief:
-    "The RichTeX lab: four pages exercising an equation built from addressable pieces. " +
+    "The aiui-viz lab. RichTeX pages: four pages exercising an equation built from addressable pieces. " +
     "`training` runs a fake PPO objective whose symbols ε, β, c_v, c_H are knobs (drag them in " +
     "the equation, or `set` them); `lens` picks the annotation family on it — magnitude (each " +
     "term's share), clipping (which argument the min takes, which bound clips, from a simulated " +
     "batch per step), gradient (each term's pull and alignment, synthetic). `derivation` steps " +
     "through completing the square with every term evaluated; `fourier` sums a square wave's " +
-    "harmonics; `fidelity` proves the markers change no layout (measure-fidelity reads it).",
+    "harmonics; `fidelity` proves the markers change no layout (measure-fidelity reads it). " +
+    "Mermaid pages: `pipeline` is a build pipeline drawn as a flowchart whose stages are " +
+    "clickable (select-stage), run by `clock`/`running`, with the `train` node a drag-knob for " +
+    "`epochs`; `anatomy` renders any Mermaid source and lists what became addressable.",
 });
 registerStandardTools(kit);
 
@@ -170,6 +198,34 @@ export const toggleHarmonic = action({
     const k = Number(args?.k);
     if (!Number.isInteger(k) || k < 1 || k % 2 === 0) return "k must be an odd positive integer";
     return `harmonic ${k} ${toggleMuted(k) ? "muted" : "unmuted"}`;
+  },
+});
+
+/**
+ * Select a stage of the pipeline page by id (the node's id in the diagram),
+ * as a click on the node would; the same id again clears the selection.
+ * @usage The stage's details panel opens and its edges light up.
+ * @example select-stage { "id": "train" }
+ */
+export const selectStage = action({
+  scope: labScope,
+  params: { id: "a stage id: raw, clean, feat, train, eval, ship, deploy" },
+  run: (args) => {
+    const id = String(args?.id ?? "");
+    const p = { epochs: epochs.get(), withEval: withEval.get() };
+    if (!stagesOf(p).some((s) => s.id === id)) return `no stage "${id}" in the current diagram`;
+    select(id);
+    return selected.get() === id ? `selected ${id}` : `cleared the selection`;
+  },
+});
+
+/** Rewind the pipeline run to t = 0 and stop the clock. */
+export const resetRun = action({
+  scope: labScope,
+  run: () => {
+    running.set(false);
+    clock.set(0);
+    return "run rewound to 0 s";
   },
 });
 

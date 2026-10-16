@@ -33,7 +33,8 @@
     "./site/json-view": "./src/site/json-view.tsx",
     "./site/prompt-record": "./src/site/prompt-record.tsx",
     "./site/markdown": "./src/site/markdown.tsx",
-    "./site/rich-tex": "./src/site/rich-tex.tsx"
+    "./site/rich-tex": "./src/site/rich-tex.tsx",
+    "./site/mermaid": "./src/site/mermaid.tsx"
   },
   "main": "./src/index.ts",
   "module": "./src/index.ts",
@@ -162,6 +163,11 @@
         "types": "./dist/site/rich-tex.d.ts",
         "import": "./dist/rich-tex.js",
         "default": "./dist/rich-tex.js"
+      },
+      "./site/mermaid": {
+        "types": "./dist/site/mermaid.d.ts",
+        "import": "./dist/mermaid.js",
+        "default": "./dist/mermaid.js"
       }
     }
   },
@@ -183,6 +189,7 @@
     "embedding-atlas": ">=0.24",
     "katex": "^0.16 || ^0.17",
     "marked": "^16",
+    "mermaid": "^12",
     "solid-js": ">=2.0.0-rc.13 <3"
   },
   "peerDependenciesMeta": {
@@ -213,6 +220,9 @@
     "marked": {
       "optional": true
     },
+    "mermaid": {
+      "optional": true
+    },
     "@habemus-papadum/aiui-prompts-inspector": {
       "optional": true
     }
@@ -238,6 +248,7 @@
     "embedding-atlas": "catalog:",
     "katex": "^0.17.0",
     "marked": "^16.4.2",
+    "mermaid": "^12.2.0",
     "solid-js": "catalog:solid",
     "vite": "catalog:",
     "vite-plugin-solid": "catalog:solid"

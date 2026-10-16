@@ -67,6 +67,8 @@ export default defineConfig({
         markdown: "src/site/markdown.tsx",
         // Math from pieces: every <Term> addressable after KaTeX renders.
         "rich-tex": "src/site/rich-tex.tsx",
+        // A Mermaid diagram as a control surface: nodes, edges, clusters addressable.
+        mermaid: "src/site/mermaid.tsx",
         // Framework-free like `./modal`, so node-side consumers (aiui-live's
         // delegators) render the same Tools: section the browser does.
         "tool-brief": "src/tool-brief.ts",
