@@ -183,6 +183,12 @@ infrastructure.
 
 ## Tablet use and companion devices
 
+The [WebRTC and companion proposal](../proposals/webrtc-and-companion-pages.md)
+develops this pattern: a companion pairs with one running main-page instance,
+with local computation and peer communication independent of application backends
+and login sessions. It covers the Wacom workflow, browser messaging alternatives,
+and the separate signaling and WebRTC responsibilities.
+
 Using the main application on an iPad is one facet: touch, Pencil input, and
 layout are part of that application's interface. During development, the
 frontend should expose a reachable address and make the appropriate network

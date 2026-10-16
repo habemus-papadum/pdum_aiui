@@ -23,6 +23,10 @@ The [application patterns](./docs/application-patterns/README.md) describe stati
 SaaS and custom backends, Electron delivery, companion devices, and AI workflows.
 The [agentic patterns proposal](./docs/proposals/agentic-patterns-and-use-cases.md) describes
 the next-generation agent client boundary, collaboration interfaces, and pencil/voice workflows.
+The [WebRTC and companion proposal](./docs/proposals/webrtc-and-companion-pages.md) describes
+instance pairing, local pen-input workflows, signaling, and observable peer communication.
+The [semantic SVG proposal](./docs/proposals/semantic-svg.md) describes reactive diagrams,
+expressive symbols, structured editing, and pencil integration.
 The [three-application master proposal](./docs/proposals/three-applications-and-development-process.md)
 describes the mathematical workspace, VACASK circuit tool, and prompting tool, with an adaptive
 development process and a shared capability inventory.
