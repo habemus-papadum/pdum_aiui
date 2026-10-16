@@ -14,6 +14,7 @@
  *   - errors: error(), latest() across errors, refetch()
  *   - progress and ctx.previous
  *   - the named-cell registry lifecycle
+ *   - equality: the interned state box, and the `equals` gate on both channels
  */
 import { createEffect, createRoot, createSignal } from "solid-js";
 import { afterEach, describe, expect, it } from "vitest";
@@ -535,5 +536,166 @@ describe("the named-cell registry", () => {
 
     d2(); // graph hot-swap or teardown
     expect(cellRegistry().map((c) => c.name)).not.toContain("census");
+  });
+});
+
+describe("equality — what counts as a new value", () => {
+  it("state readers stay quiet while recomputes land in the same state", async () => {
+    // The state box is interned per state: a ticking cell wakes its value
+    // readers on every commit, but a state()/loading() reader — a CellView's
+    // chrome — only when the state actually moves. (Before the interning,
+    // every commit minted a new-but-equal box and woke them all: Solid's
+    // UNSTABLE_MEMO_OUTPUT.)
+    const [x, setX] = createSignal(1);
+    let stateRuns = 0;
+    let valueRuns = 0;
+    root(() => {
+      const c = cell(
+        () => ({ x: x() }),
+        (d) => ({ doubled: d.x * 2 }), // sync, a fresh object per run
+      );
+      createEffect(
+        () => c.state(),
+        () => {
+          stateRuns++;
+        },
+      );
+      createEffect(
+        () => c(),
+        () => {
+          valueRuns++;
+        },
+      );
+    });
+    await tick();
+    const settledStateRuns = stateRuns;
+    for (const v of [2, 3, 4]) {
+      setX(v);
+      await tick();
+    }
+    expect(valueRuns).toBe(4); // every recompute reached the value reader…
+    expect(stateRuns).toBe(settledStateRuns); // …and none of them woke the state reader
+  });
+
+  it("`equals` closes the gate on both channels, and the old value stands", async () => {
+    const [x, setX] = createSignal(1);
+    const committed: Array<{ n: number }> = [];
+    let sideRuns = 0;
+    const c = root(() => {
+      const c = cell(
+        () => ({ x: x() }),
+        (d) => ({ n: Math.floor(d.x / 10) }), // a fresh object every run
+        { equals: (a, b) => a.n === b.n },
+      );
+      createEffect(
+        () => c(),
+        (v) => {
+          committed.push(v);
+        },
+      );
+      createEffect(
+        () => c.latest(),
+        () => {
+          sideRuns++;
+        },
+      );
+      return c;
+    });
+    await tick();
+    await tick();
+    const first = c.latest();
+    const sideSettled = sideRuns;
+    for (const v of [2, 3, 9]) {
+      setX(v); // same decade: structurally equal results
+      await tick();
+      await tick();
+    }
+    expect(committed).toHaveLength(1); // the graph heard nothing…
+    expect(sideRuns).toBe(sideSettled); // …and neither did latest() readers
+    expect(c()).toBe(first); // the old reference stands…
+    expect(c.latest()).toBe(first); // …on both channels
+    setX(10); // a new decade: a real change
+    await tick();
+    await tick();
+    expect(committed).toHaveLength(2);
+    expect(sideRuns).toBe(sideSettled + 1);
+    expect(c.latest()?.n).toBe(1);
+  });
+
+  it("`equals: false` makes a same-reference re-yield news on both channels; by default it is not", async () => {
+    // A stream that mutates one buffer in place and re-yields it.
+    const run = async (equals: false | undefined) => {
+      const buf: number[] = [];
+      const [go, setGo] = createSignal<number | undefined>(undefined);
+      const lengths: number[] = [];
+      let sideRuns = 0;
+      const c = root(() => {
+        const c = cell(
+          go,
+          async function* (_n, ctx) {
+            for (let i = 1; i <= 3; i++) {
+              await tick();
+              if (ctx.signal.aborted) return;
+              buf.push(i);
+              yield buf; // the SAME array each time
+            }
+          },
+          { equals },
+        );
+        createEffect(
+          () => c(),
+          (v) => {
+            lengths.push(v.length);
+          },
+        );
+        createEffect(
+          () => c.latest(),
+          (v) => {
+            if (v) sideRuns++;
+          },
+        );
+        return c;
+      });
+      setGo(1);
+      await until(() => c.settled() && buf.length === 3);
+      await tick();
+      dispose?.();
+      dispose = undefined;
+      return { lengths, sideRuns };
+    };
+    expect(await run(false)).toEqual({ lengths: [1, 2, 3], sideRuns: 3 });
+    expect(await run(undefined)).toEqual({ lengths: [1], sideRuns: 1 });
+  });
+
+  it("the gate is applied per yield, and never to the run's bookkeeping", async () => {
+    const [go, setGo] = createSignal<number | undefined>(undefined);
+    const committed: number[][] = [];
+    const c = root(() => {
+      const c = cell(
+        go,
+        async function* (_n, ctx) {
+          for (const chunk of [[1], [1], [1, 2], [1, 2]]) {
+            await tick();
+            if (ctx.signal.aborted) return;
+            yield chunk; // fresh arrays; pairs equal by length
+          }
+        },
+        { equals: (a, b) => a.length === b.length },
+      );
+      createEffect(
+        () => c(),
+        (v) => {
+          committed.push(v);
+        },
+      );
+      return c;
+    });
+    setGo(1);
+    await until(() => c.settled() && committed.length === 2);
+    await tick();
+    expect(committed).toEqual([[1], [1, 2]]); // one commit per distinct length
+    expect(c.latest()).toBe(committed[1]); // the first [1, 2]: the gated re-yield left it standing
+    expect(c.state()).toBe("ready"); // a run whose last yield was gated still completes
+    expect(c.settled()).toBe(true);
   });
 });

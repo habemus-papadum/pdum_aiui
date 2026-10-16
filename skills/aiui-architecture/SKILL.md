@@ -181,7 +181,10 @@ Every async value is a `cell(deps, compute)`: deps returning `undefined`/`null`/
 (so a boolean dep must be boxed, `() => ({ enabled: flag.get() })`); compute may return a value,
 promise, or async iterable (streaming is the default — commit partials; gate expensive consumers
 with `settledOnly` or `stream: "latest"` — both pinned by unit tests in aiui-viz's
-`cell.test.ts`). **Everything compute uses must arrive through the deps bundle** — a signal read
+`cell.test.ts`; a result counts as new by reference identity unless the cell's `equals` says
+otherwise — one gate for the graph read and `latest()` alike, so a compute that re-derives an
+identical object from a ticking source should pass a comparator or return the same reference).
+**Everything compute uses must arrive through the deps bundle** — a signal read
 inside compute after the first `await` is untracked, and the cell goes silently stale (the
 out-of-sync bug; write the unit test that moves each input). Cancellation is supersession — pass
 `ctx.signal` into fetches/workers; an explicit cancel is "set deps to undefined". The full state

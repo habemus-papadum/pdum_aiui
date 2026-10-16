@@ -14,7 +14,7 @@ and async iterables, every yield commits transactionally to the graph, reading a
 value suspends the reader (`NotReadyError` as control flow), stale values are served while new
 work is pending, and superseded runs are discarded with their `onCleanup`s fired. That is most of
 an Observable runtime. What remains application-critical, and what `cell()` adds
-(`aiui-viz/src/cell.ts`, ~200 lines):
+(`aiui-viz/src/cell.ts`, ~450 lines):
 
 ```ts
 const analysis = cell(
@@ -44,6 +44,12 @@ const analysis = cell(
   (partials visible only on `latest()`; one commit on completion), plus `settledOnly(cell)` for
   per-consumer gating. This is the knob that reconciles live streaming with expensive downstream
   work.
+- **Equality** — one `equals` gate (reference identity by default, a comparator, or `false`)
+  decides what counts as a new value, and it governs both channels — the graph read and
+  `latest()` — so a consumer's choice of channel never changes what it hears; when the gate
+  closes, the previous value stands on both. The state box behind `state()` / `loading()` /
+  `error()` is interned per state, so a ticking cell wakes its value readers on every commit but
+  its state readers (every CellView's chrome) only when the state moves.
 - **Retry** — `refetch()` routes to the error boundary's `reset()` when errored (the only way to
   re-run a failed computation), `refresh(memo)` otherwise.
 

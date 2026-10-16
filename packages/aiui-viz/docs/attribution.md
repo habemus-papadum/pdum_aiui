@@ -100,7 +100,10 @@ complete:
 > analysis defined at src/model/graph.ts:31)
 
 Long selections become a fenced block under the same attribution header. Selected mathematics adds
-its TeX source (the `data-tex` stamp from the `TeX` component).
+its TeX source — the whole equation from the `data-tex` stamp `TeX` and `RichTeX` leave (else
+KaTeX's own annotation), or, inside a `RichTeX` equation, just the terms the selection covers
+(`math.precision`, `math.terms`). A `copy` puts the same TeX on the clipboard: `math-selection.ts`
+is one resolver for the human's clipboard and the model's `selection` call.
 
 ## Resolving a drag rectangle (the shot locator)
 

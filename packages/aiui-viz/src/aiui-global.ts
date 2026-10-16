@@ -23,6 +23,8 @@
  * is this call; a host driving the page over CDP calls it when the page has
  * it.
  */
+
+import { installMathCopy } from "./math-selection";
 import {
   type PageSelection,
   type PageSelectionOptions,
@@ -331,5 +333,6 @@ export function ensureAiuiGlobal(): AiuiGlobal | undefined {
   w.__AIUI__.tools ??= createRegistry();
   w.__AIUI__.selection ??= pageSelection;
   watchPageSelection(); // idempotent: the page remembers selections from now on
+  installMathCopy(); // idempotent: copying rendered math puts its TeX on the clipboard
   return w.__AIUI__;
 }

@@ -32,7 +32,8 @@
     "./testing": "./src/testing.ts",
     "./site/json-view": "./src/site/json-view.tsx",
     "./site/prompt-record": "./src/site/prompt-record.tsx",
-    "./site/markdown": "./src/site/markdown.tsx"
+    "./site/markdown": "./src/site/markdown.tsx",
+    "./site/rich-tex": "./src/site/rich-tex.tsx"
   },
   "main": "./src/index.ts",
   "module": "./src/index.ts",
@@ -156,13 +157,19 @@
         "types": "./dist/site/markdown.d.ts",
         "import": "./dist/markdown.js",
         "default": "./dist/markdown.js"
+      },
+      "./site/rich-tex": {
+        "types": "./dist/site/rich-tex.d.ts",
+        "import": "./dist/rich-tex.js",
+        "default": "./dist/rich-tex.js"
       }
     }
   },
   "scripts": {
     "build": "tsc --emitDeclarationOnly -p tsconfig.json && vite build",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run"
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p lab/tsconfig.json",
+    "test": "vitest run",
+    "lab": "vite --config lab/vite.config.ts"
   },
   "peerDependencies": {
     "@duckdb/duckdb-wasm": ">=1.29",
@@ -214,9 +221,12 @@
     "@habemus-papadum/aiui-prompts": "workspace:^"
   },
   "devDependencies": {
+    "@babel/core": "catalog:",
     "@duckdb/duckdb-wasm": "catalog:",
     "@habemus-papadum/aiui-build-config": "workspace:^",
+    "@habemus-papadum/aiui-design": "workspace:^",
     "@habemus-papadum/aiui-prompts-inspector": "workspace:^",
+    "@habemus-papadum/aiui-source-processor": "workspace:^",
     "@observablehq/plot": "catalog:",
     "@solidjs/web": "catalog:solid",
     "@uwdata/flechette": "^2.5.0",

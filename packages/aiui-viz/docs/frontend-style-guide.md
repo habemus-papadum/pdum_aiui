@@ -93,6 +93,41 @@ Use `TeX` (`aiui-viz/site`; KaTeX under the hood, optional peer):
 - `throwOnError: false` is the component default: a TeX typo renders red instead of blanking
   the page.
 
+When the equation's PIECES need to be addressed — a term colored by a live quantity, hovered,
+clicked, or annotated with a note under it — use `RichTeX` + `Term` (same subpath; the lab
+at `packages/aiui-viz/lab`, `pnpm -C packages/aiui-viz lab`, is the worked example):
+
+- Children are TeX strings and `<Term id=…>`s, nested freely; each term is wrapped in KaTeX's
+  own `\htmlData` marker, which changes no layout (pinned by `rich-tex.test.tsx` and measured
+  on the lab's fidelity page). A term must be a balanced TeX group — `\left(` and `\right)`
+  cannot sit in different terms.
+- `color`, `class`, `active` are decorations: they touch only the term's span, so a CSS
+  transition on `.aiui-rtx-term` runs. A change to any TeX string re-renders the equation.
+- `note` is JSX placed under (or, with `place="above"`, over) the term, centered on its
+  glyphs with a leader line; display math only. Notes that would overlap are pushed apart
+  left to right, leaders staying on their glyphs; each note learns its term's width
+  (`--aiui-rtx-w`). Pass no `note` prop for no note — a written `note`, even `undefined`,
+  renders an empty one (spread it in conditionally).
+- A term with `control={someControl}` is a KNOB — the control's symbol in the equation, the
+  scrub pill's idea for mathematics. Hover or focus it for a readout of the value, drag
+  horizontally to change it (a `span` px drag crosses the declared range), arrow keys when
+  focused; writes go through the control's validation, and the span carries `data-control`,
+  so `locate`, `selection` and the agent's `set` all resolve it. One control may back several
+  knobs (ε in both clip bounds): give those explicit ids. The readout is positioned against the
+  viewport, so a display equation's own scroll box (the skin's `overflow-x: auto`) never clips
+  it. A term with `onClick` is focusable too and answers Enter and Space.
+- An equation that wants more than one family of annotations shows ONE at a time through a
+  lens: an enum control (`options`) that a segmented toggle and the agent's `set` both drive
+  (the lab's training page: magnitude · clipping · gradient). Notes are marginalia, one row per
+  side today. When a page genuinely needs more, the intended extension is rows — a note names
+  its row, rows stack outward from the glyphs above and below, each row runs its own collision
+  pass, leaders run through the rows between — not a second family on one row.
+- The root carries the CLEAN `data-tex` (no markers) and each term's span its own, so
+  `read-page` and `selection` see what the author wrote — and copying rendered math puts TeX
+  on the clipboard: the whole equation, or just the covered terms inside a `RichTeX`
+  (`installMathCopy`, installed by `ensureAiuiGlobal` on every aiui page; the `selection` tool
+  answers from the same resolver).
+
 ## Plotting
 
 **Observable Plot is the default** for statistical graphics, always through the `PlotFigure`

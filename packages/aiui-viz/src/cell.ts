@@ -20,6 +20,8 @@
  *   - deps gating: `deps` returning undefined/null/false holds the cell.
  *   - Retry: `refetch()` uses the error boundary's reset when errored,
  *     `refresh(memo)` otherwise.
+ *   - One `equals` gate for what counts as a new value, applied to the graph
+ *     read and to `latest()` alike (reference identity by default).
  */
 import {
   type Accessor,
@@ -58,7 +60,7 @@ export interface CellContext<T> {
 
 export type CellCompute<D, T> = (deps: D, ctx: CellContext<T>) => T | Promise<T> | AsyncIterable<T>;
 
-export interface CellOptions {
+export interface CellOptions<T = unknown> {
   /**
    * Stable identity for attribution and the cell registry. Normally you never
    * write this: the aiui compiler (the source-locator babel pass) injects
@@ -100,6 +102,23 @@ export interface CellOptions {
    *   stream per yield. Pinned by the two latest-mode tests in cell.test.ts.
    */
   stream?: "commit" | "latest";
+  /**
+   * When a run's result counts as a CHANGE. Default: reference identity —
+   * Solid's own memo rule — so a recompute that returns the same reference
+   * tells nobody. Pass a comparator to close the gate on structurally equal
+   * results (a cell that re-derives an identical array from a ticking source
+   * keeps its consumers quiet), or `false` to notify on every result, even
+   * the same reference (a stream that mutates one buffer in place and
+   * re-yields it). One gate governs both channels — the graph read `cell()`
+   * and the side channel `latest()` — so which channel a consumer reads never
+   * changes what counts as new; streaming yields pass through it one at a
+   * time, each against the last value that channel served. When the gate
+   * closes, the previous value stands on both channels (`latest()` keeps the
+   * old reference, exactly as the memo does). Run bookkeeping is never gated:
+   * `state()`, `settled()` and `progress()` still report a run that
+   * reproduced its last value.
+   */
+  equals?: false | ((prev: T, next: T) => boolean);
 }
 
 export interface Cell<T> {
@@ -190,10 +209,38 @@ export function cellByName(name: string): Cell<unknown> | undefined {
   return registry.get(name);
 }
 
+/** What the error boundary derives: the cell's state, plus the error when errored. */
+type Box = { readonly state: CellState; readonly error?: unknown };
+
+// One frozen box per non-error state. The box is the value of the error
+// boundary's internal computeds (Solid names them children / boundary / value),
+// and their equality gate is identity: a fresh `{ state }` per run was a
+// new-but-equal object on every recompute, so the gate never closed and every
+// state()/loading()/error() reader — every CellView — re-ran on each commit of
+// a ticking or streaming cell (Solid's UNSTABLE_MEMO_OUTPUT diagnostic, found
+// 2026-10-16 under the RichTeX lab's trainer). Interned, a run that lands in
+// the same state wakes no state reader. Only `errored` is minted per
+// occurrence, because the error is its payload.
+const frozenBox = (state: CellState): Box => Object.freeze({ state });
+const BOX = Object.freeze({
+  unresolved: frozenBox("unresolved"),
+  pending: frozenBox("pending"),
+  streaming: frozenBox("streaming"),
+  refreshing: frozenBox("refreshing"),
+  held: frozenBox("held"),
+  ready: frozenBox("ready"),
+}) satisfies Readonly<Record<Exclude<CellState, "errored">, Box>>;
+
+/** The cell's equality gate as a predicate: identity by default, never-equal for `false`. */
+function equalityOf<T>(equals: CellOptions<T>["equals"]): (prev: T, next: T) => boolean {
+  if (equals === false) return () => false;
+  return equals ?? ((prev, next) => prev === next);
+}
+
 export function cell<D, T>(
   deps: Accessor<D | undefined | null | false>,
   compute: CellCompute<D, T>,
-  options?: CellOptions,
+  options?: CellOptions<T>,
 ): Cell<T> {
   const streamMode = options?.stream ?? "commit";
   // The effective identity: scope-qualified when built by a slice factory.
@@ -212,45 +259,61 @@ export function cell<D, T>(
   });
   const [settled, setSettled] = createSignal(true, { ownedWrite: true });
   const [partial, setPartial] = createSignal(false, { ownedWrite: true }); // any yield this run?
-  // Boxed so `undefined` values are representable; equals:false so re-yields
-  // of an in-place-mutated object still notify.
+  // Boxed so `undefined` values are representable. Every publish is a fresh
+  // box, so the signal's own identity gate always opens; the cell's `equals`
+  // is applied BEFORE boxing, in publishLast.
   const [last, setLast] = createSignal<{ value: T } | undefined>(undefined, {
-    equals: false,
     ownedWrite: true,
   });
+  // The last box handed to the signal — the side channel's comparison base.
+  // A plain mirror, not a read of `last`: while a downstream consumer is
+  // pending on this cell, in-flight writes stage into its transaction (the
+  // stream:"latest" caveat on CellOptions), so the signal can lag what was
+  // published by a whole run, and a comparison against it would let the two
+  // channels disagree about what is new.
+  let lastBox: { value: T } | undefined;
+  const same = equalityOf(options?.equals);
+  const publishLast = (value: T): void => {
+    if (lastBox !== undefined && same(lastBox.value, value)) return; // equal ⇒ no one hears
+    lastBox = { value };
+    setLast(lastBox);
+  };
 
-  const memo = createMemo<T>((prev) => {
-    // Attribute this deps evaluation to the cell (dependency-edge capture —
-    // graph-trace.ts). Only the deps read is bracketed: reads inside compute
-    // are untracked by Solid and deliberately unattributed here too.
-    const d = runAsConsumer(cellName, deps); // pending upstream throws NotReadyError: hold
-    if (d === undefined || d === null || d === false) {
-      throw new NotReadyError(null); // explicit hold — idiomatic 2.0 "not yet"
-    }
-    const ctrl = new AbortController();
-    onCleanup(() => ctrl.abort()); // fires on supersede and on owner disposal
-    const ctx: CellContext<T> = {
-      signal: ctrl.signal,
-      previous: prev,
-      progress: (fraction) => {
-        if (!ctrl.signal.aborted) setProgress(fraction);
-      },
-    };
-    const out = compute(d, ctx);
+  const memo = createMemo<T>(
+    (prev) => {
+      // Attribute this deps evaluation to the cell (dependency-edge capture —
+      // graph-trace.ts). Only the deps read is bracketed: reads inside compute
+      // are untracked by Solid and deliberately unattributed here too.
+      const d = runAsConsumer(cellName, deps); // pending upstream throws NotReadyError: hold
+      if (d === undefined || d === null || d === false) {
+        throw new NotReadyError(null); // explicit hold — idiomatic 2.0 "not yet"
+      }
+      const ctrl = new AbortController();
+      onCleanup(() => ctrl.abort()); // fires on supersede and on owner disposal
+      const ctx: CellContext<T> = {
+        signal: ctrl.signal,
+        previous: prev,
+        progress: (fraction) => {
+          if (!ctrl.signal.aborted) setProgress(fraction);
+        },
+      };
+      const out = compute(d, ctx);
 
-    if (isAsyncIterable<T>(out)) {
-      return streamMode === "commit" ? commitStream(out, ctx) : latestOnlyStream(out, ctx);
-    }
-    if (isThenable<T>(out)) {
-      return trackPromise(out, ctx);
-    }
-    // Synchronous value: defer bookkeeping a microtask so we never write
-    // signals inside the tracked scope.
-    queueMicrotask(() => {
-      if (!ctrl.signal.aborted) setLast({ value: out });
-    });
-    return out;
-  });
+      if (isAsyncIterable<T>(out)) {
+        return streamMode === "commit" ? commitStream(out, ctx) : latestOnlyStream(out, ctx);
+      }
+      if (isThenable<T>(out)) {
+        return trackPromise(out, ctx);
+      }
+      // Synchronous value: defer bookkeeping a microtask so we never write
+      // signals inside the tracked scope.
+      queueMicrotask(() => {
+        if (!ctrl.signal.aborted) publishLast(out);
+      });
+      return out;
+    },
+    { equals: options?.equals },
+  );
 
   function beginRun() {
     setSettled(false);
@@ -265,7 +328,7 @@ export function cell<D, T>(
       if (ctx.signal.aborted) return; // superseded: framework finalizes us
       yielded = true;
       setPartial(true);
-      setLast({ value });
+      publishLast(value);
       yield value; // committed to the graph; downstream recomputes
     }
     if (ctx.signal.aborted) return;
@@ -280,7 +343,7 @@ export function cell<D, T>(
       if (ctx.signal.aborted) return;
       final = { value };
       setPartial(true);
-      setLast(final); // visible on latest(); not committed to the graph
+      publishLast(value); // visible on latest(); not committed to the graph
     }
     if (ctx.signal.aborted) return;
     if (!final) throw new Error("cell: async iterable finished without yielding");
@@ -292,7 +355,7 @@ export function cell<D, T>(
     beginRun();
     const value = await source; // rejections propagate to the error boundary
     if (ctx.signal.aborted) return;
-    setLast({ value });
+    publishLast(value);
     setSettled(true);
     yield value;
   }
@@ -320,7 +383,6 @@ export function cell<D, T>(
     }
   };
 
-  type Box = { state: CellState; error?: unknown };
   let resetError: (() => void) | undefined;
   const box = createErrorBoundary(
     (): Box => {
@@ -329,17 +391,17 @@ export function cell<D, T>(
         // A re-gated cell can serve its stale value to tracked readers, so
         // check the gate before declaring ready.
         const gate = gateNow();
-        if (gate === "gated") return { state: "held" };
-        if (gate === "blocked") return { state: "refreshing" };
-        return { state: settled() ? "ready" : partial() ? "streaming" : "refreshing" };
+        if (gate === "gated") return BOX.held;
+        if (gate === "blocked") return BOX.refreshing;
+        return settled() ? BOX.ready : partial() ? BOX.streaming : BOX.refreshing;
       } catch (e) {
         if (e instanceof NotReadyError) {
           const hasValue = last() !== undefined;
           const gate = gateNow();
-          if (gate === "gated") return { state: hasValue ? "held" : "unresolved" };
-          if (gate === "blocked" && !hasValue) return { state: "unresolved" };
-          if (partial()) return { state: "streaming" }; // latest-mode partials pre-commit
-          return { state: hasValue ? "refreshing" : "pending" };
+          if (gate === "gated") return hasValue ? BOX.held : BOX.unresolved;
+          if (gate === "blocked" && !hasValue) return BOX.unresolved;
+          if (partial()) return BOX.streaming; // latest-mode partials pre-commit
+          return hasValue ? BOX.refreshing : BOX.pending;
         }
         throw e; // real errors go to the boundary fallback
       }
@@ -360,8 +422,8 @@ export function cell<D, T>(
     const boxed = last();
     if (boxed) return boxed.value;
     // Hold the invariant `state() === "ready"` ⟹ `latest() !== undefined`.
-    // A *synchronous* compute returns straight out of the memo while `setLast`
-    // is still queued a microtask behind it (see above), and `settled` starts
+    // A *synchronous* compute returns straight out of the memo while its
+    // publishLast is still queued a microtask behind it (see above), and `settled` starts
     // life `true` — so between those two points the cell reads "ready" with an
     // empty `last`. CellView renders its children on "ready" and hands them
     // `latest()` as an `Accessor<T>`; they dereference it. Serve the memo in

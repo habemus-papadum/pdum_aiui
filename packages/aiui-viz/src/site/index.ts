@@ -7,6 +7,9 @@
  *   collapses to a top bar + drawer on a phone.
  * - {@link TocRail} — the Observable-style "On this page" right rail.
  * - {@link TeX} — KaTeX math with the `data-tex` attribution stamp.
+ * - {@link RichTeX} / {@link Term} — an equation built from pieces, every
+ *   piece addressable after the render: styled, hovered, annotated,
+ *   reactive (also on its own subpath, `./site/rich-tex`).
  * - {@link Lens} — levels of detail for any page: an inline trigger, a hover
  *   peek, a click-to-open detail panel in the page's own reactive graph
  *   (also on its own subpath, `./site/lens`, katex-free).
@@ -30,6 +33,8 @@ export type { ColorMode } from "./color-mode";
 export { colorMode } from "./color-mode";
 export { Lens, LensLayer } from "./lens";
 export { navigateTo, pathname } from "./path";
+export type { AssembledTerm, RichTeXProps, TermBox, TermProps } from "./rich-tex";
+export { assembleTeX, RichTeX, TERM_ATTR, Term } from "./rich-tex";
 export type { SiteNavItem, SiteNavProps } from "./site-nav";
 export { SiteNav } from "./site-nav";
 export { TeX } from "./tex";

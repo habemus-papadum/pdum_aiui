@@ -376,7 +376,8 @@ export function registerStandardTools(
     name: "selection",
     description:
       "What the user has selected on the page: the text, its TeX when it is rendered " +
-      "mathematics, and where it came from — the elements that authored it (nearest first, " +
+      "mathematics (just the covered terms of a RichTeX equation, with their ids under " +
+      "`math`), and where it came from — the elements that authored it (nearest first, " +
       "with file:line:col), the cells that produced it (name, live state, definition site), " +
       "and the control it sits in. The document's selection right now, or the last one for " +
       "two minutes after focus moved (live says which). { selected: false } when there is none.",

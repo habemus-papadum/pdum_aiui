@@ -222,6 +222,15 @@ One caution outside cells: **calling `spectrum()` in ordinary code** — a click
 cell also answers `state()`, `loading()`, `error()`, `progress()`, and `settled()`; the full table
 is in [Step 9](#step-9-progress-and-cancelling).
 
+**When does `peaks` re-run?** When `spectrum`'s value *changes* — and by default "changes" means
+a different reference. A compute that returns a fresh-but-identical object every time (the common
+shape of a cell that re-derives a small summary from a ticking source) therefore wakes everything
+downstream for nothing. Two cures: return the same reference when nothing changed, or tell the
+cell what equal means — `cell(deps, compute, { equals: (a, b) => a.n === b.n })`. The gate
+governs the cell's graph read and `latest()` alike, and when it closes the previous value stands
+on both. The opposite knob exists too: `equals: false` makes every result news, for a stream that
+mutates one buffer in place and re-yields it.
+
 ## Step 7: the gate — "don't run yet"
 
 If `deps` returns `undefined`, `null`, or `false`, the cell **holds**: it doesn't run at all.
@@ -626,6 +635,8 @@ they're written down. The full ledger, with the debugging stories, is
 - **Deps and compute drifting apart** (Step 4). Everything `compute` uses arrives via the bundle.
   Test each input.
 - **A boolean dependency closes the gate** (Step 7). Box it.
+- **A fresh-but-equal result re-runs everything downstream** (Step 6). Identity is the default
+  rule; return the same reference when nothing changed, or pass `equals`.
 - **Reads right after writes see the old value — everywhere, not just in tools and tests.**
   Writes are batched into transactions: the commit happens at the next microtask, and only code
   running *inside* the reactive graph (memo computes, effect computes, JSX, cell `deps`) sees

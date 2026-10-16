@@ -1,0 +1,400 @@
+/* RichTeX Lab — page chrome over the design system (site.css carries the
+   tokens, fonts, the sidebar, the control widgets, the math skin). Everything
+   here is prefixed `rtx-lab-` so nothing leaks onto a sibling page. */
+
+.rtx-lab-page {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: var(--space-lg, 32px) var(--space-md, 20px) var(--space-xl, 64px);
+}
+
+.rtx-lab-page > header {
+  margin-bottom: var(--space-md, 20px);
+}
+
+.rtx-lab-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm, 12px) var(--space-md, 20px);
+  margin: var(--space-md, 20px) 0;
+}
+
+.rtx-lab-toolbar .slider-compact {
+  min-width: 11rem;
+}
+
+/* ── the equation and its terms ─────────────────────────────────────────── */
+
+.rtx-lab-eq {
+  --aiui-rtx-gap: 18px;
+  --aiui-rtx-leader: var(--hairline);
+  font-size: 1.05rem;
+  padding-block: var(--space-sm, 12px);
+}
+
+.rtx-lab-eq-hero {
+  font-size: 1.6rem;
+}
+
+.rtx-lab-eq-formula {
+  font-size: 0.95rem;
+  color: var(--ink-muted);
+}
+
+.aiui-rtx-term {
+  transition:
+    color 450ms ease,
+    background-color 180ms ease,
+    box-shadow 180ms ease;
+  border-radius: 3px;
+  cursor: default;
+}
+
+.aiui-rtx-term[data-active="true"] {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.rtx-lab-outline .aiui-rtx-term {
+  outline: 1px dashed var(--accent);
+  outline-offset: 1px;
+}
+
+.rtx-lab-muted {
+  opacity: 0.35;
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+}
+
+/* ── notes ──────────────────────────────────────────────────────────────── */
+
+.aiui-rtx-note {
+  font-family: var(--font-sans, system-ui, sans-serif);
+  font-size: 0.72rem;
+  line-height: 1.3;
+  color: var(--ink-muted);
+  padding-top: 4px;
+  white-space: nowrap;
+}
+
+.aiui-rtx-note[data-active="true"] {
+  color: var(--ink);
+}
+
+.rtx-lab-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: var(--surface-raised);
+}
+
+.rtx-lab-share {
+  display: grid;
+  grid-template-columns: auto;
+  justify-items: center;
+  gap: 3px;
+  min-width: 7rem;
+}
+
+.rtx-lab-share-name {
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.62rem;
+}
+
+.rtx-lab-bar {
+  display: block;
+  width: 6rem;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--ghost);
+  overflow: hidden;
+}
+
+.rtx-lab-bar-fill {
+  display: block;
+  height: 100%;
+  transition: width 300ms ease;
+}
+
+.rtx-lab-share-value,
+.rtx-lab-value {
+  font-size: 0.8rem;
+  color: var(--ink);
+}
+
+.rtx-lab-mini {
+  display: block;
+  overflow: visible;
+}
+
+.rtx-lab-mini-axis {
+  stroke: var(--ghost);
+  stroke-width: 1;
+}
+
+/* ── training ───────────────────────────────────────────────────────────── */
+
+.rtx-lab-step {
+  margin-left: auto;
+  color: var(--ink-muted);
+}
+
+.rtx-lab-coeffs {
+  margin: 0 0 var(--space-md, 20px);
+}
+
+.rtx-lab-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 14px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  cursor: default;
+}
+
+.rtx-lab-legend-item[data-active="true"] {
+  background: var(--surface);
+}
+
+.rtx-lab-legend-item i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+/* ── derivation ─────────────────────────────────────────────────────────── */
+
+.rtx-lab-rule {
+  display: flex;
+  gap: var(--space-sm, 12px);
+  align-items: baseline;
+  margin: var(--space-sm, 12px) 0 0;
+}
+
+.rtx-lab-eq-steps {
+  min-height: 7.5rem;
+}
+
+.rtx-lab-sides {
+  text-align: center;
+  margin: 0 0 var(--space-md, 20px);
+}
+
+/* ── fidelity ───────────────────────────────────────────────────────────── */
+
+.rtx-lab-case {
+  margin: var(--space-md, 20px) 0;
+  padding-top: var(--space-sm, 12px);
+  border-top: 1px solid var(--ghost);
+}
+
+.rtx-lab-case h2 {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm, 12px);
+  font-size: 1rem;
+  margin: 0 0 var(--space-xs, 8px);
+}
+
+.rtx-lab-delta,
+.rtx-lab-verdict {
+  font-family: var(--font-sans, system-ui, sans-serif);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+}
+
+.rtx-lab-triptych {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-sm, 12px);
+}
+
+.rtx-lab-triptych > div {
+  background: var(--surface-raised);
+  border: 1px solid var(--ghost);
+  padding: 4px 8px;
+  overflow-x: auto;
+}
+
+.rtx-lab-triptych .math-display {
+  margin: 0;
+}
+
+.rtx-lab-diff {
+  position: relative;
+  isolation: isolate;
+}
+
+.rtx-lab-diff-a,
+.rtx-lab-diff-b {
+  background: var(--surface-raised);
+}
+
+.rtx-lab-diff-b {
+  position: absolute;
+  inset: 4px 8px;
+  mix-blend-mode: difference;
+}
+
+.rtx-lab-src {
+  margin: var(--space-xs, 8px) 0 0;
+  font-size: 0.72rem;
+  color: var(--ink-muted);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+@media (max-width: 900px) {
+  .rtx-lab-triptych {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* A display equation wider than its box: KaTeX centers the block and the
+   left edge clips. Size the block to its content and center by margins, so
+   the container's overflow-x: auto can scroll the whole equation. */
+.rtx-lab-eq .katex-display > .katex {
+  width: fit-content;
+  max-width: none;
+  margin: 0 auto;
+}
+
+/* The triptych compares renders at the same origin: plain TeX keeps KaTeX's
+   own 1em margin, RichTeX zeroes it — zero both here. */
+.rtx-lab-triptych .katex-display {
+  margin: 0;
+}
+
+/* ── knobs: a control's symbol in the equation ─────────────────────────── */
+
+.aiui-rtx-knob {
+  border-bottom: 1px dashed var(--hairline);
+  padding-bottom: 1px;
+  border-radius: 0;
+  transition: border-color 160ms ease;
+}
+
+.aiui-rtx-knob:hover,
+.aiui-rtx-knob:focus-visible,
+.aiui-rtx-knob[data-scrubbing="true"] {
+  border-bottom-color: var(--accent);
+  border-bottom-style: solid;
+}
+
+.aiui-rtx-readout {
+  --aiui-rtx-readout-gap: 10px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4em;
+  padding: 0.1rem 0.55rem;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  font-family: var(--font-sans, system-ui, sans-serif);
+  font-size: 0.78rem;
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.06);
+}
+
+.aiui-rtx-readout-value {
+  font-variant-numeric: tabular-nums;
+}
+
+.aiui-rtx-readout-name {
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+/* ── lenses ───────────────────────────────────────────────────────────────── */
+
+.rtx-lab-segmented {
+  display: inline-flex;
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.rtx-lab-seg {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0.2rem 0.75rem;
+  font: inherit;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+
+.rtx-lab-seg + .rtx-lab-seg {
+  border-left: 1px solid var(--hairline);
+}
+
+.rtx-lab-seg[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--surface);
+}
+
+/* ── bars with a running-mean tick, and the signed alignment bar ─────────── */
+
+.rtx-lab-bar {
+  position: relative;
+}
+
+.rtx-lab-bar-tick {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--ink);
+}
+
+.rtx-lab-bar-signed .rtx-lab-bar-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  transition:
+    width 300ms ease,
+    left 300ms ease;
+}
+
+.rtx-lab-bar-zero {
+  position: absolute;
+  left: 50%;
+  top: -2px;
+  bottom: -2px;
+  width: 1px;
+  background: var(--ink-muted);
+}
+
+.rtx-lab-frac .rtx-lab-bar {
+  width: 4.5rem;
+}
+
+.rtx-lab-figures-2 {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: var(--space-sm, 12px);
+}
+
+@media (max-width: 900px) {
+  .rtx-lab-figures-2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* On a phone the notes have no room beside the glyphs; the legend chips and
+   the captions carry the same numbers. */
+@media (max-width: 600px) {
+  .rtx-lab-eq .aiui-rtx-notes {
+    display: none;
+  }
+}

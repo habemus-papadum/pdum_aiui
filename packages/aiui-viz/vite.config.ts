@@ -65,6 +65,8 @@ export default defineConfig({
         // optional peer this subpath alone loads, on demand.
         "prompt-record": "src/site/prompt-record.tsx",
         markdown: "src/site/markdown.tsx",
+        // Math from pieces: every <Term> addressable after KaTeX renders.
+        "rich-tex": "src/site/rich-tex.tsx",
         // Framework-free like `./modal`, so node-side consumers (aiui-live's
         // delegators) render the same Tools: section the browser does.
         "tool-brief": "src/tool-brief.ts",

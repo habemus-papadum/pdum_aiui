@@ -17,11 +17,25 @@ Versions these were established against: `solid-js@2.0.0-beta.15`, `@solidjs/web
   progress/settled/partial) opt in with `createSignal(v, { ownedWrite: true })`; otherwise defer
   the write (`queueMicrotask`) or move it to an event handler. The solid-cells probe notes
   predate this enforcement.
+- **`UNSTABLE_MEMO_OUTPUT` means an identity gate that never closes.** Solid's dev build warns
+  when a memo commits a new-but-shallow-equal object or array four runs in a row: every
+  subscriber then re-runs on every upstream change. The first offender was `cell()` itself
+  (2026-10-16, under the RichTeX lab's 12 Hz trainer): its state box — the value of the error
+  boundary's internal `children` / `boundary` / `value` computeds — was a fresh `{ state }` per
+  run, so every CellView re-ran on every commit of a ticking cell. The box is interned per state
+  now, and `cell()` takes an `equals` option for the value itself (one gate for the graph read
+  and `latest()`). To find the next offender: import `solid-js/attribution` into the page
+  (`/@id/solid-js/attribution` under the dev server), `attribution.enable({})`, let the app run
+  a few seconds, and tally `attribution.history("rerun")` by node name — the nodes whose count
+  matches the tick rate but whose value never changes are the ones to gate.
 - **`createEffect(source, handler)`: the handler is untracked — for reads too.** Writes belong in
   the handler (that's the design), but reading a signal *inside the handler* warns
   `STRICT_READ_UNTRACKED` (at 60 Hz, spectacularly) and can miss updates. Consume the value the
   source computed: `createEffect(() => frames.at(i.get()), (frame) => draw(frame))`, not
-  `createEffect(i.get, () => draw(frames.at(i.get())))`.
+  `createEffect(i.get, () => draw(frames.at(i.get())))`. **Props count too**: a `props.x` read
+  in the handler — a spread-merged prop especially — warns once per run (RichTeX's knobs,
+  2026-10-16, 600 times a minute); read every prop the imperative side needs in the compute and
+  hand the handler a plain record.
 - **Same-tick reads after writes lie — always, not just in tools and tests.** A signal write is
   a *transaction*: `set` stages the value, the commit happens at the next microtask, and **the
   reactive graph is the only reader of your writes**. Code Solid did not call — an event
@@ -196,6 +210,19 @@ Found building the wine demo (embedding-atlas integration; full detail:
   `@uwdata/vgplot`** that pnpm auto-installs at the NEWEST release — which can be broken
   upstream (mosaic-spec 0.30.0 demanded an unpublished vgplot ^0.30.0). Pin both at the
   app's mosaic line in the consumer's own dependencies.
+
+## KaTeX
+
+- **A native copy of rendered KaTeX is glyph soup.** The HTML layer positions subscripts and
+  accents with CSS, so the clipboard gets `r`, `t`, `(θ)`, `A`, `^`, `t` on separate lines
+  (2026-10-16, the lab's training page). KaTeX's own `copy-tex` extension fixes it by rewriting
+  the `copy` event from the MathML annotation; aiui-viz's `installMathCopy` (math-selection.ts,
+  installed by `ensureAiuiGlobal`) does the same from the clean `data-tex` stamps — a `RichTeX`
+  annotation holds the `\htmlData` marker syntax — and resolves a partial selection to the
+  terms it covers instead of swallowing the equation. The `selection` tool reads the same
+  resolver, so what a user pastes and what a model reads agree. Implementation trap:
+  `Range.comparePoint` cannot tell "at the boundary" from "inside"; containment tests use
+  `compareBoundaryPoints` against a node-contents range.
 
 ## Biome (lint) specifics
 

@@ -6,11 +6,13 @@
  * One selection, three things a model wants from it:
  *
  *  - the TEXT — capped, a prompt block rather than a document — and, when the
- *    selection starts inside rendered mathematics, the TeX behind it (the
- *    `data-tex` stamp aiui-viz's `TeX` component leaves, else KaTeX's own
- *    MathML annotation). `format: "markdown"` also renders the selected
- *    fragment through page-text, so a table stays a table and every equation
- *    in it is TeX;
+ *    selection touches rendered mathematics, the TeX it covers (math-
+ *    selection.ts: the whole equation by its `data-tex` stamp or KaTeX's
+ *    MathML annotation, or — inside a `RichTeX` equation — just the terms the
+ *    selection covers, with their ids under `math`). The same resolver feeds
+ *    the clipboard on `copy`, so what a user pastes and what a model reads
+ *    agree. `format: "markdown"` also renders the selected fragment through
+ *    page-text, so a table stays a table and every equation in it is TeX;
  *  - the ATTRIBUTION the DOM contract carries (docs/attribution.md), read off
  *    the selection's START element: the element chain — its stamped
  *    ancestors, nearest first, "which JSX authored this" — and the cell chain
@@ -36,7 +38,8 @@
  * the same stamps itself (the former intent tool's selection watcher did);
  * a host driving the page over CDP calls this when the page has it.
  */
-import { AGENT_CHROME_ATTR, pageText, texOfElement } from "./page-text";
+import { type MathInRange, mathOfRange } from "./math-selection";
+import { AGENT_CHROME_ATTR, pageText } from "./page-text";
 
 /** Characters of text a read returns when `maxChars` is not given. */
 export const SELECTION_DEFAULT_CHARS = 1000;
@@ -105,8 +108,11 @@ export interface PageSelection {
   chars: number;
   /** True when `text` stops before the selection does. */
   truncated: boolean;
-  /** TeX source when the selection starts inside rendered mathematics. */
+  /** TeX source when the selection touches rendered mathematics: the whole
+   * equation, or the `RichTeX` terms it covers (see `math`). */
   tex?: string;
+  /** How fine `tex` is and which terms it covers, when it is set. */
+  math?: Pick<MathInRange, "precision" | "terms" | "display">;
   /** The selected fragment as page-text renders it (`format: "markdown"`). */
   markdown?: string;
   /** The stamped ancestors of the start element, nearest first. */
@@ -267,13 +273,18 @@ export function describeRange(
   const withSource = options.source !== false;
   const whole = range.toString().trim();
   const start = startElementOf(range);
-  const tex = texOfElement(start);
+  const math = mathOfRange(range);
   const control = start?.closest("[data-control]")?.getAttribute("data-control") ?? undefined;
   return {
     text: whole.slice(0, maxChars),
     chars: whole.length,
     truncated: whole.length > maxChars,
-    ...(tex !== undefined ? { tex } : {}),
+    ...(math !== undefined
+      ? {
+          tex: math.tex,
+          math: { precision: math.precision, terms: math.terms, display: math.display },
+        }
+      : {}),
     ...(options.format === "markdown" ? { markdown: markdownOf(range, maxChars) } : {}),
     elements: start === null ? [] : elementChain(start, depth, withSource),
     cells: start === null ? [] : cellChain(start, depth, withSource),

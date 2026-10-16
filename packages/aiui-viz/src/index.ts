@@ -84,6 +84,10 @@ export { dependencyEdges } from "./graph-trace";
 export type { HotContext } from "./hot-graph";
 // hot-graph.ts — the durable box + dispose-and-swap + self-accept, in one call.
 export { hotCellGraph } from "./hot-graph";
+// math-selection.ts — the mathematics inside a Range as TeX (the `selection`
+// tool's math resolver and the `copy` handler every aiui page installs).
+export type { MathClipboard, MathInRange } from "./math-selection";
+export { clipboardFor, installMathCopy, MATH_TERM_ATTR, mathOfRange } from "./math-selection";
 // mode-solid.ts — the Solid adapter for the modal kit's mode engine:
 // flush()-committed dispatch, reactive state/claim views, the agent bridge.
 export {

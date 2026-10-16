@@ -20,6 +20,7 @@ import {
   flush,
   getObserver,
 } from "solid-js";
+import { createErrorBoundary } from "solid-js/internal";
 import { describe, expect, it } from "vitest";
 
 const microtask = (): Promise<void> => Promise.resolve();
@@ -147,5 +148,121 @@ describe("the escape hatches (what boundary code uses instead)", () => {
     setX(9);
     await microtask();
     expect(x()).toBe(9);
+  });
+});
+
+describe("the equality gate (what cell() builds `equals` and its state box on)", () => {
+  it("a memo returning a new-but-equal object notifies every reader; `equals` closes the gate", () => {
+    let naiveRuns = 0;
+    let gatedRuns = 0;
+    const { setX, dispose } = createRoot((dispose) => {
+      const [x, setX] = createSignal(1);
+      const naive = createMemo(() => ({ decade: Math.floor(x() / 10) }));
+      const gated = createMemo(() => ({ decade: Math.floor(x() / 10) }), {
+        equals: (a, b) => a.decade === b.decade,
+      });
+      createEffect(
+        () => naive(),
+        () => {
+          naiveRuns++;
+        },
+      );
+      createEffect(
+        () => gated(),
+        () => {
+          gatedRuns++;
+        },
+      );
+      return { setX, dispose };
+    });
+    flush();
+    for (const v of [2, 3, 10]) {
+      setX(v);
+      flush();
+    }
+    expect(naiveRuns).toBe(4); // initial + one per write: a fresh object is always "new"
+    expect(gatedRuns).toBe(2); // initial + the decade change
+    dispose();
+  });
+
+  it("the gate applies to each async-iterable yield; `equals: false` reopens it", async () => {
+    const macrotask = () => new Promise<void>((r) => setTimeout(r, 0));
+    const byIdentity: number[] = [];
+    const every: number[] = [];
+    const dispose = createRoot((dispose) => {
+      const gen = async function* () {
+        for (const v of [1, 1, 2]) {
+          await macrotask();
+          yield v;
+        }
+      };
+      const a = createMemo(() => gen());
+      const b = createMemo(() => gen(), { equals: false });
+      createEffect(
+        () => a(),
+        (v) => {
+          byIdentity.push(v);
+        },
+      );
+      createEffect(
+        () => b(),
+        (v) => {
+          every.push(v);
+        },
+      );
+      return dispose;
+    });
+    const t0 = Date.now();
+    while (every.length < 3 && Date.now() - t0 < 2000) await macrotask();
+    await macrotask();
+    expect(every).toEqual([1, 1, 2]);
+    expect(byIdentity).toEqual([1, 2]);
+    dispose();
+  });
+
+  it("an error boundary's derivation closes its gate on an identical reference", () => {
+    // cell() interns its state box so that a recompute landing in the same
+    // state wakes no state reader — this is the Solid fact that rests on.
+    const READY = Object.freeze({ state: "ready" });
+    let freshRuns = 0;
+    let internedRuns = 0;
+    const { setX, dispose } = createRoot((dispose) => {
+      const [x, setX] = createSignal(0);
+      const fresh = createErrorBoundary(
+        () => {
+          x();
+          return { state: "ready" };
+        },
+        () => ({ state: "errored" }),
+      );
+      const interned = createErrorBoundary(
+        () => {
+          x();
+          return READY;
+        },
+        () => ({ state: "errored" }),
+      );
+      createEffect(
+        () => fresh().state,
+        () => {
+          freshRuns++;
+        },
+      );
+      createEffect(
+        () => interned().state,
+        () => {
+          internedRuns++;
+        },
+      );
+      return { setX, dispose };
+    });
+    flush();
+    for (const v of [1, 2, 3]) {
+      setX(v);
+      flush();
+    }
+    expect(freshRuns).toBe(4); // a fresh box per run wakes the reader every time
+    expect(internedRuns).toBe(1); // the same box never does
+    dispose();
   });
 });
