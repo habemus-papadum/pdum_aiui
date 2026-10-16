@@ -1,12 +1,25 @@
-/**
- * Local pen, touch, and mouse policy, extracted from the iPad client.
- * Pencil takes priority over fingers; large contacts never ink; two fingers
- * navigate even after pen mode latches. Coordinates are CSS px within bounds.
- * No renderer, framework, video, or transport is required.
- */
-import { type PenSample, penSample } from "../telemetry";
+/** Browser pointer capture, sample normalization, and delivery to a stroke sink. */
+import type { NavigationTransform } from "../geometry";
+import {
+  type PenKind,
+  type PenSample,
+  type PenSupport,
+  penKind,
+  penSample,
+  penSupport,
+} from "../telemetry";
+import {
+  type ContactEffect,
+  type ContactState,
+  createContactState,
+  type FingerDrawing,
+  type InputDecision,
+  isPalmContact,
+  type PenMode,
+  penContactDown,
+  transitionContact,
+} from "./policy";
 
-/** The drawing commands produced by pointer input. */
 export interface PenSink {
   begin(id: string, sample: PenSample): void;
   points(id: string, samples: PenSample[]): void;
@@ -22,391 +35,340 @@ export interface InputBounds {
   height: number;
 }
 
+/** Observed input includes rejected contacts. Only accepted samples enter the sink. */
+export interface PenInputSamples {
+  phase: "down" | "move" | "up" | "cancel";
+  pointerId: number;
+  kind: PenKind;
+  strokeId: string | null;
+  accepted: boolean;
+  decision: InputDecision;
+  /** Actual samples in ink coordinates, coalesced when available. */
+  samples: readonly PenSample[];
+  /** Predictions are diagnostic or preview data; never committed to the sink. */
+  predictedSamples: readonly PenSample[];
+  support: PenSupport;
+  coalesced: number;
+  predicted: number;
+}
+
 export interface PenInputOptions {
   sink: PenSink;
-  /** Defaults to the whole element. Useful for an inset drawing area. */
+  /** Defaults to the whole element. Used for local drawing and navigation coordinates. */
   bounds?: () => InputBounds;
+  /** Map a client-space sample's position and orientation into ink coordinates. */
+  clientToInk?: (sample: PenSample) => PenSample;
+  enabled?: boolean;
+  /** Auto activates on first pen contact. Explicit requires penEnabled or setPenEnabled(true). */
+  penMode?: PenMode;
+  penEnabled?: boolean;
+  fingerDrawing?: FingerDrawing;
+  /** Optional size heuristic; browser contact dimensions alone do not identify palms. */
+  palmContactPx?: number;
   /** Per-pointerdown veto; vetoed contacts are not captured or tracked. */
   shouldCapture?: (event: PointerEvent) => boolean;
-  /** Whether navigation callbacks are enabled; default true. */
   navigation?: () => boolean;
-  /** Pan delta as a fraction of bounds, opposite to finger movement. */
-  onPan?: (du: number, dv: number) => void;
-  /** Centre as a fraction of bounds; incremental pinch scale. */
-  onZoom?: (centerU: number, centerV: number, scale: number) => void;
-  /** Called once when a pen is first seen. Fingers stop inking from then on. */
+  /** One combined pan, zoom and rotation delta, in element-local CSS coordinates. */
+  onNavigate?: (navigation: NavigationTransform) => void;
+  /** Called when pen mode activates, automatically or explicitly. */
   onPenMode?: () => void;
-  /** Navigation is suppressed briefly after pen-up; default 500 ms. */
+  /** Navigation is suppressed during a pen contact and this long after lift; default 0 ms. */
   navCooldownMs?: number;
-  /** Monotonic clock, injectable for tests. */
   now?: () => number;
+  onSamples?: (batch: PenInputSamples) => void;
+}
+
+export interface PenInputCounts {
+  began: number;
+  ended: number;
+  cancelled: number;
+  scrolls: number;
+  zooms: number;
+  rotations: number;
+  touchDowns: number;
+  palms: number;
+  maxTouches: number;
+  observedSamples: number;
+  acceptedSamples: number;
+}
+
+/** Shared activity for the drawing region and surrounding palm guards. */
+export interface PenActivity {
+  penDown(): boolean;
+  /** Monotonic timestamp, or null if no pen contact has ended. */
+  lastPenUp(): number | null;
+  counts(): PenInputCounts;
 }
 
 export interface PenInputBinding extends PenActivity {
-  /** Cancel active contacts and release their captures. Keeps pen mode latched. */
+  /** Cancel all active contacts, retaining the pen-mode setting. */
   cancel(): void;
-  /** Cancel active contacts and remove all listeners. Idempotent. */
+  /** Changing ownership cancels active contacts and releases pointer capture. */
+  setEnabled(enabled: boolean): void;
+  /** Changes pen mode and cancels contacts. Auto mode can activate again on the next pen contact. */
+  setPenEnabled(enabled: boolean): void;
+  penEnabled(): boolean;
   dispose(): void;
 }
 
-/**
- * The pen's live activity, for policy outside the drawing area: the control guard
- * (controls.ts) refuses palm touches on surrounding controls exactly while a
- * stroke is in flight or just ended — the stage's own rules never see those
- * touches, because they land on buttons, not paper.
- */
-export interface PenActivity {
-  /** A pen contact is down right now. */
-  penDown(): boolean;
-  /** `performance.now()` of the last pen lift (0 = never). */
-  lastPenUp(): number;
-  /** Lifetime counters — the HUD's ledgers (which leg lost an input is
-   * unanswerable without knowing how many this layer SAW). Strokes:
-   * began/ended/cancelled. Navigation: scrolls/zooms emitted. Touches:
-   * touchDowns seen, palms rejected, maxTouches simultaneously tracked —
-   * a pan that emits nothing names its reason here. */
-  counts(): {
-    began: number;
-    ended: number;
-    cancelled: number;
-    scrolls: number;
-    zooms: number;
-    touchDowns: number;
-    palms: number;
-    maxTouches: number;
-  };
-}
-
-/** A touch contact larger than this (either axis) is a palm, not a finger —
- * for INK decisions only. Contact-size reporting is device/OS-dependent
- * (measured 2026-07-25: current iPadOS reports EVERY finger > 60px, so this
- * classifier must never gate the nav gesture — it would, and did, disable
- * two-finger pan wholesale). */
-const PALM_CONTACT = 60;
-
-/** Default nav cooldown after pen-up (see PenInputDeps.navCooldownMs). */
-const NAV_COOLDOWN_MS = 500;
-
-interface ActivePointer {
-  x: number;
-  y: number;
-  type: string;
-  palm: boolean;
-  strokeId: string | null;
-}
-
-/** Bind the whole pen policy to `element` (the stage). Returns the pen's
- * live activity, for the chrome guard outside the stage. */
-let bindingSequence = 0;
-
-export function bindPenInput(element: HTMLElement, deps: PenInputOptions): PenInputBinding {
-  const prefix = `pointer-${++bindingSequence}`;
-  const now = deps.now ?? (() => performance.now());
+export function bindPenInput(element: HTMLElement, options: PenInputOptions): PenInputBinding {
+  // getRandomValues also works on HTTP LAN pages; randomUUID requires a secure context.
+  const prefix = `pointer-${Array.from(crypto.getRandomValues(new Uint32Array(4)), (value) => value.toString(16)).join("-")}`;
+  const now = options.now ?? (() => performance.now());
   const bounds =
-    deps.bounds ??
+    options.bounds ??
     (() => ({
       left: 0,
       top: 0,
       width: element.clientWidth,
       height: element.clientHeight,
     }));
+  let state: ContactState = createContactState(options);
   let disposed = false;
-  let strokeSeq = 0;
-  const active = new Map<number, ActivePointer>();
-  let drawPointer: number | null = null;
-  let penSeen = false;
-  let penContacts = 0;
-  let lastPenUp = 0;
-  let began = 0;
-  let ended = 0;
-  let cancelled = 0;
-  let scrolls = 0;
-  let zooms = 0;
-  let touchDowns = 0;
-  let palms = 0;
-  let maxTouches = 0;
-  const pinch = { dist: 0, cx: 0, cy: 0 };
+  let strokeSequence = 0;
+  const strokeIds = new Map<number, string>();
+  const counts: PenInputCounts = {
+    began: 0,
+    ended: 0,
+    cancelled: 0,
+    scrolls: 0,
+    zooms: 0,
+    rotations: 0,
+    touchDowns: 0,
+    palms: 0,
+    maxTouches: 0,
+    observedSamples: 0,
+    acceptedSamples: 0,
+  };
 
-  const localSample = (e: PointerEvent): PenSample => {
+  const localSample = (event: PointerEvent, kind: PenKind): PenSample => {
+    const sample = penSample(event);
+    if (options.clientToInk) {
+      return { ...options.clientToInk(sample), kind };
+    }
     const rect = element.getBoundingClientRect();
     const box = bounds();
-    const s = penSample(e);
-    // Content-local: an inset outside the drawing bounds is not paper.
-    return { ...s, x: s.x - rect.left - box.left, y: s.y - rect.top - box.top };
-  };
-
-  const isPalm = (e: PointerEvent): boolean =>
-    e.pointerType === "touch" && (e.width > PALM_CONTACT || e.height > PALM_CONTACT);
-
-  /** The GESTURE set: every finger contact, palm classification ignored —
-   * the width heuristic is unreliable (see PALM_CONTACT) and the pan gate is
-   * the pen being idle, not the contact's size. */
-  const gestureTouches = (): ActivePointer[] =>
-    [...active.values()].filter((p) => p.type === "touch");
-
-  const penDrawing = (): boolean => drawPointer !== null && active.get(drawPointer)?.type === "pen";
-
-  /** Nav fires only while the pen is idle: no contact down, and past the
-   * post-pen-up window in which multi-contact touches are a resting palm. */
-  const navReady = (): boolean =>
-    penContacts === 0 &&
-    (lastPenUp === 0 || now() - lastPenUp > (deps.navCooldownMs ?? NAV_COOLDOWN_MS));
-
-  const beginStroke = (e: PointerEvent, p: ActivePointer): void => {
-    const id = `${prefix}-${++strokeSeq}`;
-    p.strokeId = id;
-    drawPointer = e.pointerId;
-    began += 1;
-    const sample = localSample(e);
-    deps.sink.begin(id, sample);
-  };
-
-  /** A stroke that must not survive: a finger the pencil superseded, or a
-   * finger that turned out to be the first half of a two-finger gesture. */
-  const cancelDraw = (): void => {
-    if (drawPointer === null) {
-      return;
-    }
-    const p = active.get(drawPointer);
-    if (p?.strokeId) {
-      cancelled += 1;
-      deps.sink.cancel(p.strokeId);
-      p.strokeId = null;
-    }
-    drawPointer = null;
-  };
-
-  const baselinePinch = (): void => {
-    const t = gestureTouches();
-    if (t.length < 2) {
-      return;
-    }
-    pinch.dist = Math.hypot(t[0].x - t[1].x, t[0].y - t[1].y);
-    pinch.cx = (t[0].x + t[1].x) / 2;
-    pinch.cy = (t[0].y + t[1].y) / 2;
-  };
-
-  /** Two fingers: pinch is zoom, drift is scroll — both plane-relative. */
-  const navGesture = (): void => {
-    const t = gestureTouches();
-    if (t.length < 2) {
-      return;
-    }
-    const d = Math.hypot(t[0].x - t[1].x, t[0].y - t[1].y);
-    const cx = (t[0].x + t[1].x) / 2;
-    const cy = (t[0].y + t[1].y) / 2;
-    if (pinch.dist > 0 && (deps.navigation?.() ?? true)) {
-      const rect = element.getBoundingClientRect();
-      const box = bounds();
-      const scale = d / pinch.dist;
-      if (Math.abs(scale - 1) > 0.01 && deps.onZoom && box.width > 0 && box.height > 0) {
-        zooms += 1;
-        deps.onZoom(
-          (cx - rect.left - box.left) / box.width,
-          (cy - rect.top - box.top) / box.height,
-          scale,
-        );
-      }
-      const du = box.width > 0 ? -(cx - pinch.cx) / box.width : 0;
-      const dv = box.height > 0 ? -(cy - pinch.cy) / box.height : 0;
-      if ((du !== 0 || dv !== 0) && deps.onPan) {
-        scrolls += 1;
-        deps.onPan(du, dv);
-      }
-    }
-    pinch.dist = d;
-    pinch.cx = cx;
-    pinch.cy = cy;
-  };
-
-  // Safari can claim a fast second stylus contact as a system gesture: cancel the touch stream so a fast second pen contact's pointerdown
-  // is not claimed by the system. STYLUS TOUCHES ONLY — the bug is a pencil
-  // phenomenon, and blanket-cancelling finger touchstarts starved the
-  // two-finger navigation gesture (found live 2026-07-25, the same day: pans
-  // stopped reaching the drawing area). Explicitly excluded controls keep clicks.
-  const swallowStylus = (e: TouchEvent): void => {
-    if (e.target instanceof Element && e.target.closest("[data-pencil-input-ignore]") !== null) {
-      return;
-    }
-    for (const touch of Array.from(e.changedTouches)) {
-      if ((touch as Touch & { touchType?: string }).touchType === "stylus") {
-        e.preventDefault();
-        return;
-      }
-    }
-  };
-  element.addEventListener("touchstart", swallowStylus, { passive: false });
-  element.addEventListener("touchmove", swallowStylus, { passive: false });
-
-  const down = (e: PointerEvent): void => {
-    if (
-      (e.pointerType === "mouse" && e.button !== 0) ||
-      (deps.shouldCapture && !deps.shouldCapture(e)) ||
-      (e.target instanceof Element && e.target.closest("[data-pencil-input-ignore]"))
-    )
-      return;
-    if (active.has(e.pointerId)) return;
-    try {
-      element.setPointerCapture(e.pointerId);
-    } catch {
-      // synthetic pointers have no capturable id; inking works anyway
-    }
-    const p: ActivePointer = {
-      x: e.clientX,
-      y: e.clientY,
-      type: e.pointerType,
-      palm: isPalm(e),
-      strokeId: null,
+    return {
+      ...sample,
+      x: sample.x - rect.left - box.left,
+      y: sample.y - rect.top - box.top,
+      kind,
     };
-    active.set(e.pointerId, p);
+  };
 
-    if (e.pointerType === "pen") {
-      penContacts += 1;
-      if (!penSeen) {
-        penSeen = true;
-        deps.onPenMode?.();
-      }
-      if (drawPointer !== null && drawPointer !== e.pointerId) {
-        cancelDraw(); // the pencil supersedes a stray finger
-      }
-      e.preventDefault();
-      beginStroke(e, p);
-      return;
-    }
-    if (e.pointerType === "mouse") {
-      if (drawPointer !== null) return;
-      e.preventDefault();
-      beginStroke(e, p);
-      return;
-    }
-    // touch
-    touchDowns += 1;
-    if (p.palm) {
-      palms += 1;
-    }
-    maxTouches = Math.max(maxTouches, gestureTouches().length);
-    if (penDrawing()) {
-      return; // no finger (or palm) interrupts the pencil
-    }
-    if (gestureTouches().length >= 2) {
-      cancelDraw(); // that first finger was half of a gesture, not a stroke
-      baselinePinch();
-      return;
-    }
-    if (p.palm) {
-      return; // palms never DRAW — ink is where the size heuristic still gates
-    }
-    if (!penSeen) {
-      e.preventDefault();
-      beginStroke(e, p);
+  const release = (id: number) => {
+    try {
+      element.releasePointerCapture(id);
+    } catch {
+      // Synthetic pointers have no browser-owned capture.
     }
   };
 
-  const move = (e: PointerEvent): void => {
-    const p = active.get(e.pointerId);
-    if (!p) {
-      return;
-    }
-    p.x = e.clientX;
-    p.y = e.clientY;
-
-    if (drawPointer === e.pointerId && p.strokeId) {
-      const coalesced = e.getCoalescedEvents?.() ?? [];
-      const events = coalesced.length > 0 ? coalesced : [e];
-      const samples = events.map(localSample);
-      deps.sink.points(p.strokeId, samples);
-      return;
-    }
-    if (navReady() && gestureTouches().length >= 2) {
-      navGesture();
-    } else {
-      baselinePinch(); // Suppressed movement must not become a later jump.
-    }
-  };
-
-  const endPointer = (e: PointerEvent): void => {
-    const p = active.get(e.pointerId);
-    if (!p) {
-      return;
-    }
-    active.delete(e.pointerId);
-    if (p.type === "pen") {
-      penContacts = Math.max(0, penContacts - 1);
-      lastPenUp = now();
-    }
-    if (drawPointer === e.pointerId) {
-      if (p.strokeId) {
-        if (e.type === "pointerup") {
-          ended += 1;
-          deps.sink.end(p.strokeId, localSample(e));
+  const apply = (effects: readonly ContactEffect[], samples: PenSample[] = []) => {
+    for (const effect of effects) {
+      if (effect.type === "pen-enabled") {
+        options.onPenMode?.();
+      } else if (effect.type === "navigation") {
+        if (!options.onNavigate) continue;
+        const rect = element.getBoundingClientRect();
+        const box = bounds();
+        if (effect.scale !== 1) counts.zooms += 1;
+        if (effect.rotation !== 0) counts.rotations += 1;
+        if (effect.to.x !== effect.from.x || effect.to.y !== effect.from.y) counts.scrolls += 1;
+        const local = (point: { x: number; y: number }) => ({
+          x: point.x - rect.left - box.left,
+          y: point.y - rect.top - box.top,
+        });
+        options.onNavigate({
+          from: local(effect.from),
+          to: local(effect.to),
+          scale: effect.scale,
+          rotation: effect.rotation,
+        });
+      } else if (effect.type === "begin") {
+        const id = `${prefix}-${++strokeSequence}`;
+        strokeIds.set(effect.pointerId, id);
+        counts.began += 1;
+        options.sink.begin(id, samples[0]);
+      } else {
+        const id = strokeIds.get(effect.pointerId);
+        if (!id) continue;
+        if (effect.type === "points") {
+          options.sink.points(id, samples);
         } else {
-          cancelled += 1;
-          deps.sink.cancel(p.strokeId);
+          strokeIds.delete(effect.pointerId);
+          if (effect.type === "end") {
+            counts.ended += 1;
+            options.sink.end(id, samples[0]);
+          } else {
+            counts.cancelled += 1;
+            options.sink.cancel(id);
+          }
         }
       }
-      drawPointer = null;
-    }
-    try {
-      element.releasePointerCapture(e.pointerId);
-    } catch {
-      /* synthetic pointer */
-    }
-    if (gestureTouches().length >= 2) {
-      baselinePinch();
-    } else {
-      pinch.dist = 0;
     }
   };
-  element.addEventListener("pointerdown", down);
-  element.addEventListener("pointermove", move);
-  element.addEventListener("pointerup", endPointer);
-  element.addEventListener("pointercancel", endPointer);
-  element.addEventListener("lostpointercapture", endPointer);
 
-  const cancel = (): void => {
-    cancelDraw();
-    const ids = [...active.keys()];
-    active.clear();
-    if (penContacts > 0) lastPenUp = now();
-    penContacts = 0;
-    pinch.dist = 0;
-    for (const id of ids) {
+  const ignoredTarget = (target: EventTarget | null) =>
+    target instanceof Element && target.closest("[data-pencil-input-ignore]") !== null;
+
+  const handle = (event: PointerEvent) => {
+    if (disposed) return;
+    const phase =
+      event.type === "pointerdown"
+        ? "down"
+        : event.type === "pointermove"
+          ? "move"
+          : event.type === "pointerup"
+            ? "up"
+            : "cancel";
+    const kind = penKind(event.pointerType);
+    const coalesced = phase === "move" ? (event.getCoalescedEvents?.() ?? []) : [];
+    const observed = coalesced.length > 0 ? coalesced : [event];
+    const samples = observed.map((sample) => localSample(sample, kind));
+    const predictedSamples =
+      options.onSamples && phase === "move"
+        ? (event.getPredictedEvents?.() ?? []).map((sample) => localSample(sample, kind))
+        : [];
+    const contact = {
+      id: event.pointerId,
+      kind,
+      x: event.clientX,
+      y: event.clientY,
+      width: event.width,
+      height: event.height,
+    };
+    let veto: InputDecision["reason"] | null = null;
+    if (phase === "down") {
+      if (kind === "mouse" && event.button !== 0) veto = "mouse-button";
+      else if (ignoredTarget(event.target)) veto = "ignored-target";
+      else if (options.shouldCapture && !options.shouldCapture(event)) veto = "capture-veto";
+    }
+    const before = state;
+    const priorStrokeId = strokeIds.get(event.pointerId) ?? null;
+    const transition = veto
+      ? { state, effects: [], decision: { disposition: "rejected", reason: veto } as InputDecision }
+      : transitionContact(
+          state,
+          { type: phase, contact, now: now() },
+          {
+            penMode: options.penMode,
+            fingerDrawing: options.fingerDrawing,
+            palmContactPx: options.palmContactPx,
+            navigation: options.navigation?.() ?? true,
+            navCooldownMs: options.navCooldownMs,
+          },
+        );
+    state = transition.state;
+    const newlyTracked =
+      phase === "down" && !before.contacts.has(contact.id) && state.contacts.has(contact.id);
+    if (newlyTracked) {
       try {
-        element.releasePointerCapture(id);
+        element.setPointerCapture(contact.id);
       } catch {
-        /* synthetic pointer */
+        // Synthetic pointers are still useful for replay and testing.
+      }
+      if (kind === "touch") {
+        counts.touchDowns += 1;
+        if (isPalmContact(contact, options.palmContactPx)) counts.palms += 1;
+        counts.maxTouches = Math.max(
+          counts.maxTouches,
+          [...state.contacts.values()].filter((entry) => entry.kind === "touch").length,
+        );
       }
     }
+    const accepted = transition.decision.disposition === "ink";
+    if (accepted || transition.decision.disposition === "navigation") event.preventDefault();
+    counts.observedSamples += samples.length;
+    if (accepted) counts.acceptedSamples += samples.length;
+    apply(transition.effects, samples);
+    if ((phase === "up" || phase === "cancel") && before.contacts.has(contact.id))
+      release(contact.id);
+    options.onSamples?.({
+      phase,
+      pointerId: contact.id,
+      kind,
+      strokeId: strokeIds.get(contact.id) ?? priorStrokeId,
+      accepted,
+      decision: transition.decision,
+      samples,
+      predictedSamples,
+      support: penSupport(event),
+      coalesced: coalesced.length,
+      predicted: predictedSamples.length,
+    });
   };
+
+  // Prevent Safari from claiming repeated stylus contacts as native gestures.
+  // Finger touch events remain available to the two-finger navigation policy.
+  const swallowStylus = (event: TouchEvent) => {
+    if (
+      !state.enabled ||
+      (options.penMode === "explicit" && !state.penEnabled) ||
+      ignoredTarget(event.target)
+    )
+      return;
+    if (
+      Array.from(event.changedTouches).some(
+        (touch) => (touch as Touch & { touchType?: string }).touchType === "stylus",
+      )
+    ) {
+      event.preventDefault();
+    }
+  };
+  const reset = (changes: { enabled?: boolean; penEnabled?: boolean } = {}) => {
+    const ids = [...state.contacts.keys()];
+    const transition = transitionContact(state, { type: "reset", now: now(), ...changes });
+    state = transition.state;
+    try {
+      apply(transition.effects);
+    } finally {
+      for (const id of ids) release(id);
+    }
+  };
+  const cancel = () => reset();
   const view = element.ownerDocument.defaultView;
+  // Capture controls event routing, not whether a stroke is finished or cancelled.
+  // Real stylus input can lose capture just BEFORE pointerup. Keep the contact
+  // alive until its terminal event, even if that event lands outside the canvas.
+  const events = ["pointerdown", "pointermove", "pointerup", "pointercancel"] as const;
+  const continuationEvents = ["pointermove", "pointerup", "pointercancel"] as const;
+  const continueOutside = (event: PointerEvent) => {
+    if (!state.contacts.has(event.pointerId) || event.composedPath().includes(element)) return;
+    handle(event);
+  };
+  for (const type of events) element.addEventListener(type, handle);
+  for (const type of continuationEvents)
+    element.ownerDocument.addEventListener(type, continueOutside, true);
+  element.addEventListener("touchstart", swallowStylus, { passive: false });
+  element.addEventListener("touchmove", swallowStylus, { passive: false });
   view?.addEventListener("blur", cancel);
 
   return {
     cancel,
-    dispose: () => {
+    setEnabled(enabled) {
+      if (!disposed && state.enabled !== enabled) reset({ enabled });
+    },
+    setPenEnabled(penEnabled) {
+      if (!disposed && state.penEnabled !== penEnabled) {
+        reset({ penEnabled });
+        if (penEnabled) options.onPenMode?.();
+      }
+    },
+    penEnabled: () => state.penEnabled,
+    penDown: () => penContactDown(state),
+    lastPenUp: () => state.lastPenUp,
+    counts: () => ({ ...counts }),
+    dispose() {
       if (disposed) return;
       disposed = true;
-      element.removeEventListener("pointerdown", down);
-      element.removeEventListener("pointermove", move);
-      element.removeEventListener("pointerup", endPointer);
-      element.removeEventListener("pointercancel", endPointer);
-      element.removeEventListener("lostpointercapture", endPointer);
+      for (const type of events) element.removeEventListener(type, handle);
+      for (const type of continuationEvents)
+        element.ownerDocument.removeEventListener(type, continueOutside, true);
       element.removeEventListener("touchstart", swallowStylus);
       element.removeEventListener("touchmove", swallowStylus);
       view?.removeEventListener("blur", cancel);
-      cancel();
+      reset({ enabled: false });
     },
-    penDown: () => penContacts > 0,
-    lastPenUp: () => lastPenUp,
-    counts: () => ({
-      began,
-      ended,
-      cancelled,
-      scrolls,
-      zooms,
-      touchDowns,
-      palms,
-      maxTouches,
-    }),
   };
 }

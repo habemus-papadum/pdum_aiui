@@ -52,7 +52,7 @@ action({
   name: "clear",
   description: "Erase the drawing and reset the measured statistics to empty.",
   run: () => {
-    paper.clearAnimated();
+    paper.fadeCompleted();
     resetTurn();
   },
 });

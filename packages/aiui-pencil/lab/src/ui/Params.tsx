@@ -10,7 +10,7 @@
 
 import { ControlSlider, ControlToggle } from "@habemus-papadum/aiui-viz";
 import type { JSX } from "@solidjs/web";
-import { clearAnimated, clearStrokes, loadPreset, undo } from "../model/graph";
+import { clearStrokes, evictCache, fadeCompleted, loadPreset, redo, undo } from "../model/graph";
 import {
   beta,
   cuspAngle,
@@ -24,7 +24,6 @@ import {
   preset,
   pressureAlphaFloor,
   pressureRadiusFloor,
-  retention,
   showCusps,
   showDabs,
   showFiltered,
@@ -54,7 +53,6 @@ export function Params(): JSX.Element {
           >
             <option value="write">write</option>
             <option value="sketch">sketch</option>
-            <option value="auto">auto (= write, reserved)</option>
           </select>
         </label>
         <button type="button" class="btn" onClick={() => loadPreset.run?.()}>
@@ -63,10 +61,16 @@ export function Params(): JSX.Element {
         <button type="button" class="btn" onClick={() => undo.run?.()}>
           Undo
         </button>
+        <button type="button" class="btn" onClick={() => redo.run?.()}>
+          Redo
+        </button>
+        <button type="button" class="btn" onClick={() => evictCache.run?.()}>
+          Evict cache
+        </button>
         <button type="button" class="btn" onClick={() => clearStrokes.run?.()}>
           Clear
         </button>
-        <button type="button" class="btn" onClick={() => clearAnimated.run?.()}>
+        <button type="button" class="btn" onClick={() => fadeCompleted.run?.()}>
           Clear ✨
         </button>
       </div>
@@ -81,7 +85,8 @@ export function Params(): JSX.Element {
             onInput={(e) => tool.set(e.currentTarget.value as never)}
           >
             <option value="draw">draw</option>
-            <option value="erase">erase</option>
+            <option value="erase">erase part</option>
+            <option value="erase-stroke">erase stroke</option>
           </select>
         </label>
       </div>
@@ -111,8 +116,11 @@ export function Params(): JSX.Element {
       <ControlSlider of={grainScale} label="tooth size" />
 
       <h3>Vanishing ink</h3>
-      <ControlSlider of={fadeSec} label="fade (0 = permanent)" />
-      <ControlSlider of={retention} label="retention = undo depth" />
+      <ControlSlider of={fadeSec} label="fade duration (0 = keep ink)" />
+      <p class="hint">
+        Changing the duration keeps already-faded ink hidden. Stroke data stays available until
+        cleared or retired.
+      </p>
 
       <h3>Diagnostic overlay</h3>
       <div class="checks">

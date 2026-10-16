@@ -1,30 +1,12 @@
-/**
- * graph.ts — Pencil Lab's cell graph (playbook layer 2) and its agent surface.
- *
- * Two cells and a memo, which is all this app needs:
- *
- *  - `params` — the knobs, assembled into the `PencilParams` the library speaks.
- *  - `plans`  — every completed stroke, **re-planned from its raw samples**
- *               whenever any knob moves. This is the Lab's central trick: you
- *               draw once, then turn the filter up and watch the same stroke
- *               change under you. Tuning a pencil by re-drawing a stroke you can
- *               never draw the same way twice is not tuning, it is guessing.
- *  - `verdict`— the answer to the question phase 1 exists to ask: does this
- *               device report tilt, and does it MOVE?
- *
- * Note what is *not* here: the in-flight stroke. It never crosses into the
- * reactive graph at all (see capture.ts) — the island plans it itself, every
- * frame, at pen speed.
- */
+/** Reactive diagnostics and shared human/agent actions for editable ink. */
 
 import {
-  type InkStroke,
   type InputReport,
   inputReport,
+  pencilPreset,
   planStroke,
   polygonArea,
   polylineLength,
-  resolveParams,
   type StrokePlan,
   type Telemetry,
   type TiltVerdict,
@@ -37,14 +19,16 @@ import {
   hotCellGraph,
   registerStandardTools,
 } from "@habemus-papadum/aiui-viz";
-import { PenRecorder } from "./capture";
 import {
+  baseProfile,
   beta,
+  captureReview,
   currentParams,
   cuspAngle,
   cuspWindow,
   flow,
   grain,
+  grainScale,
   ink,
   labScope,
   minCutoff,
@@ -52,7 +36,7 @@ import {
   preset,
   pressureAlphaFloor,
   pressureRadiusFloor,
-  recorder,
+  resetMeasurements,
   size,
   spacing,
   telemetry,
@@ -77,13 +61,13 @@ export interface InkStats {
   enclosedPx2: number;
 }
 
-/** The summary the readout renders — the phase-1 verdict, plus its evidence. */
+/** The observed device capabilities and their numerical evidence. */
 export interface TelemetryReport {
   verdict: TiltVerdict;
   telemetry: Telemetry;
   /** Plain-language reading of the verdict, for the human holding the pen. */
   says: string;
-  /** The other phase-1 question: are we getting every sample, and is it enough? */
+  /** Sample availability and observed input rate. */
   input: InputReport;
 }
 
@@ -100,41 +84,24 @@ const VERDICT_TEXT: Record<TiltVerdict, string> = {
 export const graph = hotCellGraph(
   labScope.name,
   () => ({
-    /**
-     * Every completed stroke, re-planned under the current knobs. Both inputs
-     * are declared: move a knob OR draw a stroke and this recomputes. (Reading a
-     * control inside `compute` instead of the deps bundle is the out-of-sync bug
-     * the guide warns about — it would leave the picture stale behind the
-     * sliders, which for a tuning lab is the one unforgivable failure.)
-     */
     plans: cell(
-      () => ({ recorded: ink.strokes(), params: currentParams() }),
-      (deps): StrokePlan[] => deps.recorded.map((r) => planStroke(r.points, deps.params)),
+      () => ({ recorded: ink.strokes() }),
+      (deps): StrokePlan[] => deps.recorded.map((r) => planStroke(r.points, r.params)),
       { scope: labScope },
     ),
 
-    /**
-     * The drawing, as numbers — the worked example of the reactive surface.
-     * A sibling cell computing over `ink.strokes()` + `ink.live()` exactly the
-     * way the design promises a consumer can: point counts come off the raw
-     * data; the enclosed area re-runs the widget's OWN pipeline (`planStroke`
-     * with the live knobs — swap in your own params to disagree with it). The
-     * live half updates ~15 Hz while the pen is still moving, and its snapshots
-     * are cumulative, so no throttling ever cost it a point.
-     */
     inkStats: cell(
-      () => ({ strokes: ink.strokes(), live: ink.live(), params: currentParams() }),
+      () => ({ strokes: ink.strokes(), live: ink.live() }),
       (deps): InkStats => {
-        const drawn = deps.strokes.filter((s) => s.tool === "draw");
         const liveStroke = deps.live.at(-1);
-        const last = liveStroke ?? drawn.at(-1);
+        const last = liveStroke ?? deps.strokes.at(-1);
         const enclosed =
           last === undefined
             ? 0
-            : Math.abs(polygonArea(planStroke([...last.points], deps.params).densified));
+            : Math.abs(polygonArea(planStroke(last.points, last.params).densified));
         return {
           strokeCount: deps.strokes.length,
-          erased: deps.strokes.length - drawn.length,
+          erased: deps.strokes.filter((stroke) => stroke.erasures.length > 0).length,
           totalPoints: deps.strokes.reduce((n, s) => n + s.points.length, 0),
           livePoints: deps.live.reduce((n, s) => n + s.points.length, 0),
           liveLengthPx: liveStroke === undefined ? 0 : polylineLength([...liveStroke.points]),
@@ -144,7 +111,7 @@ export const graph = hotCellGraph(
       { scope: labScope },
     ),
 
-    /** Does this device's pen report a usable orientation? Phase 1's whole question. */
+    /** Does this device report a changing pen orientation? */
     verdict: cell(
       () => ({ t: telemetry.get() }),
       (deps): TelemetryReport => {
@@ -180,7 +147,8 @@ registerStandardTools(kit);
 export const loadPreset = action({
   scope: labScope,
   run: () => {
-    const p = resolveParams(preset.get());
+    const p = pencilPreset(preset.get());
+    baseProfile.set(p);
     minCutoff.set(p.filter.minCutoff);
     beta.set(p.filter.beta);
     cuspAngle.set(Math.round((p.cuspThreshold * 180) / Math.PI));
@@ -196,91 +164,90 @@ export const loadPreset = action({
     velocityAlphaGain.set(p.velocityToAlpha[1]);
     velocityRef.set(p.velocityRef);
     grain.set(p.grain);
+    grainScale.set(p.grainScale);
     return `loaded the ${preset.get()} preset`;
   },
 });
 
-/** Throw away every drawn stroke — the real paper AND the diagnostic overlay. */
 export const clearStrokes = action({
   scope: labScope,
   run: () => {
-    paper.clear(); // ink.strokes() follows by itself — the surface owns the record
-    return "cleared";
+    paper.document.clear();
+    return "cleared completed ink";
   },
 });
 
-/**
- * Clear, the way vanishing ink goes: every stroke charges, heats, and pops.
- * The same exit a fading stroke takes — an animated clear is all of them taking
- * it at once. Also D4's retire move for an overlay whose viewport changed.
- */
-export const clearAnimated = action({
+export const fadeCompleted = action({
   scope: labScope,
   run: () => {
-    paper.clearAnimated();
-    return "clearing — watch it pop";
+    paper.fadeCompleted();
+    return "fading completed ink";
   },
 });
 
-/**
- * Undo the last stroke. Free below the retention horizon, impossible above it —
- * because flattening is what makes an edit permanent, and the undo depth and the
- * horizon are the same number by construction (see surface.ts).
- */
 export const undo = action({
   scope: labScope,
-  run: () => {
-    return paper.undo()
-      ? "undone"
-      : "nothing to undo — the rest has been flattened past the horizon";
-  },
+  run: () => (paper.document.undo() ? "undone" : "nothing to undo"),
+});
+export const redo = action({
+  scope: labScope,
+  run: () => (paper.document.redo() ? "redone" : "nothing to redo"),
 });
 
-/**
- * Re-bake every stroke under the current knobs.
- *
- * The Lab's central trick, and the reason strokes are stored as RAW SAMPLES:
- * committed strokes on a raster surface are pixels, so the only way to see a
- * knob's effect on ink you already drew is to throw the pixels away and re-run
- * the pipeline. Tuning a pencil by re-drawing a stroke you can never draw the
- * same way twice is not tuning, it is guessing.
- *
- * It uses programmatic stroke input with callbacks suppressed: rebuilding
- * pixels is not a new user stroke. Drawing subscriptions still update.
- */
-export const rebake = action({
+/** Change completed profiles without replacing stroke identity or original samples. */
+export const applyParams = action({
   scope: labScope,
   run: () => {
-    // Snapshot BEFORE clearing: `ink.strokes()` is the surface's own record, and
-    // clear() empties it. The captured array is ours — fresh per ink() call.
-    const recorded: readonly InkStroke[] = ink.strokes();
-    const params = currentParams();
-    paper.clear();
-    recorded.forEach((stroke, i) => {
-      if (stroke.points.length === 0) {
-        return;
-      }
-      const id = `rebake-${i}`;
-      // Each stroke keeps the TOOL it was drawn with — its identity — while the
-      // brush parameters are the ones currently under test. Using the live tool
-      // here instead replayed three pencil strokes as three eraser strokes and
-      // wiped the page; the eraser was working perfectly, and the bug was that a
-      // stroke did not remember what it was.
-      paper.beginStroke(id, { tool: stroke.tool, params, point: stroke.points[0], notify: false });
-      paper.appendPoints(id, stroke.points.slice(1));
-      paper.endStroke(id);
-    });
-    return `re-baked ${recorded.length} stroke(s)`;
+    const strokes = paper.document.snapshot().strokes;
+    paper.document.setParams(
+      strokes.map((stroke) => stroke.id),
+      currentParams(),
+    );
+    return `updated ${strokes.length} stroke profile(s)`;
   },
 });
 
-/** Wipe the measured telemetry, so the next tilt of the pen is measured from scratch. */
+export const evictCache = action({
+  scope: labScope,
+  run: () => {
+    paper.view.evictCache();
+    return "render cache evicted; ink and undo history retained";
+  },
+});
+
+export const captureInk = action({
+  scope: labScope,
+  run: () => {
+    const capture = paper.document.capture();
+    const size = paper.view.size();
+    const image = paper.view.renderCapture(capture, size.width, size.height).toDataURL("image/png");
+    captureReview.set({ capture, image, applied: false, retired: 0 });
+    return `captured ${capture.strokes.length} stroke(s); keep drawing before applying the sample result`;
+  },
+});
+
+/** A deterministic application fixture: the result does not attempt to recognize handwriting. */
+export const applySampleResult = action({
+  scope: labScope,
+  run: () => {
+    const review = captureReview.get();
+    if (!review || review.applied) return "capture ink first";
+    const before = paper.document.snapshot().strokes.length;
+    paper.document.retire(review.capture);
+    captureReview.set({
+      ...review,
+      applied: true,
+      retired: before - paper.document.snapshot().strokes.length,
+    });
+    return "sample result applied; newer ink and revised strokes remain";
+  },
+});
+
 export const resetTelemetry = action({
   scope: labScope,
   run: () => {
-    recorder.resetTelemetry();
-    telemetry.set(PenRecorder.emptySnapshot());
-    return "telemetry reset — now tilt the pen and watch the ranges move";
+    resetMeasurements();
+    return "telemetry reset";
   },
 });
 

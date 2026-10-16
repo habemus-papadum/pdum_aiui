@@ -4,9 +4,7 @@
  *
  * Catmull-Rom because it passes *through* its control points: the pen went where
  * it went, and a curve that merely approaches the samples is a curve that has
- * quietly moved the user's line. (Bézier smoothing of the kind the old ink
- * surface does — raw samples as control points, midpoints as endpoints — does
- * exactly that, which is part of why it rounds letters off.)
+ * quietly moved the user's line.
  *
  * **Centripetal** (α = 0.5), specifically, and this is not a detail. The uniform
  * parameterization (α = 0) overshoots and self-intersects when consecutive

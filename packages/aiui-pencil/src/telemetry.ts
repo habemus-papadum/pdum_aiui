@@ -106,7 +106,7 @@ export interface PenSupport {
   twist: boolean;
   /** `getCoalescedEvents()` EXISTS. Says nothing about whether it returned more than one. */
   coalescedApi: boolean;
-  /** `getPredictedEvents()` EXISTS — the latency-hiding lever (phase 3). */
+  /** `getPredictedEvents()` EXISTS; predictions are diagnostic data. */
   predictedApi: boolean;
 }
 

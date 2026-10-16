@@ -1,34 +1,14 @@
-/**
- * pad-renderer.ts — the imperative island. A canvas, a rAF loop, and no signals
- * anywhere inside it.
- *
- * This is a **diagnostic** renderer, not the pencil. It draws the *stages of the
- * pipeline* — raw samples, filtered samples, detected corners, the resampled dab
- * grid, and the dabs themselves as outlines — because phase 1's question is
- * "what is the pen telling us, and what is the math doing with it", and a
- * renderer that only showed the finished stroke could not answer either. The real
- * textured, grained, erasable `PencilSurface` has since taken over the drawing
- * itself (the Lab's durable `paper`); this overlay survives as the debug layer.
- *
- * The two rules from the frontend guide that this file exists to obey:
- *
- *  - **the hot loop never touches a signal.** Parameters, view flags, and the
- *    re-planned strokes are PUSHED in through setters by `createEffect` in the
- *    component; the loop reads plain fields.
- *  - **the durable node is adopted, not owned.** `mount`/`unmount` are written so
- *    that a hot-swapped successor component which has already adopted the canvas
- *    is never un-parented by its predecessor's cleanup (the "still mine?" guard).
- */
-
+/** Disposable diagnostic canvas over authoritative stroke snapshots. */
 import {
+  composeTransforms,
   type Dab,
+  type InkDocument,
+  type InkTransform,
   type PencilParams,
   planStroke,
   type StrokePlan,
 } from "@habemus-papadum/aiui-pencil";
-import type { PenRecorder } from "./capture";
 
-/** Which stages of the pipeline to draw. Pushed in; never read reactively. */
 export interface PadView {
   raw: boolean;
   filtered: boolean;
@@ -36,138 +16,123 @@ export interface PadView {
   dabs: boolean;
   fill: boolean;
 }
-
 const COLORS = {
-  raw: "rgba(232, 235, 240, 0.22)",
-  rawDot: "rgba(232, 235, 240, 0.5)",
-  filtered: "#4cc9f0",
-  cusp: "#ff5c87",
-  dab: "rgba(232, 235, 240, 0.30)",
-  live: "rgba(255, 209, 102, 0.9)",
+  raw: "rgba(60, 65, 80, 0.4)",
+  rawDot: "rgba(60, 65, 80, 0.65)",
+  filtered: "#008bb1",
+  cusp: "#e12664",
+  dab: "rgba(80, 90, 120, 0.5)",
+  live: "#a76100",
 };
 
 export class PadRenderer {
-  readonly canvas: HTMLCanvasElement;
-  private ctx: CanvasRenderingContext2D | null = null;
-  private host: HTMLElement | undefined;
+  readonly canvas = document.createElement("canvas");
+  private readonly ctx: CanvasRenderingContext2D | null;
+  private host?: HTMLElement;
   private raf = 0;
-
-  // Pushed in from the reactive graph. Plain fields — the loop just reads them.
-  private plans: StrokePlan[] = [];
-  private params: PencilParams | undefined;
-  private view: PadView = { raw: true, filtered: true, cusps: true, dabs: true, fill: false };
-  private recorder: PenRecorder | undefined;
-
-  /** Frame time, ms — published back out by the component at ~4Hz, not per frame. */
-  frameMs = 0;
+  private ink?: InkDocument;
+  private viewport = (): InkTransform => ({ x: 0, y: 0, scale: 1 });
+  private unsubscribe?: () => void;
+  private observer?: ResizeObserver;
+  private plans = new Map<string, { revision: number; plan: StrokePlan }>();
+  private view: PadView = { raw: false, filtered: false, cusps: false, dabs: false, fill: false };
 
   constructor() {
-    this.canvas = document.createElement("canvas");
     this.canvas.className = "pad-canvas";
-    // Without this a pen drag on an iPad is eaten by the browser as a scroll,
-    // and no amount of preventDefault in a handler gets it back.
-    this.canvas.style.touchAction = "none";
     this.ctx = this.canvas.getContext("2d");
   }
 
-  /** Adopt into a host element. Idempotent — a re-render must not re-parent. */
+  setDocument(ink: InkDocument, viewport: () => InkTransform): void {
+    this.viewport = viewport;
+    if (this.ink === ink) return;
+    this.unsubscribe?.();
+    this.ink = ink;
+    this.plans.clear();
+    this.unsubscribe = ink.subscribe(this.invalidate);
+    this.invalidate();
+  }
+
   mount(host: HTMLElement): void {
-    if (this.canvas.parentElement === host) {
-      return;
-    }
     this.host = host;
     host.append(this.canvas);
-    this.resize();
-    window.addEventListener("resize", this.onResize);
-    if (this.raf === 0) {
-      const tick = (): void => {
-        const started = performance.now();
-        this.draw();
-        this.frameMs = performance.now() - started;
-        this.raf = requestAnimationFrame(tick);
-      };
-      this.raf = requestAnimationFrame(tick);
-    }
+    window.addEventListener("resize", this.invalidate);
+    this.observer?.disconnect();
+    this.observer = new ResizeObserver(this.invalidate);
+    this.observer.observe(host);
+    this.invalidate();
   }
 
-  /**
-   * Release from a host — but ONLY if that host is still ours. A hot swap mounts
-   * the successor before disposing the predecessor, so a naive cleanup here would
-   * tear out a canvas the new component has already adopted, and the app would
-   * come back from a component edit with a blank pad. This guard is the whole
-   * reason `unmount` takes the host it is releasing from.
-   */
   unmount(host: HTMLElement): void {
-    if (this.host !== host) {
-      return; // someone else owns it now — leave it alone
-    }
-    window.removeEventListener("resize", this.onResize);
-    if (this.raf !== 0) {
-      cancelAnimationFrame(this.raf);
-      this.raf = 0;
-    }
-    this.canvas.remove();
+    if (this.host !== host) return;
+    window.removeEventListener("resize", this.invalidate);
+    this.observer?.disconnect();
+    if (this.raf) cancelAnimationFrame(this.raf);
+    this.raf = 0;
     this.host = undefined;
+    this.canvas.remove();
   }
 
-  setPlans(plans: StrokePlan[]): void {
-    this.plans = plans;
-  }
-
-  setParams(params: PencilParams): void {
-    this.params = params;
+  dispose(): void {
+    if (this.host) this.unmount(this.host);
+    this.unsubscribe?.();
+    this.plans.clear();
   }
 
   setView(view: PadView): void {
     this.view = view;
+    this.invalidate();
   }
 
-  setRecorder(recorder: PenRecorder): void {
-    this.recorder = recorder;
-  }
-
-  private readonly onResize = (): void => this.resize();
-
-  private resize(): void {
-    const dpr = window.devicePixelRatio || 1;
-    const width = this.canvas.clientWidth || 800;
-    const height = this.canvas.clientHeight || 600;
-    this.canvas.width = Math.round(width * dpr);
-    this.canvas.height = Math.round(height * dpr);
-  }
+  invalidate = (): void => {
+    if (!this.host || this.raf) return;
+    this.raf = requestAnimationFrame(() => {
+      this.raf = 0;
+      this.draw();
+    });
+  };
 
   private draw(): void {
     const ctx = this.ctx;
-    const params = this.params;
-    if (ctx === null || params === undefined) {
-      return;
-    }
-    if (this.canvas.clientWidth * (window.devicePixelRatio || 1) !== this.canvas.width) {
-      this.resize(); // the pane was resized by a layout change, not a window resize
-    }
+    if (!ctx || !this.ink) return;
     const dpr = window.devicePixelRatio || 1;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-
-    for (const plan of this.plans) {
-      this.drawPlan(ctx, plan, false);
-    }
-
-    // The in-flight stroke is planned HERE, every frame, from the recorder's own
-    // plain array — it never crosses the reactive boundary. This is what keeps
-    // the line under the pen instead of one graph-recompute behind it.
-    const live = this.recorder?.live;
-    if (live !== undefined && live.length > 0) {
-      this.drawPlan(ctx, planStroke(live, params), true);
+    const w = Math.round(this.canvas.clientWidth * dpr),
+      h = Math.round(this.canvas.clientHeight * dpr);
+    if (this.canvas.width !== w) this.canvas.width = w;
+    if (this.canvas.height !== h) this.canvas.height = h;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    if (!(this.view.raw || this.view.filtered || this.view.cusps || this.view.dabs)) return;
+    const snapshot = this.ink.snapshot();
+    const records = [
+      ...snapshot.strokes,
+      ...snapshot.live.filter((stroke) => stroke.tool === "draw"),
+    ];
+    const ids = new Set(records.map((stroke) => stroke.id));
+    for (const id of this.plans.keys()) if (!ids.has(id)) this.plans.delete(id);
+    const viewport = this.viewport();
+    for (const stroke of records) {
+      let cached = this.plans.get(stroke.id);
+      if (!cached || cached.revision !== stroke.revision) {
+        cached = { revision: stroke.revision, plan: planStroke(stroke.points, stroke.params) };
+        this.plans.set(stroke.id, cached);
+      }
+      const transform = "transform" in stroke ? stroke.transform : { x: 0, y: 0, scale: 1 };
+      const placement = composeTransforms(viewport, transform);
+      const a = Math.cos(placement.rotation ?? 0) * placement.scale * dpr;
+      const b = Math.sin(placement.rotation ?? 0) * placement.scale * dpr;
+      ctx.save();
+      ctx.setTransform(a, b, -b, a, dpr * placement.x, dpr * placement.y);
+      this.drawPlan(ctx, cached.plan, stroke.params, !("endedAt" in stroke));
+      ctx.restore();
     }
   }
 
-  private drawPlan(ctx: CanvasRenderingContext2D, plan: StrokePlan, live: boolean): void {
-    const params = this.params;
-    if (params === undefined) {
-      return;
-    }
-
+  private drawPlan(
+    ctx: CanvasRenderingContext2D,
+    plan: StrokePlan,
+    params: PencilParams,
+    live: boolean,
+  ): void {
     if (this.view.dabs) {
       for (const dab of plan.dabs) {
         drawDab(ctx, dab, this.view.fill ? params.color : undefined, live);

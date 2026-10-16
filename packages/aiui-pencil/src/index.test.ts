@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { NEW_STROKE, name, planStroke, resolveParams, SKETCH, WRITE } from "./index";
+import { name, pencilPreset, planStroke, SKETCH, WRITE } from "./index";
 import type { PenSample } from "./telemetry";
 
 describe("the barrel", () => {
@@ -20,32 +20,9 @@ describe("the barrel", () => {
       width: 1,
       height: 1,
     }));
-    const plan = planStroke(raw, resolveParams("write"));
+    const plan = planStroke(raw, pencilPreset("write"));
     expect(plan.dabs.length).toBeGreaterThan(raw.length);
     expect(plan.dabs.every((d) => d.alpha > 0 && d.alpha <= 1)).toBe(true);
-  });
-});
-
-describe("resolveParams — the mode resolver, and the placeholder in it", () => {
-  it("resolves the two real presets", () => {
-    expect(resolveParams("write")).toBe(WRITE);
-    expect(resolveParams("sketch")).toBe(SKETCH);
-  });
-
-  it("ignores the stroke context today — a preset is the degenerate adaptive mode", () => {
-    // The SIGNATURE is the placeholder: every caller already passes what an
-    // adaptive resolver would need, so `auto` becomes an implementation rather
-    // than a refactor. See the module header in pencil.ts.
-    const sketchy = { speed: 3, extent: 400, altitude: 0.2 };
-    expect(resolveParams("write", sketchy)).toBe(WRITE);
-    expect(resolveParams("sketch", NEW_STROKE)).toBe(SKETCH);
-  });
-
-  it("ships `auto` as write — the safe default", () => {
-    // A stroke wrongly smoothed as a sketch has LOST information; a sketch
-    // wrongly treated as writing merely looks a little crisp.
-    expect(resolveParams("auto")).toBe(WRITE);
-    expect(resolveParams("auto", { speed: 5, extent: 900, altitude: 0.1 })).toBe(WRITE);
   });
 });
 

@@ -91,9 +91,8 @@ export function normalizeAngle(radians: number): number {
  * was never at).
  *
  * The first input point is always emitted. The last one is emitted only if it
- * lands on the grid — a trailing partial segment is deliberately dropped rather
- * than stamped at the wrong spacing; a *live* stroke's tail arrives on the next
- * frame anyway, and a finished stroke's final dab is placed by the caller.
+ * lands on the grid — a trailing partial segment is deliberately dropped.
+ * Consumers that require exact endpoint coverage can append it explicitly.
  *
  * `spacing <= 0`, or fewer than two points, returns the input unchanged: a dot
  * is a legitimate stroke.

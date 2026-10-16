@@ -1,27 +1,12 @@
 /**
- * grain.ts — the paper's tooth.
+ * Deterministic paper grain, applied once to accumulated stroke coverage.
  *
- * This is the single detail that decides whether the mark reads as *pencil* or as
- * a grey line, and it hinges on one rule that is easy to get backwards:
+ * The repeating pattern is anchored in ink coordinates, independent of tile
+ * bounds. Unmoved strokes share a texture; a placement edit moves a stroke's
+ * texture along with its geometry and erasure masks. View navigation transforms
+ * all of them together. See `stamp.ts` and `renderer.ts`.
  *
- *   **The tooth belongs to the PAPER, not to the stroke.**
- *
- * If the noise is baked into the brush — sampled in stroke-local coordinates —
- * then the texture slides around with every mark, two strokes crossing show two
- * unrelated grains, and the eye knows instantly that it is fake, even if it
- * cannot say why. Anchor the noise to the *canvas* instead and the opposite
- * happens: strokes drawn over each other catch on the same grain, the page
- * acquires a consistent surface, and the whole thing suddenly looks like graphite
- * on paper. Same noise function; entirely different result.
- *
- * The mechanism is a repeating `CanvasPattern` filled with
- * `globalCompositeOperation = "destination-in"` over a stroke's accumulated
- * alpha — so the grain *multiplies* coverage rather than painting over it — with
- * the fill translated by the tile's own canvas-space origin, which is what keeps
- * the lattice pinned to the page rather than to the tile. See `surface.ts`.
- *
- * The noise itself is two octaves of tileable value noise. One octave looks
- * like blur; two look like fibre.
+ * Two octaves of tileable value noise multiply alpha with `destination-in`.
  */
 
 /** A deterministic PRNG — the same paper every time, which matters for tests. */

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { expect, it, vi } from "vitest";
-import { guardPenControls } from "./controls";
+import { guardPenControls, penWriting } from "./controls";
 import type { PenActivity } from "./pointer";
 
 it("keeps a refused palm blocked through release, then allows deliberate taps", () => {
@@ -12,11 +12,7 @@ it("keeps a refused palm blocked through release, then allows deliberate taps", 
   container.append(button);
   const click = vi.fn();
   button.addEventListener("click", click);
-  const dispose = guardPenControls(
-    container,
-    () => activity,
-    () => time,
-  );
+  const dispose = guardPenControls(container, () => activity, { now: () => time });
   const pointer = (type: string, kind = "touch") => {
     const e = new PointerEvent(type, {
       pointerId: 1,
@@ -42,4 +38,13 @@ it("keeps a refused palm blocked through release, then allows deliberate taps", 
   down = true;
   dispose();
   expect(pointer("pointerdown")).toBe(false);
+});
+
+it("shares configurable writing cooldowns and handles a pen lift at clock zero", () => {
+  const activity = { penDown: () => false, lastPenUp: () => 0 } as PenActivity;
+  expect(penWriting(activity, { now: () => 20, cooldownMs: 30 })).toBe(true);
+  expect(penWriting(activity, { now: () => 30, cooldownMs: 30 })).toBe(false);
+  expect(penWriting(undefined, { now: () => 0 })).toBe(false);
+  const noPen = { penDown: () => false, lastPenUp: () => null } as PenActivity;
+  expect(penWriting(noPen, { now: () => 0 })).toBe(false);
 });

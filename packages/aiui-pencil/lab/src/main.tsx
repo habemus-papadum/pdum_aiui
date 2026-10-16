@@ -8,7 +8,6 @@
  *
  *   ../../src/*.ts        layer 1 — the pure stroke pipeline (the library itself)
  *   src/model/store.ts    durable roots + the control surface
- *   src/model/capture.ts  the pen recorder — imperative, non-reactive, 120Hz
  *   src/model/pad-renderer.ts  the canvas island — no signals in the hot loop
  *   src/model/graph.ts    the cell graph + the agent tools
  *   src/ui/               components

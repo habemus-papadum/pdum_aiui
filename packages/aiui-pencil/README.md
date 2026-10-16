@@ -1,106 +1,152 @@
 # @habemus-papadum/aiui-pencil
 
-A pressure/tilt-driven pencil: textured raster strokes, erasing, undo, vanishing
-ink, local pointer policies, programmatic input, and a Solid signal adapter.
-
-```sh
-npm install @habemus-papadum/aiui-pencil
-```
-
-Everything is exported from the package root:
-
-| Component | Responsibility |
-| --- | --- |
-| `penSample`, `planStroke`, presets and geometry | Normalize input; filter, preserve corners, interpolate, and produce pressure/tilt/velocity-sensitive dabs. |
-| `PencilSurface` | Own a canvas, render strokes, retain undoable raster tiles, flatten older ink, erase, fade, resize, and translate. |
-| `bindPenInput` | Pencil priority, palm rejection, finger/mouse drawing, coalesced samples, two-finger pan/pinch callbacks, and pointer lifecycle. Used by the surface's default local input. |
-| `guardPenControls`, `penWriting` | Protect surrounding controls from palm touches during writing and briefly after pen-up. |
-| `inkSignals` | Expose committed and live stroke data to Solid. Live updates are throttled cumulative snapshots; no samples are dropped. |
-
-## Use a surface
+Editable stroke input, independent geometry processing, Canvas views, fading,
+and Solid observation. Ink can select, annotate, or author content; the library
+requires no classification of the user's intent.
 
 ```ts
 import { PencilSurface, WRITE, inkSignals } from "@habemus-papadum/aiui-pencil";
 
 const paper = new PencilSurface({ target: container, params: () => WRITE });
 paper.setActive(true);
-const ink = inkSignals(paper);
-// ink.strokes() / ink.live() are Solid accessors.
-// On final disposal: ink.dispose(); paper.dispose().
+const ink = inkSignals(paper.document);
+// ink.strokes(), ink.live(), ink.snapshot()
+
+// Dispose owners when finished; unmounting a view can simply park it.
+ink.dispose();
+paper.dispose();
 ```
 
-The container needs a positioned, nonzero box. `setActive` controls whether the
-canvas intercepts local pointers; `localInput: false` creates a surface driven
-entirely by application code. A surface owns its DOM and must be disposed by its
-application owner, not by each component that temporarily adopts its canvas.
+The container needs a positioned, nonzero box. `setActive(false)` cancels owned
+pointer input and parks rendering. The document survives disposal of its views.
 
-## Feed recorded or generated samples
+| Import | Contents |
+| --- | --- |
+| Package root | Convenient combined API |
+| `./core` | Framework-free document, sessions, samples, geometry, and brush planning |
+| `./input` | Browser binding, pure contact policy, and surrounding control guards |
+| `./canvas` | Canvas views, presentation effects, attachments, and `PencilSurface` |
+| `./solid` | `inkSignals`: consistent snapshots with throttled live observation |
+
+## Data, editing, and captures
 
 ```ts
-paper.beginStroke("stroke-1", { tool: "draw", params: WRITE, point: samples[0] });
-paper.appendPoints("stroke-1", samples.slice(1));
-paper.endStroke("stroke-1");
-// Or discard an unfinished mark: paper.cancelStroke("stroke-1").
+import { createInkDocument, createInkSession, WRITE } from "@habemus-papadum/aiui-pencil/core";
+
+const document = createInkDocument({ historyLimit: 64 });
+const input = createInkSession(document, { params: WRITE });
+input.begin("pen", samples[0]);
+input.append("pen", samples.slice(1));
+input.finish("pen");
+
+const capture = document.capture();
+// Submit this frozen evidence with the application's speech and context.
+// After applying a result, remove only captured records still at their revisions:
+document.retire(capture);
+document.undo();
+input.dispose();
 ```
 
-Samples use canvas CSS pixels and carry pressure, orientation, and time. IDs must
-be unique among active strokes. Start/end/cancel callbacks apply to programmatic
-input too. Pass `notify: false` to `beginStroke` for replay: pixels and drawing
-subscriptions update, but application stroke callbacks do not fire. Internal
-resize/translation rebuilds also suppress these callbacks.
+Completed strokes retain stable IDs, immutable samples, their own brush profile,
+placement, and partial-erasure masks. `document.setParams(ids, params)` reprocesses
+existing ink without recreating strokes. `setTransform`, `remove`, `clear`,
+`undo`, and `redo` are document edits. `clear()` clears completed ink; sessions
+own cancellation of their drafts.
+
+The mechanical tools are `draw`, `erase` (a continuous circular footprint), and
+`erase-stroke`. One completed eraser gesture is one undo step. Erasure targets
+completed strokes present when the gesture begins; subsequent ink is unaffected.
+Partial erasure preserves source points and records coverage. A raw centerline
+alone does not describe the remaining visible ink.
+
+## Views and fading
+
+`createCanvasInkView({ document, target })` displays shared ink without owning
+input. `view.setViewport({ x, y, scale, rotation })` pans, zooms, and rotates without
+changing the document (`rotation` is clockwise radians, default zero);
+`view.evictCache()` drops only cached pixels. `view.renderCapture(capture, width,
+height, density)` renders an independent canvas of frozen ink at the view's
+current viewport.
+
+`InkPresentation` supplies crossfade or hold/charge/pop effects. The pop spreads
+ink outward and hollows its middle before it disappears. Set `fadeSec` and
+optionally `fadeCurve` on `PencilSurface`; call `paper.refresh()` after changing
+those application controls. Completed fades stay hidden when the duration changes,
+including when it is set to zero. Zero keeps visible and new ink on screen.
+Fading retains data by default, so captures can still show faded ink. `expireFadedInk: true`
+removes expired records through a separate timer and clears the working undo
+history at that expiry boundary. Captures remain valid.
+
+`paper.fadeCompleted(seconds)` animates out the completed ink captured at the
+call, then discards unchanged records. New or live ink survives. Pass `false`
+as the second argument to hide that capture without removing its records.
+
+For an overlay aligned with a scroll container's viewport, the application can
+attach ink to the scrolling content:
+
+```ts
+import { bindInkAttachment } from "@habemus-papadum/aiui-pencil/canvas";
+
+const attachment = bindInkAttachment({
+  surface: paper,
+  scrollTarget: scroller,
+  viewport: () => ({ x: -scroller.scrollLeft, y: -scroller.scrollTop, scale: 1 }),
+  resizeTargets: [scroller],
+});
+```
+
+This mapping assumes the overlay shares the scroller's visible origin and does
+not itself scroll. If reflow makes the mapping uncertain, call
+`attachment.invalidate()` to hide the overlay and cancel local input while
+preserving ink. Call `resume()` after establishing a valid mapping, and
+`dispose()` when that attachment is finished.
 
 ## Input and navigation
 
-The first pen contact latches pen mode for that binding's lifetime: fingers then
-stop drawing. A pencil cancels an in-progress finger stroke; palm-sized contacts
-never draw. Two fingers pan/pinch even when their reported contact size is large,
-except while writing or during the 500 ms post-pen cooldown. A second finger
-cancels the first finger's provisional mark. Pointer cancellation, capture loss,
-blur, and disposal discard unfinished ink.
+The browser binding uses pen priority, coalesced input, provisional finger
+cancellation, and palm rejection. Configure `inputOptions` on `PencilSurface` or
+use `bindPenInput` directly. Automatic pen latching and explicit pen enablement
+are both available; finger drawing and navigation are configurable separately.
+`onSamples` reports observed/accepted input and prediction telemetry. Predictions
+are not committed as real samples.
 
-`onPan(du, dv)` and `onZoom(centerU, centerV, scale)` on `PencilSurface` report
-navigation gestures. Pan and centre coordinates are fractions of the canvas;
-scale is incremental. **The application decides how to change its view.** The
-surface does not scroll a page or implement a camera automatically.
+In Pencil mode, `PencilSurface` applies two-finger pan, zoom, and rotation by
+default once the pen is lifted. Set `navigation: false` to disable it, or use
+`navigation: { pan: true, zoom: true, rotate: false, minScale: 0.25, maxScale: 4 }`
+to choose operations and zoom limits. Operation flags also accept getters for
+live controls. `onViewportChange(viewport, reason)` lets the application synchronize
+underlying content. The lower-level binding emits one `onNavigate` intent with
+previous/current centroids, scale ratio, and angular delta.
 
-For custom input ownership use `bindPenInput(element, { sink, bounds?, onPan?,
-onZoom?, ... })`. It has no dependency on a renderer, video, transport, or Solid.
-Give a custom input element `touch-action: none` so the browser does not take
-over its drawing/navigation gestures. The returned binding exposes
-activity/counters, `cancel()`, and `dispose()`.
-`data-pencil-input-ignore` excludes controls nested inside the input element.
+Contacts present during writing cannot become navigation fingers until lifted.
+`guardPenControls` shares the binding's activity with surrounding controls and
+retains its separate cooldown. Contact-size filtering is opt-in with
+`inputOptions: { palmContactPx: ... }`; a browser's reported contact dimensions
+do not reliably distinguish a finger from a palm. Actual iPad pen, palm, and
+Safari gesture behavior requires device testing.
 
-`guardPenControls(controls, () => paper.input)` returns a cleanup function. The lab
-uses it around its controls; it keeps a refused touch blocked through release.
-
-## Demos and checks
+## Run and verify
 
 ```sh
-pnpm -C demos/circle dev                  # circle scoring, fade, guidance modes
-pnpm -C packages/aiui-pencil lab          # local brush tuning and telemetry
-LAB_INTERFACE=en0 pnpm -C packages/aiui-pencil lab # skip the network picker
+pnpm -C demos/circle dev
+pnpm -C packages/aiui-pencil lab
+LAB_INTERFACE=en0 pnpm -C packages/aiui-pencil lab
 pnpm -C packages/aiui-pencil test
 pnpm -C packages/aiui-pencil test:browser
+pnpm -C packages/aiui-pencil typecheck
+pnpm exec tsx packages/aiui-pencil/lab/benchmark-geometry.ts
 ```
 
-The lab listens on all network interfaces by default. At startup, choose the
-number of the interface on the same network as your iPad (usually `en0` on a Mac).
-Copy the printed **iPad** URL and paste it into Safari with Universal Clipboard.
-The picker lists external IPv4 addresses, avoiding the many IPv6 addresses on a
-Mac. `LAB_INTERFACE` accepts an interface name or an exact IPv4 address. With one
-address, or without an interactive terminal, the first address is selected
-automatically, preferring Ethernet/Wi-Fi interfaces. The URL uses Vite's actual
-port, including when its default port is occupied. `--host 127.0.0.1` keeps a run
-local and skips the picker.
+The lab listens on all network interfaces. Choose an IPv4 interface on the iPad's
+network and copy the printed URL into Safari using Universal Clipboard.
+`LAB_INTERFACE` accepts an interface name or exact IPv4 address; the URL includes
+the actual selected port. `--host 127.0.0.1` keeps the server local.
 
-The lab retains raw/filtered/corner/dab diagnostics and replays existing strokes
-when brush parameters change. Circle remains a gallery demo. Neither needs a
-pairing service or remote host.
+The lab provides geometry diagnostics, input telemetry, editable profiles,
+whole/partial erasing, undo/redo, cache eviction, and a capture/review fixture.
+Its patterned DOM page supports real scrolling, linked or independent ink
+navigation, and deliberate reflow. Scene controls exercise pan, zoom, rotation,
+and the explicit pause/resume boundary when reflow makes alignment uncertain.
+Circle demonstrates live measurement followed by fading ink and a retained score.
 
-The former remote application, WebRTC sessions, protocol, backend, and sidecar
-were extracted to `../pdum-aiui-intent-tool-v0/extractions/2026-10-11-pencil-connectivity/`
-(relative to the repository root). `./client`, `./server`, and `./sidecar` are
-removed. Other packages' networking is unchanged.
-
-[Getting started](./docs/getting-started.md) ·
-[Architecture and refactoring review](./docs/architecture-review.md)
+[Architecture](./docs/architecture.md) · [Getting started](./docs/getting-started.md)
