@@ -293,8 +293,8 @@
 /* ── RichTeX: the skin the lab carries, here for the one equation ─────────── */
 
 .catalog .cat-eq {
-  --aiui-rtx-gap: 18px;
-  --aiui-rtx-leader: var(--hairline);
+  --aiui-note-gap: 18px;
+  --aiui-note-leader-color: var(--hairline);
   font-size: 1.35rem;
   padding: var(--space-xs) 0 var(--space-2xs);
 }
@@ -310,7 +310,7 @@
   background: color-mix(in srgb, currentColor 12%, transparent);
   box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 12%, transparent);
 }
-.catalog .aiui-rtx-note {
+.catalog .aiui-rtx .aiui-note {
   font-family: var(--stack-sans);
   font-size: 0.72rem;
   line-height: 1.3;
@@ -318,23 +318,23 @@
   padding-top: 4px;
   white-space: nowrap;
 }
-.catalog .aiui-rtx-note[data-active="true"] {
+.catalog .aiui-rtx .aiui-note[data-active="true"] {
   color: var(--ink);
 }
-.catalog .aiui-rtx-knob {
+.catalog .aiui-rtx .aiui-knob {
   border-bottom: 1px dashed var(--hairline);
   padding-bottom: 1px;
   border-radius: 0;
   transition: border-color 160ms ease;
 }
-.catalog .aiui-rtx-knob:hover,
-.catalog .aiui-rtx-knob:focus-visible,
-.catalog .aiui-rtx-knob[data-scrubbing="true"] {
+.catalog .aiui-rtx .aiui-knob:hover,
+.catalog .aiui-rtx .aiui-knob:focus-visible,
+.catalog .aiui-rtx .aiui-knob[data-scrubbing="true"] {
   border-bottom-color: var(--accent);
   border-bottom-style: solid;
 }
-.catalog .aiui-rtx-readout {
-  --aiui-rtx-readout-gap: 10px;
+.catalog .aiui-knob-readout {
+  --aiui-knob-readout-gap: 10px;
   display: inline-flex;
   align-items: baseline;
   gap: 0.4em;
@@ -346,7 +346,7 @@
   font-size: 0.72rem;
   color: var(--ink);
 }
-.catalog .aiui-rtx-readout-name {
+.catalog .aiui-knob-readout-name {
   font-size: 0.62rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -415,7 +415,7 @@
   font-weight: 600;
 }
 .catalog [data-active="true"] .cat-chip,
-.catalog .aiui-mmd-note[data-active="true"] .cat-chip {
+.catalog .aiui-mmd .aiui-note[data-active="true"] .cat-chip {
   border-color: var(--ink);
   color: var(--ink);
 }

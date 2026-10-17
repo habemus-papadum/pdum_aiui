@@ -103,7 +103,7 @@
   font-weight: 600;
 }
 
-.aiui-mmd-note[data-active="true"] .mmd-lab-chip {
+.aiui-mmd .aiui-note[data-active="true"] .mmd-lab-chip {
   border-color: var(--ink);
   color: var(--ink);
 }

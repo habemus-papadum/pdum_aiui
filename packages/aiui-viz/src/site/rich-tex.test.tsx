@@ -10,7 +10,7 @@ import { createSignal } from "solid-js";
 import { afterEach, describe, expect, it } from "vitest";
 import { control } from "../control";
 import { resetControlSurface, tick } from "../testing";
-import { assembleTeX, RichTeX, renderMarked, resolveNoteShifts, TERM_ATTR, Term } from "./rich-tex";
+import { assembleTeX, RichTeX, renderMarked, TERM_ATTR, Term } from "./rich-tex";
 
 let dispose: (() => void) | undefined;
 afterEach(() => {
@@ -228,13 +228,15 @@ describe("<RichTeX>", () => {
         <Term id="z">{"z"}</Term>
       </RichTeX>
     ));
-    expect(
-      host.querySelector(".aiui-rtx-notes-below .aiui-rtx-note[data-for=x] i")?.textContent,
-    ).toBe("under");
-    expect(
-      host.querySelector(".aiui-rtx-notes-above .aiui-rtx-note[data-for=y] b")?.textContent,
-    ).toBe("over");
-    expect(host.querySelectorAll(".aiui-rtx-note").length).toBe(2);
+    expect(host.querySelector(".aiui-notes-below .aiui-note[data-for=x] i")?.textContent).toBe(
+      "under",
+    );
+    expect(host.querySelector(".aiui-notes-above .aiui-note[data-for=y] b")?.textContent).toBe(
+      "over",
+    );
+    expect(host.querySelectorAll(".aiui-note").length).toBe(2);
+    // The strips are the shared layer's margin layout, one per side.
+    expect(host.querySelectorAll(".aiui-notes.aiui-notes-margin").length).toBe(2);
   });
 
   it("renders inline without a notes layer", () => {
@@ -246,7 +248,7 @@ describe("<RichTeX>", () => {
       </RichTeX>
     ));
     expect(host.querySelector("span.math-inline.aiui-rtx")).not.toBeNull();
-    expect(host.querySelector(".aiui-rtx-note")).toBeNull();
+    expect(host.querySelector(".aiui-note")).toBeNull();
   });
 
   it("shows a structural error in place instead of throwing", () => {
@@ -272,7 +274,7 @@ describe("knobs — a term bound to a control", () => {
       </RichTeX>
     ));
     const span = host.querySelector<HTMLElement>(`[${TERM_ATTR}="rtx-eps-a"]`);
-    expect(span?.classList.contains("aiui-rtx-knob")).toBe(true);
+    expect(span?.classList.contains("aiui-knob")).toBe(true);
     expect(span?.getAttribute("data-control")).toBe("rtx-eps-a");
     expect(span?.getAttribute("role")).toBe("slider");
     expect(span?.getAttribute("tabindex")).toBe("0");
@@ -295,17 +297,20 @@ describe("knobs — a term bound to a control", () => {
     ));
     const span = host.querySelector<HTMLElement>(`[${TERM_ATTR}="rtx-eps-b"]`) as HTMLElement;
     const math = host.querySelector(".aiui-rtx-math") as HTMLElement;
-    expect(host.querySelector(".aiui-rtx-readout")).toBeNull();
+    expect(host.querySelector(".aiui-knob-readout")).toBeNull();
     span.dispatchEvent(new PE("pointerover", { bubbles: true }));
     await tick();
-    expect(host.querySelector(".aiui-rtx-readout")?.textContent).toContain("0.20");
+    expect(host.querySelector(".aiui-knob-readout")?.textContent).toContain("0.20");
+    expect(host.querySelector(".aiui-knob-readout")?.getAttribute("data-control")).toBe(
+      "rtx-eps-b",
+    );
 
     span.dispatchEvent(new PE("pointerdown", { bubbles: true, button: 0, clientX: 100 }));
     expect(span.getAttribute("data-scrubbing")).toBe("true");
     math.dispatchEvent(new PE("pointermove", { bubbles: true, clientX: 160 })); // 60 of 240 px: +0.25
     await tick();
     expect(eps.get()).toBeCloseTo(0.45, 9);
-    expect(host.querySelector(".aiui-rtx-readout")?.textContent).toContain("0.45");
+    expect(host.querySelector(".aiui-knob-readout")?.textContent).toContain("0.45");
     math.dispatchEvent(new PE("pointermove", { bubbles: true, clientX: 1000 })); // past the range: clamped
     await tick();
     expect(eps.get()).toBe(1);
@@ -314,7 +319,7 @@ describe("knobs — a term bound to a control", () => {
     span.dispatchEvent(new PE("pointerleave", { bubbles: true }));
     math.dispatchEvent(new PE("pointerleave", { bubbles: false }));
     await tick();
-    expect(host.querySelector(".aiui-rtx-readout")).toBeNull();
+    expect(host.querySelector(".aiui-knob-readout")).toBeNull();
   });
 
   it("arrow keys step a focused knob; Shift multiplies; Home and End go to the bounds", async () => {
@@ -357,38 +362,6 @@ describe("knobs — a term bound to a control", () => {
     ]);
     expect(named.error).toBeUndefined();
     expect(named.terms.map((t) => t.id)).toEqual(["eps1", "eps2"]);
-  });
-});
-
-describe("resolveNoteShifts — notes pushed apart, left to right", () => {
-  it("leaves separated notes alone and moves an overlapping one right by the least that clears", () => {
-    const shifts = resolveNoteShifts(
-      [
-        { id: "a", anchor: 50, width: 60 },
-        { id: "b", anchor: 200, width: 60 },
-        { id: "c", anchor: 230, width: 60 }, // would span 200..260 over b's 170..230
-      ],
-      10,
-    );
-    expect([...shifts]).toEqual([
-      ["a", 0],
-      ["b", 0],
-      ["c", 40], // left edge 240 = b's right 230 + the gap; center 270 vs anchor 230
-    ]);
-  });
-
-  it("orders by anchor, not by input, and chains the push", () => {
-    const shifts = resolveNoteShifts(
-      [
-        { id: "late", anchor: 120, width: 100 },
-        { id: "early", anchor: 100, width: 100 },
-        { id: "last", anchor: 140, width: 100 },
-      ],
-      0,
-    );
-    expect(shifts.get("early")).toBe(0); // 50..150
-    expect(shifts.get("late")).toBe(80); // pushed to 150..250, center 200
-    expect(shifts.get("last")).toBe(160); // pushed to 250..350, center 300
   });
 });
 

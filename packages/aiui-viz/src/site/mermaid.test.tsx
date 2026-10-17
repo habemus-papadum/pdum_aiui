@@ -295,11 +295,13 @@ describe("<Mermaid>", () => {
       />
     ));
     await settle();
-    const note = host.querySelector(".aiui-mmd-note") as HTMLElement;
+    const note = host.querySelector(".aiui-note") as HTMLElement;
     expect(note.getAttribute("data-for")).toBe("A");
-    expect(note.classList.contains("aiui-mmd-note-right")).toBe(true);
+    expect(note.classList.contains("aiui-note-right")).toBe(true);
+    expect(note.closest(".aiui-notes-overlay")).not.toBeNull(); // the shared layer, overlaid
     expect(note.querySelector("i.n")?.textContent).toBe("hi");
     const b = el(host, "B");
+    expect(b.classList.contains("aiui-knob")).toBe(true);
     expect(b.getAttribute("data-control")).toBe("epochs");
     expect(b.getAttribute("role")).toBe("slider");
     expect(b.getAttribute("aria-valuenow")).toBe("5");

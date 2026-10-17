@@ -42,6 +42,15 @@
  * the text (a full re-render per change) and land as `!important` rules
  * that fight every stylesheet. Keep the text structural; decorate here.
  *
+ * **Knobs and notes are the shared primitives.** A mark's `control` makes
+ * its element a knob — the gesture, the stamps and the ARIA are `knob.tsx`'s
+ * (`createKnobs`); this component binds the elements after each render and
+ * each marks pass, and resolves a press through its own hit test, so an
+ * edge's wide transparent clone scrubs the edge. A mark's `note` goes to
+ * `notes.tsx`'s `NoteLayer` in its `overlay` layout: one absolute layer over
+ * the diagram, each note beside its element (below, above, left or right),
+ * notes on one rank pushed apart when they would overlap.
+ *
  * **Rendering facts this component is built on** (Mermaid 12.2, measured):
  *  - `render(id, text, container)` must get a FRESH id each time: Mermaid
  *    first removes any element with that id from the document — reuse the
@@ -84,9 +93,11 @@
  */
 import type { JSX } from "@solidjs/web";
 import type { MermaidConfig } from "mermaid";
-import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, onCleanup, Show } from "solid-js";
 import type { ControlBox } from "../control";
-import { withUnit } from "../control-widgets";
+import { createKnobs } from "./knob";
+import { NoteLayer, type NoteSide, type NoteSpec } from "./notes";
+import { ensureStyles } from "./styles";
 
 export type MermaidKind = "node" | "edge" | "cluster";
 
@@ -116,7 +127,7 @@ export interface MermaidMark {
   /** Annotation JSX, in a layer over the diagram, anchored to the element. */
   note?: JSX.Element;
   /** Which side of the element the note sits on. Default `below`. */
-  place?: "below" | "above" | "left" | "right";
+  place?: NoteSide;
   /** Makes the element a KNOB: drag horizontally to scrub this numeric
    * control (the same gesture as a RichTeX term's `control`); arrow keys
    * when focused. Bounds and snapping are the control's own. */
@@ -237,63 +248,17 @@ export function tameStyles(svg: SVGSVGElement): void {
   );
 }
 
-/** An element's box in CSS px relative to the diagram root's top-left. */
-export interface MermaidBox {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-}
-
-function formatKnob(value: number, meta: ControlBox<number>["meta"]): string {
-  const step = meta.step;
-  const shown =
-    step !== undefined && step > 0 && step < 1
-      ? value.toFixed(Math.min(6, Math.max(0, Math.ceil(-Math.log10(step)))))
-      : String(value);
-  return withUnit(shown, meta.unit);
-}
-function perPxOf(control: ControlBox<number>, span: number | undefined): number {
-  const { min, max, step } = control.meta;
-  const px = span ?? 240;
-  if (min !== undefined && max !== undefined && max > min) return (max - min) / px;
-  return step ?? 1;
-}
-function keyStepOf(control: ControlBox<number>): number {
-  const { min, max, step } = control.meta;
-  if (step !== undefined && step > 0) return step;
-  if (min !== undefined && max !== undefined && max > min) return (max - min) / 100;
-  return 1;
-}
-const leafName = (name: string): string => name.slice(name.lastIndexOf("/") + 1);
-
 // ── structural CSS (positions only; the look is the consumer's) ─────────────
 
 export const MERMAID_STYLES = `
 .aiui-mmd { position: relative; }
-.aiui-mmd-svg > svg { display: block; }
+.aiui-mmd-svg > svg { display: block; max-width: 100%; height: auto; }
 .aiui-mmd-stage { position: absolute; left: 0; top: 0; width: 100%; visibility: hidden; pointer-events: none; }
 .aiui-mmd-hit { fill: none; stroke: transparent; pointer-events: stroke; }
 .aiui-mmd [${MERMAID_ID_ATTR}] { cursor: default; }
-.aiui-mmd [data-control] { cursor: ew-resize; touch-action: none; outline: none; }
-.aiui-mmd-notes { position: absolute; inset: 0; pointer-events: none; }
-.aiui-mmd-note { position: absolute; pointer-events: auto; }
-.aiui-mmd-note-below { transform: translate(-50%, var(--aiui-mmd-gap, 6px)); }
-.aiui-mmd-note-above { transform: translate(-50%, calc(-100% - var(--aiui-mmd-gap, 6px))); }
-.aiui-mmd-note-right { transform: translate(var(--aiui-mmd-gap, 6px), -50%); }
-.aiui-mmd-note-left { transform: translate(calc(-100% - var(--aiui-mmd-gap, 6px)), -50%); }
 .aiui-mmd-error { color: #cc0000; font-family: ui-monospace, monospace; font-size: 0.8em; white-space: pre-wrap; margin: 0; }
 `;
-
 const STYLE_MARK = "data-aiui-mermaid";
-function ensureStyles(): void {
-  if (typeof document === "undefined") return;
-  if (document.head.querySelector(`style[${STYLE_MARK}]`)) return;
-  const el = document.createElement("style");
-  el.setAttribute(STYLE_MARK, "");
-  el.textContent = MERMAID_STYLES;
-  document.head.append(el);
-}
 
 // ── the component ────────────────────────────────────────────────────────────
 
@@ -308,10 +273,11 @@ interface Indexed {
 const SHAPE = ":scope > rect, :scope > polygon, :scope > circle, :scope > ellipse, :scope > path";
 
 export function Mermaid(props: MermaidProps): JSX.Element {
-  ensureStyles();
+  ensureStyles(STYLE_MARK, MERMAID_STYLES);
   const source = createMemo(() => withConfig(props.text, props.config));
   const [error, setError] = createSignal<string | undefined>();
-  const [boxes, setBoxes] = createSignal<ReadonlyMap<string, MermaidBox>>(new Map());
+  // Bumped per swapped-in svg: the notes layer re-measures its anchors.
+  const [rendered, setRendered] = createSignal(0);
 
   let root!: HTMLElement;
   let host!: HTMLElement;
@@ -319,34 +285,8 @@ export function Mermaid(props: MermaidProps): JSX.Element {
   // id → element, for the CURRENT svg; rebuilt on every swap.
   let index = new Map<string, Indexed>();
   let marksNow: Readonly<Record<string, MermaidMark>> = {};
-  let valuesNow: ReadonlyMap<string, number> = new Map();
   // A fresh id per render (see the module doc); the newest request wins.
   let seq = 0;
-
-  // ── geometry ──────────────────────────────────────────────────────────────
-  const measure = (): void => {
-    if (root === undefined || !root.isConnected) return;
-    const r = root.getBoundingClientRect();
-    const next = new Map<string, MermaidBox>();
-    for (const [id, { el }] of index) {
-      const b = el.getBoundingClientRect();
-      next.set(id, { left: b.left - r.left, top: b.top - r.top, width: b.width, height: b.height });
-    }
-    setBoxes(next);
-  };
-  let raf: number | undefined;
-  const scheduleMeasure = (): void => {
-    if (typeof requestAnimationFrame !== "function") return;
-    if (raf !== undefined) cancelAnimationFrame(raf);
-    raf = requestAnimationFrame(() => {
-      raf = undefined;
-      measure();
-    });
-  };
-  const ro = typeof ResizeObserver === "function" ? new ResizeObserver(scheduleMeasure) : undefined;
-  if (typeof document !== "undefined" && "fonts" in document) {
-    document.fonts.ready.then(scheduleMeasure, () => {});
-  }
 
   // ── hits ──────────────────────────────────────────────────────────────────
   const hitOf = (target: Element | null): MermaidHit | undefined => {
@@ -373,61 +313,9 @@ export function Mermaid(props: MermaidProps): JSX.Element {
     if (hit !== undefined) props.onClick?.(hit, e);
   };
 
-  // ── knobs: drag to scrub, arrows when focused ─────────────────────────────
-  interface Scrub {
-    id: string;
-    control: ControlBox<number>;
-    startX: number;
-    startV: number;
-    perPx: number;
-  }
-  let scrub: Scrub | undefined;
-  const knobOf = (id: string | undefined): MermaidMark | undefined =>
-    id === undefined ? undefined : marksNow[id]?.control === undefined ? undefined : marksNow[id];
-  const onPointerDown = (e: PointerEvent): void => {
-    if (e.button !== 0) return;
-    const hit = hitOf(e.target as Element | null);
-    const knob = knobOf(hit?.id);
-    if (hit === undefined || knob?.control === undefined) return;
-    scrub = {
-      id: hit.id,
-      control: knob.control,
-      startX: e.clientX,
-      startV: knob.control.get(),
-      perPx: perPxOf(knob.control, knob.span),
-    };
-    try {
-      host.setPointerCapture?.(e.pointerId);
-    } catch {
-      /* synthetic pointer — no capture */
-    }
-    e.preventDefault();
-    hit.el.setAttribute("data-scrubbing", "true");
-  };
-  const onPointerMove = (e: PointerEvent): void => {
-    if (scrub === undefined) return;
-    scrub.control.set((scrub.startV + (e.clientX - scrub.startX) * scrub.perPx) as never);
-  };
-  const endScrub = (): void => {
-    if (scrub === undefined) return;
-    index.get(scrub.id)?.el.removeAttribute("data-scrubbing");
-    scrub = undefined;
-  };
-  const onKeyDown = (e: KeyboardEvent): void => {
-    const hit = hitOf(e.target as Element | null);
-    const control = knobOf(hit?.id)?.control;
-    if (control === undefined) return;
-    const unit = keyStepOf(control) * (e.shiftKey ? 10 : 1);
-    const v = control.get();
-    let next: number | undefined;
-    if (e.key === "ArrowRight" || e.key === "ArrowUp") next = v + unit;
-    else if (e.key === "ArrowLeft" || e.key === "ArrowDown") next = v - unit;
-    else if (e.key === "Home") next = control.meta.min;
-    else if (e.key === "End") next = control.meta.max;
-    if (next === undefined) return;
-    e.preventDefault();
-    control.set(next as never);
-  };
+  // The knobs: a press anywhere on an addressable element (a label, an edge's
+  // wide clone) resolves to the element the mark decorated.
+  const knobs = createKnobs({ resolve: (target) => hitOf(target)?.el });
 
   // Delegated to the host: the SVG is replaced on every render, the host
   // is not. Attached where the host is adopted (the render effect below —
@@ -436,29 +324,17 @@ export function Mermaid(props: MermaidProps): JSX.Element {
   const adopt = (): void => {
     if (adopted) return;
     adopted = true;
-    ro?.observe(root);
     host.addEventListener("pointerover", onPointerOver);
     host.addEventListener("pointerleave", onPointerLeave);
     host.addEventListener("click", onClick);
-    host.addEventListener("pointerdown", onPointerDown);
-    host.addEventListener("pointermove", onPointerMove);
-    host.addEventListener("pointerup", endScrub);
-    host.addEventListener("pointercancel", endScrub);
-    host.addEventListener("keydown", onKeyDown);
+    knobs.attach(host);
   };
   onCleanup(() => {
     seq++; // any render in flight is now stale
-    ro?.disconnect();
-    if (raf !== undefined) cancelAnimationFrame(raf);
     if (!adopted) return;
     host.removeEventListener("pointerover", onPointerOver);
     host.removeEventListener("pointerleave", onPointerLeave);
     host.removeEventListener("click", onClick);
-    host.removeEventListener("pointerdown", onPointerDown);
-    host.removeEventListener("pointermove", onPointerMove);
-    host.removeEventListener("pointerup", endScrub);
-    host.removeEventListener("pointercancel", endScrub);
-    host.removeEventListener("keydown", onKeyDown);
   });
 
   // ── the index: ids → elements, stamped; hit areas under the edges ─────────
@@ -517,12 +393,7 @@ export function Mermaid(props: MermaidProps): JSX.Element {
 
   // ── marks: attributes + inline style, idempotent ──────────────────────────
   const applied = new Map<string, string[]>();
-  /** `values`: each knob's control value, read in the tracking scope that
-   * called this (an untracked read here would be flagged, and stale). */
-  const applyMarks = (
-    marks: Readonly<Record<string, MermaidMark>>,
-    values: ReadonlyMap<string, number>,
-  ): void => {
+  const applyMarks = (marks: Readonly<Record<string, MermaidMark>>): void => {
     // Clear what the previous pass set on elements no longer marked.
     for (const [id, prev] of applied) {
       if (id in marks) continue;
@@ -535,7 +406,7 @@ export function Mermaid(props: MermaidProps): JSX.Element {
           (p as HTMLElement).style.stroke = "";
           (p as HTMLElement).style.fill = "";
         }
-        clearKnob(hit.el);
+        knobs.unbind(hit.el);
       }
       applied.delete(id);
     }
@@ -554,34 +425,10 @@ export function Mermaid(props: MermaidProps): JSX.Element {
         s.stroke = mark.color ?? "";
         s.fill = hit.kind === "edge" ? "" : (mark.fill ?? "");
       }
-      if (mark.control !== undefined) setKnob(hit.el, mark.control, values.get(id));
-      else clearKnob(hit.el);
+      if (mark.control !== undefined)
+        knobs.bind(hit.el, { control: mark.control, span: mark.span });
+      else knobs.unbind(hit.el);
     }
-  };
-  const setKnob = (el: Element, control: ControlBox<number>, v: number | undefined): void => {
-    el.setAttribute("data-control", control.name);
-    el.setAttribute("tabindex", "0");
-    el.setAttribute("role", "slider");
-    el.setAttribute("aria-label", control.description ?? leafName(control.name));
-    if (control.meta.min !== undefined) el.setAttribute("aria-valuemin", String(control.meta.min));
-    if (control.meta.max !== undefined) el.setAttribute("aria-valuemax", String(control.meta.max));
-    if (v === undefined) return;
-    el.setAttribute("aria-valuenow", String(v));
-    el.setAttribute("aria-valuetext", formatKnob(v, control.meta));
-  };
-  const clearKnob = (el: Element): void => {
-    if (!el.hasAttribute("data-control")) return;
-    for (const a of [
-      "data-control",
-      "tabindex",
-      "role",
-      "aria-label",
-      "aria-valuemin",
-      "aria-valuemax",
-      "aria-valuenow",
-      "aria-valuetext",
-    ])
-      el.removeAttribute(a);
   };
 
   // ── render: async, latest-wins; the previous svg stays until the next is ready
@@ -589,12 +436,13 @@ export function Mermaid(props: MermaidProps): JSX.Element {
     host.innerHTML = svg;
     const el = host.querySelector("svg");
     applied.clear();
+    knobs.clear();
     if (el !== null) {
       tameStyles(el);
       buildIndex(el);
     } else index = new Map();
-    applyMarks(marksNow, valuesNow);
-    scheduleMeasure();
+    applyMarks(marksNow);
+    setRendered((n) => n + 1);
     return el;
   };
   createEffect(source, (src) => {
@@ -625,70 +473,50 @@ export function Mermaid(props: MermaidProps): JSX.Element {
   // Marks: one memo both consumers read (a props getter re-evaluates per
   // read, and a note is JSX — built once per change, not once per reader).
   // The object literal's fields were evaluated when it was built, so the
-  // memo already tracks them; a knob's control is read here, in the
-  // tracking scope, and its value handed to the handler.
+  // memo already tracks them; a knob's value is the knob controller's to
+  // follow, so a drag never re-runs this pass.
   const marks = createMemo(() => props.marks ?? {});
-  createEffect(
-    () => {
-      const m = marks();
-      const values = new Map<string, number>();
-      for (const [id, mark] of Object.entries(m)) {
-        if (mark.control !== undefined) values.set(id, mark.control.get());
-      }
-      return { m, values };
-    },
-    ({ m, values }) => {
-      marksNow = m;
-      valuesNow = values;
-      applyMarks(m, values);
-    },
-  );
+  createEffect(marks, (m) => {
+    marksNow = m;
+    applyMarks(m);
+  });
 
   // ── notes ─────────────────────────────────────────────────────────────────
-  // One wrapper per mark OBJECT, so a consumer that keeps a mark's reference
+  // One spec per mark OBJECT, so a consumer that keeps a mark's reference
   // (the marks of untouched nodes, when only an edge's changed) keeps its
-  // note's DOM too: <For> keys on the wrapper.
-  interface NoteItem {
-    id: string;
-    mark: MermaidMark;
-  }
-  const wrappers = new WeakMap<MermaidMark, NoteItem>();
-  let lastNotes: NoteItem[] = [];
-  const notes = createMemo(() => {
+  // note's DOM too: the layer's <For> keys on the spec.
+  const specs = new WeakMap<MermaidMark, NoteSpec>();
+  let lastNotes: NoteSpec[] = [];
+  const notes = createMemo((): NoteSpec[] => {
     const next = Object.entries(marks())
       .filter(([, m]) => "note" in m)
       .map(([id, m]) => {
-        let w = wrappers.get(m);
-        if (w === undefined || w.id !== id) {
-          w = { id, mark: m };
-          wrappers.set(m, w);
+        let s = specs.get(m);
+        if (s === undefined || s.id !== id) {
+          s = {
+            id,
+            get side() {
+              return m.place ?? "below";
+            },
+            get active() {
+              return m.active === true;
+            },
+            get note() {
+              return m.note;
+            },
+          };
+          specs.set(m, s);
         }
-        return w;
+        return s;
       });
-    // The same wrappers in the same order is the same list: hand back the
+    // The same specs in the same order is the same list: hand back the
     // previous array so the memo's own equality holds and <For> stays idle.
-    if (next.length === lastNotes.length && next.every((w, i) => w === lastNotes[i])) {
+    if (next.length === lastNotes.length && next.every((s, i) => s === lastNotes[i])) {
       return lastNotes;
     }
     lastNotes = next;
     return next;
   });
-  createEffect(
-    () => notes().length,
-    () => scheduleMeasure(),
-  );
-  const anchor = (b: MermaidBox, place: MermaidMark["place"]): { x: number; y: number } => {
-    switch (place) {
-      case "above":
-        return { x: b.left + b.width / 2, y: b.top };
-      case "left":
-        return { x: b.left, y: b.top + b.height / 2 };
-      case "right":
-        return { x: b.left + b.width, y: b.top + b.height / 2 };
-      default:
-        return { x: b.left + b.width / 2, y: b.top + b.height };
-    }
-  };
 
   const rootClass = () => (props.class === undefined ? "aiui-mmd" : `aiui-mmd ${props.class}`);
 
@@ -714,34 +542,13 @@ export function Mermaid(props: MermaidProps): JSX.Element {
           stage = el;
         }}
       />
-      <Show when={notes().length > 0}>
-        <div class="aiui-mmd-notes">
-          <For each={notes()}>
-            {(n) => {
-              const box = () => boxes().get(n.id);
-              const place = () => n.mark.place ?? "below";
-              const at = () => {
-                const b = box();
-                return b === undefined ? undefined : anchor(b, place());
-              };
-              return (
-                <div
-                  class={`aiui-mmd-note aiui-mmd-note-${place()}`}
-                  data-for={n.id}
-                  data-active={n.mark.active === true ? "true" : undefined}
-                  style={{
-                    left: `${at()?.x ?? 0}px`,
-                    top: `${at()?.y ?? 0}px`,
-                    visibility: at() === undefined ? "hidden" : undefined,
-                  }}
-                >
-                  {n.mark.note}
-                </div>
-              );
-            }}
-          </For>
-        </div>
-      </Show>
+      <NoteLayer
+        layout="overlay"
+        host={() => root}
+        anchorOf={(id) => index.get(id)?.el}
+        notes={notes()}
+        version={rendered()}
+      />
     </div>
   );
 }

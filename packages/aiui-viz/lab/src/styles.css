@@ -29,8 +29,8 @@
 /* ── the equation and its terms ─────────────────────────────────────────── */
 
 .rtx-lab-eq {
-  --aiui-rtx-gap: 18px;
-  --aiui-rtx-leader: var(--hairline);
+  --aiui-note-gap: 18px;
+  --aiui-note-leader-color: var(--hairline);
   font-size: 1.05rem;
   padding-block: var(--space-sm, 12px);
 }
@@ -71,7 +71,7 @@
 
 /* ── notes ──────────────────────────────────────────────────────────────── */
 
-.aiui-rtx-note {
+.aiui-rtx .aiui-note {
   font-family: var(--font-sans, system-ui, sans-serif);
   font-size: 0.72rem;
   line-height: 1.3;
@@ -80,7 +80,7 @@
   white-space: nowrap;
 }
 
-.aiui-rtx-note[data-active="true"] {
+.aiui-rtx .aiui-note[data-active="true"] {
   color: var(--ink);
 }
 
@@ -274,22 +274,22 @@
 
 /* ── knobs: a control's symbol in the equation ─────────────────────────── */
 
-.aiui-rtx-knob {
+.aiui-rtx .aiui-knob {
   border-bottom: 1px dashed var(--hairline);
   padding-bottom: 1px;
   border-radius: 0;
   transition: border-color 160ms ease;
 }
 
-.aiui-rtx-knob:hover,
-.aiui-rtx-knob:focus-visible,
-.aiui-rtx-knob[data-scrubbing="true"] {
+.aiui-rtx .aiui-knob:hover,
+.aiui-rtx .aiui-knob:focus-visible,
+.aiui-rtx .aiui-knob[data-scrubbing="true"] {
   border-bottom-color: var(--accent);
   border-bottom-style: solid;
 }
 
-.aiui-rtx-readout {
-  --aiui-rtx-readout-gap: 10px;
+.aiui-knob-readout {
+  --aiui-knob-readout-gap: 10px;
   display: inline-flex;
   align-items: baseline;
   gap: 0.4em;
@@ -303,11 +303,11 @@
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.06);
 }
 
-.aiui-rtx-readout-value {
+.aiui-knob-readout-value {
   font-variant-numeric: tabular-nums;
 }
 
-.aiui-rtx-readout-name {
+.aiui-knob-readout-name {
   font-size: 0.62rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -396,7 +396,7 @@
 /* On a phone the notes have no room beside the glyphs; the legend chips and
    the captions carry the same numbers. */
 @media (max-width: 600px) {
-  .rtx-lab-eq .aiui-rtx-notes {
+  .rtx-lab-eq .aiui-notes {
     display: none;
   }
 }

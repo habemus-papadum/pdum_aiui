@@ -52,35 +52,15 @@
  * transitions on a term run. One effect carries both: its compute tracks the
  * HTML and every decoration; its handler compares the HTML string first.
  *
- * **Knobs.** A term with `control` is a numeric control's symbol in the
- * equation — the scrub pill's idea (`ControlScrub`), for mathematics. The
- * symbol stays symbolic; hover or focus it and a readout shows the current
- * value; press and drag horizontally to move it (a `span` px drag crosses
- * the control's whole declared range, so every knob feels the same); arrow
- * keys step it when focused. Writes go through the control's own validation,
- * so bounds and snapping are declared once. The span carries
- * `data-control="<name>"`, the attribution contract every control widget
- * keeps, so `locate` and `selection` resolve a knob to its control and the
- * agent's `set` tool moves what the user drags. One control may back several
- * knobs (ε appears twice in a clip); give those explicit ids.
- *
- * **Notes.** A term's `note` is arbitrary JSX rendered in a layer under (or
- * over) the equation, centered on the term's glyphs, with a leader line up to
- * them. Positions come from `getBoundingClientRect` after each render and on
- * every resize/font load; the layer is a one-cell grid, so it sizes to its
- * tallest note without a second measurement. Notes that would overlap are
- * pushed apart left to right ({@link resolveNoteShifts}); a pushed note keeps
- * its leader on the glyphs it belongs to. Each note also learns its term's
- * width (`--aiui-rtx-w`), for a stylesheet that confines notes to their
- * terms. Notes render for display math only — an inline equation has no
- * room for a layer. Placement is "reasonable rules", not a guarantee: notes
- * are marginalia, and a page that needs more than one family of them shows
- * one at a time (a lens). One row per side today. The intended extension,
- * when a page needs it, is ROWS: a note names its row (`row={2}`), rows stack
- * outward from the glyphs on each side — one above, one below, then more —
- * each row running its own collision pass, leaders lengthening through the
- * rows between. The layers are already one-cell grids per side; a row is one
- * more grid cell and a longer leader. Not built until a page asks.
+ * **Knobs and notes are the shared primitives.** A term with `control` is a
+ * knob — the gesture, the readout, the `data-control` stamp and the ARIA are
+ * `knob.tsx`'s (`createKnobs`, `KnobReadout`); this component only says which
+ * spans are knobs after each render. A term's `note` goes to `notes.tsx`'s
+ * `NoteLayer` in its `margin` layout: one strip above the equation, one
+ * below, each a one-cell grid sized to its tallest note, with the collision
+ * pass and the leaders. Notes render for display math only — an inline
+ * equation has no room for a strip. One control may back several knobs (ε
+ * appears twice in a clip); give those explicit ids.
  *
  * **The agent surface.** The root carries `data-tex` with the CLEAN joined
  * source (no markers), so `read-page` emits the equation as the author wrote
@@ -97,10 +77,12 @@
  */
 import type { JSX } from "@solidjs/web";
 import katex from "katex";
-import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
+import { createEffect, createMemo, onCleanup, Show } from "solid-js";
 import type { ControlBox } from "../control";
-import { withUnit } from "../control-widgets";
 import { MATH_TERM_ATTR } from "../math-selection";
+import { createKnobs, KnobReadout } from "./knob";
+import { NoteLayer, type NoteSpec } from "./notes";
+import { ensureStyles } from "./styles";
 import "katex/dist/katex.min.css";
 
 /** The attribute a term's rendered span carries: `data-aiui-term="<id>"`. */
@@ -120,7 +102,7 @@ export interface TermProps {
   class?: string;
   /** Marks the span `data-active="true"` (a linked highlight). Reactive. */
   active?: boolean;
-  /** Annotation JSX, rendered in the notes layer anchored to this term. */
+  /** Annotation JSX, rendered in the notes strip anchored to this term. */
   note?: JSX.Element;
   /** Which side of the equation the note sits on. Default `below`. */
   place?: "below" | "above";
@@ -130,7 +112,7 @@ export interface TermProps {
   /** A click on the term's glyphs. */
   onClick?: () => void;
   /** Makes the term a KNOB: the symbol of this numeric control. Hover for the
-   * value, drag to change it, arrow keys when focused (see the module doc). */
+   * value, drag to change it, arrow keys when focused (see knob.tsx). */
   control?: ControlBox<number>;
   /** Readout formatter for a knob; defaults to the value at the step's
    * precision plus the control's unit. */
@@ -275,70 +257,6 @@ export function renderMarked(marked: string, display: boolean): string {
   return katex.renderToString(marked, { ...KATEX, displayMode: display });
 }
 
-/** A term's glyph box, in CSS px relative to the math host's top-left. */
-export interface TermBox {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-}
-
-/** A note as the layout sees it: where its term's glyphs are centered, how wide it rendered. */
-export interface NoteItem {
-  id: string;
-  /** The anchor x (the term's horizontal center), host px. */
-  anchor: number;
-  width: number;
-}
-
-/**
- * Push notes apart, left to right: each note keeps its anchor unless it
- * would overlap the note before it, in which case it moves right by the
- * least that clears it. Returns each note's horizontal shift from its
- * anchor (0 for an undisturbed note). Pure; one pass over one row — when
- * notes gain rows (see the module doc), each row runs its own pass.
- */
-export function resolveNoteShifts(items: readonly NoteItem[], gap = 8): Map<string, number> {
-  const sorted = [...items].sort((a, b) => a.anchor - b.anchor);
-  const out = new Map<string, number>();
-  let prevRight = Number.NEGATIVE_INFINITY;
-  for (const it of sorted) {
-    let left = it.anchor - it.width / 2;
-    if (left < prevRight + gap) left = prevRight + gap;
-    out.set(it.id, left + it.width / 2 - it.anchor);
-    prevRight = left + it.width;
-  }
-  return out;
-}
-
-/** The knob readout's default formatter: the step's precision, then the unit. */
-function formatKnob(value: number, meta: ControlBox<number>["meta"]): string {
-  const step = meta.step;
-  const shown =
-    step !== undefined && step > 0 && step < 1
-      ? value.toFixed(Math.min(6, Math.max(0, Math.ceil(-Math.log10(step)))))
-      : String(value);
-  return withUnit(shown, meta.unit);
-}
-
-/** Value units per pixel of drag — the scrub pill's rule. */
-function perPxOf(control: ControlBox<number>, span: number | undefined): number {
-  const { min, max, step } = control.meta;
-  const px = span ?? 240;
-  if (min !== undefined && max !== undefined && max > min) return (max - min) / px;
-  return step ?? 1;
-}
-
-/** One keyboard step of a knob: its step, else a hundredth of its range, else 1. */
-function keyStepOf(control: ControlBox<number>): number {
-  const { min, max, step } = control.meta;
-  if (step !== undefined && step > 0) return step;
-  if (min !== undefined && max !== undefined && max > min) return (max - min) / 100;
-  return 1;
-}
-
-const NOTE_GAP = 8;
-
 // ── structural CSS (positions only; the look is the consumer's) ─────────────
 
 export const RICH_TEX_STYLES = `
@@ -347,37 +265,9 @@ export const RICH_TEX_STYLES = `
 .aiui-rtx-math { display: block; }
 .aiui-rtx-inline > .aiui-rtx-stage, .aiui-rtx-inline .aiui-rtx-math { display: inline; }
 .aiui-rtx .katex-display { margin: 0; }
-.aiui-rtx-knob { cursor: ew-resize; touch-action: none; outline: none; }
-.aiui-rtx-readout { position: fixed; z-index: 10; pointer-events: none; white-space: nowrap;
-  transform: translate(-50%, calc(-100% - var(--aiui-rtx-readout-gap, 6px))); }
-.aiui-rtx-notes { display: grid; width: 100%; }
-.aiui-rtx-notes-below { padding-top: var(--aiui-rtx-gap, 16px); }
-.aiui-rtx-notes-above { padding-bottom: var(--aiui-rtx-gap, 16px); align-items: end; }
-.aiui-rtx-note { grid-area: 1 / 1; justify-self: start; position: relative;
-  margin-left: calc((var(--aiui-rtx-x, 0) + var(--aiui-rtx-shift, 0)) * 1px);
-  transform: translateX(-50%); }
-.aiui-rtx-note::before { content: ""; position: absolute;
-  left: calc(50% - var(--aiui-rtx-shift, 0) * 1px); width: 0;
-  border-left: 1px solid var(--aiui-rtx-leader, currentColor); opacity: 0.5;
-  height: calc(var(--aiui-rtx-leader-len, 0) * 1px + var(--aiui-rtx-gap, 16px) - 3px); }
-.aiui-rtx-notes-below .aiui-rtx-note::before { bottom: 100%; }
-.aiui-rtx-notes-above .aiui-rtx-note::before { top: 100%; }
 .aiui-rtx-error { color: #cc0000; font-family: ui-monospace, monospace; white-space: pre-wrap; }
 `;
-
 const STYLE_MARK = "data-aiui-rich-tex";
-function ensureStyles(): void {
-  if (typeof document === "undefined") return;
-  let el = document.head.querySelector<HTMLStyleElement>(`style[${STYLE_MARK}]`);
-  if (el === null) {
-    el = document.createElement("style");
-    el.setAttribute(STYLE_MARK, "");
-    document.head.append(el);
-  }
-  // Refresh, don't just create: a hot edit of the structural CSS must land
-  // on the open page too, or the old rules outlive the module that wrote them.
-  if (el.textContent !== RICH_TEX_STYLES) el.textContent = RICH_TEX_STYLES;
-}
 
 /** The term spans enclosing an element, innermost first. */
 function termChain(el: Element | null, host: HTMLElement): HTMLElement[] {
@@ -390,10 +280,8 @@ function termChain(el: Element | null, host: HTMLElement): HTMLElement[] {
   return chain;
 }
 
-const leafName = (name: string): string => name.slice(name.lastIndexOf("/") + 1);
-
 export function RichTeX(props: RichTeXProps): JSX.Element {
-  ensureStyles();
+  ensureStyles(STYLE_MARK, RICH_TEX_STYLES);
   const display = () => props.display === true;
   const assembled = createMemo(() => assembleTeX(props.children));
   const html = createMemo(() => {
@@ -416,77 +304,21 @@ export function RichTeX(props: RichTeXProps): JSX.Element {
     control: ControlBox<number> | undefined;
     format: ((value: number) => string) | undefined;
     span: number | undefined;
-    value: number | undefined;
     clickable: boolean;
   }
   let current: Decorated[] = [];
-  const [boxes, setBoxes] = createSignal<ReadonlyMap<string, TermBox>>(new Map());
-  const [shifts, setShifts] = createSignal<ReadonlyMap<string, number>>(new Map());
-  const [mathHeight, setMathHeight] = createSignal(0);
+  // The knobs: the gesture, the readout and the stamps live in knob.tsx; this
+  // component binds the knob spans after each render. A press resolves to
+  // the innermost knob span enclosing it (the default), which is what nested
+  // terms need.
+  const knobs = createKnobs();
 
-  // ── geometry ──────────────────────────────────────────────────────────────
-  // Read in rAF / observer callbacks — outside any owner, so the writes are
-  // plain event-time writes (Solid 2.0 forbids writes from inside owned
-  // scopes without `ownedWrite`).
-  const observedNotes = new WeakSet<Element>();
-  const measure = (): void => {
-    if (!host.isConnected) return;
-    const h = host.getBoundingClientRect();
-    const next = new Map<string, TermBox>();
-    for (const [id, span] of spans) {
-      const b = span.getBoundingClientRect();
-      next.set(id, { left: b.left - h.left, top: b.top - h.top, width: b.width, height: b.height });
-    }
-    setBoxes(next);
-    setMathHeight(h.height);
-    // Notes: the collision pass, per layer, from the widths they rendered at.
-    const root = host.closest(".aiui-rtx");
-    const pushed = new Map<string, number>();
-    for (const layer of root?.querySelectorAll<HTMLElement>(".aiui-rtx-notes") ?? []) {
-      const items: NoteItem[] = [];
-      for (const n of layer.querySelectorAll<HTMLElement>(":scope > .aiui-rtx-note")) {
-        const id = n.getAttribute("data-for");
-        const b = id === null ? undefined : next.get(id);
-        if (id === null || b === undefined) continue;
-        if (ro !== undefined && !observedNotes.has(n)) {
-          observedNotes.add(n); // a note that grows (a number gaining a digit) re-measures
-          ro.observe(n);
-        }
-        items.push({ id, anchor: b.left + b.width / 2, width: n.offsetWidth });
-      }
-      for (const [id, dx] of resolveNoteShifts(items, NOTE_GAP)) pushed.set(id, dx);
-    }
-    setShifts(pushed);
-    placeReadout(); // the glyphs may have moved under an open readout
-  };
-  let raf: number | undefined;
-  const scheduleMeasure = (): void => {
-    if (typeof requestAnimationFrame !== "function") return;
-    if (raf !== undefined) cancelAnimationFrame(raf);
-    raf = requestAnimationFrame(() => {
-      raf = undefined;
-      measure();
-    });
-  };
-
-  // Re-measure when the host's box changes (reflow, a font swap) and when
-  // the web fonts finish loading (KaTeX's own arrive after first paint).
-  // Observed from the effect handler below — the first place the host
-  // element is guaranteed to exist (refs bind during render; handlers run
-  // after it, the PlotFigure precedent).
-  const ro = typeof ResizeObserver === "function" ? new ResizeObserver(scheduleMeasure) : undefined;
-  let observed: HTMLElement | undefined;
-  if (typeof document !== "undefined" && "fonts" in document) {
-    document.fonts.ready.then(scheduleMeasure, () => {});
-  }
-
-  // ── hover, click, knobs: delegated to the host ────────────────────────────
+  // ── hover and click: delegated to the host ────────────────────────────────
   // Spans are replaced on every re-render, listeners on the host are not.
   // Nested terms: the chain from innermost outward. Attached imperatively
-  // where the host is adopted (the effect below), with the resize observer —
-  // the host is static markup; the terms inside it are the interactive
-  // things. Knobs are focusable (tabindex) and answer the arrow keys; a
-  // clickable term is focusable too and answers Enter and Space.
+  // where the host is adopted (the effect below), because refs bind during
+  // render and effect handlers run after it. A clickable term is focusable
+  // and answers Enter and Space; a knob's keys are the knob controller's.
   let hovered = new Set<string>();
   const syncHover = (chain: HTMLElement[]): void => {
     const now = new Set(chain.map((el) => el.getAttribute(TERM_ATTR) ?? ""));
@@ -496,64 +328,9 @@ export function RichTeX(props: RichTeXProps): JSX.Element {
       if (!hovered.has(id)) current.find((d) => d.t.id === id)?.t.props.onHover?.(true);
     hovered = now;
   };
-  const knobOf = (id: string | null | undefined): Decorated | undefined =>
-    id == null ? undefined : current.find((d) => d.t.id === id && d.control !== undefined);
-  const innermostKnob = (chain: HTMLElement[]): string | undefined => {
-    for (const el of chain) {
-      const id = el.getAttribute(TERM_ATTR);
-      if (knobOf(id) !== undefined) return id ?? undefined;
-    }
-    return undefined;
-  };
-  // The readout shows for the knob being scrubbed, else the focused one,
-  // else the hovered one. Gesture state is plain (Solid 2.0 stages writes;
-  // a signal read in the next synchronous pointermove would still be stale).
-  interface Scrub {
-    id: string;
-    control: ControlBox<number>;
-    startX: number;
-    startV: number;
-    perPx: number;
-  }
-  let scrub: Scrub | undefined;
-  let focusedKnob: string | undefined;
-  let hoveredKnob: string | undefined;
-  const [hot, setHot] = createSignal<string | undefined>();
-  // The readout is positioned against the VIEWPORT (position: fixed), so no
-  // scroll box between it and the page — a wide equation's own overflow-x
-  // scroller, a panel — can clip it; its anchor is the hot knob's glyph box
-  // in viewport coordinates, refreshed on every measure and on scroll.
-  const [anchor, setAnchor] = createSignal<{ x: number; y: number } | undefined>();
-  const hotId = (): string | undefined => scrub?.id ?? focusedKnob ?? hoveredKnob;
-  const placeReadout = (): void => {
-    const id = hotId();
-    const span = id === undefined ? undefined : spans.get(id);
-    if (span === undefined) {
-      setAnchor(undefined);
-      return;
-    }
-    const r = span.getBoundingClientRect();
-    setAnchor({ x: r.left + r.width / 2, y: r.top });
-  };
-  const onScroll = (): void => {
-    if (hotId() !== undefined) placeReadout();
-  };
-  const showHot = (): void => {
-    setHot(hotId());
-    placeReadout();
-  };
-
-  const onPointerOver = (e: PointerEvent): void => {
-    const chain = termChain(e.target as Element | null, host);
-    syncHover(chain);
-    hoveredKnob = innermostKnob(chain);
-    showHot();
-  };
-  const onPointerLeave = (): void => {
-    syncHover([]);
-    hoveredKnob = undefined;
-    showHot();
-  };
+  const onPointerOver = (e: PointerEvent): void =>
+    syncHover(termChain(e.target as Element | null, host));
+  const onPointerLeave = (): void => syncHover([]);
   const onClick = (e: MouseEvent): void => {
     const chain = termChain(e.target as Element | null, host);
     for (const el of chain) {
@@ -561,114 +338,33 @@ export function RichTeX(props: RichTeXProps): JSX.Element {
       current.find((d) => d.t.id === id)?.t.props.onClick?.();
     }
   };
-  const onPointerDown = (e: PointerEvent): void => {
-    if (e.button !== 0) return;
-    const id = innermostKnob(termChain(e.target as Element | null, host));
-    const knob = knobOf(id);
-    if (id === undefined || knob?.control === undefined) return;
-    const control = knob.control;
-    scrub = {
-      id,
-      control,
-      startX: e.clientX,
-      startV: control.get(),
-      perPx: perPxOf(control, knob.span),
-    };
-    // Capture so the drag survives leaving the glyphs; preventDefault so the
-    // press never starts a text selection. try: a SYNTHETIC pointerdown (an
-    // agent driving the page, a jsdom test) has no active pointer and
-    // capture throws — the knob works without.
-    try {
-      host.setPointerCapture?.(e.pointerId);
-    } catch {
-      /* synthetic pointer — no capture */
-    }
-    e.preventDefault();
-    spans.get(id)?.setAttribute("data-scrubbing", "true");
-    showHot();
-  };
-  const onPointerMove = (e: PointerEvent): void => {
-    if (scrub === undefined) return;
-    // Accumulate from the press's raw value — the control snaps and clamps
-    // each write; the drag itself stays smooth.
-    scrub.control.set((scrub.startV + (e.clientX - scrub.startX) * scrub.perPx) as never);
-  };
-  const endScrub = (): void => {
-    if (scrub === undefined) return;
-    spans.get(scrub.id)?.removeAttribute("data-scrubbing");
-    scrub = undefined;
-    showHot();
-  };
   const onKeyDown = (e: KeyboardEvent): void => {
     const span = (e.target as Element | null)?.closest?.(`[${TERM_ATTR}]`);
     const id = span?.getAttribute(TERM_ATTR);
     const d = id == null ? undefined : current.find((x) => x.t.id === id);
-    if (d === undefined) return;
-    if (d.control === undefined) {
-      // A clickable term: Enter and Space are its click.
-      if (d.clickable && (e.key === "Enter" || e.key === " ")) {
-        e.preventDefault();
-        d.t.props.onClick?.();
-      }
-      return;
+    if (d === undefined || d.control !== undefined || !d.clickable) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      d.t.props.onClick?.();
     }
-    const control = d.control;
-    const unit = keyStepOf(control) * (e.shiftKey ? 10 : 1);
-    const v = control.get();
-    let next: number | undefined;
-    if (e.key === "ArrowRight" || e.key === "ArrowUp") next = v + unit;
-    else if (e.key === "ArrowLeft" || e.key === "ArrowDown") next = v - unit;
-    else if (e.key === "Home") next = control.meta.min;
-    else if (e.key === "End") next = control.meta.max;
-    if (next === undefined) return;
-    e.preventDefault();
-    control.set(next as never);
-  };
-  const onFocusIn = (e: FocusEvent): void => {
-    const span = (e.target as Element | null)?.closest?.(`[${TERM_ATTR}]`);
-    const id = span?.getAttribute(TERM_ATTR) ?? undefined;
-    if (knobOf(id) !== undefined) {
-      focusedKnob = id;
-      showHot();
-    }
-  };
-  const onFocusOut = (): void => {
-    focusedKnob = undefined;
-    showHot();
   };
 
+  let observed: HTMLElement | undefined;
   const adopt = (el: HTMLElement): void => {
-    ro?.observe(el);
     el.addEventListener("pointerover", onPointerOver);
     el.addEventListener("pointerleave", onPointerLeave);
     el.addEventListener("click", onClick);
-    el.addEventListener("pointerdown", onPointerDown);
-    el.addEventListener("pointermove", onPointerMove);
-    el.addEventListener("pointerup", endScrub);
-    el.addEventListener("pointercancel", endScrub);
     el.addEventListener("keydown", onKeyDown);
-    el.addEventListener("focusin", onFocusIn);
-    el.addEventListener("focusout", onFocusOut);
-    el.ownerDocument.addEventListener("scroll", onScroll, { capture: true, passive: true });
+    knobs.attach(el);
   };
   const release = (el: HTMLElement): void => {
-    ro?.unobserve(el);
     el.removeEventListener("pointerover", onPointerOver);
     el.removeEventListener("pointerleave", onPointerLeave);
     el.removeEventListener("click", onClick);
-    el.removeEventListener("pointerdown", onPointerDown);
-    el.removeEventListener("pointermove", onPointerMove);
-    el.removeEventListener("pointerup", endScrub);
-    el.removeEventListener("pointercancel", endScrub);
     el.removeEventListener("keydown", onKeyDown);
-    el.removeEventListener("focusin", onFocusIn);
-    el.removeEventListener("focusout", onFocusOut);
-    el.ownerDocument.removeEventListener("scroll", onScroll, { capture: true });
   };
   onCleanup(() => {
     if (observed !== undefined) release(observed);
-    ro?.disconnect();
-    if (raf !== undefined) cancelAnimationFrame(raf);
   });
 
   // ── the render + decoration effect ────────────────────────────────────────
@@ -690,8 +386,6 @@ export function RichTeX(props: RichTeXProps): JSX.Element {
           clickable: t.props.onClick !== undefined,
           format: t.props.format,
           span: t.props.span,
-          // A knob's aria state follows its control.
-          value: t.props.control?.get(),
         }),
       ),
     }),
@@ -708,6 +402,7 @@ export function RichTeX(props: RichTeXProps): JSX.Element {
         host.innerHTML = v.html;
         spans = new Map();
         applied.clear();
+        knobs.clear();
         for (const el of host.querySelectorAll<HTMLElement>(`[${TERM_ATTR}]`)) {
           const id = el.getAttribute(TERM_ATTR);
           if (id !== null) spans.set(id, el);
@@ -725,120 +420,52 @@ export function RichTeX(props: RichTeXProps): JSX.Element {
         span.setAttribute("data-tex", d.t.tex);
         if (d.active) span.setAttribute("data-active", "true");
         else span.removeAttribute("data-active");
-        if (d.clickable && d.control === undefined) {
-          span.setAttribute("tabindex", "0");
-          span.setAttribute("role", "button");
-        }
-        const control = d.control;
-        if (control !== undefined) {
-          span.classList.add("aiui-rtx-knob");
-          span.setAttribute("data-control", control.name);
-          span.setAttribute("tabindex", "0");
-          span.setAttribute("role", "slider");
-          span.setAttribute("aria-label", control.description ?? leafName(control.name));
-          if (control.meta.min !== undefined)
-            span.setAttribute("aria-valuemin", String(control.meta.min));
-          if (control.meta.max !== undefined)
-            span.setAttribute("aria-valuemax", String(control.meta.max));
-          if (d.value !== undefined) {
-            span.setAttribute("aria-valuenow", String(d.value));
-            span.setAttribute(
-              "aria-valuetext",
-              d.format ? d.format(d.value) : formatKnob(d.value, control.meta),
-            );
+        if (d.control !== undefined) {
+          knobs.bind(span, { control: d.control, span: d.span, format: d.format });
+        } else {
+          knobs.unbind(span);
+          if (d.clickable) {
+            span.setAttribute("tabindex", "0");
+            span.setAttribute("role", "button");
+          } else {
+            span.removeAttribute("tabindex");
+            span.removeAttribute("role");
           }
         }
       }
-      scheduleMeasure();
     },
   );
 
-  // ── the knob readout ──────────────────────────────────────────────────────
-  const hotKnob = createMemo(() => {
-    const id = hot();
-    return id === undefined
-      ? undefined
-      : assembled().terms.find((t) => t.id === id && t.props.control !== undefined);
-  });
-  const Readout = () => (
-    <Show when={hotKnob()}>
-      {(k) => {
-        const control = () => k().props.control as ControlBox<number>;
-        const shown = () => {
-          const v = control().get();
-          return k().props.format
-            ? (k().props.format as (v: number) => string)(v)
-            : formatKnob(v, control().meta);
-        };
-        return (
-          <span
-            class="aiui-rtx-readout"
-            data-for={k().id}
-            data-control={control().name}
-            style={{
-              left: `${anchor()?.x ?? 0}px`,
-              top: `${anchor()?.y ?? 0}px`,
-              visibility: anchor() === undefined ? "hidden" : undefined,
-            }}
-          >
-            <b class="aiui-rtx-readout-value">{shown()}</b>
-            <span class="aiui-rtx-readout-name">{leafName(control().name)}</span>
-          </span>
-        );
-      }}
-    </Show>
-  );
-
   // ── notes ─────────────────────────────────────────────────────────────────
-  const notes = createMemo(() =>
-    display() ? assembled().terms.filter((t) => "note" in t.props) : [],
+  // One spec per annotated term, keyed on the assembled term (a re-assembly
+  // rebuilds them, as it rebuilds the spans). Display math only.
+  const notes = createMemo((): NoteSpec[] =>
+    display()
+      ? assembled()
+          .terms.filter((t) => "note" in t.props)
+          .map((t) => ({
+            id: t.id,
+            get side() {
+              return t.props.place ?? "below";
+            },
+            get active() {
+              return t.props.active === true;
+            },
+            get note() {
+              return t.props.note;
+            },
+          }))
+      : [],
   );
-  const notesOn = (side: "below" | "above") =>
-    notes().filter((t) => (t.props.place ?? "below") === side);
-  // New or departed notes change the collision picture: measure again.
-  createEffect(
-    () => notes().length,
-    () => scheduleMeasure(),
-  );
-
-  const Layer = (p: { side: "below" | "above" }) => (
-    <Show when={notesOn(p.side).length > 0}>
-      <div class={`aiui-rtx-notes aiui-rtx-notes-${p.side}`}>
-        <For each={notesOn(p.side)}>
-          {(t) => {
-            const box = () => boxes().get(t.id);
-            const x = () => {
-              const b = box();
-              return b === undefined ? 0 : b.left + b.width / 2;
-            };
-            // From the equation's edge to the glyphs' near edge; the
-            // stylesheet adds the layer gap (`--aiui-rtx-gap`) and a standoff.
-            const leader = () => {
-              const b = box();
-              if (b === undefined) return 0;
-              const toGlyphs = p.side === "below" ? mathHeight() - (b.top + b.height) : b.top;
-              return Math.max(0, toGlyphs);
-            };
-            return (
-              <div
-                class="aiui-rtx-note"
-                data-for={t.id}
-                data-active={t.props.active === true ? "true" : undefined}
-                style={{
-                  "--aiui-rtx-x": String(x()),
-                  "--aiui-rtx-w": String(box()?.width ?? 0),
-                  "--aiui-rtx-shift": String(shifts().get(t.id) ?? 0),
-                  "--aiui-rtx-leader-len": String(leader()),
-                  visibility: box() === undefined ? "hidden" : undefined,
-                }}
-              >
-                {t.props.note}
-              </div>
-            );
-          }}
-        </For>
-      </div>
-    </Show>
+  const Layer = (p: { side: "above" | "below" }) => (
+    <NoteLayer
+      layout="margin"
+      side={p.side}
+      host={() => host}
+      anchorOf={(id) => spans.get(id)}
+      notes={notes()}
+      version={html()}
+    />
   );
 
   const rootClass = () => {
@@ -860,7 +487,7 @@ export function RichTeX(props: RichTeXProps): JSX.Element {
                 host = el;
               }}
             />
-            <Readout />
+            <KnobReadout of={knobs} />
           </span>
         </span>
       }
@@ -875,7 +502,7 @@ export function RichTeX(props: RichTeXProps): JSX.Element {
               host = el;
             }}
           />
-          <Readout />
+          <KnobReadout of={knobs} />
         </div>
         <Layer side="below" />
       </div>
