@@ -73,21 +73,21 @@ Then the Mermaid cleanup before it has many users: the `wrappingWidth` default t
 the Mermaid theme and the RichTeX/Mermaid skins promoted into aiui-design (the catalog demo is the
 second copy of the lab's), and the open items in `docs/proposals/rich-mermaid.md`.
 
-### B — modal kit code review — `done (branch merged by lead)` (report read 2026-10-17; approved: split and trim + a retirement record in packages/aiui-viz/docs/mode-engine.md)
+### B — modal kit code review — `done 65c8ff2e, merged 2aa8fd08` (report read 2026-10-17; approved: split and trim + a retirement record in packages/aiui-viz/docs/mode-engine.md)
 
 A read-only report on `src/modal/*` and `src/mode-solid.ts` against the four consumers: aiui-slides
 (key layer, hints, resolver), the aiui-audio hub (engine + claims), demos/audio (engine +
 `LiveDiffText`), demos/walkthrough (key layer). The advanced users were extracted to another repo;
 slides carries the remaining complexity. Fixes follow the report, after it is read.
 
-### C — internal packages — `done (branch merged by lead)`
+### C — internal packages — `done e98163ee, merged 2aa8fd08`
 
 `packages/internal/` holds aiui-dock (with the key widget), aiui-oracle, aiui-live: `private: true`,
 a workspace glob, `repository.directory`, versioning lockstep, `pnpm skills:check` links, and the
 catalog's §5 sister table all follow. READMEs say "internal scaffolding for labs and demos, a
 replacement is planned". Nothing leaves the repo. Already-published npm versions are left alone.
 
-### D — skills point at the catalog — `planned`
+### D — skills point at the catalog — `in progress`
 
 `skills/aiui-architecture` names CATALOG.md as the reference for what exists, with the caveat that
 newer pieces may exist that nothing uses yet, and carries the stance above (build in the main
