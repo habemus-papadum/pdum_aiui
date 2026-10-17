@@ -157,6 +157,33 @@ describe("audio hub", () => {
     expect(fake.releases).toHaveBeenCalled();
     await hub.dispose();
   });
+  it("a superseded acquire's signal is aborted at once, not at the 60 s ceiling", async () => {
+    const fake = fakeDriver();
+    const signals: AbortSignal[] = [];
+    // A permission prompt nobody answers; the driver honours the abort the way
+    // browser.ts does (its release listens on the signal).
+    fake.driver.capture = (_source: InputSource, signal: AbortSignal) =>
+      new Promise((_resolve, reject) => {
+        signals.push(signal);
+        signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+      });
+    const hub = createAudioHub({ driver: fake.driver });
+    const microphone = hub.startMicrophone();
+    const superseded = expect(microphone).rejects.toThrow("superseded");
+    await tick();
+    expect(signals).toHaveLength(1);
+    expect(signals[0].aborted).toBe(false);
+    const recording = hub.startRecording(new Float32Array([1]), 24000); // a new source supersedes
+    const cancelled = expect(recording).rejects.toThrow("cancelled");
+    await tick();
+    expect(signals[0].aborted).toBe(true); // pulled immediately — no timer advanced
+    expect(signals).toHaveLength(2); // and the chain moved on to the new source at once
+    expect(hub.snapshot().capture).toBe("starting");
+    expect(hub.snapshot().error).toBeUndefined(); // the abort we asked for is not a fault
+    await superseded;
+    await hub.dispose();
+    await cancelled;
+  });
   it("switches capture source without replacing consumer endpoints", async () => {
     const fake = fakeDriver();
     const hub = createAudioHub({ driver: fake.driver });

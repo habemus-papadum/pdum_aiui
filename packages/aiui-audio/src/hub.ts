@@ -1,7 +1,7 @@
 import {
-  choice,
   createClaims,
   createModeEngine,
+  openChoice,
   toggle,
 } from "@habemus-papadum/aiui-viz/mode-engine";
 import { type BrowserAudioOptions, browserAudioDriver } from "./browser";
@@ -70,10 +70,14 @@ export function createAudioHub(options: AudioHubOptions = {}): AudioHub {
   const routes = new Map<string, InputEntry>();
   let registration = 0;
   const outputs = new Map<string, OutputEntry>();
-  // Choices are the registered endpoint IDs. Removed IDs remain legal history,
-  // but cannot be selected or routed until they are registered again.
-  const inputIds = [""];
-  const outputIds = [""];
+  // Endpoint ids are an open set, registered at runtime: the legal values of
+  // the input/output regions are "nothing" or a currently registered id, read
+  // live. A removed id stays as state until the next selection, but cannot be
+  // selected or routed until it is registered again.
+  const registered =
+    (registry: { has(id: string): boolean }) =>
+    (id: string): boolean =>
+      id === "" || registry.has(id);
   let source: InputSource = { kind: "microphone" };
   let sourceVersion = 0;
   let disposed = false;
@@ -93,9 +97,9 @@ export function createAudioHub(options: AudioHubOptions = {}): AudioHub {
       regions: {
         capture: toggle(),
         parked: toggle(),
-        input: choice(inputIds),
-        temporary: choice(inputIds),
-        output: choice(outputIds),
+        input: openChoice(registered(inputs)),
+        temporary: openChoice(registered(inputs)),
+        output: openChoice(registered(outputs)),
         outputMuted: toggle(),
       },
       commands: {
@@ -270,7 +274,6 @@ export function createAudioHub(options: AudioHubOptions = {}): AudioHub {
   const input = (identity: AudioIdentity, kind: "pcm" | "stream", sampleRate = 24000) => {
     if (!identity.id || inputs.has(identity.id))
       throw new Error(`Audio input already registered or empty: ${identity.id}`);
-    if (!inputIds.includes(identity.id)) inputIds.push(identity.id);
     const entry: InputEntry = {
       ...identity,
       routeKey: `${identity.id}:${++registration}`,
@@ -342,7 +345,6 @@ export function createAudioHub(options: AudioHubOptions = {}): AudioHub {
     output(identity) {
       if (!identity.id || outputs.has(identity.id))
         throw new Error(`Audio output already registered or empty: ${identity.id}`);
-      if (!outputIds.includes(identity.id)) outputIds.push(identity.id);
       const entry: OutputEntry = { ...identity };
       outputs.set(identity.id, entry);
       notify();

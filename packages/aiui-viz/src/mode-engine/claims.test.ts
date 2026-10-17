@@ -189,6 +189,92 @@ describe("desire changes", () => {
     expect(log).toEqual(["acquire:7", "release:pointer@7", "acquire:9"]);
     expect(claims.status("inkPointer")).toMatchObject({ phase: "active", desire: { tab: 9 } });
   });
+
+  it("supersession aborts the in-flight acquire's signal at once; an acquire that honours it is not a fault", async () => {
+    const log: string[] = [];
+    const signals: AbortSignal[] = [];
+    const onError = vi.fn();
+    const statuses: string[] = [];
+    const ctx: Ctx = { tab: 7 };
+    const state: S = { phase: "turn", ink: true };
+    const claims = createClaims<S, Ctx>(
+      {
+        inkPointer: {
+          derive: inkPointerDerive,
+          acquire: (desire: { tab: number }, signal) => {
+            signals.push(signal);
+            log.push(`acquire:${desire.tab}`);
+            return new Promise<string>((resolve, reject) => {
+              signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+              if (desire.tab === 9) {
+                resolve("pointer@9");
+              }
+            });
+          },
+          release: (actual: string) => {
+            log.push(`release:${actual}`);
+          },
+          ceilingMs: 60_000,
+        },
+      },
+      {
+        getState: () => state,
+        getCtx: () => ctx,
+        onError,
+        onStatus: (_name, status) => statuses.push(status.phase),
+      },
+    );
+    claims.reconcile();
+    await settle();
+    expect(signals).toHaveLength(1);
+    expect(signals[0].aborted).toBe(false);
+
+    ctx.tab = 9;
+    claims.reconcile();
+    expect(signals[0].aborted).toBe(true); // pulled the moment the desire moved, not at the ceiling
+    expect(signals[0].reason).toMatchObject({ name: "AbortError" });
+    await settle();
+    expect(log).toEqual(["acquire:7", "acquire:9"]); // nothing to release: the first never landed
+    expect(onError).not.toHaveBeenCalled(); // the abort we asked for is not an error
+    expect(statuses).toEqual(["pending", "pending", "active"]); // no error, no stale flicker
+    expect(claims.status("inkPointer")).toMatchObject({ phase: "active", desire: { tab: 9 } });
+  });
+
+  it("retraction (a null desire) and dispose pull the in-flight acquire the same way", async () => {
+    const signals: AbortSignal[] = [];
+    let state: S = { phase: "turn", ink: true };
+    const claims = createClaims<S, Ctx>(
+      {
+        inkPointer: {
+          derive: inkPointerDerive,
+          acquire: (_desire: { tab: number }, signal) => {
+            signals.push(signal);
+            return new Promise<string>((_resolve, reject) => {
+              signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+            });
+          },
+        },
+      },
+      { getState: () => state, getCtx: () => ({ tab: 7 }), onError: vi.fn() },
+    );
+    claims.reconcile();
+    await settle();
+    state = { phase: "armed", ink: true }; // turn closed while the prompt was up
+    claims.reconcile();
+    expect(signals[0].aborted).toBe(true);
+    await settle();
+    expect(claims.status("inkPointer").phase).toBe("idle");
+
+    state = { phase: "turn", ink: true };
+    claims.reconcile();
+    await settle();
+    expect(signals).toHaveLength(2);
+    const done = claims.dispose();
+    expect(signals[1].aborted).toBe(true);
+    await settle();
+    await done;
+    expect(claims.status("inkPointer").phase).toBe("idle");
+  });
 });
 
 describe("failure", () => {

@@ -1,46 +1,49 @@
 /**
- * engine.ts — the mode engine: the composition layer the kit's modules were
- * waiting for (the mode-engine spec, git history).
+ * engine.ts — the mode engine: regions, one pure reducer as the only writer,
+ * and an atomic commit path. The design note is docs/mode-engine.md (the
+ * contract, the pieces retired around it and why, what to consider when
+ * their needs return).
  *
- * The kit has vocabulary — ladder columns (mode.ts), key layers (keys.ts),
- * per-event reconciliation (reconcile.ts), guarded effects (effect.ts) — but
- * no grammar: each app hand-rolled the composition, and the composition is
- * where the ~25-incident bug ledger of its first consumers (two generations
- * of intent client, since moved out of this repo) lived. The engine is
- * that grammar, built on one clarifying split:
+ * One clarifying split: every "mode" is two things — a **setting** (what the
+ * user chose: standing, often durable) and an **operation** (what the world
+ * is doing about it right now: derived, transient, async). Settings live in
+ * **regions** — named, independently-valued axes (the state is their product,
+ * so orthogonality is by construction and exclusion inside a region is
+ * free). Operations are **claims** (./claims.ts) — pure derivations from
+ * (regions, context) that a reconciler drives; their status is the "neither
+ * on nor off" state, derived and displayable, never stored.
  *
- * > Every "mode" is two things: a **setting** (what the user chose —
- * > standing, often durable, often agent-visible) and an **operation** (what
- * > the world is doing about it right now — derived, transient, async).
- *
- * Settings live in **regions** — named, independently-valued axes (the state
- * is their product, so orthogonality is by construction and exclusion inside
- * a region is free). Operations are **claims** (./claims.ts) — pure
- * derivations from (regions, context) that a reconciler drives; their status
- * is the "neither on nor off" state, derived and displayable, never stored.
- *
- * **Commands are the only writers.** Keyboard resolver output, cap clicks,
- * agent control.set, system events (via bindings), tests — all funnel into
- * `dispatch(command, payload)`, a pure reducer `(state, command, ctx) →
+ * **Commands are the only writers.** Keyboard resolver output, button taps,
+ * system events (via bindings), tests — all funnel into
+ * `dispatch(command, payload)`: a pure reducer `(state, command, ctx) →
  * state'` plus declared cross-region `excludes`, applied once, in
  * declaration order — no fixpoint, no constraint solver. Esc and blur are
- * commands too, resolved mechanically from spec columns (the §13.6 ladder as
- * a list). When nothing but the reducer writes machine state, "write then
- * read back" has no call sites left to occur at — the engine is the
- * structural fix for that bug class, and the write-semantics proposal's M2
- * given one home: the runtime commits atomically (the host installs a
- * `commit` hook — the Solid adapter passes `flush`), so by the time
- * `dispatch` returns, every derived value and effect-driven projection is
- * current.
+ * commands too, resolved mechanically from the spec. When nothing but the
+ * reducer writes machine state, "write then read back" has no call sites
+ * left to occur at: state is a frozen plain object, never stale to read.
  *
- * Deliberately NOT here (01 §4): entry/exit effects (the ledger is
- * unambiguous — per-event reconciliation beats transition bookkeeping, so
- * effects are claims), history states, actor spawning, XState (our chart
- * semantics are small; the value is the integrations, bespoke either way).
+ * **The commit path.** State advances, then subscribers are notified inside
+ * the host's `commit` hook (a plain call by default). Three rules keep it
+ * linear, and each is pinned by a test:
+ *  - a dispatch from inside a subscriber is QUEUED and runs after the current
+ *    commit; so is the notification for a `setContext` from inside a
+ *    subscriber (the facts change at once — `context()` reads them — the
+ *    "context" event waits its turn);
+ *  - a throwing subscriber is reported to `onError` (console.error by
+ *    default) and the loop goes on: every subscriber hears every commit, in
+ *    order, and the queue still drains, so state and notifications cannot
+ *    diverge;
+ *  - every dispatch is traced through `onDispatch`, no-ops and gate refusals
+ *    included.
  *
- * Realm rules (like the rest of modal/): no Solid import, no DOM at module
- * scope — the engine core runs in node, workers, and tests as plain data +
- * functions. The Solid adapter lives in the package root (`solidModeEngine`).
+ * Deliberately NOT here: entry/exit effects (per-event reconciliation beats
+ * transition bookkeeping — effects are claims), history states, actor
+ * spawning, a statechart library (our chart semantics are small; the value
+ * is the integrations, bespoke either way).
+ *
+ * Realm rules: no Solid import, no DOM — the engine runs in node, workers and
+ * tests as plain data + functions. A host mirrors `state()` into its own
+ * reactive system from `subscribe`.
  */
 
 /** A region's value: ladders and choices are strings, toggles are booleans. */
@@ -54,16 +57,17 @@ export type StatePatch = Readonly<Record<string, RegionValue>>;
 
 interface RegionCommon {
   /**
-   * Survives reload (standing settings). The core only carries the flag; the
-   * host adapter decides the storage (the Solid adapter adopts a durable
-   * registry entry / the agent control's persisted value as the initial).
+   * Survives reload (a standing setting). The core only carries the flag; a
+   * host adapter decides the storage and seeds `initial` from it. No in-repo
+   * host acts on it today (docs/mode-engine.md lists it among the features
+   * kept for the next host).
    */
   durable?: boolean;
   /**
-   * Expose on the agent control surface under this name: the control's
-   * getter reads the region, its setter dispatches `set:<region>` — the
-   * engine stays the single writer, so an agent's `set` and the key take the
-   * identical path (this is what structurally kills control-mirror desyncs).
+   * Expose on an agent control surface under this name: a host adapter would
+   * register a control whose getter reads the region and whose setter
+   * dispatches `set:<region>`, so the engine stays the single writer. The
+   * core only carries the name (see `durable`).
    */
   agent?: string;
   /** Human description, carried to the agent control when `agent` is set. */
@@ -112,7 +116,33 @@ export interface ChoiceRegion extends RegionCommon {
   blurExits?: boolean;
 }
 
-export type RegionSpec = LadderRegion | ToggleRegion | ChoiceRegion;
+/**
+ * One choice among a set the spec cannot enumerate — registered device ids,
+ * open tabs. `accept` is the legality test, consulted at every write (so the
+ * set may be live: a registry the host owns); the initial value must pass it
+ * too. A value that stops being acceptable stays as state until the next
+ * write — states are not revalidated. Esc/blur restore the initial, like a
+ * choice.
+ */
+export interface OpenChoiceRegion extends RegionCommon {
+  kind: "open-choice";
+  accept: (value: string) => boolean;
+  /** Initial value; also what Esc/blur restore. Defaults to `""`. */
+  initial: string;
+  /** Window blur restores the initial value. */
+  blurExits?: boolean;
+}
+
+export type RegionSpec = LadderRegion | ToggleRegion | ChoiceRegion | OpenChoiceRegion;
+
+/** The optional flags every region constructor passes through. */
+function commonFlags(opts: Partial<RegionCommon>): Partial<RegionCommon> {
+  return {
+    ...(opts.durable !== undefined ? { durable: opts.durable } : {}),
+    ...(opts.agent !== undefined ? { agent: opts.agent } : {}),
+    ...(opts.description !== undefined ? { description: opts.description } : {}),
+  };
+}
 
 /** Declare a ladder region. */
 export function ladder(
@@ -128,9 +158,7 @@ export function ladder(
     initial: opts.initial ?? rungs[0],
     escFloor: opts.escFloor ?? rungs[0],
     blurExitsFrom: opts.blurExitsFrom ?? [],
-    ...(opts.durable !== undefined ? { durable: opts.durable } : {}),
-    ...(opts.agent !== undefined ? { agent: opts.agent } : {}),
-    ...(opts.description !== undefined ? { description: opts.description } : {}),
+    ...commonFlags(opts),
   };
 }
 
@@ -140,9 +168,7 @@ export function toggle(opts: Partial<Omit<ToggleRegion, "kind">> = {}): ToggleRe
     kind: "toggle",
     initial: opts.initial ?? false,
     ...(opts.blurExits !== undefined ? { blurExits: opts.blurExits } : {}),
-    ...(opts.durable !== undefined ? { durable: opts.durable } : {}),
-    ...(opts.agent !== undefined ? { agent: opts.agent } : {}),
-    ...(opts.description !== undefined ? { description: opts.description } : {}),
+    ...commonFlags(opts),
   };
 }
 
@@ -159,9 +185,21 @@ export function choice(
     values,
     initial: opts.initial ?? values[0],
     ...(opts.blurExits !== undefined ? { blurExits: opts.blurExits } : {}),
-    ...(opts.durable !== undefined ? { durable: opts.durable } : {}),
-    ...(opts.agent !== undefined ? { agent: opts.agent } : {}),
-    ...(opts.description !== undefined ? { description: opts.description } : {}),
+    ...commonFlags(opts),
+  };
+}
+
+/** Declare an open choice region: legality by predicate, not by list. */
+export function openChoice(
+  accept: (value: string) => boolean,
+  opts: Partial<Omit<OpenChoiceRegion, "kind" | "accept">> = {},
+): OpenChoiceRegion {
+  return {
+    kind: "open-choice",
+    accept,
+    initial: opts.initial ?? "",
+    ...(opts.blurExits !== undefined ? { blurExits: opts.blurExits } : {}),
+    ...commonFlags(opts),
   };
 }
 
@@ -207,7 +245,11 @@ export interface ModeEngineSpec<Ctx> {
    */
   escOrder?: readonly string[];
   excludes?: readonly ExcludeRule[];
-  /** System events → commands (engine turnClosed, socket drop, tab close). */
+  /**
+   * System events → commands (a socket drop, a tab close). Targets are
+   * validated at creation: a declared command, `escape`/`blur`, or
+   * `set:<region>` of a declared region.
+   */
   on?: Readonly<Record<string, EventBinding>>;
   /**
    * Availability overrides. Most commands need none — availability is DERIVED
@@ -217,15 +259,15 @@ export interface ModeEngineSpec<Ctx> {
    * gate on a context fact) can override too. Keys must name declared commands.
    *
    * This is a GATE, not a hint: an unavailable command is refused by
-   * {@link ModeEngine.dispatch} itself, not merely greyed out in the bar. The
-   * difference is the whole point — a bar button, a key, an agent's `control()`
-   * write and a recovered turn all arrive as the same dispatch, and a rule that
-   * only the bar enforces is a rule that holds until the first other caller.
+   * {@link ModeEngine.dispatch} itself, not merely greyed out by a surface.
+   * A button, a key, an agent's write and a recovered turn all arrive as the
+   * same dispatch, and a rule that only one surface enforces is a rule that
+   * holds until the first other caller.
    */
   available?: Readonly<Record<string, (state: EngineState, ctx: Ctx) => boolean>>;
 }
 
-/** One dispatch, as trace data (mode changes SHOULD be events — mode.ts). */
+/** One dispatch, as trace data. */
 export interface DispatchEvent {
   kind: "dispatch";
   command: string;
@@ -234,6 +276,8 @@ export interface DispatchEvent {
   after: EngineState;
   /** The regions this dispatch actually moved (post-excludes). */
   changed: readonly string[];
+  /** The availability gate refused it: nothing ran, nothing moved. */
+  refused: boolean;
 }
 
 export interface ContextEvent {
@@ -246,18 +290,25 @@ export interface ModeEngineOptions<Ctx> {
   /** The world's initial facts. */
   context: Ctx;
   /**
-   * Region overrides adopted at creation (durable recovery: the adapter
-   * passes persisted values). Validated like any patch.
+   * Region overrides adopted at creation (durable recovery: a host passes
+   * persisted values). Validated like any patch; the excludes run over the
+   * result, so a persisted value cannot resurrect a forbidden combination.
    */
   initial?: StatePatch;
   /**
-   * The atomic-commit hook: subscribers are notified inside it. The Solid
-   * adapter passes `flush`, so effects and memos are current when dispatch
-   * returns; the default is a plain call (tests, non-Solid hosts).
+   * The atomic-commit hook: subscribers are notified inside it. A host with
+   * a reactive system passes its synchronous-commit primitive so derived
+   * values are current when dispatch returns; the default is a plain call.
    */
   commit?: (apply: () => void) => void;
-  /** Trace sink — every dispatch, including no-ops resolved to nothing. */
+  /** Trace sink — every dispatch, including no-ops and gate refusals. */
   onDispatch?: (event: DispatchEvent) => void;
+  /**
+   * Failure sink for a throwing subscriber (console.error by default). The
+   * throw is reported, never propagated: the remaining subscribers still
+   * hear the commit and the queue still drains.
+   */
+  onError?: (error: unknown, event: EngineEvent) => void;
 }
 
 export interface ModeEngine<Ctx> {
@@ -274,11 +325,11 @@ export interface ModeEngine<Ctx> {
   dispatch(command: string, payload?: unknown): EngineState;
   /**
    * Would dispatching this command do anything right now? Derived by
-   * dry-running the pure reducer against the committed state (a returned
-   * patch that changes nothing → false); `spec.available` overrides for
-   * verbs and gated commands; escape/blur resolve their own steps. The bar
-   * projection disables caps from this — gating is mechanical, not
-   * hand-written per surface. Unknown command → throws, like dispatch.
+   * dry-running the pure reducer against the committed state — excludes
+   * included, payload included (`set:<region>` with the current value is
+   * false); `spec.available` overrides for verbs and gated commands;
+   * escape/blur resolve their own steps. Unknown command, unknown region or
+   * an illegal value → throws, exactly as dispatch would.
    */
   canDispatch(command: string, payload?: unknown): boolean;
   /** Fire a declared system-event binding; unbound events are ignored. */
@@ -286,19 +337,72 @@ export interface ModeEngine<Ctx> {
   /**
    * Replace world facts (tab identity, grants, connection, selection).
    * Facts are not choices: no command sets them, they are never durable —
-   * but claims derive from them, so subscribers are notified.
+   * but claims derive from them, so subscribers are notified. The facts
+   * change at once; from inside a subscriber, the notification queues
+   * behind the current commit.
    */
   setContext(patch: Partial<Ctx>): void;
   /** Notified after every commit (dispatch that changed state, or context). */
   subscribe(listener: (state: EngineState, event: EngineEvent) => void): () => void;
-  /** The spec (frozen) — projections read it. */
+  /**
+   * The spec, as a frozen snapshot taken at creation — projections read it.
+   * Later mutation of the caller's objects changes nothing here; a set that
+   * grows at runtime belongs in an {@link openChoice}.
+   */
   readonly spec: ModeEngineSpec<Ctx>;
+}
+
+/** A deep-frozen copy of the spec: regions and their lists, excludes and their patches, bindings, gates. */
+function freezeSpec<Ctx>(spec: ModeEngineSpec<Ctx>): ModeEngineSpec<Ctx> {
+  const regions: Record<string, RegionSpec> = {};
+  for (const [name, region] of Object.entries(spec.regions)) {
+    regions[name] = Object.freeze(
+      region.kind === "ladder"
+        ? {
+            ...region,
+            rungs: Object.freeze([...region.rungs]),
+            blurExitsFrom: Object.freeze([...region.blurExitsFrom]),
+          }
+        : region.kind === "choice"
+          ? { ...region, values: Object.freeze([...region.values]) }
+          : { ...region },
+    );
+  }
+  const frozen: ModeEngineSpec<Ctx> = {
+    regions: Object.freeze(regions),
+    commands: Object.freeze({ ...spec.commands }),
+  };
+  if (spec.escOrder !== undefined) {
+    frozen.escOrder = Object.freeze([...spec.escOrder]);
+  }
+  if (spec.excludes !== undefined) {
+    frozen.excludes = Object.freeze(
+      spec.excludes.map((rule) => Object.freeze({ ...rule, set: Object.freeze({ ...rule.set }) })),
+    );
+  }
+  if (spec.on !== undefined) {
+    const on: Record<string, EventBinding> = {};
+    for (const [event, binding] of Object.entries(spec.on)) {
+      on[event] = typeof binding === "string" ? binding : Object.freeze({ ...binding });
+    }
+    frozen.on = Object.freeze(on);
+  }
+  if (spec.available !== undefined) {
+    frozen.available = Object.freeze({ ...spec.available });
+  }
+  return Object.freeze(frozen);
 }
 
 function validateValue(name: string, region: RegionSpec, value: RegionValue): void {
   if (region.kind === "toggle") {
     if (typeof value !== "boolean") {
       throw new Error(`mode engine: region "${name}" is a toggle; got ${JSON.stringify(value)}`);
+    }
+    return;
+  }
+  if (region.kind === "open-choice") {
+    if (typeof value !== "string" || !region.accept(value)) {
+      throw new Error(`mode engine: region "${name}" rejected ${JSON.stringify(value)}`);
     }
     return;
   }
@@ -316,7 +420,7 @@ function escStep(region: RegionSpec, value: RegionValue): RegionValue | null {
   if (region.kind === "toggle") {
     return value === true ? false : null;
   }
-  if (region.kind === "choice") {
+  if (region.kind === "choice" || region.kind === "open-choice") {
     return value !== region.initial ? region.initial : null;
   }
   const index = region.rungs.indexOf(value as string);
@@ -329,7 +433,7 @@ function blurStep(region: RegionSpec, value: RegionValue): RegionValue | null {
   if (region.kind === "toggle") {
     return region.blurExits === true && value === true ? false : null;
   }
-  if (region.kind === "choice") {
+  if (region.kind === "choice" || region.kind === "open-choice") {
     return region.blurExits === true && value !== region.initial ? region.initial : null;
   }
   if (!region.blurExitsFrom.includes(value as string)) {
@@ -339,10 +443,17 @@ function blurStep(region: RegionSpec, value: RegionValue): RegionValue | null {
   return index > 0 ? region.rungs[index - 1] : null;
 }
 
+/** The regions whose value differs between two states. */
+function changedRegions(before: EngineState, after: EngineState): string[] {
+  return after === before ? [] : Object.keys(after).filter((name) => after[name] !== before[name]);
+}
+
 export function createModeEngine<Ctx>(
-  spec: ModeEngineSpec<Ctx>,
+  input: ModeEngineSpec<Ctx>,
   options: ModeEngineOptions<Ctx>,
 ): ModeEngine<Ctx> {
+  const spec = freezeSpec(input);
+
   // ── spec validation, once, loudly ─────────────────────────────────────────
   for (const [name, region] of Object.entries(spec.regions)) {
     validateValue(name, region, region.initial);
@@ -388,6 +499,17 @@ export function createModeEngine<Ctx>(
       throw new Error(`mode engine: "${name}" collides with the built-in region setters`);
     }
   }
+  const isDispatchable = (command: string): boolean =>
+    spec.commands[command] !== undefined ||
+    command === "escape" ||
+    command === "blur" ||
+    (command.startsWith("set:") && spec.regions[command.slice(4)] !== undefined);
+  for (const [event, binding] of Object.entries(spec.on ?? {})) {
+    const target = typeof binding === "string" ? binding : binding.command;
+    if (!isDispatchable(target)) {
+      throw new Error(`mode engine: binding "${event}" targets unknown command "${target}"`);
+    }
+  }
 
   // ── initial state ──────────────────────────────────────────────────────────
   const initialEntries: Record<string, RegionValue> = {};
@@ -406,6 +528,12 @@ export function createModeEngine<Ctx>(
   let state: EngineState = Object.freeze(initialEntries);
   let ctx: Ctx = options.context;
   const commit = options.commit ?? ((apply: () => void) => apply());
+  const report =
+    options.onError ??
+    ((error: unknown, event: EngineEvent) => {
+      const during = event.kind === "dispatch" ? `"${event.command}"` : "a context change";
+      console.error(`[aiui-viz/mode-engine] subscriber threw during ${during}`, error);
+    });
   const listeners = new Set<(state: EngineState, event: EngineEvent) => void>();
 
   const applyPatch = (base: EngineState, patch: StatePatch | null | undefined): EngineState => {
@@ -442,6 +570,12 @@ export function createModeEngine<Ctx>(
   // disarmed boot, under a disarmed-forces-ink-off rule).
   state = applyExcludes(state);
 
+  /** The patch plus the excludes — the one computation dispatch and canDispatch share. */
+  const reduce = (base: EngineState, patch: StatePatch | null | undefined): EngineState => {
+    const afterCommand = applyPatch(base, patch);
+    return afterCommand === base ? base : applyExcludes(afterCommand);
+  };
+
   const resolveBuiltin = (command: string): StatePatch | null => {
     if (command === "escape") {
       for (const name of spec.escOrder ?? []) {
@@ -465,71 +599,93 @@ export function createModeEngine<Ctx>(
     return null;
   };
 
-  const notify = (event: EngineEvent): void => {
-    for (const listener of listeners) {
-      listener(state, event);
-    }
-  };
-
-  // Nested dispatches (a subscriber reacting inside the commit) queue and run
-  // after the current commit — single-writer linearity, never interleaving.
-  let committing = false;
-  const queued: Array<{ command: string; payload: unknown }> = [];
-  const drainQueue = (): void => {
-    while (queued.length > 0) {
-      const next = queued.shift();
-      if (next !== undefined) {
-        dispatch(next.command, next.payload);
-      }
-    }
-  };
-
-  const dispatch = (command: string, payload?: unknown): EngineState => {
-    if (committing) {
-      queued.push({ command, payload });
-      return state;
-    }
-    // The availability gate is the machine's, not the bar's. Every caller —
-    // a cap, a key, an agent's control() write, a recovered turn — arrives
-    // here, so this is the only place the rule can actually hold.
-    const gate = spec.available?.[command];
-    if (gate !== undefined && !gate(state, ctx)) {
-      return state;
-    }
-    let patch: StatePatch | null | undefined;
+  /** What a command resolves to against the committed state: a built-in, a setter, or a declared reduction. */
+  const resolvePatch = (command: string, payload: unknown): StatePatch | null | undefined => {
     if (command === "escape" || command === "blur") {
-      patch = resolveBuiltin(command);
-    } else if (command.startsWith("set:")) {
+      return resolveBuiltin(command);
+    }
+    if (command.startsWith("set:")) {
       const name = command.slice(4);
       if (spec.regions[name] === undefined) {
         throw new Error(`mode engine: "${command}" names unknown region "${name}"`);
       }
-      patch = { [name]: payload as RegionValue };
-    } else {
-      const fn = spec.commands[command];
-      if (fn === undefined) {
-        throw new Error(`mode engine: unknown command "${command}"`);
-      }
-      patch = fn(state, payload, ctx);
+      return { [name]: payload as RegionValue };
     }
+    const fn = spec.commands[command];
+    if (fn === undefined) {
+      throw new Error(`mode engine: unknown command "${command}"`);
+    }
+    return fn(state, payload, ctx);
+  };
 
-    const before = state;
-    const afterCommand = applyPatch(before, patch);
-    const after = afterCommand === before ? before : applyExcludes(afterCommand);
-    const changed = Object.keys(after).filter((name) => after[name] !== before[name]);
-    const event: DispatchEvent = { kind: "dispatch", command, payload, before, after, changed };
-    options.onDispatch?.(event);
-    if (changed.length === 0) {
-      return state;
+  // Every subscriber hears every commit: a throw is reported and the loop
+  // goes on, so the notified world never lags the committed state.
+  const notify = (event: EngineEvent): void => {
+    for (const listener of listeners) {
+      try {
+        listener(state, event);
+      } catch (error) {
+        report(error, event);
+      }
     }
-    state = after;
+  };
+
+  // Work started from inside a commit (a subscriber dispatching, a subscriber
+  // changing the context) queues and runs after the current commit —
+  // single-writer linearity, never interleaving, whatever the nesting.
+  let committing = false;
+  const queued: Array<() => void> = [];
+  const runCommit = (event: EngineEvent): void => {
     committing = true;
     try {
       commit(() => notify(event));
     } finally {
       committing = false;
     }
-    drainQueue();
+    while (queued.length > 0) {
+      queued.shift()?.();
+    }
+  };
+
+  const dispatch = (command: string, payload?: unknown): EngineState => {
+    if (committing) {
+      queued.push(() => dispatch(command, payload));
+      return state;
+    }
+    // The availability gate is the machine's, not a surface's. Every caller
+    // — a button, a key, an agent's write, a recovered turn — arrives here,
+    // so this is the only place the rule can actually hold.
+    const gate = spec.available?.[command];
+    if (gate !== undefined && !gate(state, ctx)) {
+      options.onDispatch?.({
+        kind: "dispatch",
+        command,
+        payload,
+        before: state,
+        after: state,
+        changed: [],
+        refused: true,
+      });
+      return state;
+    }
+    const before = state;
+    const after = reduce(before, resolvePatch(command, payload));
+    const changed = changedRegions(before, after);
+    const event: DispatchEvent = {
+      kind: "dispatch",
+      command,
+      payload,
+      before,
+      after,
+      changed,
+      refused: false,
+    };
+    options.onDispatch?.(event);
+    if (changed.length === 0) {
+      return state;
+    }
+    state = after;
+    runCommit(event);
     return state;
   };
 
@@ -538,28 +694,9 @@ export function createModeEngine<Ctx>(
     if (override !== undefined) {
       return override(state, ctx);
     }
-    if (command === "escape" || command === "blur") {
-      return resolveBuiltin(command) !== null;
-    }
-    if (command.startsWith("set:")) {
-      return spec.regions[command.slice(4)] !== undefined;
-    }
-    const fn = spec.commands[command];
-    if (fn === undefined) {
-      throw new Error(`mode engine: unknown command "${command}"`);
-    }
-    const patch = fn(state, payload, ctx);
-    if (patch === null || patch === undefined) {
-      return false;
-    }
     // The same pure computation dispatch performs — excludes included, so a
     // reduction the excludes would immediately revert reads as unavailable.
-    const after = applyPatch(state, patch);
-    if (after === state) {
-      return false;
-    }
-    const final = applyExcludes(after);
-    return Object.keys(final).some((name) => final[name] !== state[name]);
+    return changedRegions(state, reduce(state, resolvePatch(command, payload))).length > 0;
   };
 
   const emit = (event: string, payload?: unknown): EngineState => {
@@ -573,22 +710,22 @@ export function createModeEngine<Ctx>(
     return dispatch(binding.command, binding.payload !== undefined ? binding.payload : payload);
   };
 
+  const setContext = (patch: Partial<Ctx>): void => {
+    ctx = { ...ctx, ...patch };
+    if (committing) {
+      queued.push(() => runCommit({ kind: "context" }));
+      return;
+    }
+    runCommit({ kind: "context" });
+  };
+
   return {
     state: () => state,
     context: () => ctx,
     dispatch,
     canDispatch,
     emit,
-    setContext: (patch) => {
-      ctx = { ...ctx, ...patch };
-      committing = true;
-      try {
-        commit(() => notify({ kind: "context" }));
-      } finally {
-        committing = false;
-      }
-      drainQueue();
-    },
+    setContext,
     subscribe: (listener) => {
       listeners.add(listener);
       return () => listeners.delete(listener);

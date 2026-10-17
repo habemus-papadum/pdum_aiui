@@ -1,10 +1,7 @@
 /**
- * Guarded async effects (modal-interaction-lessons §4.4, rules §3.6 and the
- * timeout half of §3.11).
- *
- * Modal effects — mic acquisition, screen captures, model round-trips — are
- * launched from a command and deliver results as events. Two disciplines are
- * structural here so no call site can forget them:
+ * Guarded async effects — one async operation under three disciplines that
+ * are structural here so no call site can forget them (the lessons behind
+ * them are recorded in docs/mode-engine.md):
  *
  *  - **Completion-time revalidation.** Launch-time checks are worthless for
  *    slow effects: a screenshot that resolves after the share picker (seconds
@@ -15,6 +12,10 @@
  *    problem — no mode may wedge on a promise (the "Enter waits for a
  *    transcript that will never come" class). The ceiling aborts the signal
  *    and resolves `"timeout"`.
+ *  - **An outer abort.** The caller may hand in its own `signal` (a claim
+ *    superseded while acquiring); its abort is forwarded to the run's signal
+ *    at once, and a run that then fails resolves `"aborted"` — not a fault,
+ *    the caller asked. A run that lands anyway is judged by `stillValid`.
  *
  * `guardedEffect` never rejects; every outcome is data the caller folds.
  */
@@ -24,6 +25,8 @@ export type GuardedOutcome<T> =
   /** Completed, but `stillValid()` said the world moved on — drop the value. */
   | { status: "stale"; value: T }
   | { status: "timeout" }
+  /** The caller's outer `signal` aborted the run before it landed. */
+  | { status: "aborted" }
   | { status: "error"; error: unknown };
 
 export interface GuardOptions {
@@ -34,6 +37,11 @@ export interface GuardOptions {
    * mode/turn the effect was launched for is gone.
    */
   stillValid?: () => boolean;
+  /**
+   * An outer abort signal: its abort is forwarded to the run's signal (with
+   * the same reason) the moment it fires, before any ceiling.
+   */
+  signal?: AbortSignal;
 }
 
 export async function guardedEffect<T>(
@@ -41,6 +49,15 @@ export async function guardedEffect<T>(
   run: (signal: AbortSignal) => Promise<T>,
 ): Promise<GuardedOutcome<T>> {
   const controller = new AbortController();
+  const outer = options.signal;
+  const forward = () => controller.abort(outer?.reason);
+  if (outer !== undefined) {
+    if (outer.aborted) {
+      forward();
+    } else {
+      outer.addEventListener("abort", forward, { once: true });
+    }
+  }
   let timedOut = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const ceiling =
@@ -61,9 +78,13 @@ export async function guardedEffect<T>(
       }
       return { status: "ok", value };
     } catch (error) {
-      // The abort we caused is the timeout outcome, not an error.
+      // The abort we caused is the timeout outcome, not an error; the abort
+      // the caller caused is theirs to expect.
       if (timedOut) {
         return { status: "timeout" };
+      }
+      if (outer?.aborted) {
+        return { status: "aborted" };
       }
       return { status: "error", error };
     }
@@ -74,5 +95,6 @@ export async function guardedEffect<T>(
     if (timer !== undefined) {
       clearTimeout(timer);
     }
+    outer?.removeEventListener("abort", forward);
   }
 }

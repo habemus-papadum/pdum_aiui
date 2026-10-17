@@ -1,9 +1,9 @@
 /**
  * claims.ts — operations, derived: the async half of the mode engine
- * (the mode-engine spec §3.4, git history).
+ * (docs/mode-engine.md).
  *
  * A **claim** is a pure function from (state, context) to a *desired
- * operation* keyed by identity — "ink pointer on tab 42", "tab stream warm
+ * operation* keyed by identity — "capture from source 3", "tab stream warm
  * on tab 7", "sampling at 1 fps" — or null when nothing is desired. The
  * reconciler diffs desired against actual after every commit and drives the
  * async appliers (acquire/release), each run under `guardedEffect` so
@@ -13,27 +13,29 @@
  * This retires the hand-called `sync*` function as a category: the appliers
  * exist, but nobody calls them by hand — a forgotten sync becomes
  * structurally impossible ("a missed transition costs one reconcile, not a
- * wedged UI", generalized from reconcile.ts to async resources).
+ * wedged UI").
  *
  * Per-claim **status** — idle | pending | active | error | stale — is the
- * "neither on nor off" state the mode inventory kept finding (mic granted
- * but idle, stream warming, video on but not sampling): derived and
- * displayable, never stored in an ad-hoc flag.
+ * "neither on nor off" state (mic granted but idle, stream warming, video on
+ * but not sampling): derived and displayable, never stored in an ad-hoc flag.
  *
  * Semantics, precisely:
  *  - operations on one claim are strictly sequential (release completes
  *    before the next acquire starts); distinct claims are independent;
- *  - a desire change during an in-flight acquire supersedes it: the acquired
- *    value is released immediately (never adopted), and the newest desire is
- *    applied next — retraction truth: the newest desire wins, even when it
+ *  - a desire change during an in-flight acquire supersedes it: the acquire's
+ *    signal is aborted at once (a driver listening on it releases what it
+ *    holds — a pending getUserMedia stops the tracks the moment they land);
+ *    a value that lands anyway is released, never adopted; the newest desire
+ *    is applied next — retraction truth: the newest desire wins, even when it
  *    is null;
  *  - an acquire error (or ceiling timeout) parks the claim in `error` until
- *    the desire CHANGES (or `retry()` is called) — no hot retry loops;
+ *    the desire CHANGES (or `retry()` is called) — no hot retry loops; an
+ *    acquire that fails because we aborted it is not a fault;
  *  - release errors are reported and the actual is dropped anyway (a release
  *    that throws must not wedge the claim).
  *
- * Realm rules: no Solid, no DOM — statuses flow through a callback; the
- * Solid adapter mirrors them into signals.
+ * Realm rules: no Solid, no DOM — statuses flow through a callback; a host
+ * folds them into its own state (the audio hub puts them in its snapshot).
  */
 
 import { guardedEffect } from "./effect";
@@ -51,7 +53,7 @@ export interface ClaimStatus {
 export interface ClaimSpec<S, Ctx, D, A> {
   /** The pure derivation: what should exist right now (null = nothing). */
   derive: (state: S, ctx: Ctx) => D | null;
-  /** Bring the operation into being. The signal aborts on supersession/ceiling. */
+  /** Bring the operation into being. The signal aborts on supersession and at the ceiling. */
   acquire: (desire: D, signal: AbortSignal) => Promise<A>;
   /** Tear it down. Must be idempotent-ish; errors are reported, not fatal. */
   release?: (actual: A, desire: D) => void | Promise<void>;
@@ -67,7 +69,7 @@ export type ClaimSpecs<S, Ctx> = Readonly<Record<string, ClaimSpec<S, Ctx, any, 
 export interface ClaimsOptions<S, Ctx> {
   getState: () => S;
   getCtx: () => Ctx;
-  /** Status sink — fired on every phase change (the adapter mirrors to signals). */
+  /** Status sink — fired on every phase change (a host mirrors it into its own state). */
   onStatus?: (name: string, status: ClaimStatus) => void;
   /** Failure sink; defaults to console.error. */
   onError?: (name: string, error: unknown) => void;
@@ -101,6 +103,8 @@ interface ClaimRuntime<D, A> {
   /** What is actually held right now, and the desire it was acquired for. */
   actual: A | undefined;
   actualDesire: D | undefined;
+  /** The in-flight acquire's abort handle; a new desire pulls it. */
+  inFlight: AbortController | undefined;
   /** The per-claim operation chain — strictly sequential. */
   chain: Promise<void>;
   status: ClaimStatus;
@@ -124,6 +128,7 @@ export function createClaims<S, Ctx>(
       generation: 0,
       actual: undefined,
       actualDesire: undefined,
+      inFlight: undefined,
       chain: Promise.resolve(),
       status: { phase: "idle" },
     });
@@ -168,13 +173,19 @@ export function createClaims<S, Ctx>(
       setStatus(name, { phase: "idle" });
       return;
     }
+    const controller = new AbortController();
+    runtime.inFlight = controller;
     const outcome = await guardedEffect(
       {
         ...(spec.ceilingMs !== undefined ? { ceilingMs: spec.ceilingMs } : {}),
         stillValid: () => generation === runtime.generation,
+        signal: controller.signal,
       },
       (signal) => spec.acquire(desire, signal),
     );
+    if (runtime.inFlight === controller) {
+      runtime.inFlight = undefined;
+    }
     if (outcome.status === "ok") {
       runtime.actual = outcome.value;
       runtime.actualDesire = desire;
@@ -193,6 +204,11 @@ export function createClaims<S, Ctx>(
       }
       return;
     }
+    if (outcome.status === "aborted" || generation !== runtime.generation) {
+      // Superseded while acquiring and nothing landed: not a fault. The
+      // newest desire's `pending` status stands; its settle is queued behind.
+      return;
+    }
     const error = outcome.status === "timeout" ? { timeout: true } : outcome.error;
     setStatus(name, { phase: "error", desire, error });
     report(name, error);
@@ -206,6 +222,10 @@ export function createClaims<S, Ctx>(
     runtime.desired = desire;
     runtime.generation += 1;
     const generation = runtime.generation;
+    // Pull the in-flight acquire now, not when it lands: a driver listening
+    // on its signal releases promptly instead of at the ceiling.
+    runtime.inFlight?.abort(new DOMException("Claim superseded", "AbortError"));
+    runtime.inFlight = undefined;
     setStatus(name, { phase: "pending", desire: desire ?? undefined });
     runtime.chain = runtime.chain.then(() => settle(name, generation));
   };

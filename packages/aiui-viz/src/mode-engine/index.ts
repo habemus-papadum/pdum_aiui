@@ -4,8 +4,9 @@
  * the settings imply. The design note (the contract, what was retired and
  * why, what to consider when those needs return) is docs/mode-engine.md.
  *
- * - `createModeEngine` (engine.ts) — regions (`ladder` / `toggle` / `choice`),
- *   commands, excludes, mechanical esc/blur, the commit path with its queue.
+ * - `createModeEngine` (engine.ts) — regions (`ladder` / `toggle` / `choice`
+ *   / `openChoice`), commands, excludes, mechanical esc/blur, the commit
+ *   path with its queue.
  * - `createClaims` (claims.ts) — desired operations derived from (state,
  *   context), reconciled after every commit, with per-claim status and
  *   supersession that aborts the in-flight acquire.
@@ -42,6 +43,8 @@ export {
   type ModeEngine,
   type ModeEngineOptions,
   type ModeEngineSpec,
+  type OpenChoiceRegion,
+  openChoice,
   type RegionSpec,
   type RegionValue,
   type StatePatch,

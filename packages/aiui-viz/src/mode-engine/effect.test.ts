@@ -81,4 +81,48 @@ describe("guardedEffect", () => {
     expect(outcome.status).toBe("error");
     expect(vi.getTimerCount()).toBe(0);
   });
+
+  it("an outer signal's abort is forwarded at once and reads as `aborted`, not error", async () => {
+    const outer = new AbortController();
+    let seen: AbortSignal | undefined;
+    const outcome = guardedEffect({ signal: outer.signal, ceilingMs: 60_000 }, (signal) => {
+      seen = signal;
+      return new Promise<never>((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+      });
+    });
+    expect(seen?.aborted).toBe(false);
+    outer.abort(new Error("superseded"));
+    expect(seen?.aborted).toBe(true); // forwarded synchronously, long before the ceiling
+    expect(seen?.reason).toEqual(new Error("superseded"));
+    expect(await outcome).toEqual({ status: "aborted" });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("an already-aborted outer signal aborts the run's signal before it starts", async () => {
+    const outer = new AbortController();
+    outer.abort();
+    const outcome = await guardedEffect({ signal: outer.signal }, async (signal) => {
+      if (signal.aborted) {
+        throw new Error("never started");
+      }
+      return "ran";
+    });
+    expect(outcome).toEqual({ status: "aborted" });
+  });
+
+  it("a run that lands despite the outer abort is judged by stillValid, like any late result", async () => {
+    const outer = new AbortController();
+    let land!: (value: string) => void;
+    const outcome = guardedEffect(
+      { signal: outer.signal, stillValid: () => !outer.signal.aborted },
+      () =>
+        new Promise<string>((resolve) => {
+          land = resolve;
+        }),
+    );
+    outer.abort();
+    land("stream"); // getUserMedia cannot be cancelled: the stream arrives anyway
+    expect(await outcome).toEqual({ status: "stale", value: "stream" }); // handed back to release
+  });
 });

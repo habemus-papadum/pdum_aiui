@@ -7,13 +7,16 @@
  * ladder with an esc floor, standing toggles, a talk choice, transient
  * help/leader, a blur-exiting picker ladder) so the rows read like §13.6.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
+  type ChoiceRegion,
   choice,
   createModeEngine,
   type DispatchEvent,
+  type EngineEvent,
   ladder,
   type ModeEngineSpec,
+  openChoice,
   toggle,
 } from "./engine";
 
@@ -303,10 +306,97 @@ describe("commit and trace", () => {
     });
     e.dispatch("arm");
     e.dispatch("escape"); // no-op at the floor
-    expect(events.map((ev) => [ev.command, ev.changed])).toEqual([
-      ["arm", ["phase"]],
-      ["escape", []],
+    expect(events.map((ev) => [ev.command, ev.changed, ev.refused])).toEqual([
+      ["arm", ["phase"], false],
+      ["escape", [], false],
     ]);
+  });
+
+  it("a gate-refused dispatch is traced too, flagged refused", () => {
+    const events: DispatchEvent[] = [];
+    const e = createModeEngine(
+      { ...fullSpec, available: { arm: (_s, ctx) => ctx.grantedTab !== undefined } },
+      { context: { grantedTab: undefined }, onDispatch: (event) => events.push(event) },
+    );
+    e.dispatch("arm");
+    expect(events.map((ev) => [ev.command, ev.refused, ev.changed])).toEqual([["arm", true, []]]);
+    expect(events[0].before).toBe(events[0].after);
+  });
+
+  it("a setContext from inside a subscriber does not clear the commit — the next subscriber's dispatch still queues", () => {
+    const e = engine();
+    const log: string[] = [];
+    const tag = (event: EngineEvent) => (event.kind === "dispatch" ? event.command : "context");
+    e.subscribe((state, event) => {
+      log.push(`L1:${tag(event)}:${state.phase}`);
+      if (event.kind === "dispatch" && event.command === "arm") {
+        e.setContext({ grantedTab: 1 }); // facts change now; the event waits its turn
+      }
+    });
+    e.subscribe((state, event) => {
+      log.push(`L2:${tag(event)}:${state.phase}`);
+      if (event.kind === "dispatch" && event.command === "arm") {
+        expect(e.context().grantedTab).toBe(1);
+        e.dispatch("openTurn"); // must queue, not run inside the arm commit
+      }
+    });
+    e.subscribe((state, event) => {
+      log.push(`L3:${tag(event)}:${state.phase}`);
+    });
+    e.dispatch("arm");
+    expect(log).toEqual([
+      // the arm commit, heard whole by everyone…
+      "L1:arm:armed",
+      "L2:arm:armed",
+      "L3:arm:armed",
+      // …then the queued context event, then the queued dispatch, in order
+      "L1:context:armed",
+      "L2:context:armed",
+      "L3:context:armed",
+      "L1:openTurn:turn",
+      "L2:openTurn:turn",
+      "L3:openTurn:turn",
+    ]);
+  });
+
+  it("a throwing subscriber is reported; the others still hear the commit and the queue still drains", () => {
+    const errors: unknown[] = [];
+    const e = createModeEngine(fullSpec, {
+      context: { grantedTab: undefined },
+      onError: (error) => errors.push(error),
+    });
+    const heard: string[] = [];
+    let thrown = false;
+    e.subscribe((_state, event) => {
+      if (event.kind === "dispatch" && event.command === "arm") {
+        e.dispatch("openTurn"); // queued behind the arm commit
+        if (!thrown) {
+          thrown = true;
+          throw new Error("boom");
+        }
+      }
+    });
+    e.subscribe((state, event) => {
+      heard.push(`${event.kind === "dispatch" ? event.command : "context"}:${state.phase}`);
+    });
+    // arm commits, then the queued openTurn runs — before dispatch returns.
+    expect(e.dispatch("arm").phase).toBe("turn");
+    expect(heard).toEqual(["arm:armed", "openTurn:turn"]);
+    expect(errors).toEqual([expect.objectContaining({ message: "boom" })]);
+  });
+
+  it("the default failure sink is console.error, and the dispatch still returns the new state", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const e = engine();
+      e.subscribe(() => {
+        throw new Error("mirror broke");
+      });
+      expect(e.dispatch("arm").phase).toBe("armed");
+      expect(spy).toHaveBeenCalledTimes(1);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 
@@ -376,6 +466,20 @@ describe("canDispatch: availability is derived from the reducer", () => {
     expect(e.state().phase).toBe("armed");
   });
 
+  it("set:<region> compares the payload against the committed state, excludes included", () => {
+    const e = engine();
+    expect(e.canDispatch("set:video", false)).toBe(false); // already off — nothing to do
+    expect(e.canDispatch("set:video", true)).toBe(true);
+    e.dispatch("set:video", true);
+    expect(e.canDispatch("set:video", true)).toBe(false);
+    e.dispatch("arm");
+    e.dispatch("talkTo", "realtime"); // the exclude turns video off…
+    expect(e.state().video).toBe(false);
+    expect(e.canDispatch("set:video", true)).toBe(false); // …and would again: unavailable
+    expect(() => e.canDispatch("set:nope", true)).toThrow(/unknown region/);
+    expect(() => e.canDispatch("set:video", "sideways")).toThrow(/is a toggle/);
+  });
+
   it("throws on unknown commands and validates available keys at creation", () => {
     expect(() => engine().canDispatch("frobnicate")).toThrow(/unknown command/);
     expect(() =>
@@ -408,6 +512,90 @@ describe("spec validation at creation", () => {
         { context: {} },
       ),
     ).toThrow(/built-in/);
+  });
+
+  it("rejects bindings whose target is not dispatchable; built-ins and setters are", () => {
+    expect(() =>
+      createModeEngine(
+        { regions: { x: toggle() }, commands: {}, on: { ping: "ghost" } },
+        { context: {} },
+      ),
+    ).toThrow(/binding "ping" targets unknown command "ghost"/);
+    expect(() =>
+      createModeEngine(
+        {
+          regions: { x: toggle() },
+          commands: {},
+          on: { ping: { command: "set:y", payload: true } },
+        },
+        { context: {} },
+      ),
+    ).toThrow(/unknown command "set:y"/);
+    const e = createModeEngine(
+      {
+        regions: { x: toggle({ blurExits: true }) },
+        commands: {},
+        on: { blurred: "blur", flip: { command: "set:x", payload: true } },
+      },
+      { context: {} },
+    );
+    expect(e.emit("flip").x).toBe(true);
+    expect(e.emit("blurred").x).toBe(false);
+  });
+
+  it("the spec is a frozen snapshot — late mutation of the caller's arrays changes nothing", () => {
+    const values = ["a", "b"];
+    const e = createModeEngine(
+      { regions: { pick: choice(values) }, commands: {} },
+      { context: {} },
+    );
+    values.push("c"); // the hidden contract the audio hub once relied on
+    expect(() => e.dispatch("set:pick", "c")).toThrow(/allows "a" \| "b"/);
+    expect(Object.isFrozen(e.spec)).toBe(true);
+    expect(Object.isFrozen(e.spec.regions)).toBe(true);
+    expect(Object.isFrozen(e.spec.regions.pick)).toBe(true);
+    expect(Object.isFrozen((e.spec.regions.pick as ChoiceRegion).values)).toBe(true);
+    expect(Object.isFrozen(e.spec.commands)).toBe(true);
+  });
+});
+
+describe("openChoice: a set the spec cannot enumerate", () => {
+  it("validates writes through the predicate, read live", () => {
+    const registered = new Set<string>();
+    const e = createModeEngine(
+      {
+        regions: { device: openChoice((id) => id === "" || registered.has(id)) },
+        commands: { pick: (_s, id) => ({ device: id as string }) },
+      },
+      { context: {} },
+    );
+    expect(e.state().device).toBe("");
+    expect(() => e.dispatch("pick", "mic-1")).toThrow(/rejected "mic-1"/);
+    registered.add("mic-1");
+    expect(e.dispatch("pick", "mic-1").device).toBe("mic-1");
+    expect(e.canDispatch("pick", "mic-1")).toBe(false); // already there
+    registered.delete("mic-1"); // a removed id stays as state until the next write…
+    expect(e.state().device).toBe("mic-1");
+    expect(() => e.dispatch("pick", "mic-1")).toThrow(/rejected/); // …but cannot be chosen again
+  });
+
+  it("the initial must pass the predicate; esc and blur restore it like a choice", () => {
+    expect(() =>
+      createModeEngine({ regions: { d: openChoice(() => false) }, commands: {} }, { context: {} }),
+    ).toThrow(/rejected ""/);
+    const e = createModeEngine(
+      {
+        regions: { d: openChoice(() => true, { blurExits: true }) },
+        commands: {},
+        escOrder: ["d"],
+      },
+      { context: {} },
+    );
+    e.dispatch("set:d", "x");
+    expect(e.dispatch("blur").d).toBe("");
+    e.dispatch("set:d", "y");
+    expect(e.canDispatch("escape")).toBe(true);
+    expect(e.dispatch("escape").d).toBe("");
   });
 });
 
