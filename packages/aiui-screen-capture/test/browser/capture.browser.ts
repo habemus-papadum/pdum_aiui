@@ -1,5 +1,12 @@
 import { expect, test } from "@playwright/test";
 
+// The centre pixel of the captured frame, snapped to the nearest primary. Tab capture
+// round-trips the frame through YUV, and CI's software path encodes BT.601 but decodes BT.709:
+// pure red comes back as (255, 25, 0) and pure blue as (0, 15, 255) — the matrix arithmetic
+// exactly — and pure green would land near (0, 215, 0). The tests ask which element is in
+// frame, not how faithful the chroma is, so each channel is classified at the midpoint.
+const primary = (pixel: number[]) => pixel.map((channel) => (channel < 128 ? 0 : 255));
+
 test.afterEach(async ({ page }, info) => {
   if (info.status === info.expectedStatus) return;
   const diagnostic = await page.evaluate(() => {
@@ -69,11 +76,7 @@ test("native region capture follows size, scroll, target changes and clearing", 
     )
     .toBeCloseTo(300 / 180);
   await expect
-    .poll(() =>
-      page.evaluate(() =>
-        window.pixel().map((channel) => (channel < 8 ? 0 : channel > 247 ? 255 : channel)),
-      ),
-    )
+    .poll(() => page.evaluate(() => window.pixel()).then(primary))
     .toEqual([0, 0, 255, 255]);
   await page.locator("#first").evaluate((element) => {
     element.style.width = "240px";
@@ -127,11 +130,7 @@ test("native region capture follows size, scroll, target changes and clearing", 
     )
     .toBeCloseTo(2);
   await expect
-    .poll(() =>
-      page.evaluate(() =>
-        window.pixel().map((channel) => (channel < 8 ? 0 : channel > 247 ? 255 : channel)),
-      ),
-    )
+    .poll(() => page.evaluate(() => window.pixel()).then(primary))
     .toEqual([0, 255, 0, 255]);
   await page.getByLabel("Capture area", { exact: true }).selectOption("");
   await expect
@@ -165,11 +164,7 @@ test("native element isolation excludes overlapping siblings and survives hiding
     )
     .toBeCloseTo(300 / 180);
   await expect
-    .poll(() =>
-      page.evaluate(() =>
-        window.pixel().map((channel) => (channel < 8 ? 0 : channel > 247 ? 255 : channel)),
-      ),
-    )
+    .poll(() => page.evaluate(() => window.pixel()).then(primary))
     .toEqual([255, 0, 0, 255]);
   await page.locator("#first").evaluate((element) => {
     element.style.display = "none";
@@ -195,27 +190,15 @@ test("native element isolation excludes overlapping siblings and survives hiding
     .poll(() => page.evaluate(() => window.capture.snapshot().crop?.available))
     .toBe(true);
   await expect
-    .poll(() =>
-      page.evaluate(() =>
-        window.pixel().map((channel) => (channel < 8 ? 0 : channel > 247 ? 255 : channel)),
-      ),
-    )
+    .poll(() => page.evaluate(() => window.pixel()).then(primary))
     .toEqual([255, 0, 0, 255]);
   await page.getByLabel("Crop mode").selectOption("region");
   await expect
-    .poll(() =>
-      page.evaluate(() =>
-        window.pixel().map((channel) => (channel < 8 ? 0 : channel > 247 ? 255 : channel)),
-      ),
-    )
+    .poll(() => page.evaluate(() => window.pixel()).then(primary))
     .toEqual([0, 0, 255, 255]);
   await page.getByLabel("Crop mode").selectOption("element");
   await expect
-    .poll(() =>
-      page.evaluate(() =>
-        window.pixel().map((channel) => (channel < 8 ? 0 : channel > 247 ? 255 : channel)),
-      ),
-    )
+    .poll(() => page.evaluate(() => window.pixel()).then(primary))
     .toEqual([255, 0, 0, 255]);
 });
 
