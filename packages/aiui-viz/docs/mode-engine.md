@@ -1,9 +1,11 @@
 # The mode engine
 
-Status: design note, 2026-10-17. The contract of `@habemus-papadum/aiui-viz/mode-engine`
-(`src/mode-engine/`: `engine.ts`, `claims.ts`, `effect.ts`), with its two sister subpaths
-`…/keys` (the key layer) and `…/live-text` (`LiveDiffText`, `wordDiff`), and the record of what was
-retired around it on 2026-10-17 and why. The pieces came out of two generations of intent client
+Status: design note, 2026-10-17. Three parts: **the ideas** (a first read — what each concept is
+for, with analogies to systems that solve the same problem), **the contract** of
+`@habemus-papadum/aiui-viz/mode-engine` (`src/mode-engine/`: `engine.ts`, `claims.ts`,
+`effect.ts`) with its two sister subpaths `…/keys` (the key layer) and `…/live-text`
+(`LiveDiffText`, `wordDiff`), and **the record** of what was retired around it on 2026-10-17 and
+why. The pieces came out of two generations of intent client
 (the overlay and the panel) that have since moved to another repository; the history that
 produced them is in git: the modeling exercise that specified the engine
 (`git show e90cddf2:docs/proposals/intent-client/01-mode-engine.md`) and the retrospective on the
@@ -11,7 +13,294 @@ overlay's modal system (`git show 3b75c24a:packages/aiui-viz/handoff/modal-inter
 Consumers today: the aiui-audio hub (`packages/aiui-audio/src/hub.ts`: one engine, one claim),
 aiui-slides and demos/walkthrough (the key layer), demos/audio (live text).
 
-## Part one — the contract
+## Part one — the ideas
+
+Read this part first; it explains why the contract below has the shape it has. Most sections end
+with the analogy that fits best, and with where it stops fitting.
+
+### The problem: a UI driven from every direction at once
+
+The engine came out of two interactive clients whose "modes" were toggled by keyboard (a leader
+grammar, a global shortcut whose meaning depended on state), by mouse (bar buttons that had to do
+exactly what the key did), by an agent (a voice tool writing `videoOn`), and by the world (a turn
+closing, a window blur, a tab disappearing, a socket dropping). Some axes were independent — ink,
+video and talk could all be on at once. Some were exclusive within themselves — dictation,
+hands-free and realtime were one choice. Some were hierarchical with an escape ladder —
+`disarmed ⊂ armed ⊂ turn ⊂ turn.tweak`, where Esc steps out one level. And many states were
+"neither on nor off": a microphone *granted but idle*, a tab stream *warming*, video *on but not
+sampling*. The inventory ran to about forty-six flags across the two apps, five hand-called
+`sync*` functions invoked from about thirty sites, and two separate stores for "armed". The bugs
+clustered in two places: fragments of an operation's progress written back into ad-hoc flags, and
+state written from one call site and read back, stale, from another in the same tick.
+
+This is the problem Harel statecharts were invented for — orthogonal regions and hierarchy — and
+the problem the Elm architecture and Redux solved on the write side: one pure function is the only
+thing that changes the model. The engine is a statechart subsetted to what those apps needed, plus
+a declarative resource reconciler for the asynchronous half that statecharts leave to the host.
+
+### The one idea: a mode is a setting plus an operation
+
+Everything else follows from a single split. A **setting** is what the user chose: standing,
+often durable across reloads, often visible to an agent (`capture: on`, `talk: dictation`). An
+**operation** is what the world is currently doing about that choice: derived from the settings
+and the facts, transient, usually asynchronous, and always *in some phase* — pending, active,
+failed. The "neither on nor off" states are not exotic values of the setting; they are the phase
+of the operation. Settings live in **regions**. Operations are **claims**. The rule that keeps the
+split honest: no code ever stores a fragment of operation status in a flag; it derives it.
+
+**Analogy.** Kubernetes separates a resource's `spec` (desired, what someone asked for) from its
+`status` (observed, what the controller has achieved so far). `replicas: 3` is a setting; three
+running pods are the operation; "2/3 ready" is its status, computed from the world and never
+edited by hand. The controller loop converges one to the other. Regions are the spec, claims are
+the controllers, claim status is the status subresource.
+
+### Regions — the settings
+
+A region is one named axis of the state with a value of its own; the engine's state is the
+product of all regions, a frozen plain object. Because each region is an enum (or a boolean),
+exclusion *inside* a region costs nothing, and orthogonality *between* regions is true by
+construction — there is no way to express "ink and video cannot both be on" except by writing an
+explicit cross-region rule, which is the point. Four kinds:
+
+- **`toggle()`** — a boolean standing flag (capture on, help open).
+- **`choice(values)`** — exactly one of a fixed list the spec enumerates (talk: off · dictation ·
+  hands-free · realtime). The list is frozen with the spec.
+- **`openChoice(accept)`** — one of a set the spec *cannot* enumerate: registered device ids, open
+  tabs. The host supplies a predicate, consulted at every write and read live. A value that stops
+  being acceptable stays as state until the next write — states are not revalidated, writes are.
+- **`ladder(rungs)`** — exclusive *and ordered*. Esc walks it downward one rung per press, never
+  below its `escFloor` (so Esc can cancel a turn without disarming; disarming stays a deliberate
+  command). A ladder is a statechart's nesting flattened to a list: the order *is* the hierarchy.
+
+Every region has an `initial`, which is also what Esc and blur restore. Regions may carry
+`durable`, `agent` and `description` flags; the core only carries them — a host adapter acts on
+them, and none in this repo does today.
+
+**Analogy.** In a statechart the regions are the AND-decomposition (parallel states) and a ladder
+is one OR-decomposition (nested states) written as a column. In Emacs, minor modes are toggles and
+the major mode is a choice. Vim's normal/insert/visual is a ladder-like exclusive axis — but Vim's
+Esc jumps straight to normal from anywhere, while this engine's Esc deliberately steps *one* rung,
+because the convention here is that Esc is never destructive beyond the scope you are in.
+
+### Context — facts, not choices
+
+Tab identity, a granted stream, a connection, the version of a source: inputs the world supplies,
+not settings anyone chose. They sit beside the state as `context`. No command sets them, they are
+never durable, Esc and blur never touch them — but claims derive from them, so `setContext`
+notifies subscribers with a `context` event and the claims reconcile. The test for which side a
+value belongs on: *would a user ever choose this?* If not, it is context. Putting a fact in a
+region would hand it Esc, blur and durability semantics that mean nothing for it.
+
+**Analogy.** Elm's `subscriptions` deliver outside facts as messages through `update`; here the
+facts bypass the reducer entirely and act as the environment the reducer and the claims read.
+Closer still: a controller's view of the cluster — observed, not requested.
+
+### Commands — the only writers
+
+`dispatch(command, payload)` runs a pure reducer `(state, payload, ctx) → patch` and commits the
+result. Every source of change funnels into it: the key resolver's answer, a button tap
+(synthesized through the same resolver, so a button cannot drift from its key), an agent's write
+through a control bridge, a system event through an `on` binding, a test. Built in for every spec:
+a `set:<region>` setter per region, `escape` and `blur`. An unknown command throws, loudly —
+commands are code, not user input. When nothing but the reducer writes machine state, the
+write-then-read-back trap (a signal written in one place and read, stale, in another during the
+same tick) has no call sites left to occur at; `state()` is a frozen object that is never stale,
+from any scope.
+
+**Excludes** are cross-region implications — "entering realtime turns the linter off" — declared
+once and applied after *every* command in declaration order, a single pass, no fixpoint. They also
+run over the initial state, so a persisted value cannot resurrect a forbidden combination. The
+discipline: an exclude is for an invariant that must hold *whichever* command moved the state.
+"Disarm turns everything off" is not an invariant; it is what the `disarm` command's reduction
+does.
+
+**Escape and blur** are resolved mechanically from the spec, not written per app. `escOrder` ranks
+the regions; one Esc steps the highest-ranked region that is not at its base out one level (a
+toggle to off, a choice to its initial, a ladder one rung down to its floor). A press with
+everything at base is a no-op the host may pass to the page. Blur is Esc's page-focus sibling,
+restricted to regions that opted in (`blurExits`, `blurExitsFrom`) — modes whose purpose is a
+round trip out of the page, where coming back must not resume them — and it steps every opted
+region in one dispatch.
+
+**Availability is derived, and it is a gate.** `canDispatch(command, payload)` dry-runs the same
+reducer-plus-excludes computation and asks "would anything change?" — so `set:talk` with the
+current value reads as unavailable, and so does a reduction the excludes would immediately
+revert. `available` overrides exist for *verbs* (commands that are pure effects and move no
+region, which would otherwise derive to "never") and for gates on context facts. And `dispatch`
+itself refuses an unavailable command and traces the refusal: a button, a key, an agent's write
+and a recovered turn all arrive at the same sink, so the sink is the only place a rule can
+actually hold.
+
+**Analogy.** The reducer is Elm's `update` or a Redux reducer; the patch *is* the write. Excludes
+are database `CHECK` constraints with a fix-up action rather than a rejection — but deliberately
+not a constraint solver: there is no fixpoint, and declaration order is the author's
+responsibility. `canDispatch` is the command pattern's `CanExecute` (WPF, Qt actions) with the
+answer derived from the reducer instead of hand-maintained next to each button.
+
+### The commit path
+
+State advances, then every subscriber is notified inside the host's `commit` hook (a plain call
+by default; a reactive host may pass its synchronous-commit primitive). Work started *from inside*
+a commit — a subscriber dispatching, a subscriber changing the context — is queued and runs after
+the current commit, so nested work never interleaves with a notify loop. A subscriber that throws
+is reported and the loop continues, so every subscriber hears every commit in order and the queue
+still drains. Every dispatch is traced through `onDispatch`, no-ops and refusals included.
+
+Together these give single-writer linearity: the sequence of committed states is a log, every
+subscriber reads the same log in the same order, and the notified world never lags the committed
+state. The trace is the log made visible — the retrospective's "mode changes should be events so
+traces show them and replay reproduces them".
+
+**Analogy.** A database commit whose triggers cannot re-enter the transaction: anything a trigger
+wants to do is queued as the next transaction. Redux enforces the same rule by throwing when a
+reducer dispatches; this engine queues instead, so the subscriber's intent is kept, just ordered.
+
+### Claims — the operations
+
+A claim is three functions. `derive(state, ctx)` returns the *desired operation* — a value keyed by
+identity ("capture from source 3", "sampling at 1 fps") — or `null` when nothing is desired.
+`acquire(desire, signal)` brings it into being and returns the *actual* (a handle, a release
+function). `release(actual, desire)` tears it down. `createClaims` diffs desired against actual
+after every commit (wire `reconcile` to `engine.subscribe`, unconditionally — it is cheap when
+nothing changed) and drives the appliers. Each claim carries a derived **status**: `idle`,
+`pending`, `active`, `error`, `stale`. That status is the "neither on nor off" state, displayable
+and never stored.
+
+The rules, each with the failure it prevents:
+
+- **One claim is strictly sequential** — release completes before the next acquire starts. A
+  device cannot be held twice; two claims are independent.
+- **A desire change supersedes an in-flight acquire at once.** The acquire's `AbortSignal` fires
+  the moment the desire moves, so a driver listening on it releases what it holds — a pending
+  `getUserMedia` stops its tracks the moment they land, not sixty seconds later at the ceiling. A
+  value that lands anyway is released, never adopted (`stale`). The newest desire is applied next,
+  *even when it is null*: retraction is a desire like any other.
+- **An error parks the claim** in `error` until the desire changes or `retry(name)` is called — no
+  hot retry loops. An acquire that fails because we aborted it is not a fault.
+- **A throwing release is reported** and the actual dropped anyway; a release must not wedge the
+  claim.
+
+There are no entry/exit hooks anywhere in the engine, on purpose. The retrospective's durable fix
+for a stranded overlay was not better transition bookkeeping but a per-event assertion from state:
+a missed transition then costs one reconcile, not a wedged UI. Claims are that assertion,
+generalised to asynchronous acquire/release with status.
+
+**Analogy.** This is the Kubernetes controller loop: desired versus actual, diffed on every
+change, converged, with a status the UI can show. It is also React's `useEffect` with a dependency
+array and a cleanup — `derive` is the dependency array computed as a value, `release` is the
+cleanup — plus the three things `useEffect` lacks: a status, strict sequencing, and cancellation
+of the in-flight run. RxJS users will recognise supersession as `switchMap`: the newest inner
+operation wins and the previous one is unsubscribed. The distinction the Kubernetes world draws
+between *level-triggered* and *edge-triggered* controllers is exactly the engine's position on
+effects: reconcile from the current state, never from the transition that led there.
+
+### `guardedEffect` — one asynchronous step under three disciplines
+
+Under every acquire sits `guardedEffect(options, run)`. It never rejects; every outcome is data
+the caller folds: `ok`, `stale`, `timeout`, `aborted`, `error`.
+
+- **Completion-time revalidation.** `stillValid` is checked when the result *arrives*, never at
+  launch — a screenshot that resolves seconds after a share picker can land in a turn that was
+  already sent. Launch-time checks are worthless for slow effects.
+- **A ceiling.** `ceilingMs` aborts the run's signal and resolves `timeout`. Timeouts are part of
+  the effect, not the caller's problem: no mode may wedge on a promise ("Enter waits for a
+  transcript that will never come").
+- **An outer abort.** The caller's `signal` (a superseded claim) is forwarded to the run at once,
+  and a run that then fails resolves `aborted`, not `error` — the caller asked.
+
+**Analogy.** Go's `context.Context` threads cancellation and a deadline through every call; the
+revalidation step is optimistic concurrency — compare the version at commit, not at start. The
+claims runtime literally does this with a per-claim `generation` counter.
+
+### The key layer (`…/keys`)
+
+A surface's keyboard is a **stack of layers** resolved top-down by a pure function,
+`resolveKey(stack, state, key, phase, repeat)`. A binding answers with a command, `"swallow"`
+(claimed, do nothing) or `"pass"`; a layer that binds nothing for a key answers with its mandatory
+`fallback`, so claim-or-pass is exhaustive by construction. `swallow` is the inert command that
+stops a held key's repeats from scrolling the page while an acquisition is still in flight — the
+bug behind it was a keymap whose default answer was `undefined`. A binding that explicitly answers
+`"pass"` skips its own layer's fallback and falls through to the layers below (an explicit pass is
+a choice). Layers activate on a state predicate, so the stack itself is static data: a config strip
+pushes a layer that claims three keys while everything beneath keeps its meaning — a *layer*, not a
+mode.
+
+`installKeys` is the single capture-phase listener on the document; it yields to typing targets
+(composedPath-aware, so inputs inside shadow DOM count) and components never fight it. `keyHints`
+derives the displayed cheat sheet from the same table with the same shadowing, so the keymap on
+screen and the keymap in force are one table; a UI tap executes by synthesizing its binding's first
+key through the resolver (`tapKey`), so a button cannot drift from its key. The layer never
+depended on the engine: aiui-slides dispatches into a six-case switch of its own.
+
+**Analogy.** Emacs keymaps: minor-mode maps shadow the major-mode map, which shadows the global
+map, resolved in precedence order, and binding a key to `ignore` is `swallow`. CSS specificity is
+the other everyday instance of "the first winning rule shadows the rest".
+
+### Live text (`…/live-text`)
+
+`wordDiff(before, after)` is a word-level longest-common-subsequence diff merged into runs;
+`LiveDiffText` is a live line where an *extension* (new words appended) renders instantly and a
+*revision* flashes the diff, then settles — the anti-strobe rule: only rewrites animate. Two tempo
+constants (`LIVE_FLASH_MS` for a stream, `SETTLE_FLASH_MS` for a discrete patch) keep every aiui
+surface animating at one speed, because the moment two surfaces animate change differently, users
+stop trusting either. The run classes are `aiui-diff-del` / `aiui-diff-add`; the surface owns the
+CSS.
+
+**Analogy.** `git diff --word-diff`, applied live to a transcript being revised in front of you.
+
+### Worked example: the aiui-audio hub
+
+The one in-repo consumer (`packages/aiui-audio/src/hub.ts`) shows the pieces fitting:
+
+```ts
+regions: {
+  capture: toggle(),  parked: toggle(),  outputMuted: toggle(),
+  input: openChoice(registered(inputs)),      // legal = "" or a registered endpoint id
+  temporary: openChoice(registered(inputs)),
+  output: openChoice(registered(outputs)),
+},
+commands: { start, stop, select, temporary, park, resume, output, mute },   // each returns a patch
+context: { sourceVersion: 0 }
+```
+
+One claim, `capture`: `derive` is `state.capture && !disposed ? ctx.sourceVersion : null`;
+`acquire` calls the driver's capture with the claim's signal and returns the release function;
+`release` calls it; the ceiling is sixty seconds. `onStatus` folds the claim's phase into the
+hub's snapshot — `pending` becomes `"starting"`, `active` becomes `"active"`, `error` carries the
+message — which is the only place "starting" exists: nobody stores it. The hub's one subscriber
+runs `claims.reconcile()`, re-derives the audio route, and asserts each output element's muted
+flag from state (render as reconciliation, for imperative DOM).
+
+Changing the microphone is instructive. `start(source)` does not dispatch a "restart" command: it
+bumps `sourceVersion`, calls `setContext`, dispatches `start`, and calls `retry("capture")`. The
+desire is the version, so the version change makes the reconciler release the old capture and
+acquire the new one in order; the source itself is a fact about the world, not a choice the
+reducer owns. A capture that ends on its own (the driver's end callback) dispatches `stop`, and the
+`capture` region follows the world.
+
+### What it is, and what it is not
+
+A statechart, subsetted: parallel regions, hierarchy as ladders, event-to-command bindings — and
+no history states, no nested parallel machines, no delayed transitions, no actor spawning. A
+statechart library was considered and rejected, narrowly: the chart semantics here are small, and
+the value is in the integrations — claims with status over guarded effects, the key layer, the
+commit discipline, the trace — which are bespoke either way. Because the spec is data, swapping a
+library into the kernel later would be a contained change. The engine is framework-free (no Solid,
+no DOM: it runs in node, workers and tests as plain data and functions); a reactive host mirrors
+`state()` into its own system from `subscribe`, and the retired Solid adapter in Part three is the
+shape that mirror took.
+
+### Where to look
+
+The tests are the executable version of this part, named by concept: `engine.test.ts`
+(the reducer table · excludes · escape · blur · bindings · commit and trace · canDispatch · spec
+validation · openChoice · immutability), `claims.test.ts` (derive → acquire → active · desire
+changes · failure · dispose), `effect.test.ts`. The two documents the engine grew out of are in git:
+the modeling exercise that inventoried the phenomena and specified the six concepts
+(`git show e90cddf2:docs/proposals/intent-client/01-mode-engine.md`), and the retrospective whose
+eleven rules the pieces encode (`git show 3b75c24a:packages/aiui-viz/handoff/modal-interaction-lessons.md`).
+
+## Part two — the contract
 
 ### The split
 
@@ -152,7 +441,7 @@ and from claims `derive`/`acquire`/`release`/`ceilingMs`, `onStatus`, `onError`,
 idea the docs teach and the shape a modal app will need again; a later trim should start from this
 list, not re-derive it.
 
-## Part two — Retired 2026-10-17
+## Part three — retired 2026-10-17
 
 Five pieces left with this change: 676 source and 502 test lines, every one with zero consumers in
 this repo after the intent-tool split (`git grep` at `3eab11ce^` shows `aiui-intent-client`,
