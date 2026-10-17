@@ -37,7 +37,7 @@ bounds and options from the declaration; the scrub is the number-in-the-prose pi
 (the mount-seam error boundary), **`bridgeEffect`** (the hardened crossing into imperative
 systems), **`throttled`** (the outbound valve), `adopt`/`durableCanvas` (durable-DOM
 adoption), `agentToolkit`/`registerStandardTools`, **`SitePage`/`DemoCard`/`setSitePageActive`**
-(the site contract — section below), `solidModeEngine`); `…/testing` → the cell-test harness
+(the site contract — section below)); `…/testing` → the cell-test harness
 (`cellHarness`, `whenReady`, `whenState`, `recordCommits`, `resetControlSurface`) — use it,
 never hand-roll createRoot/tick plumbing in app tests; porcelain on subpaths, one per
 heavyweight optional peer — `…/plot` → `PlotFigure` (Observable Plot); `…/mosaic` →
@@ -47,11 +47,10 @@ Plot out, marks disconnected on dispose); `…/duckdb` → `instantiateDuckDB` +
 in YOUR app, see the module docblock); `…/site` → `SiteNav` (left sidebar, collapsing to a
 top bar + drawer on a phone), `TocRail`, `TeX`, `Lens`/`LensLayer` (levels of detail: inline
 trigger → hover peek → detail panel in the page's own graph; aiui-slides re-exports it),
-`colorMode`; `…/modal` → the framework-free
-modal interaction kit + mode-engine core (`createModeEngine`, `createClaims`, the region
-constructors `ladder`/`toggle`/`choice`, `barModel`, `installKeys`/`resolveKey`,
-`LiveDiffText`/`wordDiff`; the Solid adapter `solidModeEngine` is on the root barrel — see
-the mode-engine section below).
+`colorMode`; three framework-free subpaths — `…/keys` → the key layer
+(`installKeys`/`resolveKey`/`keyHints`), `…/live-text` → `LiveDiffText`/`wordDiff`,
+`…/mode-engine` → `createModeEngine`, `createClaims`, the region constructors
+`ladder`/`toggle`/`choice`/`openChoice` (see the mode-engine section below).
 
 The compiler/locator is its own package, **`@habemus-papadum/aiui-source-processor`**: in
 `vite.config.ts`, `plugins: [aiui(), solid()]` (default export; `aiui()` MUST precede
@@ -281,31 +280,34 @@ work through this surface: `.tools`, `.call(name, args)`, `.report()`,
 
 ## Modal / stateful UI = the mode engine
 
-When the UI has modes (arming, turns, talk windows, standing toggles), do NOT hand-roll signal
-choreography — use the mode engine (`solidModeEngine` from the aiui-viz root; framework-free
-core in `aiui-viz/modal`, regions built with `ladder`/`toggle`/`choice`):
+When the UI has modes that imply async operations (a capture to acquire and release, a session
+to hold open) or standing toggles that must stay orthogonal, do NOT hand-roll signal
+choreography — use the mode engine (`createModeEngine` + `createClaims` from
+`aiui-viz/mode-engine`, framework-free; design note:
+[mode-engine.md](../../packages/aiui-viz/docs/mode-engine.md)):
 
-- **Regions are settings** (ladder / toggle / choice — standing, `durable`, agent-visible via
-  `agent:`); **claims are operations** (pure derivations from (state, ctx), reconciled after
-  every commit, per-claim status idle|pending|active|error|stale; the newest desire wins).
-  Never store operation status in ad-hoc flags — derive it.
-- **Commands are the only writers** — keys, bar caps, agent `set`, system events all dispatch
-  through one pure reducer; cross-region invariants are declared `excludes` (applied after
-  every command AND to the initial state); a command's `available` map is a GATE, not a hint —
-  an unavailable command is refused by dispatch. Never write a region's signal directly — and
-  never read back after a write, you don't need to: dispatch is `flush()`-committed and machine
-  state is a plain frozen object, safe to read anywhere, any tick.
-- **Enablement is derived**: caps and keys ask `canDispatch` (dry-runs the reducer INCLUDING
-  excludes — "would this do anything?"). The bar is a projection of the spec (tree → depth
-  rows; labels stable — lit carries "engaged"; hold caps stay enabled while either half of the
-  gesture applies).
-- Regions with `agent:` auto-register a `control()` whose setter dispatches — never mirror
-  engine state into separate controls or signals.
-- Imperative events from outside (global shortcuts, sockets) cross in as sequential idempotent
-  dispatches, re-reading committed state between steps — see
-  `packages/aiui-viz/src/mode-solid.test.ts` for the flush-committed adapter contract.
-  Keymap worked example: `packages/aiui-slides/src/keys.ts` (a pure
-  table, tested); rationale: the mode-engine design note (git history).
+- **Regions are settings** (ladder / toggle / choice / `openChoice` for a set only the host can
+  enumerate); **claims are operations** (pure derivations from (state, ctx), reconciled after
+  every commit, per-claim status idle|pending|active|error|stale; the newest desire wins and the
+  in-flight acquire's signal is aborted at once). Never store operation status in ad-hoc flags —
+  derive it.
+- **Commands are the only writers** — keys, buttons, system events all dispatch through one
+  pure reducer; cross-region invariants are declared `excludes` (applied after every command
+  AND to the initial state); a command's `available` map is a GATE, not a hint — an unavailable
+  command is refused by dispatch (and traced). Never write around the reducer — and never read
+  back after a write, you don't need to: machine state is a plain frozen object only `dispatch`
+  writes, safe to read anywhere, any tick.
+- **Enablement is derived**: ask `canDispatch` (dry-runs the reducer INCLUDING excludes and the
+  payload — "would this do anything?").
+- **The host mirrors, it never writes**: `subscribe`, copy `state()` into your own signals or
+  snapshot inside the subscriber; a dispatch or `setContext` from inside a subscriber queues
+  behind the commit, and a throwing subscriber is reported without stopping the others.
+- A one-mode app does not need it: a `durableSignal` written where the phase changes is the
+  right size (demos/audio). Keyboard shortcuts alone are the key layer (`aiui-viz/keys`):
+  `packages/aiui-slides/src/keys.ts` is the worked example (a pure table, tested).
+- In-repo consumer: the aiui-audio hub (`packages/aiui-audio/src/hub.ts`); the kernel's tests:
+  `packages/aiui-viz/src/mode-engine/`. The bar projection and the Solid adapter with its agent
+  control bridge were retired 2026-10-17; the design note says what to carry back.
 
 ## Solid 2.0 (release candidate) instant-bite gotchas
 

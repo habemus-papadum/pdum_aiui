@@ -172,7 +172,7 @@ Last, the layer where it becomes *an application* rather than a pile of instrume
 anatomy (a complete dashboard overview first, then explanatory sections re-rendering the same
 widgets, theory with real mathematics, an experiments section — the
 [style guide](./frontend-style-guide.md) owns these conventions); keyboard interactions as **modal
-command structures** (the `aiui-viz/modal` kit: modes, layers, and surfaces as data — never
+command structures** (the `aiui-viz/keys` layer: bindings as data in claim-or-pass layers — never
 scattered `addEventListener("keydown", …)` calls, with bindings dispatching the SAME registered
 actions and validated controls the widgets and the agent use; and when the modes themselves
 multiply, the **mode engine** composes them — regions, commands, and excludes as one spec,
@@ -189,9 +189,9 @@ its `src/site/router.ts` is the whole router). Keep every internal link routed �
 intercepts same-origin anchors app-wide, which makes the safe idiom the default one).
 
 This layer is deliberately late because it's the most tasteful and least testable — but not
-untestable: the modal kit keeps keymaps as pure tables (unit-test the bindings and the Esc
-ladder — and a mode-engine spec is pure data plus a pure reducer, testable the same way;
-`packages/aiui-viz/src/modal/` contains the engine's tests), and the whole app is
+untestable: the key layer keeps keymaps as pure tables (unit-test the bindings — and a
+mode-engine spec is pure data plus a pure reducer, testable the same way;
+`packages/aiui-viz/src/mode-engine/` contains the engine's tests), and the whole app is
 drivable through its own tool surface — which is the layer's
 definition of done: `report` is sane, every knob is a declared control and every verb a declared
 action, and the agent can verify a feature by calling it rather than squinting at pixels.

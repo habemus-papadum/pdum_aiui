@@ -143,42 +143,43 @@ The reference implementation of a correct inbound crossing was the intent client
 gesture (its `activation.ts`; that client now lives outside this repo): a vanilla listener walks
 a state machine with sequential, idempotent dispatches, **re-reading committed state between
 steps** —
-which is safe precisely because the mode engine (next section) commits every dispatch under
-`flush` and keeps machine state as a plain frozen object. Machine state under the mode engine
-is never stale to read, from any scope — the structural fix for the write-then-read-back trap.
+which is safe precisely because the mode engine (next section) keeps machine state as a plain
+frozen object that only `dispatch` writes. Machine state under the mode engine is never stale
+to read, from any scope — the structural fix for the write-then-read-back trap.
 
 ### The mode engine: settings, operations, and one writer
 
-When an app grows real modes — arming, open turns, talk windows, standing toggles — the
-methodology's answer is the mode engine (`createModeEngine` in `aiui-viz/modal`,
-framework-free; `solidModeEngine` is the Solid adapter), built on one clarifying split: every
-"mode" is a **setting** (what the user chose — standing, often durable, often agent-visible)
-and an **operation** (what the world is doing about it right now — derived, transient, async).
-Settings live in **regions** — named independent axes (ladders, toggles, choices) whose product
-is the state, so orthogonality is by construction. Operations are **claims**: pure derivations
-from (state, context) that a reconciler drives, each with a derived status
-(idle · pending · active · error · stale) — the "granted but idle", "warming", "on but not
-sampling" states are the *status of an operation*, displayed but never stored in ad-hoc flags,
-with supersession built in (the newest desire wins, even when it is null).
+When an app grows real modes — a capture that must be acquired and released, standing toggles,
+a choice among endpoints — the methodology's answer is the mode engine (`createModeEngine` in
+`aiui-viz/mode-engine`, framework-free; [design note](./mode-engine.md)), built on one
+clarifying split: every "mode" is a **setting** (what the user chose — standing) and an
+**operation** (what the world is doing about it right now — derived, transient, async).
+Settings live in **regions** — named independent axes (ladders, toggles, choices, and open
+choices validated by a predicate the host supplies) whose product is the state, so orthogonality
+is by construction. Operations are **claims**: pure derivations from (state, context) that a
+reconciler drives, each with a derived status (idle · pending · active · error · stale) — the
+"granted but idle", "warming", "on but not sampling" states are the *status of an operation*,
+displayed but never stored in ad-hoc flags, with supersession built in: the newest desire wins,
+even when it is null, and the in-flight acquire's signal is aborted the moment the desire moves.
 
-**Commands are the only writers.** Keys, command-bar caps, the agent's `set`, and system events
-all funnel into `dispatch` — one pure reducer plus declared cross-region **excludes** ("leaving
-the turn ends talk"), applied after every command *and to the initial state*, so a durable
-value can never resurrect a forbidden combination; Esc and blur resolve mechanically from the
-spec. Because nothing else writes, availability is *derived*: `canDispatch` dry-runs the
-reducer ("would this do anything right now?"), and the command bar is a pure projection of the
-spec — a tree flattened into depth rows, labels stable (the lit highlight carries "engaged"),
-enablement mechanical rather than hand-written per surface. The Solid adapter completes the
-contract: dispatch commits under `flush()`, so state, memos, and every effect-driven projection
-are current when it returns; and regions marked `agent:` register a `control()` whose setter
-dispatches — the agent's write and the key take the identical path, which structurally kills
-the control-mirror desync class.
+**Commands are the only writers.** Keys, buttons, and system events all funnel into `dispatch`
+— one pure reducer plus declared cross-region **excludes** ("leaving the turn ends talk"),
+applied after every command *and to the initial state*, so a persisted value can never
+resurrect a forbidden combination; Esc and blur resolve mechanically from the spec; an
+`available` gate refuses, and the refusal is traced. Because nothing else writes, machine state
+is a frozen plain object that is never stale to read, and availability is *derived*:
+`canDispatch` dry-runs the reducer ("would this do anything right now?"). Subscribers are
+notified inside the engine's commit; a dispatch or context change made from inside a subscriber
+queues behind it, and a throwing subscriber is reported without stopping the others — so the
+notified world never lags the committed state. The host mirrors `state()` into whatever it
+keeps (the audio hub folds it into its snapshot); it never writes around the reducer.
 
-The deep rationale — including what was deliberately left out (entry/exit effects, history
-states, XState) — is the mode-engine design note (git history); the worked example was the
-intent client's spec (its `spec.ts`, now outside this repo): a real machine as one data
-structure — regions, commands, excludes, the Esc order, and availability overrides. In-repo,
-`packages/aiui-viz/src/mode-solid.test.ts` exercises the adapter and its dispatch boundary.
+In-repo, the aiui-audio hub is the consumer (one engine, one claim — the capture), and
+`packages/aiui-viz/src/mode-engine/*.test.ts` pin the contract. The pieces that once surrounded
+the engine — the command-bar projection, the Solid adapter with its agent control bridge, the
+pre-engine mode table, the reconciler, the focus tracker — were retired on 2026-10-17 once
+their consumers had left this repo; the [design note](./mode-engine.md) records what each was
+for and what to carry back when the need returns.
 
 ### Many notebooks, one lab
 
@@ -220,17 +221,17 @@ better instrumented than a human team would ever bother to make it.
 ## Where things live
 
 - **Library** — `@habemus-papadum/aiui-viz` (`packages/aiui-viz`): cells, the CellView wrapper,
-  the worker protocol, the durable registry, the tool surface, and the modal kit + mode engine
-  (`src/modal/`; the Solid adapter is `src/mode-solid.ts`). The [catalog](../CATALOG.md) lists
+  the worker protocol, the durable registry, the tool surface, the key layer (`src/keys/`),
+  live text (`src/live-text/`) and the mode engine (`src/mode-engine/`). The [catalog](../CATALOG.md) lists
   every piece — substrate, components, containers, the agent surface — with its state and where
   it is used.
 - **Reference apps** — `demos/gallery`: morphogen (reaction-diffusion) and aztec (domino
   tilings), each a full notebook built the intended way; `PRINCIPLES.md` there maps file layout
   to methodology.
-- **Mode-engine reference** — the kit's own tests under `src/modal/` and
-  `src/mode-solid.test.ts`. The first full consumer — the intent
-  client's machine as data, claims, bar caps, and the imperative-boundary reference, each rule
-  of its `BEHAVIOR.md` pinned by a test — now lives outside this repo.
+- **Mode-engine reference** — [the design note](./mode-engine.md) and the tests under
+  `src/mode-engine/`; the aiui-audio hub is the in-repo consumer. The first full consumer — the
+  intent client's machine as data, claims, bar caps, and the imperative-boundary reference, each
+  rule of its `BEHAVIOR.md` pinned by a test — now lives outside this repo.
 - **Design choices** — [the level-2 page](./frontend-design-choices.md); **ledger** —
   [the level-3 page](./frontend-hard-won.md).
 - **Skill** — the `aiui-architecture` skill of the repo-root Claude plugin

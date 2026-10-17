@@ -84,7 +84,7 @@ Diff to the finished page: components don't change either.
 ## The finished page (`src/main.tsx`, `src/model/keys.ts`)
 
 Layer 4 is arrangement: paper-style sections with the controls inside the prose, an experiments
-list naming exact controls, and a keyboard layer on the modal kit — <kbd>R</kbd> dispatches the
+list naming exact controls, and a keyboard layer on aiui-viz's key layer — <kbd>R</kbd> dispatches the
 **same registered `re-seed` action** the agent calls, <kbd>←</kbd><kbd>→</kbd> nudge κ through
 the **same validated control** the slider writes, and the hint bar is derived from the bindings
 themselves. One declared surface; widget, keyboard, and agent are three views of it.

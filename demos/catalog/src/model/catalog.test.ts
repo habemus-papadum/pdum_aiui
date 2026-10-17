@@ -34,7 +34,7 @@ describe("the pieces", () => {
   it("keys a row by its first code span, else its slug", () => {
     expect(pieceKey("`cell`, `cellGraph`, `cellRegistry`, `settledOnly`")).toBe("cell");
     expect(pieceKey("`ControlScrub` — the scrub pill")).toBe("ControlScrub");
-    expect(pieceKey("the modal kit, `solidModeEngine`")).toBe("solidModeEngine");
+    expect(pieceKey("the key layer, `installKeys`")).toBe("installKeys");
     expect(pieceKey("the page")).toBe("the-page");
     expect(pieceKey("vendor keys")).toBe("vendor-keys");
   });

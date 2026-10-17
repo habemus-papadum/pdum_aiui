@@ -329,7 +329,7 @@ For detailed requests, use ElevenLabs speech-to-text to build an editable draft,
 with screenshots, pencil, and other context added as needed. Every dictation
 surface should use the shared diff-flash presentation so revisions to recognized
 text are visible as they happen. The existing
-[`LiveDiffText`](../../packages/aiui-viz/src/modal/flash.ts) supplies this behavior:
+[`LiveDiffText`](../../packages/aiui-viz/src/live-text/flash.ts) supplies this behavior:
 new words appear immediately, while rewrites briefly show the word diff before
 settling to the current text.
 

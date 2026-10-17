@@ -38,8 +38,8 @@ path is refused.
 This is the **only** starter aiui ships. (An older `aiui demo` subcommand scaffolded a second,
 throwaway playground; it was removed in favour of one template that people actually build on.)
 
-Advanced pieces the starter deliberately omits — the modal interaction kit
-(`@habemus-papadum/aiui-viz/modal`), Web Worker cells, the Observable Plot and Mosaic bridges —
+Advanced pieces the starter deliberately omits — the key layer and the mode engine
+(`@habemus-papadum/aiui-viz/keys`, `…/mode-engine`), Web Worker cells, the Observable Plot and Mosaic bridges —
 are shown in the repo's `demos/gallery` reference notebooks.
 
 ## Development notes

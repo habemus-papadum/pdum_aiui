@@ -73,7 +73,7 @@ Then the Mermaid cleanup before it has many users: the `wrappingWidth` default t
 the Mermaid theme and the RichTeX/Mermaid skins promoted into aiui-design (the catalog demo is the
 second copy of the lab's), and the open items in `docs/proposals/rich-mermaid.md`.
 
-### B — modal kit code review — `planned`
+### B — modal kit code review — `done (branch merged by lead)`
 
 A read-only report on `src/modal/*` and `src/mode-solid.ts` against the four consumers: aiui-slides
 (key layer, hints, resolver), the aiui-audio hub (engine + claims), demos/audio (engine +

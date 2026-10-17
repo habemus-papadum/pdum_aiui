@@ -53,10 +53,17 @@ Versions these were established against: `solid-js@2.0.0-beta.15`, `@solidjs/web
   when a boundary read would return a pre-write value. The whole contract is pinned by
   `packages/aiui-viz/src/solid-semantics.test.ts`; Solid 1.x had read-your-own-writes behind
   the identical API, which is why 1.x-trained intuition (and priors) keep regenerating the bug.
-  Machine state under the **mode engine** is exempt by construction — `solidModeEngine` commits
-  every dispatch under `flush` and keeps state a plain frozen object, so reading it after a
-  dispatch is never stale, from any scope; putting modal state there is the structural fix for
-  this bug class.
+  Machine state under the **mode engine** (`aiui-viz/mode-engine`) is exempt by construction —
+  state is a plain frozen object that only `dispatch` writes, so reading it after a dispatch is
+  never stale, from any scope; putting modal state there is the structural fix for this bug
+  class (a host that mirrors it into signals does so inside the engine's `commit` hook).
+- **A notify loop that can be re-entered breeds interleaving bugs.** The mode engine's
+  `setContext` once reset the commit flag from inside a subscriber, so a later subscriber's
+  dispatch ran immediately and the rest heard an older event over a newer state; a throwing
+  subscriber stranded the queue until the next unrelated dispatch. Rule: anything started from
+  inside a notify loop queues behind it, and a subscriber's throw is reported, never allowed to
+  skip the others or the drain — [mode-engine.md](./mode-engine.md) (2026-10-17) has the
+  probes, the fixes, and the retired pieces' record.
 - **Gone from 1.x:** `onMount` (use ref callbacks — they run when the element exists),
   `classList` (compute class strings). `render` and the `JSX` type moved to `@solidjs/web`
   (`jsxImportSource` likewise). `<Show>`'s non-keyed function child receives an **accessor**;
@@ -85,8 +92,9 @@ Versions these were established against: `solid-js@2.0.0-beta.15`, `@solidjs/web
 - **A disabled button swallows pointer events.** A press-and-hold gesture whose down-command
   becomes unavailable mid-hold (pressing it is exactly what made it unavailable) must keep the
   button enabled across the whole gesture, or the pointerup lands on a disabled element and the
-  hold wedges. The bar projection encodes the rule: a hold cap stays enabled while *either* half
-  of its gesture applies (`packages/aiui-viz/src/modal/bar.ts`).
+  hold wedges. The retired bar projection encoded the rule — a hold cap stays enabled while
+  *either* half of its gesture applies — and [mode-engine.md](./mode-engine.md) keeps it for the
+  next bar.
 - **An uncaught effect-phase throw permanently halts the document's reactive system** (since
   2.0.0-beta.32; recoverable only via `resetErrorHalt`). Symptom: a page that looks alive but
   stops responding entirely — one console error, no crash. Only SYNCHRONOUS throws in the
@@ -259,11 +267,11 @@ Found building the wine demo (embedding-atlas integration; full detail:
 - **Explicit names must be compile-time string literals — dynamic registration passes a
   prebuilt spec.** An inline `control({ name: expr })` whose name is not a literal is a
   code-framed compile error (the name is a durable key, a tool identity, and a grep target).
-  Legitimate dynamic registration — a library minting controls from data, like the mode
-  engine's agent bridge — builds the options object first (`const spec = {…}; control(spec)`):
-  the compiler deliberately leaves a non-literal options *expression* alone, and the runtime
-  missing-name guard is the backstop (`packages/aiui-viz/src/mode-solid.ts` is the documented
-  shape).
+  Legitimate dynamic registration — a library minting controls from data, as the mode
+  engine's retired agent bridge did — builds the options object first (`const spec = {…};
+  control(spec)`): the compiler deliberately leaves a non-literal options *expression* alone,
+  and the runtime missing-name guard is the backstop (no in-repo code does this today; the
+  shape is recorded in [mode-engine.md](./mode-engine.md)).
 - **Babel string literals escape non-ASCII** (`κ` → `\u03BA` in output). Harmless at runtime,
   but string-matching tests over transformed output should use ASCII fixtures.
 

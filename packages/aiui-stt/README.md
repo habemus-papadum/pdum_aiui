@@ -41,7 +41,7 @@ credential broker, including a same-origin route. Any custom credential minter c
 Keys and tokens do not belong in the audio hub.
 
 `sttSignals(stt)` exposes status, cumulative partial text, final segments, and errors. Feed text
-into `LiveDiffText` from `aiui-viz/modal` for appended words and visible revisions. That renderer
+into `LiveDiffText` from `aiui-viz/live-text` for appended words and visible revisions. That renderer
 remains shared; it is not tied to transcription. The gallery's **Audio** demo combines dictation,
 Oracle editing, routing controls, credential fields, and the diff display.
 
