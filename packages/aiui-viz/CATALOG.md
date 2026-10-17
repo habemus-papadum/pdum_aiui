@@ -1,13 +1,16 @@
 # The catalog: what aiui-viz provides
 
-Status: reference, 2026-10-16. Kept by hand — when a piece lands, changes state, or is retired,
+Status: reference, 2026-10-17. Kept by hand — when a piece lands, changes state, or is retired,
 this page changes in the same commit.
 
 This is the one page that names every piece the package provides — the **substrate** everything
 is built from, the **components** a page is written with, the **containers** that hold pages and
 components, and the **agent surface** that crosses all three — with where each lives, what state
 it is in, and where it is used. The sister packages that happen to share this repo are listed at
-the end so the catalog is complete. Read this first. The [README](./README.md) is the export-level
+the end so the catalog is complete. Read this first: it is the reference for what exists, current
+as of its last edit. The newest rows may be a spike that nothing uses yet, or a piece no notebook
+has adopted — the state column says which, so read it rather than assuming a piece is proven, or
+absent. The [README](./README.md) is the export-level
 detail of the substrate, the [concepts page](./docs/frontend-for-agents.md) explains how the pieces
 work and why, and the [style guide](./docs/frontend-style-guide.md) says how a page should use
 them. The application-level inventory (capabilities across the planned applications, `C01`–`C13`)

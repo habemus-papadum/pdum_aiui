@@ -1,15 +1,21 @@
 ---
 name: aiui-architecture
-description: How an aiui app is architected — the four-layer playbook (pure functions → cells → components → application), SolidJS 2.0 cells, durable/disposable HMR structure, scoped identity, worker streaming, agent tool surfaces, site pages and cards. Use when creating, PLANNING, or refactoring frontend/visualization code in a project that uses @habemus-papadum/aiui-viz (or when asked to follow the aiui frontend methodology). The repo docs are the source of truth; this skill is the operational digest.
+description: How an aiui app is architected — the four-layer playbook (pure functions → cells → components → application), SolidJS 2.0 cells, durable/disposable HMR structure, scoped identity, worker streaming, agent tool surfaces, site pages and cards; where to find what aiui-viz already provides (the catalog) and the stance for changing the library (pre-alpha, build in the package, improve rather than copy). Use when creating, PLANNING, or refactoring frontend/visualization code in a project that uses @habemus-papadum/aiui-viz (or when asked to follow the aiui frontend methodology). The repo docs are the source of truth; this skill is the operational digest.
 ---
 
 # aiui architecture
 
+**Before building anything, read [CATALOG.md](../../packages/aiui-viz/CATALOG.md).** It is the
+one page that names every piece aiui-viz provides — five shelves: substrate, components,
+containers, the agent surface, the sister packages — each with its state (`shipped` / `spike` /
+`proposed`) and where it is used. It is current as of its last edit, and the newest pieces may be
+a spike nothing uses yet; read the file and its state column rather than assuming a piece exists,
+is proven, or is absent. This skill does not repeat its rows: a component, subpath or package
+named below is there because the skill adds a rule the catalog does not carry.
+
 **Sources of truth** (read when depth is needed; if this digest ever disagrees, trust them and
-say so): [CATALOG.md](../../packages/aiui-viz/CATALOG.md) (the INVENTORY: every piece —
-substrate, components, containers, the agent surface, sister packages — with its state, shipped /
-spike / proposed, and where it is used; check it before writing a component that may already
-exist) → [frontend-playbook.md](../../packages/aiui-viz/docs/frontend-playbook.md)
+say so): the catalog above →
+[frontend-playbook.md](../../packages/aiui-viz/docs/frontend-playbook.md)
 (the BUILD ORDER: pure functions → cells → components → application, a definition of done per
 layer, vertical slices — follow it when creating or extending an app) →
 [frontend-user-guide.md](../../packages/aiui-viz/docs/frontend-user-guide.md)
@@ -27,30 +33,14 @@ the whole pdum_aiui repo, so these links are the live docs wherever the skill ru
 always: the **installed package's own `.d.ts`/docblocks** — every export documents its
 contract; resolve `@habemus-papadum/aiui-viz` in node_modules and read the module headers.
 
-Library surface (`@habemus-papadum/aiui-viz`): plumbing on the root barrel (`cell`,
-`settledOnly`, `CellView`, **`control`/`action`** (the declared control surface — names, locs,
-and descriptions injected by the aiui compiler), `scope` (identity — every app declares one),
-`ControlSlider`/`ControlToggle`/`ControlScrub`/`ControlSelect`/`Dropdown` (widgets that read
-bounds and options from the declaration; the scrub is the number-in-the-prose pill),
-**`CellText`** (a cell's value as quiet prose — `latest()`, "…" until ready, stamped),
-`workerStream`/`fromWorker`, `durable`/`durableSignal`, `hotCellGraph`, **`PageBoundary`**
-(the mount-seam error boundary), **`bridgeEffect`** (the hardened crossing into imperative
-systems), **`throttled`** (the outbound valve), `adopt`/`durableCanvas` (durable-DOM
-adoption), `agentToolkit`/`registerStandardTools`, **`SitePage`/`DemoCard`/`setSitePageActive`**
-(the site contract — section below)); `…/testing` → the cell-test harness
-(`cellHarness`, `whenReady`, `whenState`, `recordCommits`, `resetControlSurface`) — use it,
-never hand-roll createRoot/tick plumbing in app tests; porcelain on subpaths, one per
-heavyweight optional peer — `…/plot` → `PlotFigure` (Observable Plot); `…/mosaic` →
-`MosaicView` (Mosaic/vgplot bridge: coordinator + reactive directive-list spec in, connected
-Plot out, marks disconnected on dispose); `…/duckdb` → `instantiateDuckDB` +
-`fetchWithProgress` (DuckDB-WASM from app-bundled `?url` assets — the four asset imports stay
-in YOUR app, see the module docblock); `…/site` → `SiteNav` (left sidebar, collapsing to a
-top bar + drawer on a phone), `TocRail`, `TeX`, `Lens`/`LensLayer` (levels of detail: inline
-trigger → hover peek → detail panel in the page's own graph; aiui-slides re-exports it),
-`colorMode`; three framework-free subpaths — `…/keys` → the key layer
-(`installKeys`/`resolveKey`/`keyHints`), `…/live-text` → `LiveDiffText`/`wordDiff`,
-`…/mode-engine` → `createModeEngine`, `createClaims`, the region constructors
-`ladder`/`toggle`/`choice`/`openChoice` (see the mode-engine section below).
+Library surface (`@habemus-papadum/aiui-viz`): the catalog's rows, one import path each —
+plumbing on the root barrel; porcelain on subpaths, one per heavyweight optional peer
+(`…/plot`, `…/mosaic`, `…/duckdb`, `…/site` and its `…/site/*`); three framework-free subpaths
+(`…/keys`, `…/live-text`, `…/mode-engine` — the mode-engine section below). Rules the catalog does not
+carry: test through `…/testing` (`cellHarness`, `whenReady`, `whenState`, `recordCommits`,
+`resetControlSurface`) and never hand-roll createRoot/tick plumbing in app tests; `…/duckdb`'s
+`instantiateDuckDB` takes the DuckDB-WASM bundles as a PARAMETER — the `?url` asset imports stay
+in YOUR app (a library cannot do them on your behalf; the module docblock shows both wirings).
 
 The compiler/locator is its own package, **`@habemus-papadum/aiui-source-processor`**: in
 `vite.config.ts`, `plugins: [aiui(), solid()]` (default export; `aiui()` MUST precede
@@ -71,12 +61,16 @@ ledger); `demos/gears` (pure SVG geometry, page CSS scoped under a root class);
 `demos/gratings` + `demos/holograms` over `demos/optics` (worker-streamed 2-D wave maps,
 WebGL field islands, physics pinned by the engine's own unit tests); `demos/circle` (the
 pencil demo — `PencilSurface` from `@habemus-papadum/aiui-pencil` — and the 600px phone
-case); `demos/twins` + `demos/oscillator` (slices and scopes); and `demos/gallery`, the site
-shell that DISCOVERS the others (it depends on none of them — section below).
+case); `demos/twins` + `demos/oscillator` (slices and scopes); `demos/gallery`, the site
+shell that DISCOVERS the others (it depends on none of them — section below); and
+`packages/aiui-viz/lab`, the package's own rig, where a spike (RichTeX, Mermaid) is proven
+before a notebook adopts it.
 
 ## Installing into an existing app
 
-Every package is on public npm under `@habemus-papadum/*`. For a NEW app, don't
+The public packages are on npm under `@habemus-papadum/*`; `packages/internal/*` (the voice
+dock, the oracle, live) is this repo's own scaffolding and no consumer app depends on it (the
+stance section below). For a NEW app, don't
 hand-assemble — scaffold with `create-aiui` and all of this arrives pinned correctly. When
 adding aiui to an app that already exists, copy the dependency set from the create-aiui app
 template ([packages/create-aiui/templates/app/package.json](../../packages/create-aiui/templates/app/package.json))
@@ -97,7 +91,8 @@ source of truth.
   and plugin declare wide vite peer ranges, so an app's existing vite usually stands.
 - **Optional peers** arrive only with the porcelain subpath that needs them: `…/plot` →
   `@observablehq/plot`; `…/mosaic` + `…/duckdb` → `@uwdata/mosaic-*` and
-  `@duckdb/duckdb-wasm` (exact-pin rule in the Charts section); `TeX` → katex.
+  `@duckdb/duckdb-wasm` (exact-pin rule in the Charts section); `TeX`/`RichTeX` → katex;
+  `…/site/mermaid` → mermaid.
 
 aiui-viz ships as `.tsx` source — the consuming app compiles it. The install is not done
 until `vite.config.ts` has `plugins: [aiui(), solid()]` (order rules in the compiler section
@@ -253,11 +248,13 @@ exist, not when the connection opens. To see what a model sees, open the page wi
 `main.tsx` and the gallery shell mount it through the dock, hidden by default) shows the
 document *as rendered* and the page's call log (who called what — the oracle, a live
 delegation, the page itself — and the result). Every in-repo demo (`pnpm new-demo` mounts it)
-and the gallery shell carry **`VoiceDock`** (`@habemus-papadum/aiui-dock`): the oracle and a
-live session on the page over the same projection (active kits only), the tool log behind its
-tools pill, one OpenAI key for both (the dev server's, else pasted into localStorage). The
-create-aiui template ships without the dock; a consumer adds it. User guide: "Documenting a
-tool".
+and the gallery shell carry **`VoiceDock`** (`@habemus-papadum/aiui-dock`, in
+`packages/internal/`): the oracle and a live session on the page over the same projection
+(active kits only), the tool log behind its tools pill, one OpenAI key for both (the dev
+server's, else pasted into localStorage). The create-aiui template ships without it, and a
+consumer app never adds it: the dock, the oracle and live are replacement-bound internal
+scaffolding (the stance section below) — a consumer drives the page through
+`window.__AIUI__.tools` from whatever host it has. User guide: "Documenting a tool".
 
 Forwarding is unconditional: the toolkit publishes every namespace into
 `window.__AIUI__.tools` (installed by the runtime, production included — the page dials
@@ -402,13 +399,14 @@ owner, 2026-10-08, superseding the system-following journal of 2026-08-12): cott
 slate ink, a mixed ladder, one indigo accent, three status colors, Cormorant/Fraunces/Libre
 Franklin with Georgia digits. Read its `DESIGN.md` before styling anything; `demos/styleguide`
 renders every role and component as the acceptance test. A page imports `site.css` once
-(tokens + fonts + element defaults + a skin for every stable aiui-viz class + the notebook
-chrome) and writes its own rules unlayered — the sheet runs on cascade layers, so page CSS wins.
-Literal colors come from the package's theme module (`chart()` — blue/green/amber, never the
-accent — `plot()`, `plotStyle()`, `TOKENS`, `FONTS`). There is no dark palette, no toggle, no
-head stamp; aiui-viz's `colorMode()` remains for consumers who theme per system. **The plate
-rule is absolute**: a sim canvas and the legend chips that key it are constants on `--plate`
-(dark, framed by a hairline) — never give one demo's plate a light variant — while chart marks
+(tokens + fonts + element defaults + a skin for every stable aiui-viz class — RichTeX, Mermaid,
+the notes and knobs included; aiui-viz ships no CSS of its own — + the notebook chrome) and
+writes its own rules unlayered — the sheet runs on cascade layers, so page CSS wins. Literal
+colors come from the package's theme module (`chart()` — blue/green/amber, never the accent —
+`plot()`, `plotStyle()`, `mermaidTheme()`, `TOKENS`, `FONTS`). There is no dark palette, no
+toggle, no head stamp; aiui-viz's `colorMode()` remains for consumers who theme per system.
+**The plate rule is absolute**: a sim canvas and the legend chips that key it are constants on
+`--plate` (dark, framed by a hairline) — never give one demo's plate a light variant — while chart marks
 on a panel are validated against the raised surface. Shipped chrome (the dock, the tool log,
 the oracle/live strips, the slides deck) reads prefixed `--aiui-*` hooks
 with neutral fallbacks; never hard-code the palette in a package. A demo's page CSS uses
@@ -422,11 +420,15 @@ logic and can't drift from the viewport). Desktop rules are the base; phone chan
 `minmax(0, Npx) minmax(0, 1fr)`, `clamp`, `auto-fit`, `max-width` caps over fixed px — and put
 each breakpoint where THIS content breaks, not at device names (TocRail <1280, seismos 860,
 circle 600); target the CSS-px band 360–414. Imperative islands (sim canvases, `PencilSurface`
-from `@habemus-papadum/aiui-pencil`) re-fit to their box via ResizeObserver, so a CSS reflow is
-enough — no device JS; give a stacked drawing surface an explicit height. Absolute overlays that
-float beside a wide figure must rejoin the flow and stack on phone (circle's readout/dock buries
-a narrow board otherwise); a drawing surface keeps `touch-action:none` while its stacked
-container allows `pan-y`. Preview by driving a real browser at a phone viewport (DevTools device
+from `@habemus-papadum/aiui-pencil`) re-fit to their box, so a CSS reflow is enough — no device
+JS; give a stacked drawing surface an explicit height. Size-aware code reads **the resize seam**
+([viewport.md](../../packages/aiui-viz/docs/viewport.md)) rather than minting a ResizeObserver:
+`elementWidth(el)` / `elementHeight(el)` for a component's own box (one shared observer, adopted
+across hot reloads, invisible to `report`), `viewportWidth()` / `viewportHeight()` for a
+page-level decision CSS cannot reach, `now()` for a clock that ticks only while read. Absolute
+overlays that float beside a wide figure must rejoin the flow and stack on phone (circle's
+readout/dock buries a narrow board otherwise); a drawing surface keeps `touch-action:none` while
+its stacked container allows `pan-y`. Preview by driving a real browser at a phone viewport (DevTools device
 mode, or a browser-automation MCP's emulate/resize + screenshot loop) sweeping 360/390/414,
 then re-shoot ~1440px to prove desktop is untouched.
 
@@ -435,9 +437,11 @@ then re-shoot ~1440px to prove desktop is untouched.
 Follow the dataviz skill (validate palettes against the actual surface; fixed categorical
 assignment; legends for ≥2 series). Keep imperative chart libs behind one bridge component;
 d3 contributes scales to plain JSX. Division of labor: **Plot** (`aiui-viz/plot`) for a chart
-*of a cell's value*; **Mosaic** (`aiui-viz/mosaic` + `aiui-viz/duckdb`) when the data lives in
-a database **table** and views coordinate through Selections (brushing filters, aggregation
-pushed down to DuckDB). Mosaic durables: the DuckDB instance, coordinator, and Selections live
+*of a cell's value* — `PlotFigure` fills its host through `elementWidth` unless the options set
+`width`, so size the HOST with CSS, never the figure; **Mosaic** (`aiui-viz/mosaic` +
+`aiui-viz/duckdb`) when the data lives in a database **table** and views coordinate through
+Selections (brushing filters, aggregation pushed down to DuckDB). Mosaic durables: the DuckDB
+instance, coordinator, and Selections live
 in the store; specs are reactive thunks (theme reads rebuild views against the surviving
 coordinator). Pin `@duckdb/duckdb-wasm` to the exact version `@uwdata/mosaic-core` uses (one
 deduped copy), and read the hard-won doc's Mosaic section before writing a custom MosaicClient.
@@ -493,18 +497,32 @@ locs, automatic); a published library runs `sourceLocatorVite({ locPrefix: "@you
 `@habemus-papadum/aiui-source-processor`) in its own build/vitest configs. Worked example:
 `demos/oscillator` consumed twice by `demos/twins`.
 
-## The library is young — treat it as improvable, not frozen
+## The stance: pre-alpha, build in the library
 
-`@habemus-papadum/aiui-viz` is an early library in a young project. Before leaning on one of its
-exports for something load-bearing, **check that the behavior you need is pinned by a unit test**
-(`packages/aiui-viz/src/*.test.ts*` — `cell.test.ts` covers the cell semantics); if it isn't,
-add the test rather than assuming. When app code needs a pattern the library almost provides —
-or you find yourself writing the same helper in a second app — the right move is usually to add
-the abstraction to aiui-viz with tests and docblocks, then use it, leaving the app simpler.
-That is how `hotCellGraph`, `durableSignal`, `bridgeEffect`, `throttled`, and
-`registerStandardTools` came to exist: each was boilerplate copy-pasted into every app until it
-was extracted. Do not re-introduce that pattern by working around the library in app code, and
-do not treat its current surface as complete.
+Everything here is pre-alpha, with few downstream users, so the cleanest architecture wins and
+work moves fast. The rules, each one paid for already:
+
+- **No backward-compatibility work.** No deprecation shims, no compat version bumps, no
+  re-exports kept for an old import path; consumers fix their own breakage.
+- **Scaffolding is replaced, not patched.** A piece that is scaffolding gets written again from
+  scratch and the old one retired, with a note recording what to carry back. `packages/internal/`
+  holds exactly the packages with a replacement in mind — today the voice dock, the oracle and
+  live — not packages that happen to be niche (aiui-stt, aiui-audio, aiui-screen-capture and
+  aiui-cf-creds are public). A consumer app never depends on an internal package.
+- **Build in the main package.** A missing capability goes into aiui-viz (or the sister package
+  that owns the concern — the skin into aiui-design, ink into aiui-pencil), with tests and
+  docblocks, then the app uses it. Not into the app, and not into a one-off helper beside it.
+- **Improve the existing piece; never paper over it.** If an export almost does what you need,
+  change the export — and before leaning on one for something load-bearing, check the behavior
+  is pinned by a unit test (`packages/aiui-viz/src/*.test.ts*`; `cell.test.ts` covers the cell
+  semantics); add the test rather than assume.
+- **Reuse and improve rather than copy.** The second consumer of a thing promotes it: a pattern
+  proven in a notebook or the lab moves into the library the moment a second page wants it, and
+  a second copy of a skin or theme moves into aiui-design. `hotCellGraph`, `durableSignal`,
+  `bridgeEffect`, `throttled`, `registerStandardTools`, the knob gesture and the notes layer
+  each exist because a copy was found in a second place. Do not re-introduce that pattern by
+  working around the library in app code, and do not treat its current surface as complete —
+  the catalog's state column says what is proven; add the row for what you promote (its § 6).
 
 ## Definition of done
 
