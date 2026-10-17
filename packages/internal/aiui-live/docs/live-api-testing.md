@@ -187,11 +187,12 @@ mirrors a behavior verified live**, and the engine's header comment records the 
 ("live-verified against the real service", with the date and the probe). Representative pins,
 one per engine:
 
-- **OpenAI STT** ([`aiui-stt/src/openai.test.ts`](../../../aiui-stt/src/openai.test.ts); the
-  former channel's `realtime.test.ts` pinned the node side): the GA `session.update` shape (no
-  beta header, nested `audio.input`), `turn_detection: null` for manual commit, `delay`
-  omitted when unset (an empty string 400s), incremental deltas accumulate, an unseen
-  `item_id` before commit belongs to the segment streaming now.
+- **OpenAI Realtime** ([`aiui-oracle/src/session.test.ts`](../../aiui-oracle/src/session.test.ts);
+  the former channel's `realtime.test.ts` pinned the node side, and `aiui-stt` no longer carries
+  an OpenAI adapter): the GA `session.update` shape (the `type: "realtime"` discriminator, an
+  `event_id`, nested `audio.input`, never `voice`/`model`), `turn_detection: null` as the manual
+  mode, far-field noise reduction beside `turn_detection` rather than inside it, `setTools` as a
+  wholesale update reconciled against the `session.updated` ack.
 - **ElevenLabs Scribe** ([`aiui-stt/src/scribe.test.ts`](../../../aiui-stt/src/scribe.test.ts); the
   former channel's `elevenlabs-realtime.test.ts` was the original): all config rides the
   connect URL; `keyterms` must be *repeated plain* params — the bracket form is silently
