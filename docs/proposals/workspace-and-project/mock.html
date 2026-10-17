@@ -1,0 +1,1146 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Workspace and Project</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=Libre+Franklin:wght@400;500;600&display=swap">
+<style>
+  /* Layout: a working paper. One wide instrument (the workspace surface) mounted on cotton paper,
+     prose on a measure beside and below it, hairlines for structure, no boxes except the surface. */
+  :root {
+    --surface: #efeee9;
+    --ink: #3d434c;
+    --accent: #4b3fc4;
+    --ok: #2a6e4e;
+    --warn: #8a5f10;
+    --alarm: #9b3b2a;
+    --plate: #0e1119;
+    --plate-ink: #e8e8ea;
+    --surface-raised: color-mix(in srgb, var(--ink) 4%, var(--surface));
+    --surface-sunken: color-mix(in srgb, var(--ink) 8%, var(--surface));
+    --ink-muted: color-mix(in srgb, var(--ink) 60%, var(--surface));
+    --muted: color-mix(in srgb, var(--ink) 50%, var(--surface));
+    --hairline: color-mix(in srgb, var(--ink) 30%, var(--surface));
+    --ghost: color-mix(in srgb, var(--ink) 14%, var(--surface));
+    --accent-wash: color-mix(in srgb, var(--accent) 12%, var(--surface));
+    --stack-display: "Fraunces", "Cormorant Garamond", Georgia, serif;
+    --stack-sans: "Libre Franklin", system-ui, -apple-system, sans-serif;
+    --stack-num: Georgia, "Times New Roman", serif;
+    --stack-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --text-body: clamp(1rem, 1.3vw, 1.1rem);
+    --text-small: 0.875rem;
+    --text-label: 0.72rem;
+    --measure: 38rem;
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--surface);
+    color: var(--ink);
+    font-family: var(--stack-sans);
+    font-size: var(--text-body);
+    line-height: 1.5;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 2rem 4rem;
+  }
+  .page { max-width: 92rem; margin: 0 auto; display: grid; gap: 3rem; }
+  h1, h2, h3 { font-family: var(--stack-display); font-weight: 500; text-wrap: balance; margin: 0; line-height: 1.1; }
+  h1 { font-size: clamp(2rem, 4.5vw, 3.2rem); }
+  h2 { font-size: clamp(1.5rem, 2.6vw, 2rem); }
+  h3 { font-size: 1.15rem; font-family: var(--stack-sans); font-weight: 600; }
+  p { margin: 0; max-width: var(--measure); }
+  .lede { font-family: var(--stack-display); font-size: clamp(1.15rem, 1.8vw, 1.35rem); color: var(--ink-muted); max-width: 46rem; }
+  .label { font-size: var(--text-label); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .num { font-family: var(--stack-num); font-variant-numeric: tabular-nums; }
+  .masthead { display: grid; gap: 1rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--hairline); }
+  .legend { display: flex; gap: 1.5rem; flex-wrap: wrap; font-size: var(--text-small); color: var(--ink-muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 0.4rem; }
+  .tag { display: inline-block; font-size: var(--text-label); letter-spacing: 0.06em; text-transform: uppercase; padding: 0.05rem 0.4rem; border: 1px solid var(--hairline); color: var(--ink-muted); vertical-align: middle; font-weight: 600; }
+  .tag.guess { border-style: dashed; color: var(--warn); border-color: var(--warn); }
+  .tag.deferred { border-style: dotted; color: var(--muted); }
+  section { display: grid; gap: 1.25rem; }
+  .section-head { display: grid; gap: 0.5rem; }
+  .prose { display: grid; gap: 0.75rem; }
+  .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: 1.5rem 2.5rem; align-items: start; }
+  .cols > * { min-width: 0; }
+  ul.plain { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.4rem; max-width: var(--measure); }
+  ul.plain li { padding-left: 1rem; text-indent: -1rem; }
+  ul.plain li::before { content: "·"; display: inline-block; width: 1rem; text-indent: 0; color: var(--muted); }
+  ol { margin: 0; padding-left: 1.25rem; max-width: var(--measure); display: grid; gap: 0.5rem; }
+
+  /* ---------- the workspace instrument ---------- */
+  .bench { display: grid; gap: 0.75rem; }
+  .bar { display: flex; flex-wrap: wrap; gap: 1rem 2rem; align-items: end; padding-bottom: 0.5rem; border-bottom: 1px solid var(--hairline); }
+  .group { display: grid; gap: 0.35rem; }
+  .seg { display: flex; flex-wrap: wrap; gap: 0; border: 1px solid var(--hairline); }
+  .seg button { font: inherit; font-size: var(--text-small); background: transparent; color: var(--ink-muted); border: 0; border-right: 1px solid var(--hairline); padding: 0.3rem 0.7rem; cursor: pointer; }
+  .seg button:last-child { border-right: 0; }
+  .seg button[aria-pressed="true"] { color: var(--ink); background: var(--surface-sunken); font-weight: 600; }
+  .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .seq { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+  .seq .arrow { color: var(--muted); }
+  .seq button { font: inherit; background: none; border: 0; padding: 0.2rem 0.3rem; color: var(--ink-muted); cursor: pointer; border-bottom: 2px solid transparent; }
+  .seq button[aria-pressed="true"] { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+  .seq button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .bar .readout { margin-left: auto; font-size: var(--text-small); color: var(--ink-muted); display: grid; gap: 0.1rem; text-align: right; }
+
+  .surface-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 17rem; gap: 1.25rem; align-items: start; }
+  @media (max-width: 64rem) { .surface-wrap { grid-template-columns: 1fr; } }
+  .surface { position: relative; width: 100%; aspect-ratio: 16 / 9; max-width: 100%; background: var(--surface-raised); border: 1px solid var(--hairline); overflow: hidden; }
+  @media (max-width: 40rem) { .surface { aspect-ratio: 3 / 4; } }
+  .phase-tag { position: absolute; right: 0.6rem; bottom: 0.35rem; font-size: var(--text-label); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); z-index: 2; pointer-events: none; }
+  .links { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+  .links path { fill: none; stroke: var(--accent); stroke-width: 1.25; stroke-dasharray: 3 4; opacity: 0.8; }
+  .links.typed path { stroke-dasharray: none; stroke-width: 1.5; }
+  .links circle { fill: var(--accent); }
+  .links text { font-family: var(--stack-mono); font-size: 10px; fill: var(--accent); }
+  .station { position: absolute; padding: 4px; transition: left 320ms ease, top 320ms ease, width 320ms ease, height 320ms ease; }
+  @media (prefers-reduced-motion: reduce) { .station { transition: none; } }
+  .station > .panel { position: relative; width: 100%; height: 100%; background: var(--surface); border: 1px solid var(--ghost); overflow: hidden; display: grid; cursor: pointer; }
+  .station[data-lod="full"] > .panel { grid-template-rows: auto minmax(0, 1fr) auto; border-color: var(--hairline); }
+  .station[data-lod="card"] > .panel { grid-template-rows: auto minmax(0, 1fr); }
+  .station[data-lod="icon"] > .panel { grid-template-rows: minmax(0, 1fr); }
+  .station.selected > .panel { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .station.lit > .panel { background: var(--accent-wash); }
+  .station > .panel:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .head { display: flex; align-items: baseline; gap: 0.5rem; padding: 0.35rem 0.6rem 0.2rem; min-width: 0; }
+  .head .name { font-weight: 600; font-size: var(--text-small); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .station[data-lod="full"] .head .name { font-size: 1rem; }
+  .head .compute { margin-left: auto; display: inline-flex; align-items: center; gap: 0.3rem; font-size: var(--text-label); color: var(--muted); letter-spacing: 0.04em; white-space: nowrap; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); display: inline-block; }
+  .dot.live { background: var(--ok); }
+  .dot.light { background: var(--warn); }
+  .dot.queued { background: var(--accent); }
+  .dot.failed { background: var(--alarm); }
+  .body { position: relative; min-height: 0; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); }
+  .body canvas { display: block; width: 100%; height: 100%; }
+  .body.split { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 0.5rem; padding: 0 0.6rem 0.4rem; }
+  .body.split canvas { border: 1px solid var(--ghost); }
+  .params { display: grid; grid-template-columns: auto auto; gap: 0.15rem 1rem; align-content: start; font-size: var(--text-small); align-self: start; }
+  .params dt { color: var(--muted); }
+  .params dd { margin: 0; text-align: right; }
+  .station[data-lod="card"] .params { font-size: 0.78rem; gap: 0 0.6rem; }
+  .pill { display: inline-block; font-size: 0.8rem; padding: 0 0.3rem; border-bottom: 1px solid var(--accent); color: var(--ink); cursor: ew-resize; }
+  .foot { display: flex; flex-wrap: wrap; gap: 0.3rem; padding: 0.3rem 0.6rem 0.45rem; border-top: 1px solid var(--ghost); font-size: var(--text-label); align-items: center; }
+  .chip { font-family: var(--stack-mono); font-size: 0.68rem; padding: 0.05rem 0.35rem; background: var(--surface-sunken); color: var(--ink-muted); white-space: nowrap; }
+  .chip.var { background: var(--accent-wash); color: var(--accent); }
+  .foot .kindword { margin-left: auto; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+  .station[data-lod="icon"] .glyph { position: absolute; inset: 0; }
+  .station[data-lod="icon"] .glyph canvas { width: 100%; height: 100%; }
+  .station[data-lod="icon"] .glyph .mark { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--stack-display); font-size: clamp(0.9rem, 2.2vw, 1.6rem); color: var(--ink-muted); }
+  .textbody { padding: 0 0.6rem 0.4rem; font-size: var(--text-small); overflow: hidden; display: grid; align-content: start; gap: 0.3rem; min-width: 0; }
+  .textbody p { max-width: none; }
+  .textbody .big { font-family: var(--stack-num); font-size: clamp(1.4rem, 3vw, 2.4rem); line-height: 1; }
+  .station[data-lod="card"] .textbody .big { font-size: clamp(1.1rem, 2.2vw, 1.6rem); }
+  .jobs { display: grid; gap: 0.2rem; font-size: 0.8rem; }
+  .jobs li { display: flex; gap: 0.5rem; align-items: center; list-style: none; }
+  .jobs ul { margin: 0; padding: 0; display: contents; }
+  .jobs .when { margin-left: auto; color: var(--muted); }
+  .peek { position: absolute; width: 15rem; max-width: 46%; aspect-ratio: 5 / 4; background: var(--surface); border: 1px solid var(--hairline); z-index: 5; pointer-events: none; display: none; grid-template-rows: auto minmax(0, 1fr); }
+  .peek.show { display: grid; }
+  .peek::after { content: "peek"; position: absolute; right: 0.4rem; bottom: 0.2rem; font-size: var(--text-label); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  /* guideposts: prose on the surface, not stations */
+  .guide { position: absolute; font-family: var(--stack-display); font-style: italic; font-size: clamp(0.85rem, 1.3vw, 1.05rem); line-height: 1.3; color: var(--ink-muted); padding: 0.2rem 0.4rem; pointer-events: none; max-width: 100%; }
+  .guide::before { content: "¶ "; color: var(--muted); font-style: normal; }
+  .slot { position: absolute; padding: 4px; pointer-events: none; }
+  .slot > div { width: 100%; height: 100%; border: 1px dashed var(--hairline); display: grid; place-items: center; color: var(--muted); font-size: var(--text-small); font-style: italic; font-family: var(--stack-display); }
+
+  /* the project rail beside the surface */
+  .project { display: grid; gap: 0.75rem; font-size: var(--text-small); align-content: start; }
+  .tree { font-family: var(--stack-mono); font-size: 0.78rem; line-height: 1.5; display: grid; gap: 0.1rem; }
+  .tree .n { display: flex; align-items: center; gap: 0.4rem; padding: 0.05rem 0.3rem; cursor: default; border-left: 2px solid transparent; }
+  .tree .n.lit { background: var(--accent-wash); border-left-color: var(--accent); }
+  .tree .d1 { padding-left: 1rem; } .tree .d2 { padding-left: 2rem; } .tree .d3 { padding-left: 3rem; }
+  .tree .dir { color: var(--ink-muted); }
+  .tree .ann { font-family: var(--stack-sans); font-size: 0.68rem; color: var(--muted); margin-left: auto; white-space: nowrap; }
+  .project .note { color: var(--ink-muted); }
+  .sel-readout { display: grid; gap: 0.2rem; padding-top: 0.5rem; border-top: 1px solid var(--hairline); }
+  .sel-readout b { font-weight: 600; }
+
+  /* ---------- the ladder ---------- */
+  .ladder { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 1.5rem; }
+  .rung { display: grid; gap: 0.5rem; padding-top: 0.6rem; border-top: 1px solid var(--hairline); min-width: 0; }
+  .rung .spec { display: grid; grid-template-columns: auto 1fr; gap: 0.15rem 0.8rem; font-size: var(--text-small); }
+  .rung .spec dt { color: var(--muted); } .rung .spec dd { margin: 0; }
+  .rung .sample { height: 7rem; border: 1px solid var(--ghost); background: var(--surface-raised); position: relative; overflow: hidden; }
+  .rung .sample canvas { display: block; position: absolute; }
+  .rung[data-rung="full"] .sample { height: 15rem; }
+
+  /* ---------- figures ---------- */
+  figure { margin: 0; display: grid; gap: 0.6rem; min-width: 0; }
+  figure svg { width: 100%; height: auto; max-width: 100%; display: block; }
+  figcaption { font-size: var(--text-small); color: var(--ink-muted); max-width: var(--measure); }
+  .fig-text { font-family: var(--stack-sans); font-size: 12px; fill: var(--ink); }
+  .fig-small { font-family: var(--stack-sans); font-size: 10.5px; fill: var(--ink-muted); }
+  .fig-muted { fill: var(--muted); }
+  .fig-line { stroke: var(--ink); stroke-width: 1.2; fill: none; }
+  .fig-faint { stroke: var(--hairline); stroke-width: 1; fill: none; }
+  .fig-acc { stroke: var(--accent); stroke-width: 1.4; fill: none; }
+  .fig-warn { stroke: var(--warn); stroke-width: 1.4; fill: none; }
+  .fig-box { fill: var(--surface); stroke: var(--hairline); }
+  .fig-box.store { fill: var(--surface-sunken); stroke: var(--ink); }
+  .fig-box.now { stroke: var(--accent); stroke-width: 1.5; }
+  .fig-dot { fill: var(--ink); } .fig-dot.acc { fill: var(--accent); } .fig-dot.open { fill: var(--surface); stroke: var(--ink); }
+
+  table { border-collapse: collapse; width: 100%; font-size: var(--text-small); }
+  .tablewrap { overflow-x: auto; }
+  th, td { text-align: left; vertical-align: top; padding: 0.45rem 0.8rem 0.45rem 0; border-bottom: 1px solid var(--ghost); }
+  th { font-weight: 600; border-bottom-color: var(--hairline); }
+  td:first-child { color: var(--ink); min-width: 11rem; font-weight: 500; }
+  td:first-child small { display: block; color: var(--muted); font-weight: 400; }
+  tr.grp th { padding-top: 1.4rem; font-family: var(--stack-display); font-weight: 500; font-size: 1.05rem; border-bottom-color: var(--hairline); }
+  tr.grp th span { display: block; font-family: var(--stack-sans); font-weight: 400; font-size: var(--text-small); color: var(--ink-muted); margin-top: 0.15rem; }
+  .saved td:first-child { color: var(--ink-muted); white-space: nowrap; min-width: 0; font-weight: 400; }
+  .questions li { max-width: 46rem; }
+  .questions li::marker { color: var(--muted); font-family: var(--stack-num); }
+  .lists { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 1.5rem 2.5rem; }
+  .lists > div { display: grid; gap: 0.6rem; min-width: 0; }
+</style>
+
+<div class="page">
+  <header class="masthead">
+    <div class="label">Mock · iteration 2 · revised 2026-10-17 after your answers · a picture to argue with, not a design</div>
+    <h1>Workspace and Project</h1>
+    <p class="lede">One project, a tree of design data with variations and a history. One workspace, a flat 2-D surface of stations looking into it, each at a level of detail that sets both its size and how much it computes. A lifecycle over both, from sketchbook to refinement, that decides how strict everything is. The domain here is fabric because it was the richest example you gave.</p>
+    <div class="legend">
+      <span><span class="tag">said</span> taken from what you described</span>
+      <span><span class="tag guess">guess</span> something the mock had to decide that you did not say</span>
+      <span><span class="tag deferred">deferred</span> you said we will not know until we build it</span>
+    </div>
+  </header>
+
+  <!-- ===================== THE WORKSPACE ===================== -->
+  <section>
+    <div class="section-head">
+      <div class="label">1 · the workspace</div>
+      <h2>A surface of stations, one workflow, four views, a phase</h2>
+      <p>Click any station to make it the big one. Change the layout rule to see the same stations re-flowed; the Plan rule leaves most of the surface empty on purpose. Step through the workflow's views. Change the phase and watch the leaders go from free-form to typed. Hover a small station to peek at its card. The italic lines on the surface are guideposts: plain text beside the stations, not stations themselves.</p>
+    </div>
+
+    <div class="bench">
+      <div class="bar">
+        <div class="group">
+          <span class="label">Workflow · fabric</span>
+          <div class="seq" id="views" role="group" aria-label="Views in the workflow"></div>
+        </div>
+        <div class="group">
+          <span class="label">Layout rule</span>
+          <div class="seg" id="rules" role="group" aria-label="Layout rule"></div>
+        </div>
+        <div class="group">
+          <span class="label">Phase</span>
+          <div class="seg" id="phases" role="group" aria-label="Lifecycle phase"></div>
+        </div>
+        <div class="readout">
+          <span id="ro-counts"></span>
+          <span id="ro-compute"></span>
+          <span id="ro-phase"></span>
+        </div>
+      </div>
+
+      <div class="surface-wrap">
+        <div class="surface" id="surface" aria-label="The workspace surface">
+          <svg class="links" id="links" aria-hidden="true"></svg>
+          <div class="slot" id="slot" hidden><div>next station?</div></div>
+          <div class="peek" id="peek" aria-hidden="true"></div>
+          <div class="phase-tag" id="phase-tag"></div>
+        </div>
+        <aside class="project">
+          <div>
+            <div class="label">The project · fabric-01</div>
+            <div class="note">The tree the stations look into. Select a station and its nodes light up; several stations read the same node, and one station can read many.</div>
+          </div>
+          <div class="tree" id="tree"></div>
+          <div class="sel-readout" id="sel"></div>
+        </aside>
+      </div>
+    </div>
+
+    <div class="cols">
+      <div class="prose">
+        <h3>What the surface is <span class="tag">said</span></h3>
+        <ul class="plain">
+          <li>Flat and 2-D, like an artboard, not docks and tabs. Ordinary HTML and CSS, no canvas-based scene.</li>
+          <li>Many stations at once, forty is not strange, sized very unevenly on a large monitor.</li>
+          <li>A station is a view into the project, not a node of it. It may read several nodes or a slice of one.</li>
+          <li>Not everything is a station. Plain text and HTML sit on the surface as annotations and guideposts to what you are looking at.</li>
+          <li>A workflow carries a set of views, possibly in sequence. A view is an arrangement: which stations, where, how big.</li>
+          <li>Layout follows rules that cut down the choices while keeping the page calm. A rule need not fill the screen: a mostly blank page with a few small stations is a real way to plan what comes next, what kind it is, and how big.</li>
+          <li>Size and detail decide each other in both directions, with some back and forth: a rule proposes a size, a view can pin a rung, a station can ask for more.</li>
+          <li>Leaders can connect a piece of one station to a piece of another. Early in the lifecycle they are free-form and carry no type; later they are refined into real relations. Both matter.</li>
+        </ul>
+      </div>
+      <div class="prose">
+        <h3>What the mock decided <span class="tag guess">guess</span></h3>
+        <ul class="plain">
+          <li>A rule hands out area; a station picks the rung that fits; a view may override either. The Plan rule shows the sparse case with a dashed slot for the next station.</li>
+          <li>Guideposts are saved with the view, in the workspace layer, never in the project.</li>
+          <li>Clicking promotes a station to hero and demotes the old hero one rung, instead of swapping places.</li>
+          <li>The compute dot has three states: cached (icon), light (card), live (full). Nothing runs for a station that is off the view.</li>
+          <li>A station is of a <em>kind</em> (weave, palette, render, analysis, queue) and the kind owns its three renderings. Kinds would be the reusable library pieces.</li>
+          <li>The Fibonacci rule names five stations by weight 5 : 3 : 2 : 1 : 1 and sweeps the rest into a tray.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== LEVEL OF DETAIL ===================== -->
+  <section>
+    <div class="section-head">
+      <div class="label">2 · level of detail</div>
+      <h2>Three rungs, each with its own compute budget</h2>
+      <p>The same twill station on each rung. The icon is drawn from the data, not an image; the card adds the numbers that matter; the full station is the whole instrument. This is the lens's trigger, peek and open ladder, and the card and page split from the gallery, applied to every station. <span class="tag guess">guess</span> three rungs is enough; a fourth between card and full did not earn its place in the mock. <span class="tag">said</span> the rung is negotiated, not dictated by size alone.</p>
+    </div>
+    <div class="ladder" id="ladder">
+      <div class="rung" data-rung="icon">
+        <div class="label">icon</div>
+        <div class="sample"></div>
+        <dl class="spec"><dt>Shows</dt><dd>a live glyph of the content, the name on hover</dd><dt>Computes</dt><dd>nothing new; draws from the last cached value</dd><dt>Opens</dt><dd>a card on hover or focus, the full station on click</dd></dl>
+      </div>
+      <div class="rung" data-rung="card">
+        <div class="label">card</div>
+        <div class="sample"></div>
+        <dl class="spec"><dt>Shows</dt><dd>the preview plus two or three numbers</dd><dt>Computes</dt><dd>cheap summaries only, from the pure model</dd><dt>Opens</dt><dd>the full station on click</dd></dl>
+      </div>
+      <div class="rung" data-rung="full">
+        <div class="label">full</div>
+        <div class="sample"></div>
+        <dl class="spec"><dt>Shows</dt><dd>everything: parameters, variants, sub-views, the nodes it reads</dd><dt>Computes</dt><dd>live cells, workers, renders; the one place heavy work is allowed</dd><dt>Opens</dt><dd>nothing further; it is the instrument</dd></dl>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== THE PROJECT ===================== -->
+  <section>
+    <div class="section-head">
+      <div class="label">3 · the project</div>
+      <h2>A tree with two axes of change: history and variation</h2>
+      <p>Versions run along time and cover the whole project. Variations sit side by side at one moment and cover one node: three twills under one name, each a candidate. A sweep is a product over variation sets. A spike picks one or two candidates and carries the rest of the design forward in a way that may never work for the others. <span class="tag">said</span> variation is first-class and probably distinct from history. <span class="tag deferred">deferred</span> whether a "current" candidate exists at all, and whether it lives in the project or in the workspace; the prior-art list below has four systems that each answer this differently.</p>
+    </div>
+    <div class="cols">
+      <figure>
+        <svg viewBox="0 0 580 230" role="img" aria-label="History along the horizontal axis, variations fanned out vertically at the newest version, and a spike branching from one variant">
+          <line x1="30" y1="150" x2="330" y2="150" class="fig-line"/>
+          <circle cx="60" cy="150" r="5" class="fig-dot"/><circle cx="130" cy="150" r="5" class="fig-dot"/><circle cx="200" cy="150" r="5" class="fig-dot"/><circle cx="270" cy="150" r="6" class="fig-dot acc"/>
+          <path d="M130 150 C 160 110, 180 110, 210 110" class="fig-faint"/><circle cx="210" cy="110" r="4" class="fig-dot open"/>
+          <text x="60" y="175" class="fig-text" text-anchor="middle">v12</text><text x="130" y="175" class="fig-text" text-anchor="middle">v13</text><text x="200" y="175" class="fig-text" text-anchor="middle">v14</text><text x="270" y="175" class="fig-text" text-anchor="middle">v15 · now</text>
+          <text x="215" y="100" class="fig-text fig-muted">a branch the agent abandoned</text>
+          <text x="30" y="212" class="fig-text fig-muted">history: the whole project, along time</text>
+          <path d="M270 150 L 400 60 M270 150 L 400 110 M270 150 L 400 160" class="fig-acc"/>
+          <rect x="400" y="46" width="96" height="28" class="fig-box"/><rect x="400" y="96" width="96" height="28" class="fig-box"/><rect x="400" y="146" width="96" height="28" class="fig-box"/>
+          <text x="448" y="64" class="fig-text" text-anchor="middle">twill · A  2/2</text><text x="448" y="114" class="fig-text" text-anchor="middle">twill · B  3/1</text><text x="448" y="164" class="fig-text" text-anchor="middle">twill · C  herring</text>
+          <path d="M496 110 C 530 110, 540 125, 560 125" class="fig-warn"/><circle cx="560" cy="125" r="4" fill="#8a5f10"/>
+          <text x="505" y="140" class="fig-small">spike on B</text>
+          <text x="400" y="212" class="fig-text fig-muted">variation: one node, side by side</text>
+        </svg>
+        <figcaption>Both axes are worth keeping. A sweep walks the variation axis; undo and compare walk the history axis; a spike takes one candidate down its own path; a swarm of agents produces sibling projects, a fourth axis the mock leaves out.</figcaption>
+      </figure>
+      <div class="prose">
+        <h3>The tree <span class="tag">said</span></h3>
+        <ul class="plain">
+          <li>A hierarchy of heterogeneous data: text, images, structured parts, whatever the domain needs.</li>
+          <li>The interface to the outside world. Parts of it go to a simulator, a renderer, a compiler, a printer; results come back into it.</li>
+          <li>Safe concurrent editing, undo, versioning. Edits arrive from a human, from an agent through the workspace's tools, from an agent on the filesystem, from several agents at once.</li>
+          <li>Backing stores vary: a git repository of files first; a plain directory, browser storage, or S3 are all plausible.</li>
+          <li>Built for one person. Agent-friendly primitives first; human chrome only where a human needs it, and no chrome built in early.</li>
+        </ul>
+        <h3>Decided for the mock <span class="tag guess">guess</span></h3>
+        <ul class="plain">
+          <li>Derived nodes (cloth, drape) are in the tree as nodes with a recipe, so a result always names the inputs and the version it came from.</li>
+          <li>The render queue is a node too: jobs out, results back, each stamped with the project version.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== THE LIFECYCLE ===================== -->
+  <section>
+    <div class="section-head">
+      <div class="label">4 · the lifecycle</div>
+      <h2>Sketchbook to refinement, and back again by markup</h2>
+      <p>A design moves through phases, and the phase sets how strict everything is: how hard things are linted, which states a station may be in, whether a leader must have a type. The phases are the same whether the project is a fabric, an analog circuit, a mechanism or a theorem. You can always go backwards: regress a design, fork it, mark up a finished design the way you would mark up a blank page, then merge the markup and the design into a new mock. The humans rough out; the agent implements in a principled way; that exchange is itself history worth keeping, and it is not git history. <span class="tag">said</span> all of it. <span class="tag guess">guess</span> the five phase names, and that lint has three levels.</p>
+    </div>
+    <figure>
+      <svg viewBox="0 0 780 290" role="img" aria-label="Five phases in a row with forward arrows, a regression arrow from refine back to mock, and a spike forking off the first build">
+        <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#3d434c"/></marker><marker id="ah-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4b3fc4"/></marker><marker id="ah-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8a5f10"/></marker></defs>
+        <rect x="20" y="110" width="120" height="36" class="fig-box"/><text x="80" y="133" class="fig-text" text-anchor="middle">sketchbook</text>
+        <rect x="175" y="110" width="120" height="36" class="fig-box now"/><text x="235" y="133" class="fig-text" text-anchor="middle">mock</text>
+        <rect x="330" y="110" width="120" height="36" class="fig-box"/><text x="390" y="133" class="fig-text" text-anchor="middle">first build</text>
+        <rect x="485" y="110" width="120" height="36" class="fig-box"/><text x="545" y="133" class="fig-text" text-anchor="middle">measure</text>
+        <rect x="640" y="110" width="120" height="36" class="fig-box"/><text x="700" y="133" class="fig-text" text-anchor="middle">refine</text>
+        <path d="M140 128 L 173 128" class="fig-line" marker-end="url(#ah)"/><path d="M295 128 L 328 128" class="fig-line" marker-end="url(#ah)"/><path d="M450 128 L 483 128" class="fig-line" marker-end="url(#ah)"/><path d="M605 128 L 638 128" class="fig-line" marker-end="url(#ah)"/>
+        <path d="M700 110 C 700 40, 235 40, 235 108" class="fig-acc" marker-end="url(#ah-acc)"/>
+        <text x="467" y="52" class="fig-text" text-anchor="middle" fill="#4b3fc4">regress: mark up the full design, merge markup and design into a new mock</text>
+        <path d="M700 146 C 700 196, 600 196, 560 196 C 548 196, 545 180, 545 148" class="fig-faint" marker-end="url(#ah)"/>
+        <text x="572" y="212" class="fig-small">measure and refine loop until the numbers hold</text>
+        <path d="M390 146 C 390 200, 420 230, 440 230" class="fig-warn" marker-end="url(#ah-warn)"/>
+        <rect x="442" y="216" width="150" height="28" class="fig-box" style="stroke:#8a5f10"/><text x="517" y="234" class="fig-text" text-anchor="middle">spike · variant B only</text>
+        <text x="20" y="168" class="fig-small">lint off</text><text x="20" y="182" class="fig-small">leaders untyped</text><text x="20" y="196" class="fig-small">any station, any state</text>
+        <text x="175" y="168" class="fig-small">lint off</text><text x="175" y="182" class="fig-small">kinds chosen, sizes roughed</text><text x="175" y="196" class="fig-small">guideposts everywhere</text>
+        <text x="330" y="168" class="fig-small">lint advisory</text><text x="330" y="182" class="fig-small">leaders typed</text><text x="330" y="196" class="fig-small">recipes real, queue live</text>
+        <text x="485" y="168" class="fig-small">lint strict</text><text x="485" y="182" class="fig-small">results stamped with versions</text>
+        <text x="640" y="168" class="fig-small">lint strict</text><text x="640" y="182" class="fig-small">variants compared, picks made</text>
+        <text x="20" y="276" class="fig-text fig-muted">the lifecycle record keeps the rough-out and the implementation that answered it; git keeps the files</text>
+      </svg>
+      <figcaption>Phases are gates on strictness, not folders. The mock's phase control up top only changes the leaders and the lint readout; the real thing would change which station states exist.</figcaption>
+    </figure>
+    <div class="cols">
+      <div class="prose">
+        <h3>Roles <span class="tag">said</span></h3>
+        <p>You are the design lead: you judge, prompt, direct. The agent is the technical architect and the engineering staff: it decides how and does the work. The affordances we take from older systems were made for a builder's own hands; the ones we design are for a judge's eyes and a director's voice.</p>
+        <p>The kitchen is the working analogy and we will not push it. Stations are worked by the staff. The chef stands at the pass and inspects every plate before it leaves; a plate that fails goes back to its station. The expediter keeps the order of the tickets. The pass is the review point the lifecycle needs; the tickets are the workflow's sequence.</p>
+      </div>
+      <div class="prose">
+        <h3>Flows to plan for <span class="tag">said</span></h3>
+        <ul class="plain">
+          <li>Forward: sketchbook, mock, first build, measurement, refinement, each stricter than the last.</li>
+          <li>Regress: take a full design back to a mock by marking it up, keeping the design.</li>
+          <li>Merge: markup plus full design becomes a new mock, then a new build.</li>
+          <li>Fork: a spike on one variant that may leave the others behind.</li>
+          <li>Record: the rough-out and the principled implementation that answered it, kept as the design's own history.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== WHO WRITES, WHO WATCHES ===================== -->
+  <section>
+    <div class="section-head">
+      <div class="label">5 · writers and watchers</div>
+      <h2>Many hands on one store, and two kinds of reload</h2>
+      <p>The workspace is one writer among several and must notice changes it did not make. Code changes come through the dev server as today. Content changes come through the store's own change feed, whatever the store is. <span class="tag">said</span> both kinds exist and must stay separate. <span class="tag deferred">deferred</span> conflict resolution: last write per node, locks, or an eventually consistent store for real-time joint editing are all open. <span class="tag guess">guess</span> the change feed looks like a version counter plus a list of touched paths, the same shape over git, a directory watcher, or S3.</p>
+    </div>
+    <figure>
+      <svg viewBox="0 0 760 250" role="img" aria-label="Writers on the left, the project store in the middle, watchers on the right">
+        <rect x="20" y="22" width="170" height="36" class="fig-box"/><text x="105" y="45" class="fig-text" text-anchor="middle">you, in a station</text>
+        <rect x="20" y="72" width="170" height="36" class="fig-box"/><text x="105" y="95" class="fig-text" text-anchor="middle">agent, via workspace tools</text>
+        <rect x="20" y="122" width="170" height="36" class="fig-box"/><text x="105" y="145" class="fig-text" text-anchor="middle">agent, on the filesystem</text>
+        <rect x="20" y="172" width="170" height="36" class="fig-box"/><text x="105" y="195" class="fig-text" text-anchor="middle">a swarm → sibling projects</text>
+        <path d="M190 40 L 300 108 M190 90 L 300 116 M190 140 L 300 124 M190 190 L 300 132" class="fig-line"/>
+        <rect x="300" y="80" width="160" height="90" class="fig-box store"/>
+        <text x="380" y="110" class="fig-text" text-anchor="middle" font-weight="600">project store</text>
+        <text x="380" y="130" class="fig-text fig-muted" text-anchor="middle">git · directory · browser · S3</text>
+        <text x="380" y="150" class="fig-text fig-muted" text-anchor="middle">version + changed paths</text>
+        <path d="M460 115 L 570 60 M460 125 L 570 125 M460 135 L 570 190" class="fig-acc"/>
+        <rect x="570" y="42" width="170" height="36" class="fig-box"/><text x="655" y="65" class="fig-text" text-anchor="middle">this workspace re-reads</text>
+        <rect x="570" y="107" width="170" height="36" class="fig-box"/><text x="655" y="130" class="fig-text" text-anchor="middle">offline tools, CLIs, scripts</text>
+        <rect x="570" y="172" width="170" height="36" class="fig-box"/><text x="655" y="195" class="fig-text" text-anchor="middle">simulators, printers, compilers</text>
+        <text x="20" y="238" class="fig-text fig-muted">writes</text>
+        <text x="570" y="238" class="fig-text fig-muted">change feed, then reads</text>
+      </svg>
+      <figcaption>The dev server's hot reload keeps the code path; the store's change feed is the content path. A station's cells re-run when a node they read changes, whoever changed it.</figcaption>
+    </figure>
+  </section>
+
+  <!-- ===================== WHAT IS SAVED WHERE ===================== -->
+  <section>
+    <div class="section-head">
+      <div class="label">6 · what is saved where</div>
+      <h2>The project is what the world reads; the workspace is how you look at it</h2>
+      <p>Both are versioned and both are worth sharing, but an offline tool should never have to wade through arrangements and levels of detail to get at the design. <span class="tag">said</span> the split matters and the usual binary (one workspace file beside everything else) may be too coarse. <span class="tag guess">guess</span> a middle grain: a workspace folder in the same repository, with one file per view, so views can be diffed, reviewed and shared one at a time; and a lifecycle record of its own beside both.</p>
+    </div>
+    <div class="tablewrap">
+      <table class="saved">
+        <thead><tr><th>Layer</th><th>Holds</th><th>Who reads it</th><th>Versioned</th><th>Example path</th></tr></thead>
+        <tbody>
+          <tr><td>project</td><td>the design data, variation sets, derived nodes with their recipes, results that came back</td><td>everyone: the workspace, agents, offline tools, simulators</td><td>yes, the project's own history</td><td><code>fabric-01/weaves/twill/B.yaml</code></td></tr>
+          <tr><td>workspace</td><td>workflows, their views in sequence, which station reads which nodes, placement, the layout rule, leaders, guideposts</td><td>the workspace, and an agent arranging a view for you</td><td>yes, alongside the project, in its own folder</td><td><code>fabric-01/.workspace/fabric/3-cloth.yaml</code></td></tr>
+          <tr><td>lifecycle record</td><td>the phase of each part, the markups, each rough-out and the implementation that answered it</td><td>you and the agent, reviewing how the design got here</td><td>yes, its own log, not git's</td><td><code>fabric-01/.lifecycle/…</code></td></tr>
+          <tr><td>session</td><td>what is hovered, the current hero, scroll, an unsent dictation</td><td>this browser only</td><td>no</td><td>memory, or browser storage</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================== PLACES TO LOOK ===================== -->
+  <section>
+    <div class="section-head">
+      <div class="label">7 · places to look</div>
+      <h2>Prior art, by the question it would answer</h2>
+      <p>For each: what it is, the organizing principle I think is there to extract, and whose hands it was built for. Most of these served a builder working with their own fingers and mouth; the test for us is whether the principle survives when the hands belong to an agent and the human is judging. Years are from memory and a few rows say "check" where I would verify before leaning on them. Read the group heads first; the rows are the shortlist, not the survey.</p>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Where</th><th>What it has</th><th>Principle to extract</th><th>Made for</th></tr></thead>
+        <tbody>
+          <tr class="grp"><th colspan="4">A · Levels of detail and focus <span>Does size pick detail, or the other way round, and what is an icon?</span></th></tr>
+          <tr><td>NLS / Augment<small>Engelbart, SRI, 1968</small></td><td>Viewspecs: a few switches on a view of a structured outline (how many levels deep, how many lines per statement) that never touch the content.</td><td>Level of detail is a property of the view, set by a tiny vocabulary. The same vocabulary works typed or spoken.</td><td>a trained operator at a keyset</td></tr>
+          <tr><td>Generalized fisheye views<small>Furnas, Bell Labs, 1986</small></td><td>Degree of interest = a priori importance minus distance from the focus; show what scores above a threshold.</td><td>A function, not hand placement, decides which stations get detail. Both of your directions fall out of one focus plus one budget.</td><td>a formula over large structures</td></tr>
+          <tr><td>Pad++ and the zoomable interface<small>Perlin and Fox 1993; Bederson's Pad++, Jazz, Piccolo</small></td><td>An infinite zoomable surface with semantic zoom: an object draws itself differently at each scale.</td><td>The generated icon. The object owns its renderings per scale, which is the rung ladder.</td><td>mouse zoom; the ladder transfers whole</td></tr>
+          <tr><td>Table Lens, Perspective Wall, Document Lens<small>Card, Robertson, Mackinlay, Rao, PARC 1991–94</small></td><td>Focus plus context in one view: the focused rows at full size, the rest compressed but present.</td><td>The tray is compressed context, not a list of icons. Nothing leaves the surface; it shrinks.</td><td>mouse and 3-D rooms; the compression rule transfers</td></tr>
+          <tr><td>Muse<small>Ink and Switch, 2019 onward</small></td><td>Boards within boards; a child board draws on its parent as a live reduced card of its own content.</td><td>A container's icon is a reduced rendering of itself; nesting is the ladder.</td><td>pencil and fingers on a tablet</td></tr>
+          <tr><td>Keynote light table; Xcode previews<small>Apple</small></td><td>Slides as real rendered thumbnails; SwiftUI previews as generated views of one component at several sizes and settings.</td><td>Previews are the thing rendered small, and variants of a preview are cheap to ask for.</td><td>a builder, but the preview model is ours already</td></tr>
+
+          <tr class="grp"><th colspan="4">B · Views, rooms, workflows, layout rules <span>How the same stations live in several arrangements, and what a rule is.</span></th></tr>
+          <tr><td>Rooms<small>Henderson and Card, PARC 1986</small></td><td>A window lives in several rooms with its own placement in each; doors lead between rooms; a task has a room.</td><td>The same station in several views with its own size in each. A workflow is a set of rooms with doors in order.</td><td>mouse; the model transfers whole</td></tr>
+          <tr><td>Blender's screen model<small>workspaces, areas, editor types, scenes</small></td><td>A screen is a tree of non-overlapping areas; any area can show any editor over the same file; a workspace tab per task.</td><td>Area is the slot, editor type is the station kind, workspace is the view, the file is the project. Split is the only layout operation.</td><td>a builder's hotkeys over a clean data model</td></tr>
+          <tr><td>Tiling window managers<small>dwm, xmonad, bspwm, 2006 onward</small></td><td>A layout is a pure function from an ordered list of windows and a rectangle to rectangles: monocle, tile with a master area, spiral.</td><td>Layout rules as pure functions over rank. Hero plus rail and Fibonacci are two values of one type, which suits a cell.</td><td>keyboards; the function type transfers</td></tr>
+          <tr><td>Houdini desktops and networks<small>SideFX</small></td><td>A saved desktop is a layout of panes over one scene; the network view is a 2-D canvas of typed nodes with wires.</td><td>Per-task layouts saved beside the scene; typed leaders between stations as a later phase of free-form ones.</td><td>a builder; dense, but principled</td></tr>
+          <tr><td>Freeform scenes; Spaces<small>Apple; scenes added 2024, check</small></td><td>A named camera position on a shared infinite board; desktops as rooms.</td><td>A view is a camera plus an arrangement, saved by name. Thin, but it is Apple's own answer to views.</td><td>fingers and a pencil</td></tr>
+          <tr><td>Figma and FigJam<small>pages, frames, sections</small></td><td>An artboard surface where frames are the unit and sections group them; FigJam is the sketchbook register, Figma the drawing register.</td><td>One tool family with a register per lifecycle phase, and a fence between them.</td><td>a builder's mouse</td></tr>
+
+          <tr class="grp"><th colspan="4">C · Variations, sweeps, spikes <span>Where a variation set lives, whether a current pick exists, and what a sweep is.</span></th></tr>
+          <tr><td>Sketchpad<small>Sutherland, MIT, 1963</small></td><td>Master drawings and instances; change the master and every instance follows; constraints between parts.</td><td>An instance is a view of a master plus a transform. Variation as masters with many instances is the oldest answer.</td><td>a light pen; the data model is the point</td></tr>
+          <tr><td>Onshape and SolidWorks configurations<small>design tables; Onshape versions and branches</small></td><td>A part carries a table of named configurations over its parameters; a design table drives a sweep; the document graph has versions, branches and merges built in.</td><td>Variations are a table on the node; sweep rows are the table; history is a graph the document owns, not a file system's.</td><td>a builder, but the tables are agent-shaped</td></tr>
+          <tr><td>Houdini takes and wedging<small>takes; TOPs and PDG wedge</small></td><td>A take overrides parameters without copying the scene; wedging builds the cross product of overrides and runs each.</td><td>A variation is an overlay of deltas over one base, so "current" is just the empty overlay. A sweep is a product of overlays. Closest to your "may not have a current".</td><td>a builder; the overlay model transfers</td></tr>
+          <tr><td>Final Cut Pro auditions; Logic Pro take folders and track alternatives<small>Apple</small></td><td>One slot holds several alternates; one is the pick; swapping disturbs nothing around it; takes are comped into one.</td><td>A variation set as a slot with a pick, stored in the document. Comping is a merge of candidates. Apple's vocabulary for a current pick.</td><td>an editor's hands; the slot model transfers</td></tr>
+          <tr><td>Altium variants; Cadence ADE Assembler corners<small>EDA</small></td><td>A variant is the same schematic with fitted or omitted parts and value overrides; corners are a matrix of conditions, each test run per cell.</td><td>Variation by override over one base, and the sweep matrix as a first-class object with a result in every cell.</td><td>an engineer; near your circuit case</td></tr>
+          <tr><td>Figma component variants and branching<small>plus multiplayer</small></td><td>Variants are named properties on a component set; branching is version control on the file with review and merge; multiplayer is last-writer-wins per property.</td><td>Variant properties as a small typed grid; per-property concurrency as the cheap option.</td><td>a builder's mouse</td></tr>
+
+          <tr class="grp"><th colspan="4">D · History, concurrent editing, forks <span>What git gives for free and what it cannot, and the eventual-consistency option.</span></th></tr>
+          <tr><td>Ink and Switch<small>local-first software 2019; Upwelling 2023; Patchwork 2024; Automerge</small></td><td>CRDT documents with branches, drafts shared as proposals, merges that keep history; version control shaped like documents rather than files.</td><td>The eventual-consistency option you deferred, worked out for documents, with branches and review on top.</td><td>writers and researchers; the model transfers</td></tr>
+          <tr><td>Fusion 360 parametric timeline<small>Autodesk</small></td><td>History is a feature list you can scrub, edit in the middle, and replay.</td><td>History as an editable program of the design, distinct from file history: a lifecycle record with replay.</td><td>a builder; the record idea transfers</td></tr>
+          <tr><td>Git, Dolt, Pijul<small>files, tables, patches</small></td><td>Branches and merges over files; the same over tables; patches as the commuting unit.</td><td>What the first backing store gives for free, and the semantic merge and variations it will never give.</td><td>programmers and agents alike</td></tr>
+
+          <tr class="grp"><th colspan="4">E · The document as the thing: parts, editors, presentations <span>The tree with per-kind editors, and what stays addressable after it is drawn.</span></th></tr>
+          <tr><td>Xerox Star; Apple Lisa<small>1981–83</small></td><td>A document-centric desktop: a handful of generic commands (move, copy, delete, show properties) over typed objects; property sheets instead of per-object menus; stationery pads.</td><td>A tiny universal verb set over typed objects, which is the agent-friendly primitive you asked for. Progressive disclosure as policy.</td><td>mouse; the verbs transfer verbatim</td></tr>
+          <tr><td>OpenDoc and OLE<small>Apple and Microsoft, 1990s</small></td><td>Compound documents of parts; each part brings its editor; the document owns layout.</td><td>The project tree with a per-kind editor embedded. Why it failed is as useful as what it got right.</td><td>a builder; the structure transfers, the chrome does not</td></tr>
+          <tr><td>Genera Dynamic Windows; CLIM presentations<small>Symbolics; Lisp machines</small></td><td>Every displayed object is a presentation of a typed object; commands accept presentations by type from anywhere on screen.</td><td>Our stamps, generalized: what is drawn stays addressable and typed, and an agent's tool surface falls out of it.</td><td>a programmer; the typing transfers</td></tr>
+          <tr><td>Boxer<small>diSessa and Abelson, 1980s</small></td><td>A box is both data and display; a port shows the same box somewhere else, live.</td><td>A station as a port into a node, the same node visible in several places at once.</td><td>learners; the port transfers</td></tr>
+          <tr><td>Self and Squeak Morphic; Lively Kernel<small>Smith and Ungar; Ingalls</small></td><td>Live objects with outliners and halos; everything on screen can be opened and edited in place.</td><td>The open ladder from icon to full is the outliner's expand; halos are the chrome that appears only on demand.</td><td>a programmer's mouse</td></tr>
+          <tr><td>Cedar Tioga<small>PARC, 1980s</small></td><td>A structured text editor with levels; show the document down to level n.</td><td>Viewspecs on prose. The same rung ladder on text stations.</td><td>a programmer</td></tr>
+
+          <tr class="grp"><th colspan="4">F · The lifecycle and the roles <span>Phases that gate strictness, going backwards, and where the review point sits.</span></th></tr>
+          <tr><td>Architecture practice<small>AIA phases; redlining</small></td><td>Schematic design, design development, construction documents: each phase has a defined precision and deliverable; drawings move by markup and resubmission.</td><td>Your lifecycle is standard practice in a profession. Lint level per phase; markup is the regression gesture; the set is the project.</td><td>a profession's practice; transfers directly</td></tr>
+          <tr><td>Aerospace reviews; readiness levels<small>PDR, CDR; NASA TRL</small></td><td>Gated maturity with criteria at each gate; going back a level is expected and named.</td><td>What must be true to advance a phase, written down. Regression as a normal move.</td><td>a profession's practice</td></tr>
+          <tr><td>Animation and VFX pipelines<small>storyboard, animatic, layout, blocking, polish; previs; dailies</small></td><td>Low fidelity on purpose at each early stage, each stage a different artifact; dailies as the daily review.</td><td>A fidelity ladder with a distinct artifact per rung, and a standing review point.</td><td>a crew under a director</td></tr>
+          <tr><td>The brigade de cuisine<small>Escoffier; your analogy</small></td><td>Stations with their own cooks, the sous-chef, the pass where the chef inspects every plate before it leaves, the expediter calling tickets.</td><td>The human at the pass; stations owned by staff; tickets as the workflow's sequence. One page of naming, not a chrome plan.</td><td>a kitchen; naming only</td></tr>
+          <tr><td>Director and crew; design principal and project architect<small>film; architecture</small></td><td>One role judges and directs; another decides how and runs the work; the review points are fixed in the week.</td><td>Your separation of concerns with its review cadence already worked out.</td><td>professions; the roles transfer</td></tr>
+
+          <tr class="grp"><th colspan="4">G · The oldest precursors <span>Pen-first and drawing-as-design-data, before mice.</span></th></tr>
+          <tr><td>GRAIL<small>RAND, 1968</small></td><td>Flowcharts drawn with a pen on a tablet, recognized live into runnable programs.</td><td>The pencil as the first input into a structured document, with recognition as the editing flow.</td><td>a pen; before the mouse</td></tr>
+          <tr><td>Alto SIL and Markup<small>PARC, 1970s; check</small></td><td>SIL drew the logic diagrams for PARC's own machines and fed wire lists to fabrication; Markup edited bitmaps.</td><td>The 2-D drawing was the design data and the interface to the shop: the project as the outside world's interface, forty years early.</td><td>engineers</td></tr>
+          <tr><td>ThingLab; Alternate Reality Kit<small>Borning 1979; Smith 1986, PARC</small></td><td>Constraint-based simulation kits in Smalltalk with live knobs and an interactor you hold.</td><td>The station as a live experiment with knobs: stations that compute.</td><td>a mouse; the kit idea transfers</td></tr>
+          <tr><td>Smalltalk-80 system browser<small>PARC</small></td><td>Four panes, each narrowing the next: category, class, protocol, method.</td><td>A view can be a fixed chain of panes, the opposite of free placement. Some workflows want this.</td><td>a programmer</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="lists">
+      <div>
+        <h3>Read first <span class="tag guess">guess</span></h3>
+        <ul class="plain">
+          <li>Rooms, for views and workflows.</li>
+          <li>NLS viewspecs with Furnas, for level of detail as a view property and a formula.</li>
+          <li>Onshape configurations with its versions and branches, and Houdini takes with wedging, for two different answers to variations and sweeps.</li>
+          <li>Final Cut auditions, for Apple's answer to a current pick.</li>
+          <li>Ink and Switch Patchwork, for document-shaped version control.</li>
+          <li>AIA phases and redlining, for the lifecycle as practice.</li>
+          <li>Xerox Star's generic commands, for the agent-friendly verb set.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>How to read them</h3>
+        <ul class="plain">
+          <li>Name the organizing principle in one sentence before describing the UI.</li>
+          <li>Say whose hands it served, and whether the principle survives when the hands are an agent's.</li>
+          <li>Note what it stored where: content, arrangement, history, picks.</li>
+          <li>Note where it failed, if it did, and whether the failure was the principle or the chrome.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== QUESTIONS ===================== -->
+  <section>
+    <div class="section-head">
+      <div class="label">8 · where the questions stand</div>
+      <h2>Settled for now, deferred, and newly open</h2>
+    </div>
+    <div class="lists">
+      <div>
+        <h3>Settled for now <span class="tag">said</span></h3>
+        <ul class="plain">
+          <li>Station is the word. Kitchen names are welcome, lightly.</li>
+          <li>Size and detail decide each other both ways, with iteration.</li>
+          <li>Layout need not fill the surface; a sparse planning arrangement is a real view.</li>
+          <li>Text and HTML guideposts live on the surface beside stations.</li>
+          <li>Leaders are both: free-form early, typed later, and the refinement is itself recorded.</li>
+          <li>The lifecycle is a first-class concept that gates strictness and available states, and runs backwards as well as forwards.</li>
+          <li>You are the design lead; the agent is the architect and the staff.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Deferred until built <span class="tag deferred">deferred</span></h3>
+        <ul class="plain">
+          <li>The shape of a variation set, whether a current pick exists, and whether it lives in the project or the workspace.</li>
+          <li>Conflict resolution between writers: last write, locks, or eventual consistency.</li>
+          <li>The exact phase names and what each gates.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Newly open</h3>
+        <ol class="questions">
+          <li>Is the phase a property of the whole project, or can one node be in mock while its neighbour is refined?</li>
+          <li>Is a phase a gate with written criteria, or a label you move at will?</li>
+          <li>Where do markups live: ink and notes in the workspace layer, or nodes in the project the agent must answer?</li>
+          <li>Does a spike become a branch on the history axis, a variant on the variation axis, or both at once?</li>
+          <li>What does the agent need from a view to do its work: the whole arrangement, or only the nodes in focus and the guideposts?</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+  // ---------- the project ----------
+  const PALETTES = {
+    'palettes/indigo-cream': { name: 'indigo · cream', warp: '#2f3a6e', weft: '#e9e2cf' },
+    'palettes/rust-slate':   { name: 'rust · slate',   warp: '#9b4a2a', weft: '#4a5160' },
+    'palettes/moss-bone':    { name: 'moss · bone',    warp: '#3f5d47', weft: '#e6e0d2' },
+  };
+  const TWILLS = {
+    A: { name: 'A  2/2 twill',   a: 2, b: 2, herring: 0 },
+    B: { name: 'B  3/1 twill',   a: 3, b: 1, herring: 0 },
+    C: { name: 'C  herringbone', a: 2, b: 2, herring: 6 },
+  };
+  const YARN = { name: 'wool 28/2', tex: 71, diameterMm: 0.32, pricePerKg: 38 };
+  const state = { current: 'A', palette: 'palettes/indigo-cream', endsPerCm: 24, picksPerCm: 22 };
+
+  const TREE = [
+    ['d0', 'fabric-01/', 'dir', 'fabric-01', 'v15'],
+    ['d1', 'weaves/', 'dir', 'weaves', ''],
+    ['d2', 'twill/', 'dir', 'weaves/twill', 'variation set · 3'],
+    ['d3', 'A.yaml', '', 'weaves/twill/A', 'pick?'],
+    ['d3', 'B.yaml', '', 'weaves/twill/B', 'spike'],
+    ['d3', 'C.yaml', '', 'weaves/twill/C', ''],
+    ['d2', 'herringbone.yaml', '', 'weaves/herringbone', ''],
+    ['d1', 'palettes/', 'dir', 'palettes', ''],
+    ['d2', 'indigo-cream.yaml', '', 'palettes/indigo-cream', ''],
+    ['d2', 'rust-slate.yaml', '', 'palettes/rust-slate', ''],
+    ['d2', 'moss-bone.yaml', '', 'palettes/moss-bone', ''],
+    ['d1', 'yarn/', 'dir', 'yarn', ''],
+    ['d2', 'wool-28.yaml', '', 'yarn/wool-28', ''],
+    ['d1', 'cloth/', 'dir', 'cloth', 'derived'],
+    ['d2', 'sample.recipe', '', 'cloth/sample', 'twill × palette × yarn'],
+    ['d1', 'drape/', 'dir', 'drape', 'derived'],
+    ['d2', 'mannequin.recipe', '', 'drape/mannequin', ''],
+    ['d2', 'cylinder.recipe', '', 'drape/cylinder', ''],
+    ['d1', 'notes.md', '', 'notes', ''],
+    ['d1', 'queue/', 'dir', 'queue', 'outside world'],
+    ['d2', 'render.jobs', '', 'queue/render', '2 running'],
+  ];
+
+  // ---------- the stations ----------
+  const STATIONS = [
+    { id: 'weave',    name: 'Weave · twill',               kind: 'weave',    nodes: ['weaves/twill/A', 'palettes/indigo-cream'] },
+    { id: 'variants', name: 'Twill variants',              kind: 'variants', nodes: ['weaves/twill'] },
+    { id: 'palette',  name: 'Palette · indigo cream',      kind: 'palette',  nodes: ['palettes/indigo-cream'], pal: 'palettes/indigo-cream' },
+    { id: 'palette2', name: 'Palette · rust slate',        kind: 'palette',  nodes: ['palettes/rust-slate'],   pal: 'palettes/rust-slate' },
+    { id: 'yarn',     name: 'Yarn · wool 28/2',            kind: 'yarn',     nodes: ['yarn/wool-28'] },
+    { id: 'counts',   name: 'Sett and cover factor',       kind: 'counts',   nodes: ['weaves/twill/A', 'yarn/wool-28'] },
+    { id: 'sweep',    name: 'Sweep · variants × palettes', kind: 'sweep',    nodes: ['weaves/twill', 'palettes'] },
+    { id: 'cloth',    name: 'Cloth render',                kind: 'cloth',    nodes: ['cloth/sample'] },
+    { id: 'closeup',  name: 'Cloth close-up',              kind: 'closeup',  nodes: ['cloth/sample'] },
+    { id: 'drape',    name: 'Drape · mannequin',           kind: 'drape',    nodes: ['drape/mannequin', 'cloth/sample'] },
+    { id: 'drape2',   name: 'Drape · cylinder',            kind: 'drape',    nodes: ['drape/cylinder', 'cloth/sample'], cyl: true },
+    { id: 'cost',     name: 'Cost per metre',              kind: 'cost',     nodes: ['yarn/wool-28', 'weaves/twill/A'] },
+    { id: 'notes',    name: 'Design notes',                kind: 'notes',    nodes: ['notes'] },
+    { id: 'queue',    name: 'Render queue',                kind: 'queue',    nodes: ['queue/render'] },
+  ];
+  const byId = Object.fromEntries(STATIONS.map(s => [s.id, s]));
+
+  // A view names the hero, the cards in rank order; every other station rides in the tray.
+  const VIEWS = [
+    { name: 'Weave',   hero: 'weave',  cards: ['variants', 'palette', 'counts'] },
+    { name: 'Palette', hero: 'sweep',  cards: ['palette', 'palette2', 'weave'] },
+    { name: 'Cloth',   hero: 'cloth',  cards: ['closeup', 'yarn', 'queue'] },
+    { name: 'Drape',   hero: 'drape',  cards: ['drape2', 'cloth', 'notes'] },
+  ];
+  const LINKS = [['palette', 'cloth', 'palette → recipe'], ['weave', 'cloth', 'weave → recipe'], ['cloth', 'drape', 'cloth → form']];
+  const RULES = ['Hero + rail', 'Fibonacci', 'Even', 'Plan'];
+  const PHASES = [
+    { name: 'Sketchbook', lint: 'lint off',      typed: false },
+    { name: 'Mock',       lint: 'lint off',      typed: false },
+    { name: 'Build',      lint: 'lint advisory', typed: true },
+    { name: 'Measure',    lint: 'lint strict',   typed: true },
+    { name: 'Refine',     lint: 'lint strict',   typed: true },
+  ];
+  // guideposts: prose placed on the surface per rule (fractions); absent = hidden under that rule
+  const GUIDES = [
+    { text: 'Baseline is the 2/2. Keep it until the drape says otherwise.', at: { 0: { x: 0.01, y: 0.905, w: 0.62 }, 3: { x: 0.02, y: 0.6, w: 0.3 } }, portrait: { 0: { x: 0.01, y: 0.94, w: 0.98 }, 3: { x: 0.04, y: 0.5, w: 0.5 } } },
+    { text: 'Next: a cost sweep across the sett before committing.', at: { 3: { x: 0.56, y: 0.08, w: 0.38 } }, portrait: { 3: { x: 0.04, y: 0.62, w: 0.6 } } },
+    { text: 'Place the drape station here once the cloth render is believable.', at: { 3: { x: 0.28, y: 0.45, w: 0.24 } }, portrait: { 3: { x: 0.58, y: 0.33, w: 0.38 } } },
+  ];
+
+  const ui = { view: 0, rule: 0, phase: 1, hero: VIEWS[0].hero, cards: VIEWS[0].cards.slice(), selected: null };
+
+  // ---------- layout rules: every rule returns {id: {x,y,w,h}} in fractions of the surface; a missing id is off the view ----------
+  function ranked() {
+    const rest = STATIONS.map(s => s.id).filter(id => id !== ui.hero && !ui.cards.includes(id));
+    return [ui.hero, ...ui.cards, ...rest];
+  }
+  function trayGrid(ids, rect, W, H) {
+    const out = {};
+    if (!ids.length) return out;
+    const pw = rect.w * W, ph = rect.h * H;
+    let cols = Math.max(1, Math.round(Math.sqrt(ids.length * pw / Math.max(ph, 1))));
+    cols = Math.min(cols, ids.length);
+    const rows = Math.ceil(ids.length / cols);
+    ids.forEach((id, k) => {
+      out[id] = { x: rect.x + (k % cols) * rect.w / cols, y: rect.y + Math.floor(k / cols) * rect.h / rows, w: rect.w / cols, h: rect.h / rows };
+    });
+    return out;
+  }
+  const isPortrait = (W, H) => H > W * 0.9;
+  function layoutHeroRail(W, H) {
+    const order = ranked();
+    const hero = order[0], cards = order.slice(1, 1 + ui.cards.length), tray = order.slice(1 + ui.cards.length);
+    const rects = {};
+    if (!isPortrait(W, H)) {
+      const hw = 0.64;
+      rects[hero] = { x: 0, y: 0, w: hw, h: 0.9 }; // a strip under the hero is left for a guidepost
+      const railX = hw, railW = 1 - hw;
+      const perRow = Math.max(4, Math.ceil(tray.length / 2));
+      const iconH = (railW / perRow) * (W / H);
+      const trayH = Math.ceil(tray.length / perRow) * iconH;
+      const cardsH = Math.max(0.3, 1 - trayH);
+      cards.forEach((id, k) => { rects[id] = { x: railX, y: k * cardsH / cards.length, w: railW, h: cardsH / cards.length }; });
+      Object.assign(rects, trayGrid(tray, { x: railX, y: cardsH, w: railW, h: 1 - cardsH }, W, H));
+    } else {
+      const hh = 0.48;
+      rects[hero] = { x: 0, y: 0, w: 1, h: hh };
+      const cardsH = 0.28;
+      cards.forEach((id, k) => { rects[id] = { x: k / cards.length, y: hh, w: 1 / cards.length, h: cardsH }; });
+      Object.assign(rects, trayGrid(tray, { x: 0, y: hh + cardsH, w: 1, h: 1 - hh - cardsH - 0.06 }, W, H));
+    }
+    return rects;
+  }
+  function layoutFib(W, H) {
+    const order = ranked();
+    const named = order.slice(0, 5), tray = order.slice(5);
+    const weights = [5, 3, 2, 1, 1, 1]; // the last weight is the tray
+    const rects = {};
+    let rect = { x: 0, y: 0, w: 1, h: 1 };
+    let remaining = weights.reduce((a, b) => a + b, 0);
+    named.forEach((id, k) => {
+      const share = weights[k] / remaining;
+      remaining -= weights[k];
+      if (rect.w * W >= rect.h * H) {
+        const take = rect.w * share;
+        rects[id] = { x: rect.x, y: rect.y, w: take, h: rect.h };
+        rect = { x: rect.x + take, y: rect.y, w: rect.w - take, h: rect.h };
+      } else {
+        const take = rect.h * share;
+        rects[id] = { x: rect.x, y: rect.y, w: rect.w, h: take };
+        rect = { x: rect.x, y: rect.y + take, w: rect.w, h: rect.h - take };
+      }
+    });
+    Object.assign(rects, trayGrid(tray, rect, W, H));
+    return rects;
+  }
+  function layoutEven(W, H) {
+    return trayGrid(ranked(), { x: 0, y: 0, w: 1, h: 1 }, W, H);
+  }
+  function layoutPlan(W, H) {
+    // the sparse page: one station as a card, a few icons, a dashed slot for the next, the rest off the view
+    const order = ranked();
+    const hero = order[0], icons = order.slice(1, 1 + ui.cards.length);
+    const rects = {};
+    if (!isPortrait(W, H)) {
+      rects[hero] = { x: 0.02, y: 0.05, w: 0.24, h: 0.38 };
+      const s = 0.06, sh = s * (W / H);
+      icons.forEach((id, k) => { rects[id] = { x: 0.02 + k * (s + 0.01), y: 0.45, w: s, h: sh }; });
+      rects.__slot = { x: 0.28, y: 0.05, w: 0.24, h: 0.38 };
+    } else {
+      rects[hero] = { x: 0.04, y: 0.03, w: 0.5, h: 0.28 };
+      const s = 0.13, sh = s * (W / H);
+      icons.forEach((id, k) => { rects[id] = { x: 0.04 + k * (s + 0.02), y: 0.33, w: s, h: sh }; });
+      rects.__slot = { x: 0.58, y: 0.03, w: 0.38, h: 0.28 };
+    }
+    return rects;
+  }
+  const LAYOUTS = [layoutHeroRail, layoutFib, layoutEven, layoutPlan];
+
+  function lodFor(pw, ph) {
+    const m = Math.min(pw, ph);
+    if (m >= 220 && pw * ph >= 80000) return 'full';
+    if (m >= 100) return 'card';
+    return 'icon';
+  }
+
+  // ---------- drawing ----------
+  function cellUp(spec, i, j) {
+    const period = spec.a + spec.b;
+    let shift = j;
+    if (spec.herring) {
+      const block = Math.floor(i / spec.herring);
+      shift = (block % 2 === 0) ? j : -j;
+    }
+    return (((i + shift) % period) + period) % period < spec.a;
+  }
+  function prep(cv) {
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const w = Math.max(1, cv.clientWidth), h = Math.max(1, cv.clientHeight);
+    cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+    const g = cv.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { g, w, h };
+  }
+  function drawWeave(cv, spec, pal, cells, shade) {
+    const { g, w, h } = prep(cv);
+    const size = Math.max(2, Math.min(w, h) / cells);
+    const cols = Math.ceil(w / size), rows = Math.ceil(h / size);
+    for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+      g.fillStyle = cellUp(spec, i, j) ? pal.warp : pal.weft;
+      g.fillRect(i * size, j * size, size + 0.5, size + 0.5);
+    }
+    if (size >= 6) {
+      g.strokeStyle = 'rgba(0,0,0,0.12)'; g.lineWidth = 1;
+      for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+        const up = cellUp(spec, i, j);
+        g.beginPath();
+        if (up) { g.moveTo(i * size + size / 2, j * size); g.lineTo(i * size + size / 2, j * size + size); }
+        else { g.moveTo(i * size, j * size + size / 2); g.lineTo(i * size + size, j * size + size / 2); }
+        g.stroke();
+      }
+    }
+    if (shade) {
+      const grad = g.createLinearGradient(0, 0, w, h);
+      grad.addColorStop(0, 'rgba(255,255,255,0.28)'); grad.addColorStop(0.5, 'rgba(0,0,0,0)'); grad.addColorStop(1, 'rgba(0,0,0,0.32)');
+      g.fillStyle = grad; g.fillRect(0, 0, w, h);
+    }
+  }
+  function drawDrape(cv, spec, pal, cyl) {
+    const { g, w, h } = prep(cv);
+    g.fillStyle = '#0e1119'; g.fillRect(0, 0, w, h);
+    const folds = cyl ? 3 : 6;
+    const size = Math.max(2, w / 90);
+    for (let x = 0; x < w; x += size) {
+      const t = x / w;
+      const fold = Math.sin(t * Math.PI * folds);
+      const light = 0.55 + 0.45 * fold;
+      const top = cyl ? h * 0.12 : h * (0.08 + 0.05 * Math.sin(t * Math.PI * 2));
+      const bottom = cyl ? h * 0.92 : h * (0.9 + 0.06 * Math.sin(t * Math.PI * folds / 2));
+      for (let y = top; y < bottom; y += size) {
+        const i = Math.floor(x / size), j = Math.floor((y - top) / size + fold * 1.5);
+        g.fillStyle = cellUp(spec, i, j) ? pal.warp : pal.weft;
+        g.fillRect(x, y, size + 0.5, size + 0.5);
+        g.fillStyle = `rgba(0,0,0,${(1 - light) * 0.7})`;
+        g.fillRect(x, y, size + 0.5, size + 0.5);
+      }
+    }
+  }
+  function drawYarn(cv) {
+    const { g, w, h } = prep(cv);
+    g.fillStyle = '#efeee9'; g.fillRect(0, 0, w, h);
+    const r = Math.min(w, h) * 0.08;
+    const plyA = '#2f3a6e', plyB = '#5a66a8';
+    for (let k = 0; k < 3; k++) {
+      const yc = h * (0.25 + k * 0.25);
+      for (let x = -r; x < w + r; x += r * 0.9) {
+        const ph = (x / (r * 3.6)) * Math.PI * 2;
+        g.fillStyle = plyA; g.beginPath(); g.ellipse(x, yc + Math.sin(ph) * r * 0.5, r * 0.9, r * 0.6, 0.6, 0, Math.PI * 2); g.fill();
+        g.fillStyle = plyB; g.beginPath(); g.ellipse(x + r * 0.45, yc - Math.sin(ph) * r * 0.5, r * 0.9, r * 0.6, -0.6, 0, Math.PI * 2); g.fill();
+      }
+    }
+  }
+  function drawPalette(cv, pal) {
+    const { g, w, h } = prep(cv);
+    g.fillStyle = pal.warp; g.beginPath(); g.moveTo(0, 0); g.lineTo(w, 0); g.lineTo(0, h); g.closePath(); g.fill();
+    g.fillStyle = pal.weft; g.beginPath(); g.moveTo(w, 0); g.lineTo(w, h); g.lineTo(0, h); g.closePath(); g.fill();
+  }
+  function drawGrid(cv, kind, lod) {
+    const { g, w, h } = prep(cv);
+    g.fillStyle = '#efeee9'; g.fillRect(0, 0, w, h);
+    const vars = Object.values(TWILLS);
+    const pals = kind === 'sweep' ? Object.values(PALETTES) : [pal()];
+    const gap = lod === 'icon' ? 1 : 6;
+    const cw = (w - gap * (vars.length + 1)) / vars.length, ch = (h - gap * (pals.length + 1)) / pals.length;
+    const size = Math.max(2, Math.min(cw, ch) / (lod === 'full' ? 16 : 8));
+    pals.forEach((p, r) => vars.forEach((v, c) => {
+      const x0 = gap + c * (cw + gap), y0 = gap + r * (ch + gap);
+      const cols = Math.ceil(cw / size), rows = Math.ceil(ch / size);
+      g.save(); g.beginPath(); g.rect(x0, y0, cw, ch); g.clip();
+      for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
+        g.fillStyle = cellUp(v, i, j) ? p.warp : p.weft;
+        g.fillRect(x0 + i * size, y0 + j * size, size + 0.5, size + 0.5);
+      }
+      g.restore();
+      if (lod === 'full' && kind === 'variants') {
+        g.fillStyle = 'rgba(239,238,233,0.9)'; g.fillRect(x0, y0 + ch - 18, cw, 18);
+        g.fillStyle = '#3d434c'; g.font = '600 11px "Libre Franklin", system-ui, sans-serif'; g.fillText(v.name, x0 + 6, y0 + ch - 5);
+      }
+      if (v === current() && p === pal() && lod !== 'icon') { g.strokeStyle = '#4b3fc4'; g.lineWidth = 2; g.strokeRect(x0 + 1, y0 + 1, cw - 2, ch - 2); }
+    }));
+  }
+
+  // ---------- derived numbers (the pure model) ----------
+  const current = () => TWILLS[state.current];
+  const pal = () => PALETTES[state.palette];
+  function coverFactor() {
+    const d = YARN.diameterMm / 10; // cm
+    const warp = state.endsPerCm * d, weft = state.picksPerCm * d;
+    return { warp, weft, total: warp + weft - warp * weft };
+  }
+  function massPerSqm() {
+    const metresPerSqm = (state.endsPerCm + state.picksPerCm) * 100;
+    return metresPerSqm * YARN.tex / 1000; // g
+  }
+  function costPerMetre() { return massPerSqm() * 1.5 / 1000 * YARN.pricePerKg; } // 150 cm wide
+  const f1 = n => n.toFixed(1), f2 = n => n.toFixed(2);
+
+  // ---------- station bodies by kind and rung ----------
+  function compute(lod) { return lod === 'full' ? ['live', 'live'] : lod === 'card' ? ['light', 'light'] : ['', 'cached']; }
+  function headHtml(st, lod) {
+    const [cls, word] = compute(lod);
+    return `<div class="head"><span class="name">${st.name}</span><span class="compute"><span class="dot ${cls}"></span>${word}</span></div>`;
+  }
+  function footHtml(st) {
+    const chips = st.nodes.map(n => `<span class="chip${n === 'weaves/twill' || n === 'palettes' ? ' var' : ''}">${n}</span>`).join('');
+    return `<div class="foot">${chips}<span class="kindword">${st.kind}</span></div>`;
+  }
+  const iconMark = (txt) => `<div class="glyph"><div class="mark">${txt}</div></div>`;
+
+  function bodyHtml(st, lod) {
+    const k = st.kind;
+    if (lod === 'icon') {
+      if (['weave', 'cloth', 'closeup', 'variants', 'sweep', 'drape', 'palette', 'yarn'].includes(k)) return `<div class="glyph"><canvas></canvas></div>`;
+      if (k === 'counts') return iconMark(`<span class="num">${f2(coverFactor().total)}</span>`);
+      if (k === 'cost') return iconMark(`<span class="num">€${f1(costPerMetre())}</span>`);
+      if (k === 'notes') return iconMark('¶');
+      if (k === 'queue') return iconMark('<span class="dot queued"></span>');
+    }
+    const cf = coverFactor();
+    const params = (rows) => `<dl class="params">${rows.map(([a, b]) => `<dt>${a}</dt><dd class="num">${b}</dd>`).join('')}</dl>`;
+    switch (k) {
+      case 'weave':
+        return lod === 'full'
+          ? `<div class="body split"><canvas></canvas>${params([['variant', current().name], ['float', `${current().a}/${current().b}`], ['ends / cm', `<span class="pill">${state.endsPerCm}</span>`], ['picks / cm', `<span class="pill">${state.picksPerCm}</span>`], ['palette', pal().name], ['cover', f2(cf.total)]])}</div>`
+          : `<div class="body split"><canvas></canvas>${params([['float', `${current().a}/${current().b}`], ['cover', f2(cf.total)]])}</div>`;
+      case 'closeup':
+      case 'cloth':
+        return lod === 'full'
+          ? `<div class="body split"><canvas></canvas>${params([['recipe', 'twill × palette × yarn'], ['from', 'v15'], ['renderer', 'stand-in'], ['mass', `${f1(massPerSqm())} g/m²`]])}</div>`
+          : `<div class="body"><canvas></canvas></div>`;
+      case 'variants':
+      case 'sweep':
+        return `<div class="body"><canvas></canvas></div>`;
+      case 'drape':
+        return lod === 'full'
+          ? `<div class="body split"><canvas></canvas>${params([['form', st.cyl ? 'cylinder' : 'mannequin M'], ['cloth', 'cloth/sample'], ['renderer', 'stand-in'], ['last run', '2 min ago']])}</div>`
+          : `<div class="body"><canvas></canvas></div>`;
+      case 'palette':
+        return `<div class="body split"><canvas></canvas>${params([['warp', PALETTES[st.pal].warp], ['weft', PALETTES[st.pal].weft]])}</div>`;
+      case 'yarn':
+        return lod === 'full'
+          ? `<div class="body split"><canvas></canvas>${params([['count', 'Nm 28/2'], ['tex', YARN.tex], ['diameter', `${YARN.diameterMm} mm`], ['price', `€${YARN.pricePerKg}/kg`]])}</div>`
+          : `<div class="body"><canvas></canvas></div>`;
+      case 'counts':
+        return `<div class="textbody"><div class="big num">${f2(cf.total)}</div><p>cover factor at <span class="num">${state.endsPerCm} × ${state.picksPerCm}</span> per cm</p>${lod === 'full' ? params([['warp cover', f2(cf.warp)], ['weft cover', f2(cf.weft)], ['mass', `${f1(massPerSqm())} g/m²`]]) : ''}</div>`;
+      case 'cost':
+        return `<div class="textbody"><div class="big num">€${f2(costPerMetre())}</div><p>per metre at 150 cm, yarn only</p>${lod === 'full' ? params([['mass', `${f1(massPerSqm())} g/m²`], ['yarn', `€${YARN.pricePerKg}/kg`]]) : ''}</div>`;
+      case 'notes':
+        return `<div class="textbody"><p>Keep the 2/2 as the baseline; B reads too shiny under the warm palette.</p>${lod === 'full' ? '<p>Try the herringbone at 6-end blocks before 8; the cylinder drape shows the chevron better. Ask for a cost sweep before committing the sett.</p>' : ''}</div>`;
+      case 'queue':
+        return `<div class="textbody jobs"><ul><li><span class="dot live"></span>drape/mannequin · A<span class="when">running</span></li><li><span class="dot live"></span>drape/cylinder · A<span class="when">running</span></li>${lod === 'full' ? '<li><span class="dot queued"></span>cloth/sample · B<span class="when">queued</span></li><li><span class="dot"></span>cloth/sample · A<span class="when">done · v15</span></li><li><span class="dot failed"></span>drape/mannequin · C<span class="when">failed · v14</span></li>' : ''}</ul></div>`;
+    }
+    return '<div class="body"></div>';
+  }
+
+  function paint(st, el, lod) {
+    const cv = el.querySelector('canvas');
+    if (!cv) return;
+    const k = st.kind;
+    const cells = lod === 'full' ? 36 : lod === 'card' ? 20 : 10;
+    if (k === 'weave') drawWeave(cv, current(), pal(), cells, false);
+    else if (k === 'cloth') drawWeave(cv, current(), pal(), lod === 'full' ? 70 : 32, true);
+    else if (k === 'closeup') drawWeave(cv, current(), pal(), lod === 'full' ? 12 : 8, true);
+    else if (k === 'palette') drawPalette(cv, PALETTES[st.pal]);
+    else if (k === 'yarn') drawYarn(cv);
+    else if (k === 'drape') drawDrape(cv, current(), pal(), !!st.cyl);
+    else if (k === 'variants' || k === 'sweep') drawGrid(cv, k, lod);
+  }
+
+  // ---------- mounting ----------
+  const surface = document.getElementById('surface');
+  const linksSvg = document.getElementById('links');
+  const peek = document.getElementById('peek');
+  const slot = document.getElementById('slot');
+  const els = {};
+  STATIONS.forEach(st => {
+    const el = document.createElement('div');
+    el.className = 'station'; el.dataset.id = st.id;
+    const panel = document.createElement('div');
+    panel.className = 'panel'; panel.tabIndex = 0; panel.setAttribute('role', 'button');
+    panel.setAttribute('aria-label', `${st.name}: make it the full station`);
+    el.appendChild(panel);
+    surface.appendChild(el);
+    els[st.id] = el;
+    panel.addEventListener('click', () => promote(st.id));
+    panel.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); promote(st.id); } });
+    panel.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse' && el.dataset.lod === 'icon') showPeek(st, el); });
+    panel.addEventListener('pointerleave', hidePeek);
+    panel.addEventListener('focus', () => { if (el.dataset.lod === 'icon') showPeek(st, el); });
+    panel.addEventListener('blur', hidePeek);
+  });
+  const guideEls = GUIDES.map(g => {
+    const el = document.createElement('div');
+    el.className = 'guide'; el.textContent = g.text; el.hidden = true;
+    surface.appendChild(el);
+    return el;
+  });
+
+  function render(st, lod) {
+    const el = els[st.id];
+    if (el.dataset.lod !== lod) {
+      el.dataset.lod = lod;
+      const panel = el.firstElementChild;
+      panel.innerHTML = lod === 'icon' ? bodyHtml(st, lod) : headHtml(st, lod) + bodyHtml(st, lod) + (lod === 'full' ? footHtml(st) : '');
+      panel.title = lod === 'icon' ? st.name : '';
+    }
+    paint(st, el, lod);
+  }
+
+  let frame = 0, settle = 0;
+  function place(el, r) {
+    el.style.left = (r.x * 100) + '%'; el.style.top = (r.y * 100) + '%';
+    el.style.width = (r.w * 100) + '%'; el.style.height = (r.h * 100) + '%';
+  }
+  function layout() {
+    const W = surface.clientWidth, H = surface.clientHeight;
+    if (!W || !H) return;
+    const rects = LAYOUTS[ui.rule](W, H);
+    const lods = {};
+    STATIONS.forEach(st => {
+      const r = rects[st.id];
+      const el = els[st.id];
+      if (!r) { el.hidden = true; lods[st.id] = 'off'; return; }
+      el.hidden = false;
+      place(el, r);
+      lods[st.id] = lodFor(r.w * W - 8, r.h * H - 8);
+      render(st, lods[st.id]);
+    });
+    slot.hidden = !rects.__slot;
+    if (rects.__slot) place(slot, rects.__slot);
+    const portrait = isPortrait(W, H);
+    GUIDES.forEach((g, i) => {
+      const at = (portrait && g.portrait ? g.portrait : g.at)[ui.rule];
+      guideEls[i].hidden = !at;
+      if (at) { guideEls[i].style.left = (at.x * 100) + '%'; guideEls[i].style.top = (at.y * 100) + '%'; guideEls[i].style.width = (at.w * 100) + '%'; }
+    });
+    const repaint = () => { STATIONS.forEach(st => { if (!els[st.id].hidden) paint(st, els[st.id], els[st.id].dataset.lod); }); drawLinks(rects); };
+    cancelAnimationFrame(frame); clearTimeout(settle);
+    frame = requestAnimationFrame(repaint);
+    settle = setTimeout(repaint, 340);
+    const counts = { full: 0, card: 0, icon: 0, off: 0 };
+    Object.values(lods).forEach(l => counts[l]++);
+    document.getElementById('ro-counts').textContent = `${STATIONS.length} stations · ${counts.full} full · ${counts.card} card · ${counts.icon} icon${counts.off ? ` · ${counts.off} off the view` : ''}`;
+    document.getElementById('ro-compute').textContent = `${counts.full} live · ${counts.card} light · ${counts.icon} cached${counts.off ? ` · ${counts.off} idle` : ''}`;
+    const ph = PHASES[ui.phase];
+    document.getElementById('ro-phase').textContent = `${ph.name.toLowerCase()} · ${ph.lint} · leaders ${ph.typed ? 'typed' : 'free-form'}`;
+    document.getElementById('phase-tag').textContent = `${ph.name} · ${ph.lint}`;
+    linksSvg.classList.toggle('typed', ph.typed);
+  }
+  function drawLinks(rects) {
+    const W = surface.clientWidth, H = surface.clientHeight;
+    const typed = PHASES[ui.phase].typed;
+    linksSvg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    linksSvg.innerHTML = LINKS.map(([a, b, label]) => {
+      const ra = rects[a], rb = rects[b];
+      if (!ra || !rb) return '';
+      const ax = (ra.x + ra.w) * W - 6, ay = (ra.y + ra.h * 0.5) * H;
+      const bx = rb.x * W + 6, by = (rb.y + rb.h * 0.5) * H;
+      const dx = Math.max(24, Math.abs(bx - ax) * 0.4);
+      const mx = (ax + bx) / 2, my = (ay + by) / 2;
+      return `<path d="M${ax},${ay} C${ax + dx},${ay} ${bx - dx},${by} ${bx},${by}"/><circle cx="${ax}" cy="${ay}" r="2.5"/><circle cx="${bx}" cy="${by}" r="2.5"/>${typed ? `<text x="${mx}" y="${my - 4}" text-anchor="middle">${label}</text>` : ''}`;
+    }).join('');
+  }
+
+  function promote(id) {
+    if (id !== ui.hero) {
+      const old = ui.hero;
+      ui.cards = ui.cards.filter(c => c !== id);
+      ui.cards.unshift(old);
+      ui.cards = ui.cards.slice(0, 3);
+      ui.hero = id;
+    }
+    select(id);
+    layout();
+  }
+  const covers = (p, node) => node === p || node.startsWith(p + '/') || (p.startsWith(node + '/') && node !== 'fabric-01');
+  function select(id) {
+    ui.selected = id;
+    STATIONS.forEach(st => els[st.id].classList.toggle('selected', st.id === id));
+    const st = byId[id];
+    document.querySelectorAll('#tree .n').forEach(n => n.classList.toggle('lit', st.nodes.some(p => covers(p, n.dataset.node))));
+    document.getElementById('sel').innerHTML = `<span class="label">selected station</span><b>${st.name}</b><span>kind <code>${st.kind}</code> · reads ${st.nodes.length} node${st.nodes.length === 1 ? '' : 's'}</span>`;
+  }
+  function showPeek(st, el) {
+    peek.innerHTML = headHtml(st, 'card') + bodyHtml(st, 'card');
+    peek.classList.add('show');
+    const sr = surface.getBoundingClientRect(), er = el.getBoundingClientRect();
+    const pw = peek.offsetWidth, ph = peek.offsetHeight;
+    let x = er.left - sr.left - pw - 8, y = er.top - sr.top + er.height / 2 - ph / 2;
+    if (x < 4) x = er.right - sr.left + 8;
+    if (x + pw > sr.width - 4) x = Math.max(4, sr.width - pw - 4);
+    y = Math.max(4, Math.min(y, sr.height - ph - 4));
+    peek.style.left = x + 'px'; peek.style.top = y + 'px';
+    if (peek.querySelector('canvas')) requestAnimationFrame(() => paint(st, peek, 'card'));
+  }
+  function hidePeek() { peek.classList.remove('show'); }
+
+  // ---------- bars ----------
+  const viewsEl = document.getElementById('views');
+  VIEWS.forEach((v, k) => {
+    if (k) { const a = document.createElement('span'); a.className = 'arrow'; a.textContent = '→'; viewsEl.appendChild(a); }
+    const b = document.createElement('button'); b.type = 'button'; b.id = `view-${k}`;
+    b.innerHTML = `<span class="num">${k + 1}</span> ${v.name}`;
+    b.addEventListener('click', () => setView(k));
+    viewsEl.appendChild(b);
+  });
+  function setView(k) {
+    ui.view = k; ui.hero = VIEWS[k].hero; ui.cards = VIEWS[k].cards.slice();
+    viewsEl.querySelectorAll('button').forEach((b, i) => b.setAttribute('aria-pressed', String(i === k)));
+    select(ui.hero);
+    layout();
+  }
+  function segmented(id, names, initial, onPick) {
+    const host = document.getElementById(id);
+    names.forEach((name, k) => {
+      const b = document.createElement('button'); b.type = 'button'; b.id = `${id}-${k}`; b.textContent = name;
+      b.setAttribute('aria-pressed', String(k === initial));
+      b.addEventListener('click', () => { host.querySelectorAll('button').forEach((x, i) => x.setAttribute('aria-pressed', String(i === k))); onPick(k); });
+      host.appendChild(b);
+    });
+  }
+  segmented('rules', RULES, ui.rule, k => { ui.rule = k; layout(); });
+  segmented('phases', PHASES.map(p => p.name), ui.phase, k => { ui.phase = k; layout(); });
+
+  // ---------- the tree ----------
+  const treeEl = document.getElementById('tree');
+  TREE.forEach(([d, label, cls, node, ann]) => {
+    const n = document.createElement('div');
+    n.className = `n ${d} ${cls}`; n.dataset.node = node;
+    n.innerHTML = `<span>${label}</span>${ann ? `<span class="ann">${ann}</span>` : ''}`;
+    n.addEventListener('pointerenter', () => STATIONS.forEach(st => els[st.id].classList.toggle('lit', st.nodes.some(p => covers(p, node)))));
+    n.addEventListener('pointerleave', () => STATIONS.forEach(st => els[st.id].classList.remove('lit')));
+    treeEl.appendChild(n);
+  });
+
+  // ---------- the ladder samples ----------
+  function paintLadder() {
+    document.querySelectorAll('#ladder .rung').forEach(rung => {
+      const sample = rung.querySelector('.sample');
+      const lod = rung.dataset.rung;
+      sample.innerHTML = '';
+      const box = document.createElement('div');
+      box.className = 'station'; box.dataset.lod = lod;
+      box.style.position = 'absolute';
+      if (lod === 'full') { box.style.inset = '0'; } else { box.style.left = '8px'; box.style.top = '8px'; box.style.width = (lod === 'icon' ? 52 : 210) + 'px'; box.style.height = (lod === 'icon' ? 52 : 96) + 'px'; }
+      const panel = document.createElement('div'); panel.className = 'panel'; panel.style.cursor = 'default';
+      const st = byId.weave;
+      panel.innerHTML = lod === 'icon' ? bodyHtml(st, lod) : headHtml(st, lod) + bodyHtml(st, lod) + (lod === 'full' ? footHtml(st) : '');
+      box.appendChild(panel); sample.appendChild(box);
+      requestAnimationFrame(() => paint(st, box, lod));
+    });
+  }
+
+  // ---------- go ----------
+  const ro = new ResizeObserver(() => { layout(); paintLadder(); });
+  ro.observe(surface);
+  setView(0);
+  paintLadder();
+})();
+</script>
+
+</body></html>

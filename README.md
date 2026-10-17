@@ -30,6 +30,9 @@ expressive symbols, structured editing, and pencil integration.
 The [three-application master proposal](./docs/proposals/three-applications-and-development-process.md)
 describes the mathematical workspace, VACASK circuit tool, and prompting tool, with an adaptive
 development process and a shared capability inventory.
+The [workspace and project proposal](./docs/proposals/workspace-and-project.md) carries the
+hypotheses ledger and the build-use-rebuild loop for the 2-D workspace of stations over a versioned
+project tree, with its mock and reading guide beside it.
 The [experiments](./experiments/README.md) provide runnable examples of the infrastructure.
 
 ## Requirements

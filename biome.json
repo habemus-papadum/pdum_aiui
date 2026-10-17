@@ -12,7 +12,8 @@
       "!**/.aiui/lsp",
       "!**/templates/*/aiui/lsp",
       "!.claude/worktrees",
-      "!**/corpus"
+      "!**/corpus",
+      "!docs/proposals/workspace-and-project"
     ]
   },
   "formatter": {

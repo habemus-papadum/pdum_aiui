@@ -1,0 +1,674 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Workspace Reading Guide</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;1,9..144,400&family=Libre+Franklin:wght@400;500;600&display=swap">
+<style>
+  /* Layout: a syllabus on cotton paper. One column of entries on a reading measure, a checkbox per entry,
+     link kinds as small tags, hairlines between sections. Nothing boxed. */
+  :root {
+    --surface: #efeee9;
+    --ink: #3d434c;
+    --accent: #4b3fc4;
+    --ok: #2a6e4e;
+    --warn: #8a5f10;
+    --surface-raised: color-mix(in srgb, var(--ink) 4%, var(--surface));
+    --surface-sunken: color-mix(in srgb, var(--ink) 8%, var(--surface));
+    --ink-muted: color-mix(in srgb, var(--ink) 60%, var(--surface));
+    --muted: color-mix(in srgb, var(--ink) 50%, var(--surface));
+    --hairline: color-mix(in srgb, var(--ink) 30%, var(--surface));
+    --ghost: color-mix(in srgb, var(--ink) 14%, var(--surface));
+    --accent-wash: color-mix(in srgb, var(--accent) 12%, var(--surface));
+    --stack-display: "Fraunces", "Cormorant Garamond", Georgia, serif;
+    --stack-sans: "Libre Franklin", system-ui, -apple-system, sans-serif;
+    --stack-num: Georgia, "Times New Roman", serif;
+    --text-body: clamp(1rem, 1.3vw, 1.1rem);
+    --text-small: 0.875rem;
+    --text-label: 0.72rem;
+    --measure: 44rem;
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  body { background: var(--surface); color: var(--ink); font-family: var(--stack-sans); font-size: var(--text-body); line-height: 1.5; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 2rem 5rem; }
+  .page { max-width: 58rem; margin: 0 auto; display: grid; gap: 2.75rem; }
+  h1, h2, h3 { font-family: var(--stack-display); font-weight: 500; text-wrap: balance; margin: 0; line-height: 1.1; }
+  h1 { font-size: clamp(2rem, 4.5vw, 3rem); }
+  h2 { font-size: clamp(1.4rem, 2.4vw, 1.8rem); }
+  h3 { font-family: var(--stack-sans); font-weight: 600; font-size: 1.05rem; line-height: 1.3; }
+  p { margin: 0; max-width: var(--measure); }
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
+  a:hover { border-bottom-color: var(--accent); }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .label { font-size: var(--text-label); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .num { font-family: var(--stack-num); font-variant-numeric: tabular-nums; }
+  .lede { font-family: var(--stack-display); font-size: clamp(1.1rem, 1.7vw, 1.3rem); color: var(--ink-muted); max-width: 46rem; }
+  .masthead { display: grid; gap: 1rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--hairline); }
+  .legend { display: flex; flex-wrap: wrap; gap: 0.6rem 1.25rem; font-size: var(--text-small); color: var(--ink-muted); align-items: center; }
+  .kind { display: inline-block; font-size: var(--text-label); letter-spacing: 0.06em; text-transform: uppercase; padding: 0.05rem 0.4rem; border: 1px solid var(--hairline); color: var(--ink-muted); font-weight: 600; vertical-align: middle; }
+  .kind.watch { color: var(--accent); border-color: var(--accent); }
+  .kind.play { color: var(--ok); border-color: var(--ok); }
+  .kind.buy { color: var(--warn); border-color: var(--warn); }
+  .progress { margin-left: auto; font-size: var(--text-small); color: var(--ink-muted); }
+  section { display: grid; gap: 1.25rem; }
+  .section-head { display: grid; gap: 0.4rem; padding-top: 0.5rem; }
+  .section-head p { color: var(--ink-muted); }
+  .entries { display: grid; gap: 1.5rem; }
+  .entry { display: grid; grid-template-columns: 1.6rem minmax(0, 1fr); gap: 0.5rem 0.75rem; padding-top: 1rem; border-top: 1px solid var(--ghost); }
+  .entry:first-child { border-top: 0; padding-top: 0; }
+  .entry input { width: 1.1rem; height: 1.1rem; margin: 0.2rem 0 0; accent-color: var(--accent); cursor: pointer; }
+  .entry .body { display: grid; gap: 0.45rem; min-width: 0; }
+  .entry.done h3 { color: var(--muted); }
+  .meta { font-size: var(--text-small); color: var(--muted); }
+  .why { max-width: var(--measure); }
+  .look { font-size: var(--text-small); color: var(--ink-muted); max-width: var(--measure); }
+  .look b { color: var(--ink); font-weight: 600; }
+  .links { display: flex; flex-wrap: wrap; gap: 0.35rem 1rem; font-size: var(--text-small); align-items: baseline; }
+  .links span { display: inline-flex; gap: 0.35rem; align-items: baseline; white-space: nowrap; }
+  .time { font-size: var(--text-label); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  ol.plan { margin: 0; padding-left: 1.4rem; display: grid; gap: 0.45rem; max-width: var(--measure); }
+  ol.plan li::marker { color: var(--muted); font-family: var(--stack-num); }
+  ul.plain { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.4rem; max-width: var(--measure); }
+  ul.plain li { padding-left: 1rem; text-indent: -1rem; }
+  ul.plain li::before { content: "·"; display: inline-block; width: 1rem; text-indent: 0; color: var(--muted); }
+  .books { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 1rem 2rem; }
+  .book { display: grid; gap: 0.2rem; font-size: var(--text-small); padding-top: 0.6rem; border-top: 1px solid var(--ghost); min-width: 0; }
+  .book b { font-weight: 600; color: var(--ink); }
+  .note { font-size: var(--text-small); color: var(--ink-muted); max-width: var(--measure); }
+</style>
+
+<div class="page">
+  <header class="masthead">
+    <div class="label">Reading guide · for the workspace and project vision · 2026-10-17</div>
+    <h1>Workspace Reading Guide</h1>
+    <p class="lede">Two or three things per question, chosen for how much they teach per hour. Watch the films first; they are short and most of them show the idea better than the paper does. Tick what you have read; the ticks stay in this browser only.</p>
+    <div class="legend">
+      <span><span class="kind">read</span> a paper or an article</span>
+      <span><span class="kind watch">watch</span> a film or a screen recording</span>
+      <span><span class="kind">docs</span> a product's own manual</span>
+      <span><span class="kind play">play</span> something you can run today</span>
+      <span><span class="kind buy">buy</span> a book</span>
+      <span class="progress" id="progress"></span>
+    </div>
+  </header>
+
+  <section>
+    <div class="section-head">
+      <h2>Two evenings of film</h2>
+      <p>About two and a half hours in this order. Each one is the thing itself running, not a talk about it.</p>
+    </div>
+    <ol class="plan">
+      <li><a href="https://www.youtube.com/playlist?list=PLCGFadV4FqU2yAqCzKaxnKKXgnJBUrKTE">Engelbart's 1968 demo, the highlights reel</a> <span class="time">about 30 min</span>. Watch for the view controls on the outline.</li>
+      <li><a href="https://www.youtube.com/watch?v=6orsmFndx_o">Sketchpad, the 1963 film</a> <span class="time">17 min</span>. Masters and instances, constraints, the light pen.</li>
+      <li><a href="https://www.youtube.com/watch?v=v7M3yw4Y71I">Toolglass and Magic Lenses, the ten-minute cut</a> <span class="time">10 min</span>. A lens you move over the content.</li>
+      <li><a href="https://www.youtube.com/watch?v=BlIRYTuSv0Q">Pad++, Bederson's own summary</a> <span class="time">3 min</span>. Semantic zoom.</li>
+      <li><a href="https://www.youtube.com/watch?v=Cn4vC80Pv6Q">The Xerox Star user interface, 1982, part one</a> and <a href="https://www.youtube.com/watch?v=ODZBL80JPqw">part two</a>. Generic commands over typed objects.</li>
+      <li><a href="https://www.youtube.com/watch?v=w1HhPE0zV6g">The Alternate Reality Kit, 1987</a> <span class="time">16 min</span>. Live experiments with knobs.</li>
+      <li><a href="https://www.youtube.com/watch?v=2Cq8S3jzJiQ">GRAIL on the RAND tablet, 1968</a> <span class="time">14 min</span>. Pen first, before the mouse.</li>
+      <li><a href="https://www.youtube.com/watch?v=-K01FQ73xgY">Genera 7.0 overview, Symbolics, 1986</a>. Dynamic Windows: anything printed stays an object you can point at.</li>
+    </ol>
+  </section>
+
+  <!-- ===================== A ===================== -->
+  <section>
+    <div class="section-head">
+      <div class="label">A · levels of detail and focus</div>
+      <h2>Does size pick detail, and what is a loupe?</h2>
+      <p>Your weave example wants a continuous magnifier, not three rungs. Two of these are exactly that: a formula that assigns detail by interest, and a lens you drag over the content. Both could be a property of a station rather than of the surface.</p>
+    </div>
+    <div class="entries">
+      <article class="entry" data-key="furnas">
+        <input type="checkbox" id="c-furnas" aria-label="Mark Generalized Fisheye Views as read">
+        <div class="body">
+          <h3>Generalized Fisheye Views</h3>
+          <div class="meta">George Furnas · Bell Labs · CHI 1986 · 8 pages · then the 2006 follow-up if it lands</div>
+          <p class="why">The degree-of-interest function: a priori importance minus distance from the focus, shown above a threshold. It is the one-line answer to "which station gets detail", and it works on trees, calendars and code alike.</p>
+          <p class="look"><b>Look for</b> the DOI formula and its two inputs, the threshold as a budget, and the code and calendar examples. In the follow-up, the distinction between what to show and how to show it.</p>
+          <div class="links">
+            <span><span class="kind">read</span><a href="https://pages.cpsc.ucalgary.ca/~saul/581/exer.eps/4furnas86.pdf">paper, PDF</a></span>
+            <span><span class="kind">read</span><a href="https://doi.org/10.1145/22627.22342">ACM record</a></span>
+            <span><span class="kind">read</span><a href="https://doi.org/10.1145/1124772.1124921">A Fisheye Follow-up, CHI 2006</a></span>
+            <span class="time">45 min</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry" data-key="toolglass">
+        <input type="checkbox" id="c-toolglass" aria-label="Mark Toolglass and Magic Lenses as read">
+        <div class="body">
+          <h3>Toolglass and Magic Lenses: the See-Through Interface</h3>
+          <div class="meta">Bier, Stone, Pier, Buxton, DeRose · Xerox PARC · SIGGRAPH 1993 · 8 pages · two films</div>
+          <p class="why">A transparent sheet between you and the document. Lenses on it re-render whatever is beneath them: magnified, filtered, wireframed, annotated. The loupe you described for weaves, with the twist that lenses compose when stacked.</p>
+          <p class="look"><b>Look for</b> lenses as filters rather than zoom, the composition of two lenses, the two-handed input, and how the sheet avoids modes.</p>
+          <div class="links">
+            <span><span class="kind watch">watch</span><a href="https://www.youtube.com/watch?v=v7M3yw4Y71I">ten-minute film</a></span>
+            <span><span class="kind watch">watch</span><a href="https://www.youtube.com/watch?v=e8QqaY1tWpo">the 1994 film</a></span>
+            <span><span class="kind">read</span><a href="https://www.lri.fr/~mbl/FundHCI/papers/Bier-SIGGRAPH93.pdf">paper, PDF</a></span>
+            <span><span class="kind">read</span><a href="https://www.billbuxton.com/tgml93.html">Buxton's page</a></span>
+            <span class="time">10 min film · 40 min paper</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry" data-key="pad">
+        <input type="checkbox" id="c-pad" aria-label="Mark Pad++ as read">
+        <div class="body">
+          <h3>Pad++ and the zooming interface</h3>
+          <div class="meta">Bederson and Hollan · UIST 1994 · after Perlin and Fox's Pad, 1993 · 10 pages · a three-minute film</div>
+          <p class="why">An infinite surface where an object draws itself differently at each scale. That is the generated icon: the object owns its renderings per scale. It is also a warning about what an unstructured infinite canvas costs.</p>
+          <p class="look"><b>Look for</b> semantic zoom on the calendar, portals (a view into another part of the surface, which is a station), and what they say about getting lost.</p>
+          <div class="links">
+            <span><span class="kind watch">watch</span><a href="https://www.youtube.com/watch?v=BlIRYTuSv0Q">Bederson's summary</a></span>
+            <span><span class="kind watch">watch</span><a href="https://www.youtube.com/playlist?list=PL6BF97BA70A36F0CC">his ZUI playlist</a></span>
+            <span><span class="kind">read</span><a href="https://www.lri.fr/~mbl/Teach/SituatedComputing/2017/papers/ZUI/pad++-uis94-p17-bederson.pdf">paper, PDF</a></span>
+            <span><span class="kind">read</span><a href="https://mrl.cs.nyu.edu/projects/zui/">Perlin's Pad page</a></span>
+            <span class="time">3 min film · 45 min paper</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry" data-key="nls">
+        <input type="checkbox" id="c-nls" aria-label="Mark Engelbart's demo as watched">
+        <div class="body">
+          <h3>Engelbart's 1968 demo: viewspecs</h3>
+          <div class="meta">Doug Engelbart and SRI's Augmentation Research Center · December 1968 · highlights 30 min, full 100 min</div>
+          <p class="why">The outline on screen is viewed through a few switches: how many levels deep, how many lines per statement, with or without the numbering. Level of detail as a property of the view, set by a tiny vocabulary that works typed or spoken. Nothing in the content changes.</p>
+          <p class="look"><b>Look for</b> the moments he collapses the list to first lines or to one level, the shared screen with Menlo Park, and how little vocabulary it takes.</p>
+          <div class="links">
+            <span><span class="kind watch">watch</span><a href="https://www.youtube.com/playlist?list=PLCGFadV4FqU2yAqCzKaxnKKXgnJBUrKTE">highlights playlist</a></span>
+            <span><span class="kind watch">watch</span><a href="https://www.youtube.com/watch?v=UhpTiWyVa6k">full demo, remastered, part 1 of 3</a></span>
+            <span><span class="kind">read</span><a href="https://www.dougengelbart.org/content/view/209/">the Institute's demo page, with the table of contents</a></span>
+            <span class="time">30 min</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry" data-key="tablelens">
+        <input type="checkbox" id="c-tablelens" aria-label="Mark Table Lens and Muse as read">
+        <div class="body">
+          <h3>If you want more: Table Lens, and Muse</h3>
+          <div class="meta">Rao and Card · PARC · CHI 1994 · 5 pages &nbsp;·&nbsp; Ink and Switch · 2019 · an essay</div>
+          <p class="why">Table Lens compresses the rows you are not looking at instead of hiding them: the tray as compressed context. Muse draws a child board as a live reduced card on its parent: nesting as the ladder.</p>
+          <div class="links">
+            <span><span class="kind">read</span><a href="https://doi.org/10.1145/191666.191776">Table Lens, ACM record</a></span>
+            <span><span class="kind">read</span><a href="https://www.inkandswitch.com/muse/">Muse: designing a studio for ideas</a></span>
+            <span><span class="kind">docs</span><a href="https://support.apple.com/guide/keynote/tanae4979928/mac">Keynote's light table</a></span>
+            <span class="time">20 min · 30 min</span>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== B ===================== -->
+  <section>
+    <div class="section-head">
+      <div class="label">B · views, rooms, layout rules</div>
+      <h2>The same stations in several arrangements</h2>
+      <p>Three different answers to how one set of things lives in many layouts: a window with a placement per room, a screen that is a tree of areas, and a layout that is a pure function.</p>
+    </div>
+    <div class="entries">
+      <article class="entry" data-key="rooms">
+        <input type="checkbox" id="c-rooms" aria-label="Mark Rooms as read">
+        <div class="body">
+          <h3>Rooms: multiple virtual workspaces</h3>
+          <div class="meta">Henderson and Card · Xerox PARC · ACM Transactions on Graphics 1986 · 33 pages, or the six-page technical description</div>
+          <p class="why">A window can be in several rooms, with its own size and place in each. Doors lead between rooms. There is an Overview room that shows every room small. This is your workflow of views, built in 1986 from a study of how people thrash between windows.</p>
+          <p class="look"><b>Look for</b> placements (one window, many positions), the Overview, Baggage (what travels with you through a door), and the task analysis at the start.</p>
+          <div class="links">
+            <span><span class="kind">read</span><a href="https://files.interlisp.org/medley/rooms/ROOMSTECHDESC.TEDIT.pdf">technical description, scanned PDF</a></span>
+            <span><span class="kind">read</span><a href="https://doi.org/10.1145/24054.24056">the paper, ACM record</a></span>
+            <span><span class="kind">read</span><a href="https://digibarn.com/collections/software/xerox-rooms/index.html">DigiBarn's screenshots</a></span>
+            <span class="time">20 min · 90 min for the paper</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry" data-key="blender">
+        <input type="checkbox" id="c-blender" aria-label="Mark Blender's screen model as read">
+        <div class="body">
+          <h3>Blender's screen model: workspaces, areas, editors</h3>
+          <div class="meta">Blender Foundation · the manual, and the official Fundamentals series</div>
+          <p class="why">A window is a tree of non-overlapping areas; any area can show any editor over the same file; a workspace is a tab of areas for one task. Area, editor, workspace, file map onto slot, kind, view, project. Splitting is the only layout operation there is.</p>
+          <p class="look"><b>Look for</b> how a workspace tab remembers its layout, how an area changes editor type without moving, and what is per-workspace versus per-file. <b>Play:</b> install it, split an area, change its editor, switch tabs.</p>
+          <div class="links">
+            <span><span class="kind">docs</span><a href="https://docs.blender.org/manual/en/latest/interface/window_system/workspaces.html">workspaces</a></span>
+            <span><span class="kind">docs</span><a href="https://docs.blender.org/manual/en/latest/interface/window_system/areas.html">areas</a></span>
+            <span><span class="kind watch">watch</span><a href="https://www.youtube.com/playlist?list=PLa1F2ddGya_-UvuAqHAksYnB0qL9yWDO6">Blender Fundamentals 2.8 playlist</a></span>
+            <span><span class="kind play">play</span><a href="https://www.blender.org/download/">Blender</a></span>
+            <span class="time">30 min</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry" data-key="xmonad">
+        <input type="checkbox" id="c-xmonad" aria-label="Mark xmonad as read">
+        <div class="body">
+          <h3>xmonad: layout as a pure function</h3>
+          <div class="meta">Janssen, Stewart, Creighton · 2007 · a guided tour and one module's documentation</div>
+          <p class="why">A layout takes an ordered list of windows and a rectangle and returns rectangles. Tall is a master area plus a stack; Mirror flips it; Full is one window; Choose lets you cycle. Hero plus rail and Fibonacci are two values of this one type, which is what a cell wants to compute.</p>
+          <p class="look"><b>Look for</b> the master area, the ordering of windows as the only state, and the stated principle that the result of any action is predictable.</p>
+          <div class="links">
+            <span><span class="kind">read</span><a href="https://xmonad.org/tour.html">guided tour</a></span>
+            <span><span class="kind">docs</span><a href="https://hackage.haskell.org/package/xmonad/docs/XMonad-Layout.html">XMonad.Layout</a></span>
+            <span class="time">20 min</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry" data-key="freeform">
+        <input type="checkbox" id="c-freeform" aria-label="Mark Freeform scenes as read">
+        <div class="body">
+          <h3>If you want more: Freeform scenes</h3>
+          <div class="meta">Apple · 2024 · one support page</div>
+          <p class="why">A scene is a named framing of part of an infinite board, kept in order for presenting. It is a view as a camera, nothing more, and it is Apple's own answer.</p>
+          <div class="links">
+            <span><span class="kind">docs</span><a href="https://support.apple.com/guide/freeform/frfm7cc55b64/mac">navigate and present scenes</a></span>
+            <span><span class="kind play">play</span>Freeform is on your Mac already</span>
+            <span class="time">10 min</span>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== C ===================== -->
+  <section>
+    <div class="section-head">
+      <div class="label">C · variations, sweeps, spikes</div>
+      <h2>Where a variation lives, and whether a current pick exists</h2>
+      <p>Four working answers. Sketchpad: masters and instances. Onshape: a table on the part plus a history graph. Houdini: an overlay of deltas over one base, so "current" is the empty overlay. Final Cut: a slot with a pick.</p>
+    </div>
+    <div class="entries">
+      <article class="entry" data-key="sketchpad">
+        <input type="checkbox" id="c-sketchpad" aria-label="Mark Sketchpad as read">
+        <div class="body">
+          <h3>Sketchpad: a man-machine graphical communication system</h3>
+          <div class="meta">Ivan Sutherland · MIT Lincoln Lab · 1963 · the film, and the thesis reprinted by Cambridge in 2003 with a new preface</div>
+          <p class="why">A master drawing and its instances: change the master, every instance follows. Constraints between parts that relax toward a solution. The oldest answer to variation, and the data model behind every CAD system since.</p>
+          <p class="look"><b>Look for</b> instances and subpictures in the film, then the chapters on the ring structure and on constraint satisfaction. Blackwell and Rodden's preface says what to skip.</p>
+          <div class="links">
+            <span><span class="kind watch">watch</span><a href="https://www.youtube.com/watch?v=6orsmFndx_o">the 1963 film, 17 min</a></span>
+            <span><span class="kind">read</span><a href="https://www.cl.cam.ac.uk/techreports/UCAM-CL-TR-574.pdf">the thesis, PDF</a></span>
+            <span><span class="kind watch">watch</span><a href="https://computerhistory.org/collections/catalog/102639871">Sutherland's 1994 talk, CHM catalog</a></span>
+            <span class="time">17 min · 2 h for the thesis</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry" data-key="onshape">
+        <input type="checkbox" id="c-onshape" aria-label="Mark Onshape as read">
+        <div class="body">
+          <h3>Onshape: configurations, versions, branches</h3>
+          <div class="meta">PTC Onshape · the help pages and a one-hour webinar · a free account to play with</div>
+          <p class="why">A part carries a table of named configurations over its parameters, which is a variation set on the node. The document itself has versions, branches and merges, so history belongs to the design and not to a file system. Both at once, in one product you can try tonight.</p>
+          <p class="look"><b>Look for</b> the configuration table (rows are options, columns are parameters), what a branch is a pointer to, and the three merge choices. <b>Play:</b> make a part with two configurations, branch, change one, merge.</p>
+          <div class="links">
+            <span><span class="kind">docs</span><a href="https://cad.onshape.com/help/Content/configurations.htm">configurations</a></span>
+            <span><span class="kind">docs</span><a href="https://www.onshape.com/en/features/branch-merge-cad">branching and merging</a></span>
+            <span><span class="kind">docs</span><a href="https://cad.onshape.com/help/Content/merging.htm">merging</a></span>
+            <span><span class="kind watch">watch</span><a href="https://www.onshape.com/en/resource-center/videos/design-projects-with-git-style-branching-merging">webinar, 1 h</a></span>
+            <span><span class="kind watch">watch</span><a href="https://youtu.be/XjdaRcD0faQ">a consultant's short walkthrough</a></span>
+            <span><span class="kind play">play</span><a href="https://www.onshape.com/en/products/free">free plan</a></span>
+            <span class="time">45 min</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry" data-key="houdini">
+        <input type="checkbox" id="c-houdini" aria-label="Mark Houdini takes and wedging as read">
+        <div class="body">
+          <h3>Houdini: takes, and wedging with TOPs</h3>
+          <div class="meta">SideFX · the manual, and the Intro to PDG video series · Houdini Apprentice is free</div>
+          <p class="why">A take is a layered set of parameter changes over the parent take; nothing is copied. A Wedge node generates one work item per variation of the attributes you name, and stacked wedges give the cross product. This is a variation as an overlay and a sweep as a product, which is closest to your "there may be no current".</p>
+          <p class="look"><b>Look for</b> inheritance between takes, the auto-take mode, how a wedge attribute is referenced from a parameter, and what the results look like side by side.</p>
+          <div class="links">
+            <span><span class="kind">docs</span><a href="https://www.sidefx.com/docs/houdini/basics/takes.html">takes</a></span>
+            <span><span class="kind">docs</span><a href="https://www.sidefx.com/docs/houdini/tops/wedge.html">wedging attributes</a></span>
+            <span><span class="kind watch">watch</span><a href="https://www.sidefx.com/learn/collections/intro-to-pdg/">Intro to PDG</a></span>
+            <span><span class="kind watch">watch</span><a href="https://www.sidefx.com/tutorials/pdg-particle-steam-wedging-part-1">particle stream wedging</a></span>
+            <span><span class="kind play">play</span><a href="https://www.sidefx.com/products/houdini-apprentice/">Houdini Apprentice</a></span>
+            <span class="time">45 min</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry" data-key="auditions">
+        <input type="checkbox" id="c-auditions" aria-label="Mark Final Cut auditions as read">
+        <div class="body">
+          <h3>Apple's answer: auditions and take folders</h3>
+          <div class="meta">Final Cut Pro and Logic Pro · two support pages · both on your Mac if you have them</div>
+          <p class="why">An audition is one slot in the timeline holding several alternates with one pick; swapping the pick disturbs nothing around it. A take folder holds the recorded takes and a comp is assembled from the best parts, then flattened. The variation set as a slot with a pick, stored in the document, and comping as a merge.</p>
+          <p class="look"><b>Look for</b> what happens to the timeline when the pick changes length, and what flattening a comp keeps and throws away.</p>
+          <div class="links">
+            <span><span class="kind">docs</span><a href="https://support.apple.com/guide/final-cut-pro/verbbd353d6/mac">create auditions</a></span>
+            <span><span class="kind">docs</span><a href="https://support.apple.com/guide/logicpro/lgcp317d758e/mac">comping in Logic Pro</a></span>
+            <span class="time">15 min</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry" data-key="altium">
+        <input type="checkbox" id="c-altium" aria-label="Mark Altium and Figma variants as read">
+        <div class="body">
+          <h3>If you want more: Altium design variants, Figma variants</h3>
+          <div class="meta">Altium · one documentation page &nbsp;·&nbsp; Figma · one help article</div>
+          <p class="why">Altium keeps one base schematic and varies only the population: fitted, not fitted, a different value, an alternative part. Figma's variants are named properties on a component set. Two small typed grids over one base, near your circuit case.</p>
+          <div class="links">
+            <span><span class="kind">docs</span><a href="https://www.altium.com/documentation/altium-designer/design-variants">design variants</a></span>
+            <span><span class="kind">docs</span><a href="https://help.figma.com/hc/en-us/articles/360056440594-Create-and-use-variants">create and use variants</a></span>
+            <span class="time">20 min</span>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== D ===================== -->
+  <section>
+    <div class="section-head">
+      <div class="label">D · history, concurrent editing, forks</div>
+      <h2>What git gives for free, and the eventual-consistency option</h2>
+      <p>The deferred conflict question has three living answers: documents that merge by construction, last-writer-wins per property, and history as an editable program.</p>
+    </div>
+    <div class="entries">
+      <article class="entry" data-key="inkswitch">
+        <input type="checkbox" id="c-inkswitch" aria-label="Mark Ink and Switch as read">
+        <div class="body">
+          <h3>Ink and Switch: local-first, Upwelling, Patchwork</h3>
+          <div class="meta">Kleppmann, Wiggins, van Hardenberg, McGranaghan · 2019 · then the lab's 2023 and 2024 essays</div>
+          <p class="why">The essay sets out seven ideals for software whose data lives with you and merges without a server deciding. Upwelling gives writers private drafts that merge into a shared history. Patchwork is the lab's own version-controlled, branching document system, which they now work in. The eventual-consistency branch of your deferred question, worked out for documents.</p>
+          <p class="look"><b>Look for</b> the seven ideals, Upwelling's layers and what a merge looks like to an editor, and Patchwork's branches with comments and history kept.</p>
+          <div class="links">
+            <span><span class="kind">read</span><a href="https://www.inkandswitch.com/local-first/">Local-first software</a></span>
+            <span><span class="kind">read</span><a href="https://www.inkandswitch.com/upwelling/">Upwelling</a></span>
+            <span><span class="kind">read</span><a href="https://www.inkandswitch.com/patchwork/">Patchwork</a></span>
+            <span class="time">2 h for all three</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry" data-key="figma">
+        <input type="checkbox" id="c-figma" aria-label="Mark Figma multiplayer as read">
+        <div class="body">
+          <h3>How Figma's multiplayer technology works</h3>
+          <div class="meta">Evan Wallace · Figma · October 2019 · one post, and the branching guide</div>
+          <p class="why">Two edits conflict only if they touch the same property of the same object, and then the last one wins. They looked at operational transforms and CRDTs and chose the simplest thing that holds. Branching came later as review-and-merge on top. The cheap option, argued honestly.</p>
+          <p class="look"><b>Look for</b> why they rejected the heavier machinery, the undo rule (undo, copy, redo must leave the document unchanged), and how the server orders edits.</p>
+          <div class="links">
+            <span><span class="kind">read</span><a href="https://www.figma.com/blog/how-figmas-multiplayer-technology-works/">the post</a></span>
+            <span><span class="kind">docs</span><a href="https://help.figma.com/hc/en-us/articles/360063144053-Create-branches-and-merge-changes">guide to branching</a></span>
+            <span class="time">30 min</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry" data-key="fusion">
+        <input type="checkbox" id="c-fusion" aria-label="Mark Fusion 360 timeline as read">
+        <div class="body">
+          <h3>Fusion 360's parametric timeline</h3>
+          <div class="meta">Autodesk · one help page · a personal license is free</div>
+          <p class="why">The history of a part is a list of features you can scrub, edit in the middle, suppress, and replay. History as an editable program of the design, which is a different thing from a file's history and close to your lifecycle record.</p>
+          <p class="look"><b>Look for</b> what happens to later features when you edit an early one, and the choice between capturing history and direct modeling. <b>Play:</b> sketch, extrude, fillet, then drag the marker back and change the sketch.</p>
+          <div class="links">
+            <span><span class="kind">docs</span><a href="https://help.autodesk.com/cloudhelp/ENU/Fusion-Designs/files/ASM-USE-TIMELINE.htm">use the timeline</a></span>
+            <span><span class="kind play">play</span><a href="https://www.autodesk.com/products/fusion-360/personal">Fusion for personal use</a></span>
+            <span class="time">20 min</span>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== E ===================== -->
+  <section>
+    <div class="section-head">
+      <div class="label">E · the document as the thing</div>
+      <h2>Typed objects, generic verbs, and what stays addressable after it is drawn</h2>
+      <p>The agent-friendly primitive you asked for was designed in 1981: a handful of universal commands over typed objects with property sheets. Two live-object systems and one Lisp machine show what happens when everything on screen stays an object.</p>
+    </div>
+    <div class="entries">
+      <article class="entry" data-key="star">
+        <input type="checkbox" id="c-star" aria-label="Mark the Xerox Star as read">
+        <div class="body">
+          <h3>Designing the Star User Interface</h3>
+          <div class="meta">Smith, Irby, Kimball, Verplank, Harslem · Xerox · BYTE, April 1982 · 40 magazine pages · two films from 1982</div>
+          <p class="why">A document-centric desktop with a small set of generic commands (move, copy, delete, show properties, again), property sheets instead of per-object menus, and progressive disclosure as a stated policy. The verb set transfers to an agent verbatim.</p>
+          <p class="look"><b>Look for</b> the list of principles near the start, the universal commands, what they say about modes and about "seeing and pointing versus remembering and typing".</p>
+          <div class="links">
+            <span><span class="kind">read</span><a href="https://www.guidebookgallery.org/articles/designingthestaruserinterface">the article, reprinted</a></span>
+            <span><span class="kind">read</span><a href="https://archive.org/details/byte-magazine-1982-04/page/n283/mode/2up">the BYTE scan</a></span>
+            <span><span class="kind watch">watch</span><a href="https://www.youtube.com/watch?v=Cn4vC80Pv6Q">1982 demo, part 1</a></span>
+            <span><span class="kind watch">watch</span><a href="https://www.youtube.com/watch?v=ODZBL80JPqw">part 2</a></span>
+            <span><span class="kind watch">watch</span><a href="https://digibarn.com/collections/movies/digibarn-tv/gui-movies/xerox/index.html">DigiBarn's Xerox film shelf</a></span>
+            <span class="time">1 h</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry" data-key="self">
+        <input type="checkbox" id="c-self" aria-label="Mark Self and Boxer as read">
+        <div class="body">
+          <h3>Self and Morphic; Boxer</h3>
+          <div class="meta">Ungar and Smith, Sun Labs, 1995 film and the 2007 history paper &nbsp;·&nbsp; diSessa and Abelson, Boxer, CACM 1986</div>
+          <p class="why">In Self every object on screen is live: open it, drag a halo, change a slot, and the program changes. Boxer makes a box both data and display, and a port shows the same box live somewhere else, which is a station as a port into a node. Lively Kernel is Morphic running in a browser tab today.</p>
+          <p class="look"><b>Look for</b> the outliner opening an object in place in the Self film, the morphic halo, and Boxer's ports and its naive-realism principle (what you see is all there is).</p>
+          <div class="links">
+            <span><span class="kind watch">watch</span><a href="https://blog.selflanguage.org/2009/10/25/the-original-self-video/">the 1995 Self film, 20 min</a></span>
+            <span><span class="kind">read</span><a href="https://worrydream.com/refs/Ungar_2007_-_Self_(HOPL).pdf">Self, the HOPL history, PDF</a></span>
+            <span><span class="kind">read</span><a href="https://web.media.mit.edu/~mres/papers/boxer.pdf">Boxer, PDF</a></span>
+            <span><span class="kind play">play</span><a href="https://lively-kernel.org/">Lively Kernel</a></span>
+            <span><span class="kind play">play</span><a href="https://selflanguage.org/">Self</a></span>
+            <span><span class="kind play">play</span><a href="https://github.com/boxer-project/boxer-sunrise">Boxer Sunrise</a></span>
+            <span class="time">20 min film · 1 h reading</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry" data-key="genera">
+        <input type="checkbox" id="c-genera" aria-label="Mark Genera as read">
+        <div class="body">
+          <h3>Genera's Dynamic Windows and presentations</h3>
+          <div class="meta">Symbolics · 1986 onward · a period film, a 1990 manual, and a 2012 talk</div>
+          <p class="why">Anything the system prints is a presentation of a typed object. A command that wants a pathname lets you click any pathname on screen, however long ago it was printed. Our stamps, generalized: what is drawn stays typed and addressable, and the tool surface falls out of it.</p>
+          <p class="look"><b>Look for</b> clicking on previously printed output as an argument, the mouse documentation line at the bottom, and the chapter on presentations in the Concepts manual.</p>
+          <div class="links">
+            <span><span class="kind watch">watch</span><a href="https://www.youtube.com/watch?v=-K01FQ73xgY">Genera 7.0 overview, 1986</a></span>
+            <span><span class="kind">read</span><a href="https://neonvagabond.xyz/symbolics-info/documentation/Genera-Concepts.pdf">Genera Concepts, PDF</a></span>
+            <span><span class="kind watch">watch</span><a href="https://www.youtube.com/watch?v=jACcgLfyiyM">Kalman Reti at MIT, 2012</a></span>
+            <span class="time">45 min</span>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== F ===================== -->
+  <section>
+    <div class="section-head">
+      <div class="label">F · the lifecycle and the roles</div>
+      <h2>Phases that gate strictness, and where the review point sits</h2>
+      <p>None of these is software. Each is a profession that already runs the lifecycle you described, with a name for every phase and a place where the lead looks at the work.</p>
+    </div>
+    <div class="entries">
+      <article class="entry" data-key="aia">
+        <input type="checkbox" id="c-aia" aria-label="Mark architecture phases as read">
+        <div class="body">
+          <h3>The architect's phases: SD, DD, CD</h3>
+          <div class="meta">Standard practice in US architecture · two firm explainers</div>
+          <p class="why">Schematic design fixes the idea at low precision, design development proves it works, construction documents make it buildable. Each phase has its own precision and deliverable, and drawings move forward by markup and resubmission. Your lifecycle, with lint level per phase and markup as the regression gesture, already in daily use.</p>
+          <p class="look"><b>Look for</b> what is decided and what is deliberately left open in each phase, and how a redline round is run.</p>
+          <div class="links">
+            <span><span class="kind">read</span><a href="https://fontanarchitecture.com/architectural-design-phases/">five phases explained</a></span>
+            <span><span class="kind">read</span><a href="https://wc-studio.com/journal/2019/7/5/working-with-an-architect-understanding-phases-of-design-construction">phases of design and construction</a></span>
+            <span class="time">20 min</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry" data-key="nasa">
+        <input type="checkbox" id="c-nasa" aria-label="Mark NASA reviews as read">
+        <div class="body">
+          <h3>NASA's readiness levels and design reviews</h3>
+          <div class="meta">NASA · the TRL table, and sections 3.5 and 3.6 of the Systems Engineering Handbook</div>
+          <p class="why">Nine readiness levels with an exit criterion each, and a preliminary and a critical design review as gates between phases, with entrance and success criteria written down. Going back a level is expected and named. Gates as criteria rather than labels.</p>
+          <p class="look"><b>Look for</b> the exit criteria column, and the PDR and CDR entrance and success criteria in the handbook's appendix on reviews.</p>
+          <div class="links">
+            <span><span class="kind">read</span><a href="https://esto.nasa.gov/trl">technology readiness levels</a></span>
+            <span><span class="kind">read</span><a href="https://www.nasa.gov/sites/default/files/atoms/files/nasa_systems_engineering_handbook_0.pdf">Systems Engineering Handbook, PDF</a></span>
+            <span class="time">30 min, skimming</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry" data-key="brigade">
+        <input type="checkbox" id="c-brigade" aria-label="Mark the kitchen brigade as read">
+        <div class="body">
+          <h3>The brigade de cuisine</h3>
+          <div class="meta">Escoffier · the Savoy, 1890s · an explainer with Michel Roux Jr's walkthrough, and the book</div>
+          <p class="why">Stations with their own cooks, a sous-chef running the floor, the chef at the pass inspecting every plate before it leaves, an expediter calling tickets in order. Your analogy; one page of it gives us the names: station, pass, ticket.</p>
+          <p class="look"><b>Look for</b> what the pass actually checks, what goes back and to whom, and how the expediter sequences a table's plates.</p>
+          <div class="links">
+            <span><span class="kind watch">watch</span><a href="https://www.finedininglovers.com/explore/articles/escoffiers-kitchen-brigade-system-explained">the brigade explained, with film</a></span>
+            <span><span class="kind">read</span><a href="https://www.masterclass.com/articles/kitchen-brigade-explained">MasterClass explainer</a></span>
+            <span><span class="kind buy">buy</span><a href="https://www.amazon.com/s?k=9780470900277">Escoffier, the complete guide</a></span>
+            <span class="time">15 min</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry" data-key="pixar">
+        <input type="checkbox" id="c-pixar" aria-label="Mark Pixar in a Box as read">
+        <div class="body">
+          <h3>Pixar in a Box: the pipeline</h3>
+          <div class="meta">Pixar and Khan Academy · 2015 onward · short films per stage</div>
+          <p class="why">Story, then storyboards, then animatics, layout, animation, lighting, rendering: each stage a different artifact at a different fidelity, on purpose, with dailies as the standing review. A fidelity ladder with a distinct thing per rung.</p>
+          <p class="look"><b>Look for</b> what each stage refuses to decide, and how a change late in the pipeline is handled.</p>
+          <div class="links">
+            <span><span class="kind watch">watch</span><a href="https://www.khanacademy.org/computing/pixar">Pixar in a Box</a></span>
+            <span class="time">1 h, pick the pipeline lessons</span>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== G ===================== -->
+  <section>
+    <div class="section-head">
+      <div class="label">G · the oldest precursors</div>
+      <h2>Pen first, and the drawing as the design data</h2>
+      <p>Before the mouse and before Smalltalk. Three films and one manual, chosen because each one is the thing itself, not a history of it.</p>
+    </div>
+    <div class="entries">
+      <article class="entry" data-key="grail">
+        <input type="checkbox" id="c-grail" aria-label="Mark GRAIL as watched">
+        <div class="body">
+          <h3>GRAIL on the RAND tablet</h3>
+          <div class="meta">Ellis, Heafner, Sibley · RAND · 1968 · a 14-minute film, Alan Kay's demonstration of it, and a RAND paper</div>
+          <p class="why">Flowcharts drawn with a pen on a tablet, recognized live into a running program; no keyboard. The pencil as the first input into a structured document, with recognition as the editing flow, twenty years before anyone shipped it.</p>
+          <p class="look"><b>Look for</b> how a drawn box becomes a typed node, how an edit is made by drawing over, and the latency they lived with.</p>
+          <div class="links">
+            <span><span class="kind watch">watch</span><a href="https://www.youtube.com/watch?v=2Cq8S3jzJiQ">the film, from the CHM tape</a></span>
+            <span><span class="kind watch">watch</span><a href="https://www.youtube.com/watch?v=QQhVQ1UG6aM">Alan Kay demonstrates GRAIL</a></span>
+            <span><span class="kind">read</span><a href="https://www.rand.org/pubs/papers/P3697.html">RAND paper P-3697, the companion to the film</a></span>
+            <span class="time">25 min</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry" data-key="sil">
+        <input type="checkbox" id="c-sil" aria-label="Mark SIL and the Early History of Smalltalk as read">
+        <div class="body">
+          <h3>Alto SIL, and the Early History of Smalltalk</h3>
+          <div class="meta">Thacker, Sproull, Bates · PARC · the SIL manual, 1981 &nbsp;·&nbsp; Alan Kay · HOPL 1993</div>
+          <p class="why">SIL drew the logic diagrams for PARC's own machines, and companion programs read connectivity off the drawings and produced the wire lists the shop built from. The drawing was the design data and the interface to fabrication. Kay's history gives the stance behind all of it.</p>
+          <p class="look"><b>Look for</b> the pipeline from drawing to wirelist in the manual's first pages, and in Kay's paper the sections on the Dynabook and on what an object is.</p>
+          <div class="links">
+            <span><span class="kind">read</span><a href="https://xeroxparcarchive.computerhistory.org/_cd6_/sil/.SILMANUAL.PRESS!1.pdf">the SIL manual, PDF</a></span>
+            <span><span class="kind">read</span><a href="https://worrydream.com/EarlyHistoryOfSmalltalk/">The Early History of Smalltalk</a></span>
+            <span class="time">20 min · 2 h for Kay</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry" data-key="ark">
+        <input type="checkbox" id="c-ark" aria-label="Mark the Alternate Reality Kit as watched">
+        <div class="body">
+          <h3>The Alternate Reality Kit</h3>
+          <div class="meta">Randall Smith · Xerox PARC · CHI+GI 1987 technical video · 16 min</div>
+          <p class="why">A physics world in Smalltalk where you hold an interactor and pick up a gravity slider or a message as a thing on the screen. A station as a live experiment with knobs, and the direct ancestor of Self and Morphic.</p>
+          <p class="look"><b>Look for</b> the interactor, messages as draggable objects, and how changing a law changes the running world.</p>
+          <div class="links">
+            <span><span class="kind watch">watch</span><a href="https://www.youtube.com/watch?v=w1HhPE0zV6g">the 1987 film</a></span>
+            <span class="time">16 min</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry" data-key="browser">
+        <input type="checkbox" id="c-browser" aria-label="Mark the Smalltalk-80 browser as done">
+        <div class="body">
+          <h3>The Smalltalk-80 system browser</h3>
+          <div class="meta">Adele Goldberg · the orange book, 1984 · and Pharo, where the browser is the first thing you see</div>
+          <p class="why">Four panes, each narrowing the next: category, class, protocol, method. A view that is a fixed chain of panes, the opposite of free placement, and some workflows want exactly this.</p>
+          <p class="look"><b>Play:</b> open Pharo, open a System Browser, and watch how a click in one pane rewrites the panes to its right. <b>Look for</b> in the book, the chapter on the browser and the one on the debugger.</p>
+          <div class="links">
+            <span><span class="kind play">play</span><a href="https://pharo.org/">Pharo</a></span>
+            <span><span class="kind buy">buy</span><a href="https://www.amazon.com/s?k=0201113724">Smalltalk-80: The Interactive Programming Environment</a></span>
+            <span class="time">20 min</span>
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ===================== BOOKS ===================== -->
+  <section>
+    <div class="section-head">
+      <div class="label">on the shelf</div>
+      <h2>Five books, if you want paper</h2>
+      <p class="note">Amazon links are searches by ISBN or title, so they land on the current listing. Everything else in this guide is free to read online.</p>
+    </div>
+    <div class="books">
+      <div class="book"><b>Readings in Information Visualization</b><span>Card, Mackinlay, Shneiderman, 1999. Reprints Furnas's fisheye paper, the Table Lens and the Perspective Wall with commentary; group A in one volume.</span><a href="https://www.amazon.com/s?k=9781558605336">Amazon</a></div>
+      <div class="book"><b>Dealers of Lightning</b><span>Michael Hiltzik, 1999. PARC in the Alto years: Smalltalk, Star, the people behind Rooms and SIL.</span><a href="https://www.amazon.com/s?k=Dealers+of+Lightning+Hiltzik">Amazon</a></div>
+      <div class="book"><b>The Dream Machine</b><span>M. Mitchell Waldrop, 2001. Licklider, Engelbart, Sutherland and ARPA; the context for groups A and G.</span><a href="https://www.amazon.com/s?k=The+Dream+Machine+Waldrop">Amazon</a></div>
+      <div class="book"><b>Smalltalk-80: The Interactive Programming Environment</b><span>Adele Goldberg, 1984. The orange book: the browser, the inspector, the debugger as they were designed.</span><a href="https://www.amazon.com/s?k=0201113724">Amazon</a></div>
+      <div class="book"><b>Escoffier: The Complete Guide to the Art of Modern Cookery</b><span>Cracknell and Kaufmann's translation of the fourth edition. The brigade is in the front matter; the rest is dinner.</span><a href="https://www.amazon.com/s?k=9780470900277">Amazon</a></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>When you come back</h2>
+    </div>
+    <ul class="plain">
+      <li>Which principles felt like ours, and which felt like a builder's convenience we do not need.</li>
+      <li>Which answer to variations you want tried first: a table on the node, an overlay of deltas, or a slot with a pick.</li>
+      <li>Whether the loupe is a station's property, a surface tool, or both.</li>
+      <li>Anything here that should be dropped from the survey, and anything missing that you remember from the old days.</li>
+    </ul>
+  </section>
+</div>
+
+<script>
+(() => {
+  const KEY = 'workspace-reading-guide:done';
+  const entries = [...document.querySelectorAll('.entry')];
+  const progress = document.getElementById('progress');
+  let done = new Set();
+  try { done = new Set(JSON.parse(localStorage.getItem(KEY) || '[]')); } catch (e) { done = new Set(); }
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify([...done])); } catch (e) { /* storage unavailable; the ticks live for this page view only */ } };
+  const render = () => {
+    entries.forEach(el => el.classList.toggle('done', done.has(el.dataset.key)));
+    progress.textContent = `${done.size} of ${entries.length} ticked`;
+  };
+  entries.forEach(el => {
+    const box = el.querySelector('input');
+    box.checked = done.has(el.dataset.key);
+    box.addEventListener('change', () => { if (box.checked) done.add(el.dataset.key); else done.delete(el.dataset.key); save(); render(); });
+  });
+  render();
+})();
+</script>
+
+</body></html>
