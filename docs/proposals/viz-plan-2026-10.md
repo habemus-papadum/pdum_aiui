@@ -87,7 +87,7 @@ a workspace glob, `repository.directory`, versioning lockstep, `pnpm skills:chec
 catalog's §5 sister table all follow. READMEs say "internal scaffolding for labs and demos, a
 replacement is planned". Nothing leaves the repo. Already-published npm versions are left alone.
 
-### D — skills point at the catalog — `in progress`
+### D — skills point at the catalog — `done 21f7e6b9`
 
 `skills/aiui-architecture` names CATALOG.md as the reference for what exists, with the caveat that
 newer pieces may exist that nothing uses yet, and carries the stance above (build in the main
