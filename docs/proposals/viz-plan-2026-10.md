@@ -27,7 +27,7 @@ taken on 2026-10-17 and are stated inline so nobody re-derives them.
 `demos/catalog` (the catalog rendered live), its README row, the CATALOG.md intro line, the
 lockfile. Nothing to decide; it was verified end to end on 2026-10-16.
 
-### H2 — the resize seam — `planned`
+### H2 — the resize seam — `done 75c0ee84`
 
 Observable's baked-in reactive values are `width` (the **main column's** width, not the window's),
 `now` (the time, ticking per animation frame while something reads it), `dark` (the color scheme),
