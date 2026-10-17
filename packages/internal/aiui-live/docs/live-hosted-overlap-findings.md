@@ -179,7 +179,7 @@ Timings, for reference:
 
 ## 5. What this means for our code
 
-Our session engine, in `packages/aiui-live/src/session.ts`, handles hosted mode by opening one
+Our session engine, in `packages/internal/aiui-live/src/session.ts`, handles hosted mode by opening one
 task per delegation and answering function calls itself. The shape matches the wire. Four things
 do not:
 

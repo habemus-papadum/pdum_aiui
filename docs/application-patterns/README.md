@@ -279,9 +279,9 @@ prompt material for the chosen destination.
 
 [Structured prompts](../../packages/aiui-prompts/README.md) supplies composition,
 stored records, inspection, and delivery preparation. It is a reusable foundation
-for prompt tools. The [oracle](../../packages/aiui-oracle/README.md),
-[live sessions](../../packages/aiui-live/README.md), and
-[dock](../../packages/aiui-dock/README.md) supply existing in-application AI pieces.
+for prompt tools. The [oracle](../../packages/internal/aiui-oracle/README.md),
+[live sessions](../../packages/internal/aiui-live/README.md), and
+[dock](../../packages/internal/aiui-dock/README.md) supply existing in-application AI pieces.
 Their existence does not require every application to embed the same prompting
 interface.
 

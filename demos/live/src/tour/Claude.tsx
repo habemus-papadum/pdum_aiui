@@ -24,7 +24,7 @@ import {
   SPAWN_ENV,
 } from "./sdk-catalog";
 
-/** What `claudeDelegator` passes to `query()` — the keys in packages/aiui-live/src/claude/index.ts. */
+/** What `claudeDelegator` passes to `query()` — the keys in packages/internal/aiui-live/src/claude/index.ts. */
 const SET_BY_DELEGATOR = new Set([
   "cwd",
   "model",

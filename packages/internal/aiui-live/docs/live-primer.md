@@ -185,10 +185,10 @@ each case, with the timings we recorded.
 
 ## 6. Where the real code is
 
-- The event names and shapes, as our code types them: `packages/aiui-live/src/protocol.ts`.
+- The event names and shapes, as our code types them: `packages/internal/aiui-live/src/protocol.ts`.
 - The session engine that opens a task per delegation and answers function calls:
-  `packages/aiui-live/src/session.ts`.
-- The Claude Code thinking model for client mode: `packages/aiui-live/src/claude/index.ts`.
+  `packages/internal/aiui-live/src/session.ts`.
+- The Claude Code thinking model for client mode: `packages/internal/aiui-live/src/claude/index.ts`.
 - OpenAI's own guides, readable as Markdown by adding `.md` to the URL:
   `https://developers.openai.com/api/docs/guides/live-delegation` and `/guides/steering`.
 - How we run these measurements without a microphone: [Testing patterns for realtime vendor APIs](./live-api-testing.md).

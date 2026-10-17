@@ -240,7 +240,7 @@ pieces are designed to already do the right thing, and the idiom is about **plac
 ## The prompt
 
 `weaveInstructions()` composes the standard persona with the app-specific portion. The base
-persona, published verbatim (`ORACLE_BASE_PERSONA` in `packages/aiui-oracle/src/prompt.ts`):
+persona, published verbatim (`ORACLE_BASE_PERSONA` in `packages/internal/aiui-oracle/src/prompt.ts`):
 
 > You are the oracle: a real-time voice assistant embedded in an interactive app. You answer
 > questions about the app and drive it on the user's behalf through the tools you are given.
@@ -294,7 +294,7 @@ gets no section: a string is the whole prompt, stated.
 
 ## The lab
 
-`pnpm -C packages/aiui-oracle lab` — a standing-wave bench with the oracle wired in: all
+`pnpm -C packages/internal/aiui-oracle lab` — a standing-wave bench with the oracle wired in: all
 three key flows mounted, a composer for text/image injection, a live instructions editor,
 per-tool toggles, and the viewer. The lab is where every capability lands first.
 

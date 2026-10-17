@@ -3,8 +3,8 @@
  * event with its direction and meaning, the engine's own options, the
  * backends as a comparison table, the measured numbers, and the vendor
  * pages each fact came from. Everything here is checked against
- * `packages/aiui-live/src/protocol.ts` / `session.ts` and the proposal
- * (`packages/aiui-live/docs/oracle-live.md`); when they move, move this.
+ * `packages/internal/aiui-live/src/protocol.ts` / `session.ts` and the proposal
+ * (`packages/internal/aiui-live/docs/oracle-live.md`); when they move, move this.
  */
 
 import type { LedgerEntry } from "@habemus-papadum/aiui-live";
@@ -33,7 +33,7 @@ export const LINKS = {
   sdkPermissions: `${CLAUDE}/permissions`,
   sdkRepo: "https://github.com/anthropics/claude-agent-sdk-typescript",
   proposal:
-    "https://github.com/habemus-papadum/pdum_aiui/blob/main/packages/aiui-live/docs/oracle-live.md",
+    "https://github.com/habemus-papadum/pdum_aiui/blob/main/packages/internal/aiui-live/docs/oracle-live.md",
 } as const;
 
 // ── the wire vocabulary ──────────────────────────────────────────────────────

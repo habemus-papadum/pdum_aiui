@@ -158,7 +158,7 @@ Read: each module's header comment.
 | --- | --- | --- | --- | --- |
 | the audio widgets | `AudioControl`, `AudioMeter`, `AudioRoutePicker`, `MicrophonePicker` over one shared audio hub. | [`aiui-audio`](../aiui-audio)`/widgets` | shipped | demos/audio, the dock |
 | the capture widgets | `ScreenCaptureControl`, `ScreenCapturePreview`, and `ScreenCaptureTarget`, which declares a capture boundary around an element. | [`aiui-screen-capture`](../aiui-screen-capture)`/widgets` | shipped | demos/screen-capture |
-| the voice-engine widgets | Each engine's panels — control, key, parameters; captions, composer, ledger, tasks. | [`aiui-oracle`](../aiui-oracle/README.md)`/widgets`, [`aiui-live`](../aiui-live/README.md)`/widgets` | shipped | the dock |
+| the voice-engine widgets | Each engine's panels — control, key, parameters; captions, composer, ledger, tasks. | [`aiui-oracle`](../internal/aiui-oracle/README.md)`/widgets`, [`aiui-live`](../internal/aiui-live/README.md)`/widgets` | shipped | the dock |
 
 **The word "widget."** In this repo a widget is a visible piece over a headless engine or a declared
 control — porcelain over plumbing. Widgets may mount twice, because they write shared state and
@@ -178,8 +178,8 @@ What holds pages and components. Read: [style guide § the page is a short paper
 | the notebook page | The anatomy a page follows — title block and lede, the laboratory first, then observables, theory, experiments — with `SiteNav` (a sidebar that becomes a top bar and drawer on a phone), `TocRail`, and `colorMode`. The skin is `aiui-design/site.css`, in layers (reset < base < chrome < components < notebook); a page's own unlayered CSS wins over it. | `…/site`; [`aiui-design`](../aiui-design/README.md) | shipped | every notebook |
 | the gallery | Many pages, one document. A Vite plugin discovers `demos/*` by the marker and serves `virtual:demo-pages`; sidebar, routes, lazy chunks and landing cards all derive from it; the dock mounts once; link clicks become `navigate()` so a voice turn survives routing. Published as the static site. | [`demos/gallery`](../../demos/gallery) (`demo-discovery.ts`, `src/site/*`) | shipped | the public site |
 | the deck | Slides as data (`SlideDef[]`), the current slide and scene step as controls, `next` / `prev` as actions — so voice and agents move the deck — a HUD overview, one gesture per step, the slide in the URL tail, off-screen slides parked. A deck routes on the tail, so it is also a gallery page. | [`aiui-slides`](../aiui-slides/README.md) | shipped | [`demos/gear-talk`](../../demos/gear-talk) |
-| the dock | `VoiceDock`: one pill in the corner that opens into five panes — the oracle, a live session, the tool log, vendor keys, a source browser — and projects `__AIUI__.tools` into both voice sessions. Nothing connects until pressed. | [`aiui-dock`](../aiui-dock/README.md) | shipped | every gallery page, every in-repo demo (`pnpm new-demo` mounts it; the create-aiui template ships without it) |
-| the lab | A package's own rig for the components it ships: one document routed on the pathname, the playbook's layers, its own scope. Three exist. | [`packages/aiui-viz/lab`](./lab) (scope `viz-lab`: the RichTeX and Mermaid pages), `packages/aiui-pencil/lab`, `packages/aiui-oracle/lab` | shipped | `pnpm -C packages/<name> lab` |
+| the dock | `VoiceDock`: one pill in the corner that opens into five panes — the oracle, a live session, the tool log, vendor keys, a source browser — and projects `__AIUI__.tools` into both voice sessions. Nothing connects until pressed. | [`aiui-dock`](../internal/aiui-dock/README.md) | shipped | every gallery page, every in-repo demo (`pnpm new-demo` mounts it; the create-aiui template ships without it) |
+| the lab | A package's own rig for the components it ships: one document routed on the pathname, the playbook's layers, its own scope. Three exist. | [`packages/aiui-viz/lab`](./lab) (scope `viz-lab`: the RichTeX and Mermaid pages), `packages/aiui-pencil/lab`, `packages/internal/aiui-oracle/lab` | shipped | `pnpm -C packages/<name> lab` |
 | the app shapes | The template every app starts from — `main.tsx` standalone (an in-repo demo adds the dock), `page.tsx` the SitePage, `index.ts` the library barrel, `card.tsx` the card, one `scope` — plus the multi-entry teaching app and the slice mounted twice. | [`create-aiui`](../create-aiui/README.md); [`demos/walkthrough`](../../demos/walkthrough); [`demos/twins`](../../demos/twins) | shipped | — |
 
 **What is not a container.** `report` is the agent tool (one bounded snapshot of the app), not a
@@ -233,9 +233,6 @@ reaches for them in the same breath.
 | Package | What it is |
 | --- | --- |
 | [`aiui-slides`](../aiui-slides/README.md) | The deck (§3). |
-| [`aiui-dock`](../aiui-dock/README.md) | The voice dock (§3): the oracle and a live session in any page. |
-| [`aiui-oracle`](../aiui-oracle/README.md) | A realtime voice control surface (OpenAI Realtime over WebRTC) with the app's cells and actions as tools. |
-| [`aiui-live`](../aiui-live/README.md) | GPT-Live sessions with pluggable delegation backends (local tools, hosted Responses, the Claude Agent SDK). |
 | [`aiui-audio`](../aiui-audio) | One shared microphone hub, exclusive routing, playback, and the audio widgets. |
 | [`aiui-stt`](../aiui-stt/README.md) | ElevenLabs realtime dictation over the audio hub. |
 | [`aiui-screen-capture`](../aiui-screen-capture) | Tab, window or display capture with element cropping, and the capture widgets. |
@@ -252,6 +249,15 @@ reaches for them in the same breath.
 | [`create-aiui`](../create-aiui/README.md) | `pnpm create @habemus-papadum/aiui`: the starter with the dual page + card shape. | Scaffolds a consumer. |
 | `aiui-build-config` | Internal, never published: the externalize-deps matcher and the Solid-under-Vitest configuration. | Build plumbing. |
 | [`aibr`](../aibr/README.md) | Persistent shared browsers and exec-based agent launchers. | Not a UI piece; a tool for the agents that build these pages. |
+
+**Internal scaffolding for labs and demos** (`packages/internal/`; never published, a replacement is
+planned; they depend on `@habemus-papadum/aiui-viz`):
+
+| Package | What it is |
+| --- | --- |
+| [`aiui-dock`](../internal/aiui-dock/README.md) | The voice dock (§3): the oracle and a live session in any page, with the key widget and the tool pane. |
+| [`aiui-oracle`](../internal/aiui-oracle/README.md) | A realtime voice control surface (OpenAI Realtime over WebRTC) with the app's cells and actions as tools. |
+| [`aiui-live`](../internal/aiui-live/README.md) | GPT-Live sessions with pluggable delegation backends (local tools, hosted Responses, the Claude Agent SDK). |
 
 ## 6. Adding a piece
 

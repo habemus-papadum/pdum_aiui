@@ -203,7 +203,7 @@ Timings, for reference:
 
 ## 6. What this means for our code
 
-Our Claude delegator, `packages/aiui-live/src/claude/index.ts`, runs one delegation at a time:
+Our Claude delegator, `packages/internal/aiui-live/src/claude/index.ts`, runs one delegation at a time:
 each new request waits for the previous turn's result. That was built on the old finding. It is
 now a choice, not a necessity.
 

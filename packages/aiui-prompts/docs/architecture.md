@@ -1355,9 +1355,9 @@ Within every milestone, apply the four layers:
    the same controller commands to an agent without introducing aiui dependencies into the library.
 
 The first downstream migration should be deterministic instruction assembly in
-[aiui-oracle](../../aiui-oracle/src/prompt.ts): it provides a small, reviewable boundary with
+[aiui-oracle](../../internal/aiui-oracle/src/prompt.ts): it provides a small, reviewable boundary with
 slot ordering and a real consumer. Run old/new rendering side by side in fixtures before changing
-callers. Then address [live prompts](../../aiui-live/src/prompt.ts) and the intent tool's
+callers. Then address [live prompts](../../internal/aiui-live/src/prompt.ts) and the intent tool's
 composition (its lowering pipeline's `compose.ts`, now outside this repo), preserving their
 acquisition, session policy, event ordering, and transport. Existing source-locator code is
 methodology evidence only; the new transform implements its own binding-aware capture contract.

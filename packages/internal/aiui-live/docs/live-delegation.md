@@ -20,7 +20,7 @@ which already sketch the channel as a backend) and the live tour page
 ## 0. In one screen
 
 **What we want.** A delegation today is one ticket handed to one delegator
-(`packages/aiui-live/src/types.ts`, `Delegator.handle(req)`). We want a *tree*: a router that
+(`packages/internal/aiui-live/src/types.ts`, `Delegator.handle(req)`). We want a *tree*: a router that
 answers quick questions itself and escalates hard ones, a race between a fast model and Claude
 Code, a fallback after a timeout, and so on, with the shape chosen by the user from the page,
 and with every node visible while it runs and inspectable after it fails.
@@ -49,7 +49,7 @@ separate layers we own (§5), and the page must be able to fire each one without
 
 | Piece | Where | What it gives the design |
 | --- | --- | --- |
-| `DelegationRequest` = `{id, text, transcript, tools, signal, say, note, steer, log}`; `Delegator.handle(req) → Promise<string \| void>` | `packages/aiui-live/src/types.ts` | The seam. `say/note/steer/log` are plain functions, so a router can wrap them; `signal` is an `AbortSignal`, so cancel propagates by linking controllers. |
+| `DelegationRequest` = `{id, text, transcript, tools, signal, say, note, steer, log}`; `Delegator.handle(req) → Promise<string \| void>` | `packages/internal/aiui-live/src/types.ts` | The seam. `say/note/steer/log` are plain functions, so a router can wrap them; `signal` is an `AbortSignal`, so cancel propagates by linking controllers. |
 | Task table: `LiveTask {id, status, request, appends, log, backend, firstAppendT, firstSpokenT, doneAt}`; `cancelTask` aborts the controller; a cancelled task refuses late appends (`task cancelled` receipt) and late results (`status !== "open"` guard) | `src/session.ts` | Late results are already dropped. The ticket is the unit of cancellation. |
 | Ledger: `LedgerEntry {seq, t, dir, kind, summary, delegationId?, event?}` | `src/types.ts` | The one event stream the widgets render; needs a `spanId`. |
 | Relay frames: client `hello \| delegate \| cancel \| tool_result`, server `ready \| say/note/steer \| log \| record \| done \| failed \| tool \| error` | `src/delegators/relay-protocol.ts` | Flat: one delegator per connection, named in `hello`. Needs `plan`, `configure`, `stop`, span frames. |
@@ -321,7 +321,7 @@ silently; the speech path never waits on it.
 ## 8. Rough code structure
 
 ```
-packages/aiui-live/src/
+packages/internal/aiui-live/src/
   plan.ts                 Plan schema (zod), compilePlan(), childRequest(), the four combinators
   spans.ts                Span type, span ledger entries, LiveTask.spans, derived backend path
   session.ts              stop(scope), onNewTicket policy, span-aware append/record, setOutputEnabled
