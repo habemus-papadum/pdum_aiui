@@ -50,7 +50,7 @@ composition, and ideally they sit in no registry at all. The durable registry is
 enumerated, which is why `colorMode`'s pattern is acceptable; the control/tool registry IS
 enumerated (`report`) and these values do not belong in it.
 
-### H3 — scaffolding and creds — `planned`
+### H3 — scaffolding and creds — `done 61d2dd65`
 
 - The root `package.json` gains a `repository` field so `pnpm new-demo` stamps a real URL (today it
   writes `""`; styleguide and catalog have the URL by hand).
