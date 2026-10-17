@@ -8,7 +8,7 @@
 #
 # `layout node` is direnv's stdlib helper: it prepends ./node_modules/.bin to
 # PATH, so `vite` and `tsc` run as bare commands — no npx. The .env file is
-# where secrets live (gitignored) — e.g. OPENAI_API_KEY, which the dev server
-# hands to the page's voice dock (the `devKeys` option in vite.config.ts).
+# where secrets live (gitignored) — e.g. a vendor API key the dev server can
+# hand to the page through the `devKeys` opt-in in vite.config.ts.
 layout node
 dotenv_if_exists .env

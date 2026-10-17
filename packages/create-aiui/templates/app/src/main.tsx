@@ -6,11 +6,9 @@
  *
  *   npm run dev       this app, served by Vite
  *
- * The voice dock on the page (an oracle over OpenAI's realtime API, with the
- * app's cells as its tools) takes OPENAI_API_KEY from the dev server's
- * environment, or a key pasted into its field. Describe what you want — "make
- * this golden", "turn this into a tide chart for my harbor" — and edit this
- * code with your coding agent while the page keeps running.
+ * Describe what you want — "make this golden", "turn this into a tide chart
+ * for my harbor" — to your coding agent, and edit this code while the page
+ * keeps running.
  *
  * There is deliberately almost nothing in this file. The aiui() plugin
  * (vite.config.ts — the entire integration) stamps the source locations the
@@ -32,7 +30,6 @@
  */
 
 import "@habemus-papadum/aiui-design/site.css";
-import { VoiceDock } from "@habemus-papadum/aiui-dock";
 import { PageBoundary } from "@habemus-papadum/aiui-viz";
 import { render } from "@solidjs/web";
 import { page } from "./page";
@@ -42,14 +39,10 @@ page.activate?.();
 // PageBoundary: an uncaught effect throw would otherwise halt the page's
 // whole reactive system (Solid 2.0 semantics) — contained, it renders a
 // fault card with a reset instead. Same seam a multi-app shell uses.
-// VoiceDock: the pill row in the corner — talk to this app through the oracle
-// or a live session (the dev server's OpenAI key, else one you paste), open
-// its tool log ("was my agent actually calling the tools?"), all on the page.
 render(
   () => (
     <PageBoundary name={page.title}>
       <page.App />
-      <VoiceDock />
     </PageBoundary>
   ),
   document.getElementById("root") as HTMLElement,

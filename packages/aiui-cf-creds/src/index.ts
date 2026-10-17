@@ -13,8 +13,9 @@
  *
  * The bridges live on subpaths so each app pays only for what it uses:
  *
- *  - `aiui-cf-creds/oracle` — `federatedKeySource`: `ek_` client secrets
- *    minted browser-side over workload identity federation (no parent key).
+ *  - `aiui-cf-creds/openai` — `federatedKeySource`: `ek_` client secrets
+ *    minted browser-side over workload identity federation (no parent key);
+ *    the oracle's `KeySource` by shape, with no dependency on the oracle.
  *  - `aiui-cf-creds/stt`    — both STT credential flavors: single-use scribe
  *    connect URLs and `transcription`-type `ek_` sources.
  *  - `aiui-cf-creds/mosaic` — `brokerConnector`: the app's Mosaic connector

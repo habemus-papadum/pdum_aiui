@@ -95,13 +95,19 @@ export function catalogRefs() {
 }
 
 /**
- * Infer the npm scope and repo URL from the first existing scoped package under
- * packages/. Every package shares one scope and repo URL, so any of them will
- * do — reading the first one tolerates any single package being absent or
- * renamed.
+ * The repo URL comes from the root package.json's `repository` field — the one
+ * place it is declared; a package's own copy may be blank (aibr's is) — and the
+ * npm scope from the first existing scoped package under packages/. Every
+ * package shares one scope, so any of them will do — reading the first one
+ * tolerates any single package being absent or renamed.
  * @returns {{ scope: string; repoUrl: string }}
  */
 export function deriveContext() {
+  const root = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8"));
+  const repoUrl = root.repository?.url;
+  if (typeof repoUrl !== "string" || repoUrl === "") {
+    return fail("the root package.json has no repository.url to stamp on the scaffold");
+  }
   const packagesDir = join(repoRoot, "packages");
   const dirs = existsSync(packagesDir)
     ? readdirSync(packagesDir).filter((d) => existsSync(join(packagesDir, d, "package.json")))
@@ -110,7 +116,7 @@ export function deriveContext() {
     const pkg = JSON.parse(readFileSync(join(packagesDir, dir, "package.json"), "utf8"));
     const scope = pkg.name?.startsWith("@") ? pkg.name.split("/")[0] : "";
     if (scope) {
-      return { scope, repoUrl: pkg.repository?.url ?? "" };
+      return { scope, repoUrl };
     }
   }
   return fail("no existing package to infer the npm scope from — create packages/* first");

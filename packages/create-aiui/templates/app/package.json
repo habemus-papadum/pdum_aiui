@@ -26,7 +26,6 @@
   },
   "dependencies": {
     "@habemus-papadum/aiui-design": "__AIUI_VERSION_RANGE__",
-    "@habemus-papadum/aiui-dock": "__AIUI_VERSION_RANGE__",
     "@habemus-papadum/aiui-source-processor": "__AIUI_VERSION_RANGE__",
     "@habemus-papadum/aiui-viz": "__AIUI_VERSION_RANGE__",
     "@solidjs/web": "2.0.0-rc.13",

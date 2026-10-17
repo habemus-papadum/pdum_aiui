@@ -1087,9 +1087,6 @@ importers:
 
   packages/aiui-cf-creds:
     dependencies:
-      '@habemus-papadum/aiui-oracle':
-        specifier: workspace:^
-        version: link:../aiui-oracle
       '@habemus-papadum/cf-browser-credentials':
         specifier: ^0.5.0
         version: 0.5.0
@@ -1664,9 +1661,6 @@ importers:
       '@habemus-papadum/aiui-design':
         specifier: workspace:^
         version: link:../aiui-design
-      '@habemus-papadum/aiui-dock':
-        specifier: workspace:^
-        version: link:../aiui-dock
       '@habemus-papadum/aiui-source-processor':
         specifier: workspace:^
         version: link:../aiui-source-processor

@@ -250,13 +250,15 @@ library's `sql`/`schema` tools (`registerSqlTools(kit, { runner })` from
 `@habemus-papadum/aiui-viz/duckdb`, over a connection dedicated to agent reads) and the table
 list is introspected into the tool's usage — resolve the runner's promise once the tables
 exist, not when the connection opens. To see what a model sees, open the page with
-`#aiui-tools`: `ToolLog` (`@habemus-papadum/aiui-viz/site/tool-log`; the app template's
-`main.tsx` and the gallery shell mount it, hidden by default) shows the document *as
-rendered* and the page's call log (who called what — the oracle, a live delegation, the page
-itself — and the result). The app template and the gallery shell also mount **`VoiceDock`**
-(`@habemus-papadum/aiui-dock`): the oracle and a live session on the page over the same
-projection (active kits only), the tool log behind its tools pill, one OpenAI key for both
-(the dev server's, else pasted into localStorage). User guide: "Documenting a tool".
+`#aiui-tools`: `ToolLog` (`@habemus-papadum/aiui-viz/site/tool-log`; every in-repo demo's
+`main.tsx` and the gallery shell mount it through the dock, hidden by default) shows the
+document *as rendered* and the page's call log (who called what — the oracle, a live
+delegation, the page itself — and the result). Every in-repo demo (`pnpm new-demo` mounts it)
+and the gallery shell carry **`VoiceDock`** (`@habemus-papadum/aiui-dock`): the oracle and a
+live session on the page over the same projection (active kits only), the tool log behind its
+tools pill, one OpenAI key for both (the dev server's, else pasted into localStorage). The
+create-aiui template ships without the dock; a consumer adds it. User guide: "Documenting a
+tool".
 
 Forwarding is unconditional: the toolkit publishes every namespace into
 `window.__AIUI__.tools` (installed by the runtime, production included — the page dials

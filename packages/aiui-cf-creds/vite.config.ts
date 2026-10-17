@@ -8,11 +8,11 @@ export default defineConfig({
   build: {
     lib: {
       // One entry per export subpath, so a Mosaic-only app never imports the
-      // vendor-SDK-touching modules (`/oracle`, `/stt`) — mirroring aiui-viz's
+      // vendor-SDK-touching modules (`/openai`, `/stt`) — mirroring aiui-viz's
       // optional-peer entry-point layout.
       entry: {
         index: "src/index.ts",
-        oracle: "src/oracle.ts",
+        openai: "src/openai.ts",
         stt: "src/stt.ts",
         mosaic: "src/mosaic.ts",
         motherduck: "src/motherduck.ts",

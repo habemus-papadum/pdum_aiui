@@ -1,7 +1,7 @@
 # @habemus-papadum/create-aiui
 
-Scaffold a fresh SolidJS + [aiui-viz](https://github.com/habemus-papadum/pdum_aiui) app with the
-voice dock, ready for an agent to edit.
+Scaffold a fresh SolidJS + [aiui-viz](https://github.com/habemus-papadum/pdum_aiui) app, ready
+for an agent to edit.
 
 ```sh
 pnpm create @habemus-papadum/aiui@latest my-app   # or: npm create @habemus-papadum/aiui@latest my-app
@@ -17,9 +17,8 @@ pnpm dev          # Vite; open the printed URL
 > pins the app's aiui dependencies to *its own* release line, so an old scaffolder gives you old
 > `@habemus-papadum/*` packages.
 
-The scaffolded app opens on a banner that explains itself, with the voice dock in the corner
-(it takes an OpenAI key from `OPENAI_API_KEY` in the environment or from its own key pane). Its
-starter content — a Maurer rose driven by two sliders — is scenery built to be rebuilt, but its
+The scaffolded app opens on a banner that explains itself. Its starter content — a Maurer rose
+driven by two sliders — is scenery built to be rebuilt, but its
 *shape* is the [frontend-for-agents](https://github.com/habemus-papadum/pdum_aiui/blob/main/packages/aiui-viz/docs/frontend-for-agents.md)
 methodology in miniature:
 

@@ -1,25 +1,29 @@
 /**
- * oracle.ts — the federated KeySource: `ek_` client secrets minted entirely
- * browser-side, with NO parent key existing anywhere.
+ * openai.ts — the federated OpenAI key source: `ek_` client secrets minted
+ * entirely browser-side, with NO parent key existing anywhere.
  *
  * The chain (verified live against a deployed broker, 2026-08-07): the
  * broker's ephemeral AWS credentials → STS `GetWebIdentityToken` (a ≤300 s
  * OIDC JWT) → the OpenAI SDK's `workloadIdentity` exchange (internal,
  * auto-refreshed) → `POST /v1/realtime/client_secrets` → `ek_`. Every link
  * before the mint is the kit's (`cf-creds-openai`); this module owns only the
- * mint call and the mapping onto the oracle's {@link KeySource} contract.
+ * mint call and the mapping onto the key-source contract below.
  *
  * Under the broker's key contract (kit ≥0.4) the app passes only `key` —
  * its own name — and the region, audience, and federation ids all ride the
  * broker's one-mint bundle (`createBrokeredOpenAI`). The explicit id trio
  * remains as the legacy lane for brokers predating the contract.
  *
- * This is the fourth species in the oracle's key chain — compose it as
- * `cachingKeySource(federatedKeySource({...}))` behind paste-key and dev-key:
- * caching is CORRECT here for the same reason it is over `mintingKeySource`
- * (one `ek_` opens multiple sessions until it expires).
+ * The contract is declared HERE, structurally: {@link OpenAIKeySource} and
+ * {@link OpenAICredential} are the shapes of aiui-oracle's `KeySource` and
+ * `OracleCredential`, so the oracle accepts a federated source as the fourth
+ * species in its key chain — composed as
+ * `cachingKeySource(federatedKeySource({...}))` behind paste-key and dev-key
+ * (caching is CORRECT here, as over `mintingKeySource`: one `ek_` opens
+ * multiple sessions until it expires) — while this public package depends on
+ * nothing of the oracle, which is internal scaffolding. The two declarations
+ * are pinned equal at compile time in demos/audio, the one package with both.
  */
-import type { KeySource, OracleCredential } from "@habemus-papadum/aiui-oracle";
 import type { CredentialManager } from "@habemus-papadum/cf-browser-credentials";
 import type { AwsCredentials } from "@habemus-papadum/cf-creds-aws";
 import {
@@ -28,6 +32,32 @@ import {
   OPENAI_CREDENTIALS_PATH,
 } from "@habemus-papadum/cf-creds-openai";
 import { type BrokerOptions, brokerAwsManager, brokerRoute } from "./shared";
+
+/**
+ * A short-lived credential for opening realtime sessions. One `ek_` mints
+ * MULTIPLE sessions until it expires — reconnects reuse it within TTL. The
+ * shape of aiui-oracle's `OracleCredential`.
+ */
+export interface OpenAICredential {
+  ek: string;
+  /** Unix seconds; 0 = unknown. */
+  expiresAt: number;
+  /** Which source answered (paste-key / dev-key / cf-federation) — the
+   * ledger's auth attribution. */
+  source?: string;
+}
+
+/** Where realtime credentials come from — the shape of aiui-oracle's `KeySource`. */
+export interface OpenAIKeySource {
+  /** Human-readable, for the ledger ("paste-key", "cf-federation"). */
+  describe(): string;
+  /**
+   * Produce a session-opening credential for the given wire session config.
+   * (The baked config is a DEFAULT, not a sandbox — the client can
+   * `session.update` over it; TTL is the real bound.)
+   */
+  credential(session: Record<string, unknown>): Promise<OpenAICredential>;
+}
 
 /**
  * The one SDK surface the mint uses — structural, so tests inject a stub and
@@ -85,7 +115,7 @@ export interface FederatedMintOptions extends BrokerOptions {
  * The wire session config is forwarded as the secret's baked DEFAULT, not a
  * sandbox — the client can `session.update` over it; TTL is the real bound.
  */
-export function federatedKeySource(options: FederatedMintOptions): KeySource {
+export function federatedKeySource(options: FederatedMintOptions): OpenAIKeySource {
   // Lazy: a chained source that never wins must not build SDK clients (nor,
   // in the keyed lane, fetch the broker bundle). Memoized as a promise; a
   // failed build is forgotten so a transient broker error doesn't wedge the
@@ -128,7 +158,7 @@ export function federatedKeySource(options: FederatedMintOptions): KeySource {
   };
   return {
     describe: () => "cf-federation",
-    async credential(session): Promise<OracleCredential> {
+    async credential(session): Promise<OpenAICredential> {
       const minted = await (await clientOf()).realtime.clientSecrets.create({
         expires_after: {
           anchor: "created_at",

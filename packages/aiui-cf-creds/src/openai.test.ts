@@ -1,12 +1,13 @@
 /**
- * oracle.test.ts — the mint mapping and the KeySource contract. The
+ * openai.test.ts — the mint mapping and the key-source contract. The
  * federation chain itself (broker → STS → SDK exchange) is the kit's,
  * verified live 2026-08-07; what THIS package owns is the mint call's body
- * and the mapping onto OracleCredential — pinned here over an injected
+ * and the mapping onto OpenAICredential (the oracle's OracleCredential by
+ * shape; demos/audio pins the two equal) — pinned here over an injected
  * structural client. All identity values are invented fixtures (D2).
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { federatedKeySource, type MintClient } from "./oracle";
+import { federatedKeySource, type MintClient } from "./openai";
 
 // The keyed lane's seam: the kit's createBrokeredOpenAI is what turns a key
 // into a configured client (its own tests own that behavior); THIS package
