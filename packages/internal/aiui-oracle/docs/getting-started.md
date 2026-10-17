@@ -1,6 +1,6 @@
 # Getting Started with @habemus-papadum/aiui-oracle
 
-> This page lives at `packages/aiui-oracle/docs/getting-started.md`, beside the package's other
+> This page lives at `packages/internal/aiui-oracle/docs/getting-started.md`, beside the package's other
 > guides. The package overview is the `README.md`; the API is `src/index.ts`.
 
 The oracle is a realtime voice control surface for an aiui app: a browser-side WebRTC session
@@ -8,9 +8,8 @@ to OpenAI's Realtime API with the app's controls and actions projected as tools.
 
 ## Install
 
-```sh
-npm install @habemus-papadum/aiui-oracle
-```
+In-workspace only (the package is internal scaffolding, never published):
+`"@habemus-papadum/aiui-oracle": "workspace:^"` in a demo's `package.json`.
 
 ## Where to start
 

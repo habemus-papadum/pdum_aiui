@@ -337,11 +337,12 @@ function TourPage() {
             <a href={LINKS.sdkRepo}>the repository</a>
           </li>
           <li>
-            This repo: <a href={LINKS.proposal}>packages/aiui-live/docs/oracle-live.md</a> (the
-            design and the measurements), <code>packages/aiui-live/src/protocol.ts</code> (the typed
-            wire), <code>session.ts</code> (the engine), <code>claude/index.ts</code> (the
-            delegator), and <code>packages/aiui-live/docs/</code> (the measurements; the raw probe
-            retired to git history).
+            This repo: <a href={LINKS.proposal}>packages/internal/aiui-live/docs/oracle-live.md</a>{" "}
+            (the design and the measurements),{" "}
+            <code>packages/internal/aiui-live/src/protocol.ts</code> (the typed wire),{" "}
+            <code>session.ts</code> (the engine), <code>claude/index.ts</code> (the delegator), and{" "}
+            <code>packages/internal/aiui-live/docs/</code> (the measurements; the raw probe retired
+            to git history).
           </li>
         </ul>
       </section>

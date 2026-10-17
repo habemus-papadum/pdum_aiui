@@ -1,5 +1,9 @@
 # @habemus-papadum/aiui-dock
 
+> **Internal scaffolding** for this repo's labs and demos. Not published; the demos and the
+> gallery consume it in-workspace (`workspace:^`). A replacement is planned — see
+> [the October 2026 plan](../../../docs/proposals/viz-plan-2026-10.md).
+
 The voice dock: both voice engines embedded in an aiui page, wired to the page's own tools,
 with viewers, shared vendor keys and a source browser. One `aiui` pill in the corner (the sessions'
 combined status dot) expands into the row — `🔮 oracle · 🎙 live · 🧰 tools · 🔑 key ·
@@ -10,9 +14,7 @@ when the page can read them — a dev server, or a build made with `aiui({ sourc
 
 ## Install
 
-```sh
-npm install @habemus-papadum/aiui-dock
-```
+In-workspace only: `"@habemus-papadum/aiui-dock": "workspace:^"` in a demo's `package.json`.
 
 ## Usage
 
@@ -64,7 +66,7 @@ keys), `serverUrl` (the live routes, default `/live/sessions`), `class`.
 ## Shared browser audio
 
 Browser WebRTC transports take registered `input` and `output` endpoints from
-[`aiui-audio`](../aiui-audio/README.md). Capture, meters, device selection, and input routing
+[`aiui-audio`](../../aiui-audio/README.md). Capture, meters, device selection, and input routing
 live in the hub. Sessions enable or disable their own endpoint without owning the microphone.
 Use `AudioProvider` around a host to share the hub with VoiceDock and demos, or pass the hub in
 the dock's `audio` prop. The dock's audio pane exposes the same controls.

@@ -10,7 +10,7 @@ exercise the shapes with different content and deliberate escaping/ownership edg
 | Existing span map (`aiui-lowering-pipeline/corpus/all-markers.spans.json`, likewise) | Exact primary contribution partitions plus captured event/selection/source origins; `importText` for opaque inputs moving later |
 | [Tool brief](../../aiui-viz/corpus/tool-brief-seismos-like.txt) | One ToolSnapshot, read/write/other and group projections, preserved declaration and field origins |
 | [Budgeted brief](../../aiui-viz/corpus/tool-brief-seismos-like-900.txt) | Retained full declarations, longest-usage-first policy and recorded removals, explicit required-over-budget result |
-| [Delegation](../../aiui-live/corpus/claude-delegation-message.txt) | XML wrapper containing transcript lines, a structured request, Markdown sections, and ToolBrief without flattening author-side |
+| [Delegation](../../internal/aiui-live/corpus/claude-delegation-message.txt) | XML wrapper containing transcript lines, a structured request, Markdown sections, and ToolBrief without flattening author-side |
 
 The new contribution map covers every emitted character and every media part, including ordinary
 prose and generated delimiters. It does not infer ownership by scanning for the old bracket strings.

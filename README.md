@@ -70,9 +70,6 @@ opt-in and never part of a build. A built page takes a pasted key instead.
 | [`aiui-prompts`](./packages/aiui-prompts/README.md) | Structured prompt records: deterministic compilation, provenance, delivery operations, for Node and browsers. |
 | [`aiui-prompts-inspector`](./packages/aiui-prompts-inspector/README.md) | Native Solid inspection and compact previews of stored prompt records. |
 | [`aiui-prompts-vite`](./packages/aiui-prompts-vite/README.md) | Vite routing and optional source provenance for prompt JSX. |
-| [`aiui-oracle`](./packages/aiui-oracle/README.md) | The oracle: a realtime voice control surface (OpenAI Realtime over WebRTC) with the app's cells and actions as tools. |
-| [`aiui-live`](./packages/aiui-live/README.md) | GPT-Live sessions with pluggable delegation backends (local tools, hosted Responses, the Claude Agent SDK). Its `docs/` carry the measured findings. |
-| [`aiui-dock`](./packages/aiui-dock/README.md) | The voice dock: the oracle and a live session embedded in any aiui page, with the tool log, a key field and a source browser. |
 | [`aiui-audio`](packages/aiui-audio) | Shared microphone capture, exclusive routing, playback, and audio controls. |
 | [`aiui-screen-capture`](packages/aiui-screen-capture) | Browser screen capture, native element cropping, and Solid preview controls. |
 | [`aiui-stt`](./packages/aiui-stt/README.md) | ElevenLabs realtime dictation with injected audio and credentials. |
@@ -80,6 +77,7 @@ opt-in and never part of a build. A built page takes a pasted key instead.
 | [`aiui-pencil`](./packages/aiui-pencil/README.md) | A pressure/tilt-driven pencil with local input policies, programmatic strokes, a raster surface, and a Solid adapter. |
 | `aiui-build-config` | *Internal, never published.* The one home of the externalize-deps matcher and the Solid-under-Vitest configuration every package shares. |
 | `aiui-prompts/spikes/*` | *Internal, never published.* Two prompt-authoring spikes kept beside their future foundation package (`authoring`, `inspector`). |
+| [`aiui-dock`](./packages/internal/aiui-dock/README.md), [`aiui-oracle`](./packages/internal/aiui-oracle/README.md), [`aiui-live`](./packages/internal/aiui-live/README.md) | *Internal scaffolding for the labs and demos, never published* (`packages/internal/`); a replacement is planned. The voice dock (both voice engines in any aiui page, with the tool log, a key field and a source browser), the oracle (OpenAI Realtime over WebRTC, the app's cells and actions as tools) and GPT-Live sessions with pluggable delegation backends (its `docs/` carry the measured findings). |
 
 The two demo-only libraries, `demos/optics` (the scalar-wave engine) and `demos/oscillator` (a
 reusable slice), are workspace members too and never published.
@@ -138,6 +136,7 @@ so a stray publish cannot overwrite a released one. The guardrails are in
 
 ```
 packages/*               the published libraries (one lockstep version)
+packages/internal/*      internal scaffolding for the labs and demos (dock, oracle, live); never published
 demos/*                  the notebooks, the gallery shell, and two demo-only libraries
 docs/application-patterns/ application recipes, shared principles, and planned spikes
 docs/proposals/          finished proposals, kept as a record (status in each header)

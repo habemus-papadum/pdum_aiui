@@ -80,7 +80,7 @@ A read-only report on `src/modal/*` and `src/mode-solid.ts` against the four con
 `LiveDiffText`), demos/walkthrough (key layer). The advanced users were extracted to another repo;
 slides carries the remaining complexity. Fixes follow the report, after it is read.
 
-### C — internal packages — `in progress`
+### C — internal packages — `done (branch merged by lead)`
 
 `packages/internal/` holds aiui-dock (with the key widget), aiui-oracle, aiui-live: `private: true`,
 a workspace glob, `repository.directory`, versioning lockstep, `pnpm skills:check` links, and the

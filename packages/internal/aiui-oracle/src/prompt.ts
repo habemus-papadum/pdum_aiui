@@ -1,7 +1,7 @@
 /**
  * prompt.ts — the woven instructions: a standard persona plus the
  * integrator's app-specific portion, as a PROMPT of the prompt toolkit.
- * Seeded from the persona of record (packages/aiui-oracle/docs/oracle.md),
+ * Seeded from the persona of record (packages/internal/aiui-oracle/docs/oracle.md),
  * re-registered for the new role: the oracle is an APP's voice control
  * surface now, not a briefing side-channel.
  *

@@ -16,11 +16,13 @@ it, and the notebooks that demonstrate both. Three pillars:
    guide, design choices, hard-won ledger and style guide go deeper); the root skill
    `skills/aiui-architecture` is its operational digest.
 2. **AI utilities** — `aiui-prompts` (+ `-inspector`, `-vite`; `docs/architecture.md` is the
-   contract), `aiui-oracle` (the app's cells as tools over OpenAI Realtime), `aiui-live`
-   (GPT-Live with pluggable delegation backends; its `docs/` carry the measured findings),
-   `aiui-dock` (both voice engines in any aiui page), `aiui-stt`, `aiui-cf-creds`, `aiui-pencil`,
-   and `aiui-audio` / `aiui-screen-capture`. Pencil owns editable stroke data, input, geometry, and presentation.
-   See pencil's `docs/architecture.md`.
+   contract), `aiui-stt`, `aiui-cf-creds`, `aiui-pencil`, and `aiui-audio` / `aiui-screen-capture`.
+   Pencil owns editable stroke data, input, geometry, and presentation. See pencil's
+   `docs/architecture.md`. Three more sit in `packages/internal/` as **internal scaffolding for
+   the labs and demos** — never published, a replacement planned: `aiui-oracle` (the app's cells
+   as tools over OpenAI Realtime), `aiui-live` (GPT-Live with pluggable delegation backends; its
+   `docs/` carry the measured findings) and `aiui-dock` (both voice engines in any aiui page,
+   with the key widget and the tool pane).
 3. **The demo notebooks and the gallery** — `demos/*`, composed into the published static site.
 
 **House rules for prose.** Design notes live in the owning package's `docs/`. `docs/proposals/`
@@ -161,6 +163,10 @@ Publishing authenticates with the **`NPM_TOKEN` repo secret** (rotate with
 `gh secret set NPM_TOKEN --repo habemus-papadum/pdum_aiui`) and runs one recursive
 `pnpm -r publish`; a NEW package needs **no provisioning** — its first release publishes it.
 Assumption: a paid npm org (publishing scoped packages as `restricted` requires one).
+
+**`packages/internal/*` is for packages with a replacement in mind** — not for packages that
+happen to be niche. They carry `"private": true` and no `publishConfig` (the demo shape), keep the
+source-first dev fields, and stay in version lockstep through their own workspace glob.
 
 **Every package declares a publication level at creation time.** `pnpm new-package <name>`
 requires exactly one of `--public` (`publishConfig.access: "public"`), `--private`

@@ -1,8 +1,8 @@
 # Getting started with @habemus-papadum/aiui-dock
 
 Mount `<VoiceDock />` once beside the app and the page can be driven by voice with no external
-host at all — no browser extension, no CDP driver. The template scaffolded by `create-aiui` and
-the notebook gallery both mount it.
+host at all — no browser extension, no CDP driver. Every in-repo demo (`pnpm new-demo` mounts it)
+and the notebook gallery carry it; the create-aiui template ships without it.
 
 ```tsx
 import { VoiceDock } from "@habemus-papadum/aiui-dock";

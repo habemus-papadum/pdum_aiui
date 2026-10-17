@@ -352,8 +352,8 @@ scenarios before anything touches a package.
 
 ## 10. What was built
 
-Same day, from this document: [`packages/aiui-live`](../) and
-[`demos/live`](../../../demos/live/). The decisions above held; the shape that emerged:
+Same day, from this document: [`packages/internal/aiui-live`](../) and
+[`demos/live`](../../../../demos/live/). The decisions above held; the shape that emerged:
 
 - **`LiveSession`** owns the task table, the append/ack ledger (chunked under the 500-token
   cap), the two transcript tracks regrouped by silence, a progress line for quiet tasks
@@ -389,7 +389,7 @@ person), and mid-session `delegation.responses.tools` updates.
   `voice-latency-cost?api=live`, `models/gpt-live-1`.
 - `exploration/live-probe/` (retired to git history) — the scenarios behind §4;
   [live-api-testing](./live-api-testing.md) §1 describes the harness promoted from it.
-- [`packages/aiui-oracle/docs/oracle.md`](../../aiui-oracle/docs/oracle.md) — the
+- [`packages/internal/aiui-oracle/docs/oracle.md`](../../aiui-oracle/docs/oracle.md) — the
   oracle as it stands; the intent tool's panel embedding (its `lanes/oracle.ts`, outside
   this repo) is where the tool-source rule carries over from.
 - The channel-wakeups rule (the intent tool's proposal of that name, retired to git

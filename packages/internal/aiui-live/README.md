@@ -1,14 +1,16 @@
 # @habemus-papadum/aiui-live
 
+> **Internal scaffolding** for this repo's labs and demos. Not published; the demos and the
+> gallery consume it in-workspace (`workspace:^`). A replacement is planned — see
+> [the October 2026 plan](../../../docs/proposals/viz-plan-2026-10.md).
+
 The live oracle — a full-duplex voice front (OpenAI GPT-Live over WebRTC in the browser,
 WebSocket in node) with pluggable delegation backends: local tools, hosted Responses, a relay
 to a server, or Claude Code through the Agent SDK.
 
 ## Install
 
-```sh
-npm install @habemus-papadum/aiui-live
-```
+In-workspace only: `"@habemus-papadum/aiui-live": "workspace:^"` in a demo's `package.json`.
 
 ## Read next
 

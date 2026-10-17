@@ -28,7 +28,7 @@ WAV a human can listen to afterwards.
 
 ### 1.1 The pieces (as they exist in `aiui-live`)
 
-All of it lives in the Node-only subpath [`packages/aiui-live/src/node/`](../src/node/)
+All of it lives in the Node-only subpath [`packages/internal/aiui-live/src/node/`](../src/node/)
 (`@habemus-papadum/aiui-live/node`; browser code never imports it):
 
 | Piece | File | What it does |
@@ -44,7 +44,7 @@ exercised headlessly is the production session, not a test double.
 
 ### 1.2 The harness — `demos/live/scripts/headless.mts`
 
-[`headless.mts`](../../../demos/live/scripts/headless.mts) is the worked example: a real `gpt-live-1`
+[`headless.mts`](../../../../demos/live/scripts/headless.mts) is the worked example: a real `gpt-live-1`
 session with a synthesized voice as the user and a delegation backend of your choice, including
 Claude Code run **in this process** with the demo as its working directory (exactly what the dev
 server's relay does for the page).
@@ -127,7 +127,7 @@ and each wire fact learned in §1 becomes an assertion that fails if the engine 
 
 ### 2.1 The seam
 
-In `aiui-stt` ([`support.ts`](../../aiui-stt/src/support.ts), a browser-side port of the former
+In `aiui-stt` ([`support.ts`](../../../aiui-stt/src/support.ts), a browser-side port of the former
 channel's `session-core.ts`):
 
 ```ts
@@ -157,7 +157,7 @@ over WebRTC in the browser.
 
 ### 2.2 The fake
 
-[`aiui-stt/src/test-support/fakes.ts`](../../aiui-stt/src/test-support/fakes.ts) is the shared
+[`aiui-stt/src/test-support/fakes.ts`](../../../aiui-stt/src/test-support/fakes.ts) is the shared
 scripted fake for both STT engines (`fakeSocket()`, plus `recordingCallbacks()` and `pcmMs(n)`
 for zeroed audio of a known duration). It is a port of the former channel's `fake-upstream.ts`,
 the one superset-shaped fake its four engines (two STT, two linter) shared, each vendor's earlier
@@ -187,12 +187,12 @@ mirrors a behavior verified live**, and the engine's header comment records the 
 ("live-verified against the real service", with the date and the probe). Representative pins,
 one per engine:
 
-- **OpenAI STT** ([`aiui-stt/src/openai.test.ts`](../../aiui-stt/src/openai.test.ts); the
+- **OpenAI STT** ([`aiui-stt/src/openai.test.ts`](../../../aiui-stt/src/openai.test.ts); the
   former channel's `realtime.test.ts` pinned the node side): the GA `session.update` shape (no
   beta header, nested `audio.input`), `turn_detection: null` for manual commit, `delay`
   omitted when unset (an empty string 400s), incremental deltas accumulate, an unseen
   `item_id` before commit belongs to the segment streaming now.
-- **ElevenLabs Scribe** ([`aiui-stt/src/scribe.test.ts`](../../aiui-stt/src/scribe.test.ts); the
+- **ElevenLabs Scribe** ([`aiui-stt/src/scribe.test.ts`](../../../aiui-stt/src/scribe.test.ts); the
   former channel's `elevenlabs-realtime.test.ts` was the original): all config rides the
   connect URL; `keyterms` must be *repeated plain* params — the bracket form is silently
   dropped; there is no `commit_strategy` parameter; the `session_started` echo is the only
@@ -334,15 +334,15 @@ for completeness; it is a decision to revisit, not a gap to close.
 
 ## Pointers
 
-- [`packages/aiui-live/src/node/`](../src/node/) — `speech.ts`,
+- [`packages/internal/aiui-live/src/node/`](../src/node/) — `speech.ts`,
   `ws-transport.ts`, `backend.ts`; the subpath `@habemus-papadum/aiui-live/node`.
-- [`demos/live/scripts/headless.mts`](../../../demos/live/scripts/headless.mts); the demo's
-  [README](../../../demos/live/README.md) ("Without a microphone"). `tools-bench.mts` is in git
+- [`demos/live/scripts/headless.mts`](../../../../demos/live/scripts/headless.mts); the demo's
+  [README](../../../../demos/live/README.md) ("Without a microphone"). `tools-bench.mts` is in git
   history.
 - `exploration/live-probe/` (retired to git history) — the probe and its README's scenario
   table; [oracle-live.md §4](./oracle-live.md#4-what-we-measured) for the numbers.
-- [`packages/aiui-stt/src/support.ts`](../../aiui-stt/src/support.ts) (the seam),
-  [`test-support/fakes.ts`](../../aiui-stt/src/test-support/fakes.ts) (the fake), the two
+- [`packages/aiui-stt/src/support.ts`](../../../aiui-stt/src/support.ts) (the seam),
+  [`test-support/fakes.ts`](../../../aiui-stt/src/test-support/fakes.ts) (the fake), the two
   engine test files beside them. The former channel's `session-core.ts`, `fake-upstream.ts`
   and four engine tests are in git history.
 - The e2e tier (the former launcher package's `test/`, its fixture, `vitest.e2e.config.ts`

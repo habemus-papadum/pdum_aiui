@@ -345,7 +345,7 @@ For casual requests and quick exchanges, offer an OpenAI GPT-Live voice front
 end in client delegation mode. The person talks with the voice model and gets
 spoken feedback; the integration hands delegated work to the selected underlying
 agent through its client. That agent may be in the browser or a remote process.
-The existing [two-model voice loop](../../packages/aiui-live/docs/live-primer.md)
+The existing [two-model voice loop](../../packages/internal/aiui-live/docs/live-primer.md)
 provides a starting point for this arrangement.
 
 Detailed dictation and live conversation are complementary prompting styles.
@@ -616,11 +616,11 @@ temporarily absent.
 
 ## 11. Replacing Oracle and Live
 
-[`Oracle`](../../packages/aiui-oracle/README.md) and
-[`Live`](../../packages/aiui-live/README.md) are the existing first-generation
+[`Oracle`](../../packages/internal/aiui-oracle/README.md) and
+[`Live`](../../packages/internal/aiui-live/README.md) are the existing first-generation
 copilot implementations. They already contain useful engine/widget separation,
 event ledgers, tool integration, voice controls, and—in Live—delegation machinery.
-The [dock](../../packages/aiui-dock/README.md) embeds both in applications.
+The [dock](../../packages/internal/aiui-dock/README.md) embeds both in applications.
 
 The next generation should replace those separate stacks with a more deliberate
 agent-client boundary and shared collaboration components. Preserve useful

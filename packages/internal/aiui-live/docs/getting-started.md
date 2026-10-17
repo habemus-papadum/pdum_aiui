@@ -1,6 +1,6 @@
 # Getting Started with @habemus-papadum/aiui-live
 
-> This page lives at `packages/aiui-live/docs/getting-started.md`, beside the package's other
+> This page lives at `packages/internal/aiui-live/docs/getting-started.md`, beside the package's other
 > guides. The package overview is the `README.md`; the API is `src/index.ts`.
 
 The live oracle — a full-duplex voice front (OpenAI GPT-Live over WebRTC/WebSocket) with
@@ -8,9 +8,8 @@ pluggable delegation backends: local tools, hosted Responses, or Claude Code.
 
 ## Install
 
-```sh
-npm install @habemus-papadum/aiui-live
-```
+In-workspace only (the package is internal scaffolding, never published):
+`"@habemus-papadum/aiui-live": "workspace:^"` in a demo's `package.json`.
 
 ## Where to start
 
@@ -23,7 +22,7 @@ and re-seed), the transports (WebRTC in the browser, WebSocket in node under
 Claude Code through the Agent SDK (`@habemus-papadum/aiui-live/claude`).
 
 `demos/live` is the worked example — the tour page shows every wire event, and
-[`scripts/headless.mts`](../../../demos/live/scripts/headless.mts) drives a real session with
+[`scripts/headless.mts`](../../../../demos/live/scripts/headless.mts) drives a real session with
 a synthesized voice as the user, no microphone needed
 ([how that works](./live-api-testing.md)). The voice dock (`@habemus-papadum/aiui-dock`)
 mounts a live session beside any aiui page.
@@ -31,7 +30,7 @@ mounts a live session beside any aiui page.
 ## Shared browser audio
 
 Browser WebRTC transports take registered `input` and `output` endpoints from
-[`aiui-audio`](../../aiui-audio/README.md). Capture, meters, device selection, and input routing
+[`aiui-audio`](../../../aiui-audio/README.md). Capture, meters, device selection, and input routing
 live in the hub. Sessions enable or disable their own endpoint without owning the microphone.
 Use `AudioProvider` around a host to share the hub with VoiceDock and demos, or pass the hub in
 the dock's `audio` prop. The dock's audio pane exposes the same controls.
