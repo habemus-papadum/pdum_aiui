@@ -113,6 +113,13 @@ Ordering: A and B run alongside C and D; C lands before D.
   182px in the overview panel and its band-axis labels collide (before: a 640px figure scrolling inside
   the panel). Morphogen-side fix: fewer ticks or a minimum width.
 - **PromptRecordView** is exactly deferred loading of the prompts inspector; keep as is.
+- **CI on main has been red since 2026-10-11** (every run, the same two tests; not a viz item, noted
+  here so it is on a list): `packages/aiui-screen-capture/test/browser/capture.browser.ts` — "native
+  region capture follows size, scroll, target changes and clearing" and "native element isolation
+  excludes overlapping siblings and survives hiding" — fail the pixel-colour `toEqual` after a real
+  `getDisplayMedia` share in CI's headless Chrome. Screen-capture has not changed since `fbeb9e8f`,
+  so the environment moved, not the package. Decide: fix the fixture, or run the two native tests
+  only where region/element capture is real.
 
 ## Dropped
 
