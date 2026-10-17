@@ -1,7 +1,7 @@
 {
   "name": "@habemus-papadum/aiui-cf-creds",
   "version": "0.21.0+dev",
-  "description": "Broker-backed ephemeral credentials for aiui apps: adapters from the cf_browser_credentials kit to aiui's credential seams (oracle KeySource, STT connect, Mosaic connector).",
+  "description": "Broker-backed ephemeral credentials for aiui apps: adapters from the cf_browser_credentials kit to aiui's credential seams (the OpenAI realtime key source, STT connect, Mosaic connector, MotherDuck).",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -12,7 +12,7 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
-    "./oracle": "./src/oracle.ts",
+    "./openai": "./src/openai.ts",
     "./stt": "./src/stt.ts",
     "./mosaic": "./src/mosaic.ts",
     "./motherduck": "./src/motherduck.ts"
@@ -35,10 +35,10 @@
         "import": "./dist/index.js",
         "default": "./dist/index.js"
       },
-      "./oracle": {
-        "types": "./dist/oracle.d.ts",
-        "import": "./dist/oracle.js",
-        "default": "./dist/oracle.js"
+      "./openai": {
+        "types": "./dist/openai.d.ts",
+        "import": "./dist/openai.js",
+        "default": "./dist/openai.js"
       },
       "./stt": {
         "types": "./dist/stt.d.ts",
@@ -63,7 +63,6 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@habemus-papadum/aiui-oracle": "workspace:^",
     "@habemus-papadum/cf-browser-credentials": "^0.5.0",
     "@habemus-papadum/cf-creds-aws": "^0.5.0",
     "@habemus-papadum/cf-creds-elevenlabs": "^0.5.0",

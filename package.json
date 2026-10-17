@@ -6,6 +6,10 @@
   "description": "pdum_aiui - a UI framework for agent-written scientific interfaces, its AI utilities, and the demos: a lockstep-versioned TypeScript monorepo.",
   "author": "Nehal Patel <nehal@alum.mit.edu>",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/habemus-papadum/pdum_aiui.git"
+  },
   "engines": {
     "node": ">=24.5.0",
     "pnpm": ">=11"

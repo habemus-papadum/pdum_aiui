@@ -113,10 +113,63 @@ function rewirePackageJson(
       test: "vitest run",
       typecheck: "tsc --noEmit -p tsconfig.json",
     },
-    dependencies: withCatalogRefs(template.dependencies),
+    dependencies: withCatalogRefs(withVoiceDock(template.dependencies)),
     devDependencies: withCatalogRefs(template.devDependencies),
   };
   writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
+}
+
+const VOICE_DOCK = "@habemus-papadum/aiui-dock";
+
+/**
+ * The in-repo demo's one dependency beyond the template's: the voice dock. The
+ * template ships without it — a consumer's app decides its own voice surface —
+ * and a demo in this repo is where the dock is exercised, so it is added here
+ * (see {@link injectVoiceDock} for the source side). Asserted absent from the
+ * template so a template that grows the dock back fails this script loudly.
+ */
+function withVoiceDock(deps: Record<string, string>): Record<string, string> {
+  if (VOICE_DOCK in deps) {
+    fail(`the template depends on ${VOICE_DOCK} itself — update new-demo.ts's dock injection`);
+  }
+  return Object.fromEntries(
+    Object.entries({ ...deps, [VOICE_DOCK]: "workspace:^" }).sort(([a], [b]) => a.localeCompare(b)),
+  );
+}
+
+/**
+ * Mount the voice dock in the scaffolded demo: the import and the element in
+ * `src/main.tsx`, and the `devKeys` opt-in in `vite.config.ts` that hands the
+ * dev server's OpenAI key to the page (what the demo README promises). Same
+ * anchored-replacement discipline as {@link claudeMd}: every anchor must occur
+ * exactly once, or the template changed under this script and it stops here.
+ */
+function injectVoiceDock(dest: string): void {
+  const splice = (file: string, edits: ReadonlyArray<readonly [string, string]>): void => {
+    const path = join(dest, file);
+    let text = readFileSync(path, "utf8");
+    if (text.includes(VOICE_DOCK)) {
+      fail(`template ${file} carries the voice dock itself — update new-demo.ts's dock injection`);
+    }
+    for (const [anchor, replacement] of edits) {
+      if (text.split(anchor).length !== 2) {
+        fail(
+          `template ${file} anchor not found once (${JSON.stringify(anchor)}) — update new-demo.ts's dock injection`,
+        );
+      }
+      text = text.replace(anchor, replacement);
+    }
+    writeFileSync(path, text);
+  };
+  const importAnchor = 'import { PageBoundary } from "@habemus-papadum/aiui-viz";\n';
+  const mountAnchor = "      <page.App />\n";
+  splice("src/main.tsx", [
+    [importAnchor, `import { VoiceDock } from "${VOICE_DOCK}";\n${importAnchor}`],
+    [mountAnchor, `${mountAnchor}      <VoiceDock />\n`],
+  ]);
+  splice("vite.config.ts", [
+    ["plugins: [aiui(), solid()]", 'plugins: [aiui({ devKeys: ["openai"] }), solid()]'],
+  ]);
 }
 
 /**
@@ -240,6 +293,7 @@ function main(): void {
   scaffoldApp(template, dest, version, "workspace:^");
 
   rewirePackageJson(dest, slug, description, version, deriveContext());
+  injectVoiceDock(dest);
   writeFileSync(join(dest, "tsconfig.json"), TSCONFIG);
   writeFileSync(
     join(dest, "CLAUDE.md"),

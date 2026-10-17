@@ -4,8 +4,8 @@
     "outDir": "dist",
     "declarationDir": "dist",
     // No JSX of our own — these exist so the source-first typecheck can walk
-    // through aiui-oracle's barrel into aiui-viz's .tsx files (each resolves
-    // @solidjs/web from its own package).
+    // through aiui-viz's subpaths (the Mosaic and DuckDB bridges) into its
+    // .tsx files (each resolves @solidjs/web from its own package).
     "jsx": "preserve",
     "jsxImportSource": "@solidjs/web"
   },

@@ -11,7 +11,7 @@ import { join, relative, resolve } from "node:path";
 import { classifyTarget, initGitRepo, packageManager, scaffoldApp, templateRoot } from "./scaffold";
 import { VERSION } from "./version";
 
-const USAGE = `create-aiui — scaffold a SolidJS + aiui-viz app with the voice dock, ready for an agent to edit
+const USAGE = `create-aiui — scaffold a SolidJS + aiui-viz app, ready for an agent to edit
 
 usage: pnpm create @habemus-papadum/aiui [dir] [--skip-install]
 
@@ -87,9 +87,8 @@ your app is ready. Next:
   ${pm} run dev        # Vite; open the printed URL
 
 The page explains itself from there: the starter is scenery for your agent to
-point at, built to be rebuilt. The voice dock in the corner takes an OpenAI key
-from OPENAI_API_KEY in the environment or from its own key pane. (Optional:
-\`direnv allow\` in ${rel} activates .envrc — PATH + .env.)`);
+point at, built to be rebuilt. (Optional: \`direnv allow\` in ${rel} activates
+.envrc — PATH + .env.)`);
 }
 
 main();

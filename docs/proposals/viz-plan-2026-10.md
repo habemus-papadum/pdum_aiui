@@ -50,7 +50,7 @@ composition, and ideally they sit in no registry at all. The durable registry is
 enumerated, which is why `colorMode`'s pattern is acceptable; the control/tool registry IS
 enumerated (`report`) and these values do not belong in it.
 
-### H3 — scaffolding and creds — `planned`
+### H3 — scaffolding and creds — `done 61d2dd65`
 
 - The root `package.json` gains a `repository` field so `pnpm new-demo` stamps a real URL (today it
   writes `""`; styleguide and catalog have the URL by hand).
@@ -64,7 +64,7 @@ enumerated (`report`) and these values do not belong in it.
 
 ## Now — in parallel, after housekeeping
 
-### A — hover notes and knobs, then Mermaid cleanup — `planned`
+### A — hover notes and knobs, then Mermaid cleanup — `in progress`
 
 One agent, because both live in `src/site/rich-tex.tsx` and `src/site/mermaid.tsx`. First: one
 shared knob gesture (drag over a numeric control's range, arrow-key step, readout, `data-control`
@@ -73,14 +73,14 @@ Then the Mermaid cleanup before it has many users: the `wrappingWidth` default t
 the Mermaid theme and the RichTeX/Mermaid skins promoted into aiui-design (the catalog demo is the
 second copy of the lab's), and the open items in `docs/proposals/rich-mermaid.md`.
 
-### B — modal kit code review — `done (branch merged by lead)`
+### B — modal kit code review — `done (branch merged by lead)` (report read 2026-10-17; approved: split and trim + a retirement record in packages/aiui-viz/docs/mode-engine.md)
 
 A read-only report on `src/modal/*` and `src/mode-solid.ts` against the four consumers: aiui-slides
 (key layer, hints, resolver), the aiui-audio hub (engine + claims), demos/audio (engine +
 `LiveDiffText`), demos/walkthrough (key layer). The advanced users were extracted to another repo;
 slides carries the remaining complexity. Fixes follow the report, after it is read.
 
-### C — internal packages — `planned`
+### C — internal packages — `in progress`
 
 `packages/internal/` holds aiui-dock (with the key widget), aiui-oracle, aiui-live: `private: true`,
 a workspace glob, `repository.directory`, versioning lockstep, `pnpm skills:check` links, and the
@@ -108,6 +108,9 @@ Ordering: A and B run alongside C and D; C lands before D.
   catalog rows only until they are built.
 - **The dock replacement**, and what goes with it (tool inspector, key entry, both voice engines).
 - **Remaining ResizeObservers** migrate onto the H2 seam.
+- **morphogen's structure-analysis histogram**: now that `PlotFigure` fills its host (H2), it renders at
+  182px in the overview panel and its band-axis labels collide (before: a 640px figure scrolling inside
+  the panel). Morphogen-side fix: fewer ticks or a minimum width.
 - **PromptRecordView** is exactly deferred loading of the prompts inspector; keep as is.
 
 ## Dropped

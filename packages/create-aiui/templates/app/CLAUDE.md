@@ -1,9 +1,9 @@
 # an aiui starter app
 
 This directory was scaffolded by `create-aiui`. It is the user's sandbox: a SolidJS 2.0 (beta) +
-aiui-viz app with the voice dock, whose visible content — the banner, the rose — is **placeholder
-scenery meant to be replaced** the moment the user describes the app they actually want. Be bold
-about rebuilding the page (the banner included); be careful about the wiring underneath.
+aiui-viz app whose visible content — the banner, the rose — is **placeholder scenery meant to be
+replaced** the moment the user describes the app they actually want. Be bold about rebuilding the
+page (the banner included); be careful about the wiring underneath.
 
 The app has a **dual shape** — it is both a standalone app and a library:
 
@@ -35,8 +35,8 @@ canvas before building theirs), do exactly this and nothing more:
    "no tests" green).
 
 The result compiles and runs: an empty page, an empty cell graph over empty durable roots, the
-voice dock still mounted, the standard agent tools still registered. Do not "clean up" anything
-else — unused-looking scaffolding outside the fences is the app's wiring.
+standard agent tools still registered. Do not "clean up" anything else — unused-looking
+scaffolding outside the fences is the app's wiring.
 
 (For authors editing the scenery instead of deleting it: keep the invariant that fenced code is
 only ever referenced from other fenced code or fenced files, so step 1+2 can never break the
@@ -102,9 +102,10 @@ Ground rules:
   runs on cascade layers, so `src/styles.css` wins without specificity games. Style with the
   tokens (`var(--ink)`, `var(--surface-raised)`, `var(--space-sm)`, `var(--text-label)`…) rather
   than restating colors; a user who wants a different look deletes that one import.
-- The dev server runs via `npm run dev` (plain `vite`). The voice dock takes its OpenAI key from
-  `OPENAI_API_KEY` in the environment (the `devKeys` opt-in in `vite.config.ts`; `.env` under
-  direnv is the usual place) or from its own key pane.
+- The dev server runs via `npm run dev` (plain `vite`). Secrets live in `.env` under direnv,
+  never in source; a vendor key the page itself needs in dev reaches it only through the
+  `devKeys` opt-in of the `aiui()` plugin in `vite.config.ts` (off by default — it makes every
+  dev-served page carry the key).
 - This is a standalone git repo scaffolded for the user; commit freely — history here belongs to
   their sandbox and goes nowhere else.
 

@@ -21,16 +21,18 @@ npm install @habemus-papadum/aiui-cf-creds
 
 Each bridge lives on its own subpath so an app pays only for what it uses:
 
-### `aiui-cf-creds/oracle` — the federated KeySource
+### `aiui-cf-creds/openai` — the federated OpenAI key source
 
 `ek_` client secrets minted entirely browser-side over AWS workload identity federation
 (broker credentials → STS `GetWebIdentityToken` → the OpenAI SDK's `workloadIdentity`
 exchange → `POST /v1/realtime/client_secrets`). No parent key exists; the OpenAI service
-account behind it is created keyless.
+account behind it is created keyless. The result is an `OpenAIKeySource` — the shape of
+aiui-oracle's `KeySource`, declared here so this package depends on nothing of the oracle —
+and the oracle's key chain takes it as is:
 
 ```ts
 import { chainKeySource, cachingKeySource, pasteKeySource, devKeySource } from "@habemus-papadum/aiui-oracle";
-import { federatedKeySource } from "@habemus-papadum/aiui-cf-creds/oracle";
+import { federatedKeySource } from "@habemus-papadum/aiui-cf-creds/openai";
 
 const keySource = chainKeySource([
   pasteKeySource(localStorage, {}),   // a pasted key still trumps everything

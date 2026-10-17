@@ -1,10 +1,9 @@
 # your app (an aiui starter)
 
 A SolidJS + aiui-viz app scaffolded by
-[`create-aiui`](https://github.com/habemus-papadum/pdum_aiui/tree/main/packages/create-aiui), with
-the voice dock in the corner, ready for an agent to edit. The app you see on first run — a banner
-and a rose you can play with — is **scenery, built to be rebuilt**: tell your agent the app you
-actually want.
+[`create-aiui`](https://github.com/habemus-papadum/pdum_aiui/tree/main/packages/create-aiui),
+ready for an agent to edit. The app you see on first run — a banner and a rose you can play
+with — is **scenery, built to be rebuilt**: tell your agent the app you actually want.
 
 ## Run it
 
@@ -13,13 +12,10 @@ pnpm install
 npm run dev
 ```
 
-Open the printed URL. The `aiui` pill in the corner is the voice dock: it expands into the voice
-sessions, the page's tool log, a key pane and a source browser, and nothing connects until you
-press one. Both voice engines want an OpenAI key — export `OPENAI_API_KEY` before `npm run dev`
-and the dev server hands it to the page, or paste one into the key pane.
+Open the printed URL.
 
 Optional but recommended: `direnv allow` activates `.envrc` — it puts `node_modules/.bin` on
-your PATH (bare `vite`, `tsc`) and loads `.env`, where `OPENAI_API_KEY` belongs.
+your PATH (bare `vite`, `tsc`) and loads `.env`, where secrets belong (it is gitignored).
 
 ## What's what
 
