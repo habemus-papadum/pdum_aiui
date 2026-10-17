@@ -22,9 +22,19 @@ export async function fixture() {
     { mode: 0o755 },
   );
   const agent = join(root, "agent.mjs");
+  // The SIGINT handler is installed before the pid line is written: the signal test sends
+  // SIGINT the moment it reads that line, and a handler installed after the write loses the
+  // race to the default disposition on a slow runner (seen twice on macOS CI, exit code null).
   await writeFile(
     agent,
-    `console.log(JSON.stringify({pid:process.pid,args:process.argv.slice(2),cwd:process.cwd()}));\nif(process.env.AIBR_TEST_WAIT){process.on('SIGINT',()=>process.exit(17));setInterval(()=>{},1000)}else{process.exit(Number(process.env.AIBR_TEST_EXIT||0))}\n`,
+    [
+      "const wait = Boolean(process.env.AIBR_TEST_WAIT);",
+      "if (wait) process.on('SIGINT', () => process.exit(17));",
+      "console.log(JSON.stringify({pid:process.pid,args:process.argv.slice(2),cwd:process.cwd()}));",
+      "if (wait) setInterval(() => {}, 1000);",
+      "else process.exit(Number(process.env.AIBR_TEST_EXIT || 0));",
+      "",
+    ].join("\n"),
   );
   for (const name of ["claude", "codex"])
     await writeFile(
