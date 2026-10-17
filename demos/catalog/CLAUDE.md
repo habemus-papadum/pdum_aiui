@@ -22,10 +22,10 @@ How it is built:
   a styling or behavior change to a piece breaks it here first. The stamp inspector
   (`src/ui/StampInspector.tsx`) shows the `data-*` stamps under the pointer inside any specimen.
 - **The look is the design system's.** `src/styles.css` holds only this page's own chrome (the
-  entry list, the badges, the specimen frames, the stamp bar) plus a skin for the two spike
-  components — RichTeX and Mermaid — that `aiui-design` does not dress yet; it is a copy of the
-  aiui-viz lab's, scoped under `.catalog`. When the design package gains those rules, delete the
-  copy here. Likewise `src/ui/mermaid-theme.ts` duplicates the lab's Mermaid theme.
+  entry list, the badges, the specimen frames, the stamp bar, the chips the notes carry),
+  scoped under `.catalog`. The RichTeX and Mermaid skins and the Mermaid theme are
+  `aiui-design`'s (`site.css`, `mermaidTheme()`), promoted there once this page became their
+  second consumer after the aiui-viz lab.
 
 This page is a sheet, not evidence: an entry's state (shipped · spike · proposed) is the
 catalog's judgement from notebooks and labs, and a specimen here does not promote a row.

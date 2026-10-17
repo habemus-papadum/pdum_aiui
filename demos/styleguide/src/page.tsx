@@ -7,9 +7,14 @@
  */
 import "./styles.css";
 import "./model/graph"; // builds the cell graph + registers the agent tools
+import { mermaidTheme } from "@habemus-papadum/aiui-design";
 import type { SitePage } from "@habemus-papadum/aiui-viz";
+import { configureMermaid } from "@habemus-papadum/aiui-viz/site/mermaid";
 import { appScope } from "./model/store";
 import { App } from "./ui/App";
+
+// The design system's own Mermaid theme, once, for the diagram on the sheet.
+configureMermaid(mermaidTheme());
 
 export const page: SitePage = {
   title: "styleguide — the aiui design system",

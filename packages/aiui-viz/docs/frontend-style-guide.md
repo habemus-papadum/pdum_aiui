@@ -107,7 +107,8 @@ at `packages/aiui-viz/lab`, `pnpm -C packages/aiui-viz lab`, is the worked examp
 - `note` is JSX placed under (or, with `place="above"`, over) the term, centered on its
   glyphs with a leader line; display math only. Notes that would overlap are pushed apart
   left to right, leaders staying on their glyphs; each note learns its term's width
-  (`--aiui-rtx-w`). Pass no `note` prop for no note — a written `note`, even `undefined`,
+  (`--aiui-note-w`). The strip is the shared notes layer (`NoteLayer`, `aiui-viz/site/notes`),
+  which Mermaid uses too. Pass no `note` prop for no note — a written `note`, even `undefined`,
   renders an empty one (spread it in conditionally).
 - A term with `control={someControl}` is a KNOB — the control's symbol in the equation, the
   scrub pill's idea for mathematics. Hover or focus it for a readout of the value, drag

@@ -7,7 +7,7 @@
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { CHART, chart, FONTS, PLOT, plot, plotStyle, TOKENS } from "./index";
+import { CHART, chart, FONTS, MERMAID, mermaidTheme, PLOT, plot, plotStyle, TOKENS } from "./index";
 
 const HEX = /^#[0-9a-f]{6}$/;
 
@@ -91,6 +91,20 @@ describe("aiui-design theme", () => {
       const accentLike = r > g && b > g && Math.abs(r - ar) < 60 && Math.abs(b - ab) < 60;
       expect(accentLike).toBe(false);
     }
+  });
+
+  it("the Mermaid theme paints only from the ladder, flat and in the label face", () => {
+    expect(mermaidTheme()).toBe(MERMAID);
+    expect(MERMAID.theme).toBe("base");
+    expect(MERMAID.look).toBe("classic");
+    expect(MERMAID.fontFamily).toBe(FONTS.sans);
+    const ladder = new Set<string>(Object.values(TOKENS));
+    for (const [key, value] of Object.entries(MERMAID.themeVariables)) {
+      if (key === "fontFamily" || key === "fontSize") continue;
+      expect(ladder.has(value), `${key} is a ladder rung`).toBe(true);
+    }
+    // No accent anywhere: the diagram's chrome is monochrome; marks bring the accent.
+    expect(Object.values(MERMAID.themeVariables)).not.toContain(TOKENS.accent);
   });
 
   it("accessors are callable and plotStyle is transparent panel ink in the label face", () => {

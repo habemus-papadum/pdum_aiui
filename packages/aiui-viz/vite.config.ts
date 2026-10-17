@@ -71,6 +71,10 @@ export default defineConfig({
         "rich-tex": "src/site/rich-tex.tsx",
         // A Mermaid diagram as a control surface: nodes, edges, clusters addressable.
         mermaid: "src/site/mermaid.tsx",
+        // The attention primitives both of the above consume: the knob gesture
+        // with its readout, and the notes layer. Solid only, no heavy peer.
+        knob: "src/site/knob.tsx",
+        notes: "src/site/notes.tsx",
         // Framework-free like `./mode-engine`, so node-side consumers (aiui-live's
         // delegators) render the same Tools: section the browser does.
         "tool-brief": "src/tool-brief.ts",

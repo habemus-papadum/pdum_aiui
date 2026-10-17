@@ -15,8 +15,9 @@ import {
   ControlSlider,
   ControlToggle,
 } from "@habemus-papadum/aiui-viz";
-import { Lens, TeX, TocRail } from "@habemus-papadum/aiui-viz/site";
-import { For } from "solid-js";
+import { Lens, RichTeX, Term, TeX, TocRail } from "@habemus-papadum/aiui-viz/site";
+import { Mermaid, type MermaidHit, type MermaidMark } from "@habemus-papadum/aiui-viz/site/mermaid";
+import { createSignal, For } from "solid-js";
 import { graph } from "../model/graph";
 import { breakCatalog, feed, kill, nullcline, preset } from "../model/store";
 
@@ -547,6 +548,67 @@ function CodeMath() {
   );
 }
 
+/** The design system's dataflow, as a diagram: two nodes, one edge each. */
+const SHEET_FLOW = `flowchart LR
+  feed(["f · feed"]) --> plate["the plate"]
+  kill(["k · kill"]) --> plate
+  plate --> stats["observables"]`;
+
+function RichMath() {
+  const [hot, setHot] = createSignal<string | undefined>();
+  const [hover, setHover] = createSignal<MermaidHit | undefined>();
+  const marks = (): Record<string, MermaidMark> => {
+    const h = hover();
+    const m: Record<string, MermaidMark> = {
+      // One mark: the plate is active, with a note.
+      plate: { active: true, note: <span>a worker raster</span> },
+    };
+    if (h !== undefined && h.kind === "node" && h.id !== "plate")
+      m[h.id] = { color: TOKENS.accent };
+    return m;
+  };
+  return (
+    <section id="rich">
+      <h2>Equations &amp; Diagrams</h2>
+      <p class="measure">
+        Pieces of an equation and nodes of a diagram carry the same affordances. A knob is a dashed
+        underline that turns solid and accent under the pointer, on focus, and while dragged; the
+        readout is a hairline pill; a note sits in the label voice, muted until its piece is active.
+        Hover the reaction term; drag <TeX tex="f" /> sideways or step it with the arrow keys; hover
+        a node of the diagram.
+      </p>
+      <div class="specimen">
+        <span class="spec">
+          RichTeX · a term with a note, a term that is a knob on the feed rate
+        </span>
+        <RichTeX display class="rich-eq">
+          {"\\partial_t u = D_u \\nabla^2 u -"}
+          <Term
+            id="reaction"
+            color={CHART.amber}
+            active={hot() === "reaction"}
+            onHover={(h) => setHot(h ? "reaction" : undefined)}
+            note={<span>reaction · u v²</span>}
+          >
+            {"u v^2"}
+          </Term>
+          {"+"}
+          <Term control={feed} format={(v) => v.toFixed(3)}>
+            {"f"}
+          </Term>
+          {"(1 - u)"}
+        </RichTeX>
+      </div>
+      <div class="specimen">
+        <span class="spec">
+          Mermaid · the base theme on the ladder, one active node with a note
+        </span>
+        <Mermaid class="rich-diagram" text={SHEET_FLOW} marks={marks()} onHover={setHover} />
+      </div>
+    </section>
+  );
+}
+
 export function App() {
   return (
     <div class="styleguide app">
@@ -559,6 +621,7 @@ export function App() {
         <CellStates />
         <Chrome />
         <CodeMath />
+        <RichMath />
       </main>
       <TocRail />
     </div>

@@ -1,56 +1,12 @@
-/* The Mermaid pages' chrome — `mmd-lab-` prefixed, over the design system.
-
-   Mermaid's own stylesheet is id-scoped (`#svgId .node rect {…}`), which
-   would beat any class rule here — the component wraps that id in :where()
-   after each render, so these ordinary selectors win. The PALETTE still goes
-   in through the config (ui/mermaid-theme.ts): arrowheads and label
-   backgrounds are painted from it, not from any stylesheet. */
+/* The Mermaid pages' chrome — `mmd-lab-` prefixed, over the design system,
+   whose site.css carries the `.aiui-mmd` skin (transitions, the active and
+   hovered strokes, the knob, the notes). The palette goes in through the
+   config (aiui-design's mermaidTheme()): arrowheads and label backgrounds
+   are painted from it, not from any stylesheet. */
 
 .mmd-lab-diagram {
   margin: var(--space-md, 20px) 0;
   padding: var(--space-sm, 12px) 0 var(--space-md, 20px);
-}
-
-.mmd-lab-diagram svg {
-  max-width: 100%;
-  height: auto;
-}
-
-/* transitions are uncontested — Mermaid sets none */
-.mmd-lab-diagram .node > rect,
-.mmd-lab-diagram .node > polygon,
-.mmd-lab-diagram .node > circle,
-.mmd-lab-diagram .node > path,
-.mmd-lab-diagram .cluster > rect,
-.mmd-lab-diagram path[data-edge] {
-  transition:
-    fill 250ms ease,
-    stroke 250ms ease,
-    stroke-width 150ms ease;
-}
-
-.mmd-lab-diagram .node,
-.mmd-lab-diagram .aiui-mmd-hit,
-.mmd-lab-diagram .edgeLabel {
-  cursor: pointer;
-}
-
-/* the selected element: a heavier edge */
-.mmd-lab-diagram [data-active="true"] > rect,
-.mmd-lab-diagram [data-active="true"] > polygon,
-.mmd-lab-diagram [data-active="true"] > circle,
-.mmd-lab-diagram [data-active="true"] > path,
-.mmd-lab-diagram path[data-edge][data-active="true"] {
-  stroke-width: 2.5px;
-}
-
-/* the hovered element: the accent, over whatever the mark painted */
-.mmd-lab-diagram [data-hover="true"] > rect,
-.mmd-lab-diagram [data-hover="true"] > polygon,
-.mmd-lab-diagram [data-hover="true"] > circle,
-.mmd-lab-diagram [data-hover="true"] > path,
-.mmd-lab-diagram path[data-edge][data-hover="true"] {
-  stroke: var(--accent);
 }
 
 /* the running stage breathes */
@@ -76,12 +32,6 @@
   }
 }
 
-/* the knob while scrubbed */
-.mmd-lab-diagram [data-scrubbing="true"] > rect {
-  stroke: var(--accent);
-  stroke-width: 2.5px;
-}
-
 /* notes: chips under the stages */
 .mmd-lab-chip {
   display: inline-flex;
@@ -103,7 +53,7 @@
   font-weight: 600;
 }
 
-.aiui-mmd-note[data-active="true"] .mmd-lab-chip {
+.aiui-mmd .aiui-note[data-active="true"] .mmd-lab-chip {
   border-color: var(--ink);
   color: var(--ink);
 }

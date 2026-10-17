@@ -94,3 +94,82 @@ export const plotStyle = (): {
   fontSize: "12px",
   fontFamily: FONTS.sans,
 });
+
+/**
+ * The Mermaid theme: the ladder as Mermaid's `themeVariables`, flat shapes,
+ * the lighter layout, and the default a label needs to not be clipped.
+ * Mermaid's own stylesheet is id-scoped (`#svgId .node rect {…}`) and its
+ * arrowheads and label backgrounds are painted from the config, not from any
+ * stylesheet, so the palette has to go IN through `configureMermaid`; the
+ * look of states (`data-active`, `data-hover`, a knob) is `site.css`'s
+ * `.aiui-mmd` skin, which the component lets win by taming Mermaid's sheet.
+ * Typed structurally — this package has no Mermaid dependency; the object
+ * satisfies `MermaidConfig` by shape.
+ *
+ *   configureMermaid(mermaidTheme());   // once, where the page is wired
+ *
+ * `fontSize` and the flowchart spacing are the house density; a denser page
+ * overrides them per diagram through the component's `config` prop (Mermaid
+ * merges frontmatter config over the site's).
+ */
+export interface MermaidTheme {
+  theme: "base";
+  look: "classic";
+  layout: "dagre";
+  fontFamily: string;
+  themeVariables: Readonly<Record<string, string>>;
+  flowchart: {
+    curve: "basis";
+    padding: number;
+    nodeSpacing: number;
+    rankSpacing: number;
+  };
+}
+
+export const MERMAID: MermaidTheme = {
+  theme: "base",
+  look: "classic",
+  layout: "dagre",
+  fontFamily: FONTS.sans,
+  themeVariables: {
+    fontFamily: FONTS.sans,
+    fontSize: "14px",
+    primaryColor: TOKENS.surfaceRaised,
+    primaryBorderColor: TOKENS.hairline,
+    primaryTextColor: TOKENS.ink,
+    secondaryColor: TOKENS.surface,
+    secondaryBorderColor: TOKENS.ghost,
+    secondaryTextColor: TOKENS.ink,
+    tertiaryColor: TOKENS.surface,
+    tertiaryBorderColor: TOKENS.ghost,
+    tertiaryTextColor: TOKENS.ink,
+    lineColor: TOKENS.inkMuted,
+    textColor: TOKENS.ink,
+    mainBkg: TOKENS.surfaceRaised,
+    nodeBorder: TOKENS.hairline,
+    clusterBkg: TOKENS.surface,
+    clusterBorder: TOKENS.ghost,
+    titleColor: TOKENS.inkMuted,
+    edgeLabelBackground: TOKENS.surface,
+    noteBkgColor: TOKENS.surfaceRaised,
+    noteBorderColor: TOKENS.ghost,
+    noteTextColor: TOKENS.ink,
+    actorBkg: TOKENS.surfaceRaised,
+    actorBorder: TOKENS.hairline,
+    actorTextColor: TOKENS.ink,
+    actorLineColor: TOKENS.ghost,
+    signalColor: TOKENS.inkMuted,
+    signalTextColor: TOKENS.ink,
+    labelBoxBkgColor: TOKENS.surface,
+    labelBoxBorderColor: TOKENS.ghost,
+  },
+  flowchart: {
+    curve: "basis",
+    padding: 10,
+    nodeSpacing: 32,
+    rankSpacing: 44,
+  },
+};
+
+/** Accessor-shaped, beside `plotStyle()` (see the module doc). */
+export const mermaidTheme = (): MermaidTheme => MERMAID;

@@ -36,7 +36,9 @@
     "./site/prompt-record": "./src/site/prompt-record.tsx",
     "./site/markdown": "./src/site/markdown.tsx",
     "./site/rich-tex": "./src/site/rich-tex.tsx",
-    "./site/mermaid": "./src/site/mermaid.tsx"
+    "./site/mermaid": "./src/site/mermaid.tsx",
+    "./site/knob": "./src/site/knob.tsx",
+    "./site/notes": "./src/site/notes.tsx"
   },
   "main": "./src/index.ts",
   "module": "./src/index.ts",
@@ -180,6 +182,16 @@
         "types": "./dist/site/mermaid.d.ts",
         "import": "./dist/mermaid.js",
         "default": "./dist/mermaid.js"
+      },
+      "./site/knob": {
+        "types": "./dist/site/knob.d.ts",
+        "import": "./dist/knob.js",
+        "default": "./dist/knob.js"
+      },
+      "./site/notes": {
+        "types": "./dist/site/notes.d.ts",
+        "import": "./dist/notes.js",
+        "default": "./dist/notes.js"
       }
     }
   },

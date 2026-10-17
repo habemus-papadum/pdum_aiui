@@ -64,7 +64,7 @@ enumerated (`report`) and these values do not belong in it.
 
 ## Now — in parallel, after housekeeping
 
-### A — hover notes and knobs, then Mermaid cleanup — `in progress`
+### A — hover notes and knobs, then Mermaid cleanup — `done e2b14389`
 
 One agent, because both live in `src/site/rich-tex.tsx` and `src/site/mermaid.tsx`. First: one
 shared knob gesture (drag over a numeric control's range, arrow-key step, readout, `data-control`

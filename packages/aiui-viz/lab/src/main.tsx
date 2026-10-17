@@ -26,9 +26,11 @@
  *   src/model/graph.ts            the cell graph, the bridges, the agent tools
  *   src/ui/                       components; styles.css is the shared chrome (`lab-`)
  *                                 + the RichTeX pages (`rtx-lab-`), mermaid.css the
- *                                 Mermaid pages (`mmd-lab-`)
+ *                                 Mermaid pages (`mmd-lab-`); the components' own
+ *                                 skins and the Mermaid theme are aiui-design's
  */
 import "@habemus-papadum/aiui-design/site.css";
+import { mermaidTheme } from "@habemus-papadum/aiui-design";
 import "./styles.css";
 import "./mermaid.css";
 import "./model/graph"; // builds the cell graph + registers the agent tools
@@ -36,10 +38,9 @@ import { PageBoundary } from "@habemus-papadum/aiui-viz";
 import { configureMermaid } from "@habemus-papadum/aiui-viz/site/mermaid";
 import { render } from "@solidjs/web";
 import { App } from "./ui/App";
-import { LAB_MERMAID } from "./ui/mermaid-theme";
 
 // The design system's palette and fonts, once, for every diagram.
-configureMermaid(LAB_MERMAID);
+configureMermaid(mermaidTheme());
 
 render(
   () => (

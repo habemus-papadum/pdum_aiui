@@ -93,7 +93,7 @@ Read: [style guide § Mathematics](./docs/frontend-style-guide.md); the header o
 | Piece | What it is | Where | State | Seen in |
 | --- | --- | --- | --- | --- |
 | `TeX` | One TeX string, rendered by KaTeX as one block and stamped `data-tex`, so `read-page` and `selection` give the equation back as TeX. | `…/site` · `src/site/tex.tsx` | shipped | morphogen, aztec, seismos, gratings, holograms, circle |
-| `RichTeX`, `Term` | An equation built from pieces. Each `<Term>` stays addressable after KaTeX draws it (through `\htmlData`, which changes no layout — pinned by test): colored, classed, marked active, hovered, clicked, annotated with a `note`, or dragged as a knob when bound to a `control`. Copy and the `selection` tool resolve to the covered terms. | `…/site`, `…/site/rich-tex` · `src/site/rich-tex.tsx`, `src/math-selection.ts` | spike | the lab: `/fidelity`, `/training`, `/derivation`, `/fourier` |
+| `RichTeX`, `Term` | An equation built from pieces. Each `<Term>` stays addressable after KaTeX draws it (through `\htmlData`, which changes no layout — pinned by test): colored, classed, marked active, hovered, clicked, annotated with a `note` (the shared notes layer, in strips above and below), or dragged as a knob when bound to a `control` (the shared knob gesture). Copy and the `selection` tool resolve to the covered terms. The skin is aiui-design's. | `…/site`, `…/site/rich-tex` · `src/site/rich-tex.tsx`, `src/math-selection.ts` | spike | the lab: `/fidelity`, `/training`, `/derivation`, `/fourier`; [`demos/styleguide`](../../demos/styleguide), [`demos/catalog`](../../demos/catalog) |
 
 ### 2.3 Diagrams
 
@@ -102,7 +102,7 @@ Read: [rich-mermaid.md](../../docs/proposals/rich-mermaid.md) (the measured fact
 
 | Piece | What it is | Where | State | Seen in |
 | --- | --- | --- | --- | --- |
-| `Mermaid` | A diagram as a control surface. Mermaid renders the text; the component recovers every node, edge and cluster by the id the author wrote (no marker injection), stamps it `data-aiui-id` / `data-aiui-kind`, and offers `onClick`, `onHover` and `marks` by id — color, fill, class, active, a note, a knob — with wide hit areas under edges. A text change re-renders (async, latest wins, the last diagram kept); a mark touches attributes only. | `…/site/mermaid` · `src/site/mermaid.tsx` | spike | the lab: `/pipeline`, `/anatomy` |
+| `Mermaid` | A diagram as a control surface. Mermaid renders the text; the component recovers every node, edge and cluster by the id the author wrote (no marker injection), stamps it `data-aiui-id` / `data-aiui-kind`, and offers `onClick` (pointer, or Enter / Space on a focused node), `onHover` and `marks` by id — color, fill, class, active, a note (the shared notes layer, overlaid), a knob (the shared gesture, with its readout) — with wide hit areas under edges. A text change re-renders (async, latest wins, the last diagram kept); a mark touches attributes only. Labels are not clipped (a 640 px box, not Mermaid's 120); Mermaid's own sheet goes under `@layer aiui-vendor`, so a layered skin wins. The theme (`mermaidTheme()`) and the skin are aiui-design's. | `…/site/mermaid` · `src/site/mermaid.tsx` | spike | the lab: `/pipeline`, `/anatomy`; [`demos/styleguide`](../../demos/styleguide), [`demos/catalog`](../../demos/catalog) |
 | `aiui-svg` | Semantic, reactive SVG: structured documents with expressive symbol families, direct editing with history, motion, pencil integration. The boundary with Mermaid: Mermaid is the text-first, auto-laid-out view; aiui-svg is the geometry you edit. | working package name `aiui-svg` | proposed | — |
 
 ### 2.4 Ink
@@ -115,18 +115,20 @@ Read: [aiui-pencil's architecture](../aiui-pencil/docs/architecture.md).
 
 ### 2.5 Attention: hover, marks, notes, knobs, the lens
 
-The ways a page draws the eye to one piece or lets the reader drill into it. Today these are four
-local implementations that share conventions but not code; the conventions are the contract.
+The ways a page draws the eye to one piece or lets the reader drill into it. The notes layer and
+the knob gesture are one implementation each, consumed by the equation and the diagram (and by
+the SVG when it comes); hover and active marks share a convention, not code.
 
 | Piece | What it is | Where | State | Seen in |
 | --- | --- | --- | --- | --- |
 | `Lens`, `LensLayer` | Levels of detail in three tiers: an inline trigger (a real button), a hover-or-focus peek built from the pure model only, and a click-to-open detail panel living in the page's own reactive graph. | `…/site/lens` (KaTeX-free) · `src/site/lens.tsx` | shipped | gear-talk, styleguide; aiui-slides re-exports it |
-| hover and active marks | `Term`: `active`, `color`, `class`, `onHover`. `Mermaid`: `marks[id].active` / `color` / `fill` / `class`, `onHover`. Both set `data-active`; the page's CSS does the rest. | RichTeX, Mermaid | spike | the lab |
-| notes | Annotation JSX anchored to a measured box, placed above or below (Mermaid also left or right), with a leader line; RichTeX runs a collision pass that pushes overlapping notes apart. | `Term note=`, `MermaidMark.note` | spike | the lab: `/training`, `/pipeline` |
-| knobs | A symbol or node bound to a numeric control: hover for the value, drag sideways to change it, arrow keys when focused; carries `data-control` like every widget. The scrub pill is the same gesture in prose. | `Term control=`, `MermaidMark.control`, `ControlScrub` | spike (the pill is shipped) | the lab: `/training`, `/pipeline` |
+| `createKnobs`, `KnobReadout`, `NoteLayer` | The attention primitives. `createKnobs` delegates the knob gesture to a host — a press resolves to the bound element, a `span` of pixels crosses the control's range, arrow keys step (Shift ×10, Home/End), the stamp is `data-control` plus slider ARIA kept live on the control — and `KnobReadout` is the pill fixed above the hot knob. `NoteLayer` renders notes anchored to measured boxes in two layouts (an in-flow `margin` strip, an `overlay`), re-measures through the resize seam, and pushes colliding notes apart per row with leaders kept on their anchors. Skinned by aiui-design. | `…/site`, `…/site/knob`, `…/site/notes` · `src/site/knob.tsx`, `src/site/notes.tsx` | shipped | RichTeX, Mermaid; styleguide, catalog, the lab |
+| hover and active marks | `Term`: `active`, `color`, `class`, `onHover`. `Mermaid`: `marks[id].active` / `color` / `fill` / `class`, `onHover`. Both set `data-active`; aiui-design's skin does the rest. | RichTeX, Mermaid | spike | the lab |
+| notes | Annotation JSX anchored to a term or a diagram element, placed above or below (Mermaid also left or right), with a leader line; overlapping notes are pushed apart. The equation's strips and the diagram's overlay are `NoteLayer`. | `Term note=`, `MermaidMark.note` | spike | the lab: `/training`, `/pipeline`; styleguide |
+| knobs | A symbol or node bound to a numeric control: hover for the value, drag sideways to change it, arrow keys when focused; carries `data-control` like every widget. Both are `createKnobs`; the scrub pill is the same gesture in prose. | `Term control=`, `MermaidMark.control`, `ControlScrub` | spike (the pill is shipped) | the lab: `/training`, `/pipeline`; styleguide |
 
-One attention layer that the equation, the diagram and the coming SVG all share is the open slot
-here — see [§6](#6-adding-a-piece).
+The peek-and-open tier (the lens) and the marks-notes-knobs tier are still two vocabularies — see
+[§6](#6-adding-a-piece).
 
 ### 2.6 Data views
 
@@ -282,11 +284,11 @@ The rules a new row follows, each one paid for already:
 
 - **`aiui-svg`** — [semantic-svg.md](../../docs/proposals/semantic-svg.md): the geometry you edit,
   meant to join the lab beside RichTeX and Mermaid.
-- **One attention layer** — hover → peek → open, marks by id, notes anchored to measured boxes,
-  the knob gesture — shared by the equation, the diagram and the SVG instead of implemented in
-  each (today the knob helpers are duplicated between `rich-tex.tsx` and `mermaid.tsx`).
+- **One attention layer** — the notes layer and the knob gesture are shared now (`NoteLayer`,
+  `createKnobs`); what remains is joining them with the lens's hover → peek → open ladder, so
+  the equation, the diagram and the SVG draw the eye and open detail through one vocabulary.
 - **Readers for diagrams** — `read-page` and `selection` awareness of `data-mermaid`.
 - **An ordered multi-page report** — chapters with shared figures and state, between a notebook
   page and a gallery.
-- **Mermaid follow-ons** — keyboard access to clickable nodes; a Playwright test over the real
-  renderer (listed in [rich-mermaid.md](../../docs/proposals/rich-mermaid.md)).
+- **Mermaid follow-ons** — a Playwright test over the real renderer; `read-page` / `selection`
+  awareness of `data-mermaid` (listed in [rich-mermaid.md](../../docs/proposals/rich-mermaid.md)).
