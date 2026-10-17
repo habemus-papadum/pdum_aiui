@@ -185,3 +185,14 @@
     max-width: none;
   }
 }
+
+/* the equations-and-diagrams specimens: a size for the equation, room for the
+ * diagram's notes (the look of both is the design package's) */
+.styleguide .rich-eq {
+  font-size: 1.3rem;
+  padding: var(--space-xs) 0 var(--space-2xs);
+}
+.styleguide .rich-diagram {
+  max-width: 32rem;
+  padding-bottom: var(--space-sm);
+}

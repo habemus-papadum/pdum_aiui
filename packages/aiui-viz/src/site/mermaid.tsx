@@ -68,18 +68,38 @@
  *    a label ever need a hook of its own.
  *  - An edge is a 1 px stroke: a transparent 12 px clone (`pointer-events:
  *    stroke`) is laid under each so it can be clicked.
- *  - Mermaid's stylesheet is id-scoped (`#svgId .node rect {…}`), which
- *    would beat any class rule a page writes: the id is wrapped in
- *    `:where()` after each render ({@link tameStyles}), so a consumer's
- *    skin applies with ordinary selectors. The palette still goes in
- *    through `config` (the base theme + `themeVariables` from the design
- *    tokens; `look: "classic"` for flat shapes) — Mermaid also reads it for
+ *  - Mermaid's stylesheet is id-scoped (`#svgId .node rect {…}`) and
+ *    unlayered, which would beat any class rule a page writes and any rule
+ *    a design system keeps in a cascade layer: after each render the sheet
+ *    is wrapped in `@layer aiui-vendor` and the id in `:where()`
+ *    ({@link tameStyles}). A page's own unlayered skin then wins by
+ *    specificity; a layered skin wins when its stylesheet declares
+ *    `aiui-vendor` before its own layers (`@layer aiui-vendor, …;` — what
+ *    aiui-design's site.css does). The palette still goes in through
+ *    `config` (the base theme + `themeVariables` from the design tokens;
+ *    `look: "classic"` for flat shapes) — Mermaid also reads it for
  *    arrowheads and label backgrounds, which no stylesheet reaches.
  *
  * **Configuration.** {@link configureMermaid} sets the site-wide defaults
  * (theme, font, layout) once; `config` on a diagram is injected as YAML
  * frontmatter (`---\nconfig: {…}\n---`), Mermaid's per-diagram mechanism
- * — a text that brings its own frontmatter is left alone.
+ * — a text that brings its own frontmatter is left alone. One default is
+ * this component's own ({@link LABEL_DEFAULTS}): Mermaid 12.2 ships
+ * `flowchart.wrappingWidth: 120`, and a plain label is laid out `nowrap`
+ * inside a box of that width — so any label wider than 120 px is CLIPPED,
+ * and a shorter one is padded out to 120 px (measured on the lab's
+ * `/anatomy`: a 515 px label in a 120 px box, every short node 160 px wide).
+ * Raised, a node grows to its text up to that width, a markdown-string
+ * label wraps there, and only a plain label longer than it still clips
+ * (write it as a markdown string to wrap it). 640 fits some ninety
+ * characters at the house 14 px. The site config and a diagram's own
+ * `config` both override it.
+ *
+ * **Keyboard.** With `onClick` given, every node and cluster is focusable
+ * (`tabindex`, `role="button"`) and Enter or Space is its click, the path a
+ * clickable RichTeX term has; the root carries `aiui-mmd-clickable` so a
+ * skin can show the pointer only where a click does something. A knob keeps
+ * its slider role and the knob controller's keys.
  *
  * **The agent surface.** The root carries `data-mermaid` with the source
  * text — the diagram as the author wrote it, which is also the best thing
@@ -95,7 +115,7 @@ import type { JSX } from "@solidjs/web";
 import type { MermaidConfig } from "mermaid";
 import { createEffect, createMemo, createSignal, onCleanup, Show } from "solid-js";
 import type { ControlBox } from "../control";
-import { createKnobs } from "./knob";
+import { createKnobs, KnobReadout } from "./knob";
 import { NoteLayer, type NoteSide, type NoteSpec } from "./notes";
 import { ensureStyles } from "./styles";
 
@@ -143,8 +163,9 @@ export interface MermaidProps {
   config?: MermaidConfig;
   /** Decorations by id. */
   marks?: Readonly<Record<string, MermaidMark>>;
-  /** A click on a node, edge (its line, hit area or label) or cluster. */
-  onClick?: (hit: MermaidHit, event: MouseEvent) => void;
+  /** A click on a node, edge (its line, hit area or label) or cluster — or
+   * Enter / Space on a focused node or cluster (see the module doc). */
+  onClick?: (hit: MermaidHit, event: MouseEvent | KeyboardEvent) => void;
   /** The pointer entered an addressable element (`undefined` on leave). */
   onHover?: (hit: MermaidHit | undefined) => void;
   /** Extra class(es) on the root, after `aiui-mmd`. */
@@ -178,20 +199,32 @@ const BASE: MermaidConfig = {
   suppressErrorRendering: true,
 };
 
+/** The label box a node grows to before a label wraps or clips — see the
+ * module doc for why Mermaid's own 120 is not usable. */
+export const LABEL_DEFAULTS = { wrappingWidth: 640 } as const;
+
+/** What `initialize` gets: the component's base, the site's config over it,
+ * and the label default under the site's flowchart settings. Pure; exported
+ * for tests. */
+export function initConfig(site: MermaidConfig): MermaidConfig {
+  return { ...BASE, ...site, flowchart: { ...LABEL_DEFAULTS, ...site.flowchart } };
+}
+
 /**
  * Site-wide Mermaid defaults — theme, fonts, layout, look — applied at load
  * (or at once, if Mermaid is already loaded). A diagram's own `config`
  * frontmatter layers on top per render. Call it once, where the design
- * system's tokens are known (the host app, not this package).
+ * system's tokens are known (the host app, not this package; aiui-design's
+ * `mermaidTheme()` is the house theme).
  */
 export function configureMermaid(config: MermaidConfig): void {
   siteConfig = config;
-  if (loaded !== undefined) void loaded.then((m) => m.initialize({ ...BASE, ...siteConfig }));
+  if (loaded !== undefined) void loaded.then((m) => m.initialize(initConfig(siteConfig)));
 }
 
 function loadMermaid(): Promise<MermaidApi> {
   loaded ??= import("mermaid").then((mod) => {
-    mod.default.initialize({ ...BASE, ...siteConfig });
+    mod.default.initialize(initConfig(siteConfig));
     return mod.default;
   });
   return loaded;
@@ -228,13 +261,20 @@ export function recoverId(el: Element, svgId: string, kind: MermaidKind): string
   return m === null ? rest : m[1];
 }
 
+/** The cascade layer Mermaid's own stylesheet is moved into. */
+export const VENDOR_LAYER = "aiui-vendor";
+
 /**
  * Mermaid scopes its stylesheet by the svg's id — `#p1 .node rect {…}` —
- * which outranks any class rule a page writes. Wrapping the id in
- * `:where()` keeps the scoping and drops its specificity to zero, so the
- * consumer's ordinary skin (`.my-diagram .node rect`) wins without
- * `!important`. Mermaid's own `!important` rules (a `classDef` in the text)
- * are left as they are — the text's directives are not the lever here.
+ * which outranks any class rule a page writes, and leaves it unlayered,
+ * which outranks any rule a design system keeps in a cascade layer. Two
+ * rewrites: the id is wrapped in `:where()`, keeping the scoping and
+ * dropping its specificity to zero, so a page's ordinary skin
+ * (`.my-diagram .node rect`) wins without `!important`; and the whole sheet
+ * goes into `@layer aiui-vendor`, so a layered skin wins too once its
+ * stylesheet has declared that layer first. Mermaid's own `!important`
+ * rules (a `classDef` in the text) are left as they are — the text's
+ * directives are not the lever here.
  */
 export function tameStyles(svg: SVGSVGElement): void {
   const style = svg.querySelector(":scope > style");
@@ -242,10 +282,11 @@ export function tameStyles(svg: SVGSVGElement): void {
   const id = svg.id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   // Only where a selector starts (the sheet's start, after `}` or `,`) and
   // the id is whole — never inside a declaration value.
-  style.textContent = (style.textContent ?? "").replace(
+  const scoped = (style.textContent ?? "").replace(
     new RegExp(`(?<=^|[},])#${id}(?=[\\s.>:,{[])`, "g"),
     `:where(#${svg.id})`,
   );
+  style.textContent = `@layer ${VENDOR_LAYER}{${scoped}}`;
 }
 
 // ── structural CSS (positions only; the look is the consumer's) ─────────────
@@ -255,7 +296,7 @@ export const MERMAID_STYLES = `
 .aiui-mmd-svg > svg { display: block; max-width: 100%; height: auto; }
 .aiui-mmd-stage { position: absolute; left: 0; top: 0; width: 100%; visibility: hidden; pointer-events: none; }
 .aiui-mmd-hit { fill: none; stroke: transparent; pointer-events: stroke; }
-.aiui-mmd [${MERMAID_ID_ATTR}] { cursor: default; }
+.aiui-mmd [${MERMAID_ID_ATTR}] { outline: none; }
 .aiui-mmd-error { color: #cc0000; font-family: ui-monospace, monospace; font-size: 0.8em; white-space: pre-wrap; margin: 0; }
 `;
 const STYLE_MARK = "data-aiui-mermaid";
@@ -312,6 +353,32 @@ export function Mermaid(props: MermaidProps): JSX.Element {
     const hit = hitOf(e.target as Element | null);
     if (hit !== undefined) props.onClick?.(hit, e);
   };
+  // Enter and Space on a focused node or cluster are its click. A knob's
+  // keys are the knob controller's (it answers first, on the same host).
+  const onKeyDown = (e: KeyboardEvent): void => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const target = e.target as Element | null;
+    if (target === null || target.hasAttribute("data-control")) return;
+    const hit = hitOf(target);
+    if (hit === undefined || hit.el !== target) return;
+    e.preventDefault();
+    props.onClick?.(hit, e);
+  };
+  /** Focusable when the diagram is clickable and the element is not a knob. */
+  let clickableNow = false;
+  const focusable = (el: Element): void => {
+    if (el.hasAttribute("data-control")) return;
+    if (clickableNow) {
+      el.setAttribute("tabindex", "0");
+      el.setAttribute("role", "button");
+    } else {
+      el.removeAttribute("tabindex");
+      el.removeAttribute("role");
+    }
+  };
+  const refocusAll = (): void => {
+    for (const { el, kind } of index.values()) if (kind !== "edge") focusable(el);
+  };
 
   // The knobs: a press anywhere on an addressable element (a label, an edge's
   // wide clone) resolves to the element the mark decorated.
@@ -327,6 +394,7 @@ export function Mermaid(props: MermaidProps): JSX.Element {
     host.addEventListener("pointerover", onPointerOver);
     host.addEventListener("pointerleave", onPointerLeave);
     host.addEventListener("click", onClick);
+    host.addEventListener("keydown", onKeyDown);
     knobs.attach(host);
   };
   onCleanup(() => {
@@ -335,6 +403,7 @@ export function Mermaid(props: MermaidProps): JSX.Element {
     host.removeEventListener("pointerover", onPointerOver);
     host.removeEventListener("pointerleave", onPointerLeave);
     host.removeEventListener("click", onClick);
+    host.removeEventListener("keydown", onKeyDown);
   });
 
   // ── the index: ids → elements, stamped; hit areas under the edges ─────────
@@ -407,6 +476,7 @@ export function Mermaid(props: MermaidProps): JSX.Element {
           (p as HTMLElement).style.fill = "";
         }
         knobs.unbind(hit.el);
+        if (hit.kind !== "edge") focusable(hit.el);
       }
       applied.delete(id);
     }
@@ -425,9 +495,12 @@ export function Mermaid(props: MermaidProps): JSX.Element {
         s.stroke = mark.color ?? "";
         s.fill = hit.kind === "edge" ? "" : (mark.fill ?? "");
       }
-      if (mark.control !== undefined)
+      if (mark.control !== undefined) {
         knobs.bind(hit.el, { control: mark.control, span: mark.span });
-      else knobs.unbind(hit.el);
+      } else {
+        knobs.unbind(hit.el);
+        if (hit.kind !== "edge") focusable(hit.el);
+      }
     }
   };
 
@@ -440,6 +513,7 @@ export function Mermaid(props: MermaidProps): JSX.Element {
     if (el !== null) {
       tameStyles(el);
       buildIndex(el);
+      refocusAll();
     } else index = new Map();
     applyMarks(marksNow);
     setRendered((n) => n + 1);
@@ -480,6 +554,11 @@ export function Mermaid(props: MermaidProps): JSX.Element {
     marksNow = m;
     applyMarks(m);
   });
+  const clickable = createMemo(() => props.onClick !== undefined);
+  createEffect(clickable, (c) => {
+    clickableNow = c;
+    refocusAll();
+  });
 
   // ── notes ─────────────────────────────────────────────────────────────────
   // One spec per mark OBJECT, so a consumer that keeps a mark's reference
@@ -518,7 +597,10 @@ export function Mermaid(props: MermaidProps): JSX.Element {
     return next;
   });
 
-  const rootClass = () => (props.class === undefined ? "aiui-mmd" : `aiui-mmd ${props.class}`);
+  const rootClass = () => {
+    const base = clickable() ? "aiui-mmd aiui-mmd-clickable" : "aiui-mmd";
+    return props.class === undefined ? base : `${base} ${props.class}`;
+  };
 
   return (
     <div
@@ -542,6 +624,7 @@ export function Mermaid(props: MermaidProps): JSX.Element {
           stage = el;
         }}
       />
+      <KnobReadout of={knobs} />
       <NoteLayer
         layout="overlay"
         host={() => root}

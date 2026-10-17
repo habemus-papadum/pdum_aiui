@@ -64,6 +64,8 @@ const fake = vi.hoisted(() => {
 vi.mock("mermaid", () => ({ default: fake.api }));
 
 import {
+  initConfig,
+  LABEL_DEFAULTS,
   MERMAID_ID_ATTR,
   Mermaid,
   type MermaidHit,
@@ -113,6 +115,21 @@ describe("withConfig", () => {
   });
 });
 
+describe("initConfig", () => {
+  it("lays the label default under the site's flowchart settings, never over them", () => {
+    expect(initConfig({}).flowchart).toEqual({ wrappingWidth: LABEL_DEFAULTS.wrappingWidth });
+    expect(initConfig({ flowchart: { curve: "basis" } }).flowchart).toEqual({
+      wrappingWidth: LABEL_DEFAULTS.wrappingWidth,
+      curve: "basis",
+    });
+    expect(initConfig({ flowchart: { wrappingWidth: 120 } }).flowchart?.wrappingWidth).toBe(120);
+    const c = initConfig({ theme: "base" });
+    expect(c.theme).toBe("base");
+    expect(c.securityLevel).toBe("strict");
+    expect(c.suppressErrorRendering).toBe(true);
+  });
+});
+
 describe("recoverId", () => {
   const g = (id: string, dataId?: string): Element => {
     const e = document.createElementNS("http://www.w3.org/2000/svg", "g");
@@ -148,7 +165,7 @@ describe("tameStyles", () => {
     svg.append(style);
     tameStyles(svg);
     expect(style.textContent).toBe(
-      ":where(#p1){font-family:x;}:where(#p1) .node rect,:where(#p1) .node circle{fill:#eee;}#p10 .x{fill:#p1;}:where(#p1) .hot>*{fill:red!important;}",
+      "@layer aiui-vendor{:where(#p1){font-family:x;}:where(#p1) .node rect,:where(#p1) .node circle{fill:#eee;}#p10 .x{fill:#p1;}:where(#p1) .hot>*{fill:red!important;}}",
     );
   });
 });
@@ -160,7 +177,9 @@ describe("<Mermaid>", () => {
     await settle();
     const root = host.querySelector(".aiui-mmd") as HTMLElement;
     expect(root.getAttribute("data-mermaid")).toBe(text);
-    expect(host.querySelector("svg > style")?.textContent).toMatch(/^:where\(#aiui-mmd-\d+\) /);
+    expect(host.querySelector("svg > style")?.textContent).toMatch(
+      /^@layer aiui-vendor\{:where\(#aiui-mmd-\d+\) /,
+    );
     const ids = Array.from(host.querySelectorAll(`[${MERMAID_ID_ATTR}]`)).map((e) => [
       e.getAttribute("data-aiui-kind"),
       e.getAttribute(MERMAID_ID_ATTR),
@@ -205,6 +224,28 @@ describe("<Mermaid>", () => {
     ]);
     // The edge hit resolves to the edge path itself, not the clone.
     expect(hits[1]?.el.getAttribute("data-edge")).toBe("true");
+    // Clickable: the root says so, nodes and clusters are focusable buttons,
+    // and Enter / Space on one is its click. Edges stay as they are.
+    expect(host.querySelector(".aiui-mmd")?.classList.contains("aiui-mmd-clickable")).toBe(true);
+    expect(el(host, "A").getAttribute("tabindex")).toBe("0");
+    expect(el(host, "A").getAttribute("role")).toBe("button");
+    expect(el(host, "S").getAttribute("role")).toBe("button");
+    expect(el(host, "L_A_B_0").hasAttribute("tabindex")).toBe(false);
+    el(host, "A").dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    el(host, "C").dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
+    el(host, "C").dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    expect(hits.slice(3).map((h) => [h.kind, h.id])).toEqual([
+      ["node", "A"],
+      ["node", "C"],
+    ]);
+  });
+
+  it("without onClick nothing is focusable and the root is not clickable", async () => {
+    const host = mount(() => <Mermaid text={"flowchart LR\n  A --> B"} />);
+    await settle();
+    expect(host.querySelector(".aiui-mmd")?.classList.contains("aiui-mmd-clickable")).toBe(false);
+    expect(el(host, "A").hasAttribute("tabindex")).toBe(false);
+    expect(el(host, "A").hasAttribute("role")).toBe(false);
   });
 
   it("applies and clears marks in place — the svg is not re-rendered", async () => {
@@ -309,5 +350,11 @@ describe("<Mermaid>", () => {
     await tick();
     expect(epochs.get()).toBe(6);
     expect(b.getAttribute("aria-valuenow")).toBe("6");
+    // The knob has the readout every knob has: hover shows the value and the name.
+    const PE = typeof PointerEvent === "function" ? PointerEvent : MouseEvent;
+    expect(host.querySelector(".aiui-knob-readout")).toBeNull();
+    b.querySelector("p")?.dispatchEvent(new PE("pointerover", { bubbles: true }));
+    await tick();
+    expect(host.querySelector(".aiui-knob-readout")?.textContent).toBe("6epochs");
   });
 });

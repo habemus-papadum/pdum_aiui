@@ -196,14 +196,60 @@ Conventions the lab settled on:
 - A knob is a horizontal drag on a value. Mermaid cannot move nodes; "drag to reposition" is
   the semantic SVG proposal's territory.
 - Arrowheads are shared `<marker>`s: a mark's `color` recolors the line, not its head.
-- Notes anchor to measured boxes (after render, resize, font load); no collision pass yet
-  (RichTeX has `resolveNoteShifts` to borrow).
-- Keyboard: knobs are focusable and answer the arrows; a merely clickable node has no keyboard
-  path (the same open item as RichTeX terms).
+- Notes anchor to measured boxes (after render, resize, font load); the shared layer pushes
+  colliding notes apart per rank (cleanup, 2026-10-17).
+- Keyboard: knobs are focusable and answer the arrows; with `onClick`, nodes and clusters are
+  focusable buttons (cleanup, 2026-10-17).
 - Coverage: flowchart, state, class, ER fully addressable; sequence via `data-id`/`data-et`;
   mindmap by Mermaid's own node ids; timeline/gantt/pie render with no handles.
 - The unit test runs over a fake Mermaid (jsdom has no layout). The real markup shape is
   pinned only by the lab; a Playwright test in the pencil style would make it CI's business.
+
+## Cleanup 2026-10-17
+
+Done after the knob gesture and the notes layer were lifted out of `rich-tex.tsx` and
+`mermaid.tsx` into `src/site/knob.tsx` and `src/site/notes.tsx` (shared by both; the catalog's
+§2.5 row). What changed in the Mermaid component and around it:
+
+- **Labels are no longer clipped.** Measured on `/anatomy`: Mermaid 12.2 defaults
+  `flowchart.wrappingWidth` to 120 and lays a plain label out `nowrap` in a box of that width, so
+  a 515 px label showed its first 120 px and every short node was padded out to 160 px. The
+  component now initializes with `wrappingWidth: 640` under the site's own flowchart settings
+  (`initConfig`): a node grows to its text, a markdown-string label wraps at 640, and only a plain
+  label longer than that clips. The lab's pipeline nodes went from a uniform 160 px to 73–90 px.
+- **The theme and the skin moved into aiui-design.** `mermaidTheme()` (the ladder as
+  `themeVariables`, `look: "classic"`, dagre, the fonts) replaces the two copies in the lab and
+  the catalog; the `.aiui-mmd` skin (transitions, the active and hovered strokes, the knob, the
+  notes, the pointer only where a click does something) and the RichTeX skin sit in `site.css`'s
+  `components` layer. The catalog's diagrams took the house density (14 px, the lab's spacing) in
+  place of their 13 px copy; the catalog's longest shelf label is why the default is 640, not 480.
+- **Mermaid's own sheet is layered.** The id-only `:where()` rewrite was not enough once the
+  skin lived in a cascade layer: an unlayered vendor sheet beats every layered rule. `tameStyles`
+  now also wraps the sheet in `@layer aiui-vendor`, and `site.css` declares that layer first.
+  Found live: active nodes computed at 1 px until this landed.
+- **Knobs have the readout.** The catalog described a knob as "hover for the value" for both
+  components; the Mermaid knob showed nothing. `KnobReadout` now renders in the diagram too.
+- **Keyboard access for clickable nodes** (open item 5): with `onClick` given, nodes and clusters
+  carry `tabindex` and `role="button"`, Enter and Space are their click, and the root carries
+  `aiui-mmd-clickable`; `onClick`'s event is `MouseEvent | KeyboardEvent`. A knob keeps its
+  slider role.
+- **The note collision pass** (open item 5) came with the shared layer: the overlay runs
+  `resolveNoteShifts` per rank, so a row of chips under adjacent stages no longer overlaps.
+- **Smaller:** `configureMermaid` no longer wipes the component's own defaults with a shallow
+  spread; the structural `<style>` refreshes on a hot edit (the shared injector); the diagram
+  fits its host (`max-width: 100%; height: auto` is structural now); the `cursor: default` on
+  every addressable element is gone (the skin decides).
+
+Deliberately left, with the reason:
+
+- `read-page` / `selection` awareness of `data-mermaid` (follow-on 2): agent-surface work in
+  `page-text.ts` and the standard tools, a feature rather than a defect; still the next item.
+- A Playwright test over the real renderer (follow-on 4): the unit suite's fake pins the markup
+  shape; the real one is exercised by the lab, the catalog and the styleguide by hand.
+- FLIP transitions across re-renders (follow-on 6) and recoloring arrowheads per edge: design
+  questions, not defects — a re-render is a new SVG and markers are shared by construction.
+- Rows for RichTeX notes (`row={2}`): never built; the shared layer runs one row per strip, as the
+  module doc always said, and no page has asked.
 
 ## What the lab shows
 
@@ -221,13 +267,14 @@ Conventions the lab settled on:
 
 ## If adopted — follow-ons, in order of value
 
-1. A `.aiui-mmd` skin in `aiui-design/site.css` (now possible with ordinary selectors) and the
-   theme-variable map as a `mermaidTheme()` accessor beside `plotStyle()`.
+1. ~~A `.aiui-mmd` skin in `aiui-design/site.css` and the theme-variable map as a
+   `mermaidTheme()` accessor beside `plotStyle()`.~~ Done (cleanup, 2026-10-17).
 2. `read-page` / `selection` awareness of `data-mermaid`, as for `data-tex`: emit the source
    where a diagram sits in the page text; resolve a selection inside one to its id.
-3. The knob helpers shared with RichTeX (`formatKnob`, `perPxOf`, `keyStepOf`) into one module.
+3. ~~The knob helpers shared with RichTeX into one module.~~ Done: `src/site/knob.tsx` and
+   `src/site/notes.tsx` (2026-10-17).
 4. A Playwright test over the real Mermaid pinning the markup facts above.
-5. Keyboard access for clickable nodes; a note collision pass.
+5. ~~Keyboard access for clickable nodes; a note collision pass.~~ Done (cleanup, 2026-10-17).
 6. FLIP transitions across re-renders keyed by id, if a demo wants animated relayout.
 
 The lab became the uniform aiui-viz lab with this spike (scope `viz-lab`; shared `lab-`

@@ -10,14 +10,17 @@
  * the notebook chrome two or more demos share (panels, tiles, the figure
  * layout, the experiments list). The LOOK is owned by DESIGN.md.
  *
- * Precedence runs on cascade layers — reset < base < chrome < components <
- * notebook — and a page's own unlayered rules beat all of them, so a demo's
- * page.css wins without specificity games. */
+ * Precedence runs on cascade layers — aiui-vendor < reset < base < chrome <
+ * components < notebook — and a page's own unlayered rules beat all of them,
+ * so a demo's page.css wins without specificity games. */
 
 @import "./fonts.css";
 @import "./tokens.css";
 
-@layer reset, base, chrome, components, notebook;
+/* aiui-vendor first: a third-party sheet a component injects into its own
+ * markup (Mermaid's, moved there by aiui-viz) sits under every layer here, so
+ * the components skin below wins over it as it does over anything else. */
+@layer aiui-vendor, reset, base, chrome, components, notebook;
 
 /* ---------------------------------------------------------------- reset -- */
 
@@ -1028,6 +1031,128 @@
     border: var(--hairline-width) solid var(--alarm);
     border-radius: var(--radius);
     padding: var(--space-sm);
+  }
+
+  /* RichTeX, Mermaid, and the attention primitives they share (aiui-viz/site:
+   * rich-tex, mermaid, knob, notes). The components own positions; this is the
+   * look. A term's active highlight is a wash of its own ink. A knob in an
+   * equation is a dashed underline — the scrub pill's affordance, for a glyph
+   * — solid and accent under the pointer, on focus, and while scrubbed; a knob
+   * in a diagram shows the same on its shape. The readout is a hairline pill
+   * in the label voice. Notes run in the label voice, muted until active. A
+   * diagram's fills and strokes transition, so a mark animates; the pointer
+   * appears only where a click does something (`aiui-mmd-clickable`). */
+  .aiui-rtx {
+    --aiui-note-gap: 18px;
+    --aiui-note-leader-color: var(--hairline);
+  }
+  .aiui-rtx-term {
+    transition:
+      color 450ms ease,
+      background-color 180ms ease,
+      box-shadow 180ms ease;
+    border-radius: 3px;
+    cursor: default;
+  }
+  .aiui-rtx-term[data-active="true"] {
+    background: color-mix(in srgb, currentColor 12%, transparent);
+    box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 12%, transparent);
+  }
+  .aiui-rtx .aiui-knob {
+    border-bottom: 1px dashed var(--hairline);
+    padding-bottom: 1px;
+    border-radius: 0;
+    transition: border-color 160ms ease;
+  }
+  .aiui-rtx .aiui-knob:hover,
+  .aiui-rtx .aiui-knob:focus-visible,
+  .aiui-rtx .aiui-knob[data-scrubbing="true"] {
+    border-bottom-color: var(--accent);
+    border-bottom-style: solid;
+  }
+  .aiui-knob-readout {
+    --aiui-knob-readout-gap: 10px;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.4em;
+    padding: 0.1rem 0.55rem;
+    border: var(--hairline-width) solid var(--hairline);
+    border-radius: 999px;
+    background: var(--surface-raised);
+    font-family: var(--stack-sans);
+    font-size: 0.78rem;
+    color: var(--ink);
+  }
+  .aiui-knob-readout-value {
+    font-variant-numeric: tabular-nums;
+  }
+  .aiui-knob-readout-name {
+    font-size: 0.62rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+  }
+  .aiui-rtx .aiui-note,
+  .aiui-mmd .aiui-note {
+    font-family: var(--stack-sans);
+    font-size: 0.72rem;
+    line-height: 1.3;
+    color: var(--ink-muted);
+    white-space: nowrap;
+  }
+  .aiui-rtx .aiui-note {
+    padding-top: 4px;
+  }
+  .aiui-rtx .aiui-note[data-active="true"],
+  .aiui-mmd .aiui-note[data-active="true"] {
+    color: var(--ink);
+  }
+  .aiui-mmd {
+    --aiui-note-gap: 8px;
+    --aiui-note-leader-color: var(--hairline);
+  }
+  .aiui-mmd .node > rect,
+  .aiui-mmd .node > polygon,
+  .aiui-mmd .node > circle,
+  .aiui-mmd .node > path,
+  .aiui-mmd .cluster > rect,
+  .aiui-mmd path[data-edge] {
+    transition:
+      fill 250ms ease,
+      stroke 250ms ease,
+      stroke-width 150ms ease;
+  }
+  .aiui-mmd-clickable .node,
+  .aiui-mmd-clickable .cluster > rect,
+  .aiui-mmd-clickable .aiui-mmd-hit,
+  .aiui-mmd-clickable .edgeLabel {
+    cursor: pointer;
+  }
+  .aiui-mmd [data-active="true"] > rect,
+  .aiui-mmd [data-active="true"] > polygon,
+  .aiui-mmd [data-active="true"] > circle,
+  .aiui-mmd [data-active="true"] > path,
+  .aiui-mmd path[data-edge][data-active="true"] {
+    stroke-width: 2.5px;
+  }
+  .aiui-mmd [data-hover="true"] > rect,
+  .aiui-mmd [data-hover="true"] > polygon,
+  .aiui-mmd [data-hover="true"] > circle,
+  .aiui-mmd [data-hover="true"] > path,
+  .aiui-mmd path[data-edge][data-hover="true"] {
+    stroke: var(--accent);
+  }
+  .aiui-mmd .aiui-knob[data-scrubbing="true"] > rect,
+  .aiui-mmd .aiui-knob[data-scrubbing="true"] > polygon,
+  .aiui-mmd .aiui-knob[data-scrubbing="true"] > path,
+  .aiui-mmd .aiui-knob:focus-visible > rect,
+  .aiui-mmd .aiui-knob:focus-visible > polygon,
+  .aiui-mmd .aiui-knob:focus-visible > path,
+  .aiui-mmd [role="button"]:focus-visible > rect,
+  .aiui-mmd [role="button"]:focus-visible > polygon,
+  .aiui-mmd [role="button"]:focus-visible > path {
+    stroke: var(--accent);
+    stroke-width: 2.5px;
   }
 
   /* Mosaic's SelectionInspector and SelectionViews (aiui-viz/mosaic): rows of

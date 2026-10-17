@@ -1,8 +1,8 @@
 /* styles.css — the catalog page's OWN chrome: the entry list, the state badges,
- * the specimen frames, the stamp bar, and the skins for the two spike
- * components (RichTeX, Mermaid) the design package does not dress yet. The
- * look of everything else is the design system's. Scoped under .catalog so
- * nothing leaks onto a sibling mounted in the same document. */
+ * the specimen frames, the stamp bar, the chips the notes carry. The look of
+ * everything else — the components' skins included — is the design system's.
+ * Scoped under .catalog so nothing leaks onto a sibling mounted in the same
+ * document. */
 
 .catalog .cat-head {
   margin-bottom: var(--space-md);
@@ -290,109 +290,18 @@
   color: var(--ink-muted);
 }
 
-/* ── RichTeX: the skin the lab carries, here for the one equation ─────────── */
+/* ── RichTeX and Mermaid: the look is the design system's; this is the page's framing ── */
 
 .catalog .cat-eq {
-  --aiui-note-gap: 18px;
-  --aiui-note-leader-color: var(--hairline);
   font-size: 1.35rem;
   padding: var(--space-xs) 0 var(--space-2xs);
 }
-.catalog .aiui-rtx-term {
-  transition:
-    color 300ms ease,
-    background-color 180ms ease,
-    box-shadow 180ms ease;
-  border-radius: 3px;
-  cursor: default;
-}
-.catalog .aiui-rtx-term[data-active="true"] {
-  background: color-mix(in srgb, currentColor 12%, transparent);
-  box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 12%, transparent);
-}
-.catalog .aiui-rtx .aiui-note {
-  font-family: var(--stack-sans);
-  font-size: 0.72rem;
-  line-height: 1.3;
-  color: var(--ink-muted);
-  padding-top: 4px;
-  white-space: nowrap;
-}
-.catalog .aiui-rtx .aiui-note[data-active="true"] {
-  color: var(--ink);
-}
-.catalog .aiui-rtx .aiui-knob {
-  border-bottom: 1px dashed var(--hairline);
-  padding-bottom: 1px;
-  border-radius: 0;
-  transition: border-color 160ms ease;
-}
-.catalog .aiui-rtx .aiui-knob:hover,
-.catalog .aiui-rtx .aiui-knob:focus-visible,
-.catalog .aiui-rtx .aiui-knob[data-scrubbing="true"] {
-  border-bottom-color: var(--accent);
-  border-bottom-style: solid;
-}
-.catalog .aiui-knob-readout {
-  --aiui-knob-readout-gap: 10px;
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.4em;
-  padding: 0.1rem 0.55rem;
-  border: var(--hairline-width) solid var(--hairline);
-  border-radius: 999px;
-  background: var(--surface-raised);
-  font-family: var(--stack-sans);
-  font-size: 0.72rem;
-  color: var(--ink);
-}
-.catalog .aiui-knob-readout-name {
-  font-size: 0.62rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ink-muted);
-}
-
-/* ── Mermaid: likewise ───────────────────────────────────────────────────── */
-
 .catalog .cat-figure {
   margin: var(--space-sm) 0 var(--space-md);
 }
 .catalog .cat-diagram {
   margin: var(--space-xs) 0 var(--space-sm);
   padding-bottom: var(--space-md);
-}
-.catalog .cat-diagram svg {
-  max-width: 100%;
-  height: auto;
-}
-.catalog .cat-diagram .node > rect,
-.catalog .cat-diagram .node > polygon,
-.catalog .cat-diagram .node > circle,
-.catalog .cat-diagram .node > path,
-.catalog .cat-diagram .cluster > rect,
-.catalog .cat-diagram path[data-edge] {
-  transition:
-    fill 250ms ease,
-    stroke 250ms ease,
-    stroke-width 150ms ease;
-}
-.catalog .cat-diagram .node,
-.catalog .cat-diagram .aiui-mmd-hit,
-.catalog .cat-diagram .edgeLabel {
-  cursor: pointer;
-}
-.catalog .cat-diagram [data-active="true"] > rect,
-.catalog .cat-diagram [data-active="true"] > polygon,
-.catalog .cat-diagram [data-active="true"] > circle,
-.catalog .cat-diagram [data-active="true"] > path,
-.catalog .cat-diagram path[data-edge][data-active="true"] {
-  stroke-width: 2.5px;
-}
-.catalog .cat-diagram [data-scrubbing="true"] > rect,
-.catalog .cat-diagram [data-scrubbing="true"] > path {
-  stroke: var(--accent);
-  stroke-width: 2.5px;
 }
 
 /* notes on terms and nodes: a chip */
@@ -414,8 +323,7 @@
   color: var(--ink);
   font-weight: 600;
 }
-.catalog [data-active="true"] .cat-chip,
-.catalog .aiui-mmd .aiui-note[data-active="true"] .cat-chip {
+.catalog .aiui-note[data-active="true"] .cat-chip {
   border-color: var(--ink);
   color: var(--ink);
 }

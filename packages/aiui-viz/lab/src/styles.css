@@ -29,8 +29,6 @@
 /* ── the equation and its terms ─────────────────────────────────────────── */
 
 .rtx-lab-eq {
-  --aiui-note-gap: 18px;
-  --aiui-note-leader-color: var(--hairline);
   font-size: 1.05rem;
   padding-block: var(--space-sm, 12px);
 }
@@ -44,20 +42,6 @@
   color: var(--ink-muted);
 }
 
-.aiui-rtx-term {
-  transition:
-    color 450ms ease,
-    background-color 180ms ease,
-    box-shadow 180ms ease;
-  border-radius: 3px;
-  cursor: default;
-}
-
-.aiui-rtx-term[data-active="true"] {
-  background: color-mix(in srgb, currentColor 12%, transparent);
-  box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 12%, transparent);
-}
-
 .rtx-lab-outline .aiui-rtx-term {
   outline: 1px dashed var(--accent);
   outline-offset: 1px;
@@ -69,20 +53,7 @@
   text-decoration-thickness: 1.5px;
 }
 
-/* ── notes ──────────────────────────────────────────────────────────────── */
-
-.aiui-rtx .aiui-note {
-  font-family: var(--font-sans, system-ui, sans-serif);
-  font-size: 0.72rem;
-  line-height: 1.3;
-  color: var(--ink-muted);
-  padding-top: 4px;
-  white-space: nowrap;
-}
-
-.aiui-rtx .aiui-note[data-active="true"] {
-  color: var(--ink);
-}
+/* ── notes (the look of a note is the design system's; these are the chips) ── */
 
 .rtx-lab-chip {
   display: inline-block;
@@ -270,48 +241,6 @@
    own 1em margin, RichTeX zeroes it — zero both here. */
 .rtx-lab-triptych .katex-display {
   margin: 0;
-}
-
-/* ── knobs: a control's symbol in the equation ─────────────────────────── */
-
-.aiui-rtx .aiui-knob {
-  border-bottom: 1px dashed var(--hairline);
-  padding-bottom: 1px;
-  border-radius: 0;
-  transition: border-color 160ms ease;
-}
-
-.aiui-rtx .aiui-knob:hover,
-.aiui-rtx .aiui-knob:focus-visible,
-.aiui-rtx .aiui-knob[data-scrubbing="true"] {
-  border-bottom-color: var(--accent);
-  border-bottom-style: solid;
-}
-
-.aiui-knob-readout {
-  --aiui-knob-readout-gap: 10px;
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.4em;
-  padding: 0.1rem 0.55rem;
-  border: 1px solid var(--hairline);
-  border-radius: 999px;
-  background: var(--surface-raised);
-  font-family: var(--font-sans, system-ui, sans-serif);
-  font-size: 0.78rem;
-  color: var(--ink);
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.06);
-}
-
-.aiui-knob-readout-value {
-  font-variant-numeric: tabular-nums;
-}
-
-.aiui-knob-readout-name {
-  font-size: 0.62rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ink-muted);
 }
 
 /* ── lenses ───────────────────────────────────────────────────────────────── */

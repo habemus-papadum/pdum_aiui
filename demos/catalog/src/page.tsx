@@ -9,13 +9,13 @@
  */
 import "./styles.css";
 import "./model/graph"; // builds the cell graph + registers the agent tools
+import { mermaidTheme } from "@habemus-papadum/aiui-design";
 import type { SitePage } from "@habemus-papadum/aiui-viz";
 import { configureMermaid } from "@habemus-papadum/aiui-viz/site/mermaid";
 import { activations, appScope, deactivations, PAGE_TITLE } from "./model/store";
 import { App } from "./ui/App";
-import { CATALOG_MERMAID } from "./ui/mermaid-theme";
 
-configureMermaid(CATALOG_MERMAID);
+configureMermaid(mermaidTheme());
 
 export const page: SitePage = {
   title: PAGE_TITLE,
