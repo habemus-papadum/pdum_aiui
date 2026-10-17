@@ -1,5 +1,5 @@
 /**
- * keys.ts — the deck's keyboard as modal-kit DATA (aiui-viz/modal keys.ts):
+ * keys.ts — the deck's keyboard as key-layer DATA (aiui-viz/keys):
  * one base layer for frame movement, one HUD layer that claims Escape while
  * the overview is open. Claim-or-pass is exhaustive by construction; typing
  * targets already yield inside `installKeys`.
@@ -24,7 +24,7 @@
  * the bindings' hints, so the displayed keymap and the working keymap are one
  * table.
  */
-import type { KeyLayer } from "@habemus-papadum/aiui-viz/modal";
+import type { KeyLayer } from "@habemus-papadum/aiui-viz/keys";
 
 /** Everything a binding may ask the deck to do. */
 export type DeckCommand = "next" | "prev" | "first" | "last" | "toggle-hud" | "close-hud";

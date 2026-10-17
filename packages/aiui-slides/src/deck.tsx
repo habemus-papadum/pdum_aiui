@@ -39,7 +39,7 @@
  * whole runtime — gestures included — exercises headlessly.
  */
 import { PageBoundary } from "@habemus-papadum/aiui-viz";
-import { installKeys, resolveKey } from "@habemus-papadum/aiui-viz/modal";
+import { installKeys, resolveKey } from "@habemus-papadum/aiui-viz/keys";
 import { LensLayer } from "@habemus-papadum/aiui-viz/site/lens";
 import type { JSX } from "@solidjs/web";
 import { createEffect, createSignal, For, getOwner, onCleanup, runWithOwner, Show } from "solid-js";
@@ -103,7 +103,7 @@ export function Deck(props: {
 
   if (props.basePath !== undefined) bindDeckToPath(model, props.basePath);
 
-  // --- the keymap (modal kit: one capture owner, claim-or-pass layers) ------
+  // --- the keymap (the key layer: one capture owner, claim-or-pass layers) --
   const layers = deckKeyLayers();
   const keyState = (): DeckKeyState => ({
     hudOpen: hudOpen(),

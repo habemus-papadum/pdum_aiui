@@ -1,5 +1,5 @@
 /**
- * keys.ts — the keyboard layer (playbook layer 4), on the aiui-viz modal kit:
+ * keys.ts — the keyboard layer (playbook layer 4), on the aiui-viz key layer:
  * one mode, a few bindings — and every binding dispatches through the SAME
  * registered surface the widgets and the agent use (`actionByName` for verbs,
  * the control boxes for values). The hint bar the UI shows is derived from
@@ -7,7 +7,7 @@
  * one. (The backtick is left unclaimed for an external tool's hotkey.)
  */
 import { actionByName, durable } from "@habemus-papadum/aiui-viz";
-import { installKeys, type KeyLayer, keyHints, resolveKey } from "@habemus-papadum/aiui-viz/modal";
+import { installKeys, type KeyLayer, keyHints, resolveKey } from "@habemus-papadum/aiui-viz/keys";
 import { kappa } from "./store";
 
 type Mode = "view";

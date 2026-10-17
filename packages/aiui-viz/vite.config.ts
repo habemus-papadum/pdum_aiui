@@ -41,9 +41,11 @@ export default defineConfig({
       // @uwdata/mosaic-plot, @duckdb/duckdb-wasm, and katex stay optional
       // peers that core consumers never import; the page-chrome porcelain
       // (`./site`, plus `./site/color-mode` and `./site/lens` alone — the
-      // katex-free pieces a deck or a theme reaches for); and the modal interaction kit (`./modal`: framework-free,
-      // no Solid import, so node-side consumers can reach it, e.g. a host
-      // that re-exports `wordDiff`).
+      // katex-free pieces a deck or a theme reaches for); and three
+      // framework-free subpaths with no Solid import, so node-side consumers
+      // can reach them: the key layer (`./keys`), live text (`./live-text`,
+      // e.g. a host that re-exports `wordDiff`) and the mode engine
+      // (`./mode-engine`).
       entry: {
         index: "src/index.ts",
         plot: "src/plot.tsx",
@@ -69,13 +71,15 @@ export default defineConfig({
         "rich-tex": "src/site/rich-tex.tsx",
         // A Mermaid diagram as a control surface: nodes, edges, clusters addressable.
         mermaid: "src/site/mermaid.tsx",
-        // Framework-free like `./modal`, so node-side consumers (aiui-live's
+        // Framework-free like `./mode-engine`, so node-side consumers (aiui-live's
         // delegators) render the same Tools: section the browser does.
         "tool-brief": "src/tool-brief.ts",
         // Framework-free too: the page as text, math as TeX (read-page's engine).
         "page-text": "src/page-text.ts",
         "vendor-keys": "src/vendor-keys.ts",
-        modal: "src/modal/index.ts",
+        keys: "src/keys/index.ts",
+        "live-text": "src/live-text/index.ts",
+        "mode-engine": "src/mode-engine/index.ts",
         testing: "src/testing.ts",
       },
       formats: ["es"],

@@ -28,7 +28,9 @@
     "./tool-brief": "./src/tool-brief.ts",
     "./page-text": "./src/page-text.ts",
     "./vendor-keys": "./src/vendor-keys.ts",
-    "./modal": "./src/modal/index.ts",
+    "./keys": "./src/keys/index.ts",
+    "./live-text": "./src/live-text/index.ts",
+    "./mode-engine": "./src/mode-engine/index.ts",
     "./testing": "./src/testing.ts",
     "./site/json-view": "./src/site/json-view.tsx",
     "./site/prompt-record": "./src/site/prompt-record.tsx",
@@ -134,10 +136,20 @@
         "import": "./dist/page-text.js",
         "default": "./dist/page-text.js"
       },
-      "./modal": {
-        "types": "./dist/modal/index.d.ts",
-        "import": "./dist/modal.js",
-        "default": "./dist/modal.js"
+      "./keys": {
+        "types": "./dist/keys/index.d.ts",
+        "import": "./dist/keys.js",
+        "default": "./dist/keys.js"
+      },
+      "./live-text": {
+        "types": "./dist/live-text/index.d.ts",
+        "import": "./dist/live-text.js",
+        "default": "./dist/live-text.js"
+      },
+      "./mode-engine": {
+        "types": "./dist/mode-engine/index.d.ts",
+        "import": "./dist/mode-engine.js",
+        "default": "./dist/mode-engine.js"
       },
       "./testing": {
         "types": "./dist/testing.d.ts",

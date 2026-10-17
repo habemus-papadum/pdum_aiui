@@ -113,7 +113,7 @@ export function createClaims<S, Ctx>(
   const report =
     options.onError ??
     ((name: string, error: unknown) => {
-      console.error(`[aiui-viz/modal] claim "${name}" applier failed`, error);
+      console.error(`[aiui-viz/mode-engine] claim "${name}" applier failed`, error);
     });
 
   // biome-ignore lint/suspicious/noExplicitAny: runtime rows are erased; each spec's D/A was checked at its declaration

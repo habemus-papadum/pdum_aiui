@@ -1,4 +1,9 @@
-import { choice, createClaims, createModeEngine, toggle } from "@habemus-papadum/aiui-viz/modal";
+import {
+  choice,
+  createClaims,
+  createModeEngine,
+  toggle,
+} from "@habemus-papadum/aiui-viz/mode-engine";
 import { type BrowserAudioOptions, browserAudioDriver } from "./browser";
 import { floatToPcm16, resampleLinear } from "./pcm";
 import type {

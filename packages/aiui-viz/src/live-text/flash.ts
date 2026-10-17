@@ -16,11 +16,11 @@
  *    flash the diff and settle to clean text after `flashMs`. The anti-strobe
  *    rule: only rewrites animate, appends never do.
  *
- * The run class names ship as options with the historical defaults
- * ({@link DEFAULT_DIFF_CLASSES} — the overlay's `mm-` names) so extraction
- * changed nothing for existing surfaces; new surfaces may restyle but should
- * keep the house tempo ({@link LIVE_FLASH_MS} / {@link SETTLE_FLASH_MS}) so
- * all aiui text animates at one speed.
+ * The run class names ship as options ({@link DEFAULT_DIFF_CLASSES} —
+ * `aiui-diff-del` / `aiui-diff-add`; the surface that styles them owns the
+ * CSS). A surface may restyle, but should keep the house tempo
+ * ({@link LIVE_FLASH_MS} / {@link SETTLE_FLASH_MS}) so all aiui text
+ * animates at one speed.
  */
 import { type DiffRun, wordDiff } from "./diff";
 
@@ -38,10 +38,10 @@ export interface DiffRunClasses {
   add: string;
 }
 
-/** The historical (overlay) class names; restyle per surface if you must. */
+/** The default run classes; restyle per surface if you must. */
 export const DEFAULT_DIFF_CLASSES: DiffRunClasses = {
-  del: "mm-diff-del",
-  add: "mm-diff-add",
+  del: "aiui-diff-del",
+  add: "aiui-diff-add",
 };
 
 /**

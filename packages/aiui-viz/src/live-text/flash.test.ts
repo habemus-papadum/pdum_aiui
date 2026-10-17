@@ -27,16 +27,16 @@ describe("isExtension", () => {
 });
 
 describe("runsFragment / renderRuns", () => {
-  it("marks deletions and additions with the historical classes, leaves common words unstyled", () => {
+  it("marks deletions and additions with the default classes, leaves common words unstyled", () => {
     const host = document.createElement("div");
     host.append(runsFragment("make the curb thicker", "make the curve thicker"));
-    const dels = [...host.querySelectorAll(".mm-diff-del")].map((el) => el.textContent?.trim());
-    const adds = [...host.querySelectorAll(".mm-diff-add")].map((el) => el.textContent?.trim());
+    const dels = [...host.querySelectorAll(".aiui-diff-del")].map((el) => el.textContent?.trim());
+    const adds = [...host.querySelectorAll(".aiui-diff-add")].map((el) => el.textContent?.trim());
     expect(dels).toEqual(["curb"]);
     expect(adds).toEqual(["curve"]);
     expect(host.textContent).toContain("make the");
-    // The defaults ARE the overlay's names — extraction changed nothing.
-    expect(DEFAULT_DIFF_CLASSES).toEqual({ del: "mm-diff-del", add: "mm-diff-add" });
+    // The defaults are the house names a styling surface targets.
+    expect(DEFAULT_DIFF_CLASSES).toEqual({ del: "aiui-diff-del", add: "aiui-diff-add" });
   });
 
   it("renderRuns renders precomputed runs identically (the preview's path)", () => {
@@ -47,8 +47,8 @@ describe("runsFragment / renderRuns", () => {
         { kind: "add", text: "new" },
       ]),
     );
-    expect(host.querySelector(".mm-diff-del")?.textContent?.trim()).toBe("old");
-    expect(host.querySelector(".mm-diff-add")?.textContent?.trim()).toBe("new");
+    expect(host.querySelector(".aiui-diff-del")?.textContent?.trim()).toBe("old");
+    expect(host.querySelector(".aiui-diff-add")?.textContent?.trim()).toBe("new");
   });
 
   it("a surface may restyle the runs via DiffRunClasses", () => {
@@ -56,7 +56,7 @@ describe("runsFragment / renderRuns", () => {
     host.append(runsFragment("old word", "new word", { del: "viz-del", add: "viz-add" }));
     expect(host.querySelector(".viz-del")?.textContent?.trim()).toBe("old");
     expect(host.querySelector(".viz-add")?.textContent?.trim()).toBe("new");
-    expect(host.querySelector(".mm-diff-del")).toBeNull();
+    expect(host.querySelector(".aiui-diff-del")).toBeNull();
   });
 });
 
@@ -74,7 +74,7 @@ describe("LiveDiffText", () => {
     live.update("make the");
     live.update("make the curve");
     expect(host.textContent).toBe("make the curve");
-    expect(host.querySelector(".mm-diff-add")).toBeNull();
+    expect(host.querySelector(".aiui-diff-add")).toBeNull();
     expect(vi.getTimerCount()).toBe(0); // nothing pending — extensions never arm the flash
   });
 
@@ -83,11 +83,11 @@ describe("LiveDiffText", () => {
     const live = new LiveDiffText(host, { flashMs: () => 20 });
     live.update("make the curb");
     live.update("make the curve"); // the model rewrote its hypothesis
-    expect(host.querySelector(".mm-diff-del")?.textContent?.trim()).toBe("curb");
-    expect(host.querySelector(".mm-diff-add")?.textContent?.trim()).toBe("curve");
+    expect(host.querySelector(".aiui-diff-del")?.textContent?.trim()).toBe("curb");
+    expect(host.querySelector(".aiui-diff-add")?.textContent?.trim()).toBe("curve");
     vi.advanceTimersByTime(20);
     expect(host.textContent).toBe("make the curve");
-    expect(host.querySelector(".mm-diff-del")).toBeNull();
+    expect(host.querySelector(".aiui-diff-del")).toBeNull();
     expect(live.value).toBe("make the curve");
   });
 
@@ -97,7 +97,7 @@ describe("LiveDiffText", () => {
     live.update("the curb");
     live.update("the curve");
     vi.advanceTimersByTime(LIVE_FLASH_MS - 1);
-    expect(host.querySelector(".mm-diff-del")).not.toBeNull(); // still reading the diff
+    expect(host.querySelector(".aiui-diff-del")).not.toBeNull(); // still reading the diff
     vi.advanceTimersByTime(1);
     expect(host.textContent).toBe("the curve");
   });
@@ -111,7 +111,7 @@ describe("LiveDiffText", () => {
     live.update("the curb");
     live.update("the curve");
     expect(host.querySelector(".viz-del")?.textContent?.trim()).toBe("curb");
-    expect(host.querySelector(".mm-diff-del")).toBeNull();
+    expect(host.querySelector(".aiui-diff-del")).toBeNull();
   });
 
   it("a second revision mid-flash re-arms the timer — the stale settle never fires early", () => {
@@ -123,8 +123,8 @@ describe("LiveDiffText", () => {
     live.update("gamma one"); // second revision, half-way through the first flash
     // The first timer's deadline passes; the SECOND flash must still be showing.
     vi.advanceTimersByTime(10);
-    expect(host.querySelector(".mm-diff-del")?.textContent?.trim()).toBe("beta");
-    expect(host.querySelector(".mm-diff-add")?.textContent?.trim()).toBe("gamma");
+    expect(host.querySelector(".aiui-diff-del")?.textContent?.trim()).toBe("beta");
+    expect(host.querySelector(".aiui-diff-add")?.textContent?.trim()).toBe("gamma");
     vi.advanceTimersByTime(10); // the re-armed timer's own 20ms elapse
     expect(host.textContent).toBe("gamma one");
   });
@@ -148,7 +148,7 @@ describe("LiveDiffText", () => {
     expect(live.value).toBe("");
     expect(vi.getTimerCount()).toBe(0); // the settle timer died with the segment
     live.update("fresh"); // a new segment starts clean, no phantom diff
-    expect(host.querySelector(".mm-diff-add")).toBeNull();
+    expect(host.querySelector(".aiui-diff-add")).toBeNull();
     expect(host.textContent).toBe("fresh");
   });
 });

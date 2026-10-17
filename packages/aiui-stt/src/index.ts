@@ -1,5 +1,5 @@
 /** ElevenLabs realtime dictation. Audio comes from aiui-audio or an injected PCM source;
- * credentials come from a fresh connectUrl callback. LiveDiffText lives in aiui-viz/modal. */
+ * credentials come from a fresh connectUrl callback. LiveDiffText lives in aiui-viz/live-text. */
 
 // reactive.ts — the Solid face: signals over the handle's event stream (D5).
 export type { SttSegmentFinal, SttSignals } from "./reactive";

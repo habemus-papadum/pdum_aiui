@@ -1,7 +1,7 @@
 import { AudioControl, useAudioHub } from "@habemus-papadum/aiui-audio/widgets";
 import { VendorKeyInput } from "@habemus-papadum/aiui-dock";
 import { bridgeEffect, CellView } from "@habemus-papadum/aiui-viz";
-import { LiveDiffText } from "@habemus-papadum/aiui-viz/modal";
+import { LiveDiffText } from "@habemus-papadum/aiui-viz/live-text";
 import { createSignal, onCleanup, Show, untrack } from "solid-js";
 import { graph } from "../model/graph";
 import { appScope, demoFor, fallbackAudio } from "../model/store";

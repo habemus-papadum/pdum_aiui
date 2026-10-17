@@ -88,13 +88,6 @@ export { hotCellGraph } from "./hot-graph";
 // tool's math resolver and the `copy` handler every aiui page installs).
 export type { MathClipboard, MathInRange } from "./math-selection";
 export { clipboardFor, installMathCopy, MATH_TERM_ATTR, mathOfRange } from "./math-selection";
-// mode-solid.ts — the Solid adapter for the modal kit's mode engine:
-// flush()-committed dispatch, reactive state/claim views, the agent bridge.
-export {
-  type SolidModeEngine,
-  type SolidModeEngineConfig,
-  solidModeEngine,
-} from "./mode-solid";
 // mosaic-registry.ts — the live directory of Mosaic clause producers (which
 // component can filter what); structural, so the barrel stays mosaic-free.
 export {

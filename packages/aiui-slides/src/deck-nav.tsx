@@ -8,7 +8,7 @@
  *
  *  - a button executes by synthesizing its binding's first key through the
  *    same `resolveKey` stack real keydowns use (the tapKey house pattern —
- *    modal-kit keys.ts);
+ *    aiui-viz/keys);
  *  - its tooltip comes from the binding's own hint (`keyHints`), so the
  *    displayed keymap and the working keymap are one table — and the widget
  *    doubles as the keyboard cheat sheet ("next slide (↓)").
@@ -17,7 +17,7 @@
  * fallbacks in styles.css; a design system overrides the custom properties or
  * ships its own sheet.
  */
-import { type KeyHint, keyHints } from "@habemus-papadum/aiui-viz/modal";
+import { type KeyHint, keyHints } from "@habemus-papadum/aiui-viz/keys";
 import type { JSX } from "@solidjs/web";
 import { type DeckKeyState, deckKeyLayers } from "./keys";
 import type { DeckModel } from "./model";

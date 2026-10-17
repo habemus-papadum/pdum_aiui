@@ -10,7 +10,7 @@
  * No throttling: deltas arrive at word rate (Scribe's partial transcript updates), orders of magnitude below the pencil's pen
  * frequency — every event can afford to cross into the graph.
  *
- * The display side is `LiveDiffText` (aiui-viz/modal): {@link SttSignals.partial}'s
+ * The display side is `LiveDiffText` (aiui-viz/live-text): {@link SttSignals.partial}'s
  * cumulative text is exactly what its `update()` wants — appends extend,
  * revisions flash and settle (proposal D6; this package ships no renderer).
  */

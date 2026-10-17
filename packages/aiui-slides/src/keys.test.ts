@@ -1,9 +1,9 @@
 /**
  * keys.test.ts — the deck keymap as a table: state × key → claim, resolved
- * through the real stack (the modal kit's promise: keymap redesigns get cheap
+ * through the real stack (the key layer's promise: keymap redesigns get cheap
  * because this is where they are tested).
  */
-import { keyHints, resolveKey } from "@habemus-papadum/aiui-viz/modal";
+import { keyHints, resolveKey } from "@habemus-papadum/aiui-viz/keys";
 import { describe, expect, it } from "vitest";
 import { type DeckCommand, type DeckKeyState, deckKeyLayers } from "./keys";
 

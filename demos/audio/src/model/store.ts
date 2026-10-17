@@ -3,7 +3,6 @@ import { standardScribeConnectUrl } from "@habemus-papadum/aiui-cf-creds/stt";
 import { OracleSession, standardKeySources, webRtcTransport } from "@habemus-papadum/aiui-oracle";
 import { createStt, scribeTransport } from "@habemus-papadum/aiui-stt";
 import { scope } from "@habemus-papadum/aiui-viz";
-import { choice, createModeEngine } from "@habemus-papadum/aiui-viz/modal";
 
 export const appScope = scope("audio-demo");
 export const fallbackAudio = () => appScope.durable("standalone-audio", () => createAudioHub());
@@ -19,23 +18,14 @@ const instances = appScope.durable(
 function createDemo(hub: AudioHub) {
   const draft = appScope.durableSignal("draft", "");
   const partial = appScope.durableSignal("partial", "");
-  const state = appScope.durableSignal("state", "idle");
+  // The demo's one mode, as the durable signal the UI reads: every method below
+  // is already sequential and async, so the phase is written where it changes
+  // (reads happen after awaits, never in the same tick as a write).
+  const state = appScope.durableSignal<"idle" | "dictating" | "editing">("state", "idle");
   const error = appScope.durableSignal("error", "");
   const transcript = hub.pcmInput({ id: "dictation", label: "Dictation", icon: "✍" });
   const editor = hub.streamInput({ id: "editor", label: "Text editor", icon: "🔮" });
   const playback = hub.output({ id: "editor", label: "Text editor", icon: "🔮" });
-  const mode = createModeEngine(
-    {
-      regions: { phase: choice(["idle", "dictating", "editing"]) },
-      commands: {
-        idle: () => ({ phase: "idle" }),
-        dictate: () => ({ phase: "dictating" }),
-        edit: () => ({ phase: "editing" }),
-      },
-    },
-    { context: {} },
-  );
-  mode.subscribe((next) => state.set(next.phase as string));
   let finalText = draft.get();
   let restore: ReturnType<AudioHub["temporarilyRouteInput"]> | undefined;
   const stt = createStt({
@@ -90,7 +80,7 @@ function createDemo(hub: AudioHub) {
     oracle,
     async dictate() {
       error.set("");
-      if (mode.state().phase === "dictating") return;
+      if (state.get() === "dictating") return;
       if (restore) {
         oracle.park();
         await restore.release();
@@ -101,16 +91,16 @@ function createDemo(hub: AudioHub) {
       await hub.selectInput(transcript.id);
       await hub.resumeInput();
       stt.beginSegment();
-      mode.dispatch("dictate");
+      state.set("dictating");
     },
     async finish() {
-      if (mode.state().phase === "dictating") {
+      if (state.get() === "dictating") {
         await stt.endSegment();
         const pending = await stt.drain();
         if (pending.length)
           throw new Error("Still waiting for the final transcript. Try finishing again.");
       }
-      mode.dispatch("idle");
+      state.set("idle");
     },
     async edit() {
       error.set("");
@@ -126,7 +116,7 @@ function createDemo(hub: AudioHub) {
         throw new Error("Could not connect the text editor. Check the OpenAI key.");
       }
       oracle.sendText(`Current draft:\n${finalText}\nWait for my spoken edits.`);
-      mode.dispatch("edit");
+      state.set("editing");
     },
     async returnToDictation() {
       oracle.park();
@@ -134,7 +124,7 @@ function createDemo(hub: AudioHub) {
       restore = undefined;
       await stt.connect();
       stt.beginSegment();
-      mode.dispatch("dictate");
+      state.set("dictating");
       // Deliberately preserve a park requested while the editor was active.
     },
     async park() {
@@ -145,7 +135,7 @@ function createDemo(hub: AudioHub) {
       oracle.close();
       await restore?.release();
       restore = undefined;
-      mode.dispatch("idle");
+      state.set("idle");
     },
     setDraft(text: string) {
       finalText = text;
