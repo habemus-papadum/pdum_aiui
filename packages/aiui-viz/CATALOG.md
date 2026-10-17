@@ -12,7 +12,9 @@ detail of the substrate, the [concepts page](./docs/frontend-for-agents.md) expl
 work and why, and the [style guide](./docs/frontend-style-guide.md) says how a page should use
 them. The application-level inventory (capabilities across the planned applications, `C01`–`C13`)
 is §6 of the [three-applications proposal](../../docs/proposals/three-applications-and-development-process.md);
-this catalog is the library-level one it asks for.
+this catalog is the library-level one it asks for. [`demos/catalog`](../../demos/catalog) renders this
+file as a gallery page with the pieces shown live; it is a sheet, not evidence — a row's state comes
+from the notebooks and labs named in it.
 
 ## How to read an entry
 

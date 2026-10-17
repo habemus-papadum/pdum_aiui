@@ -102,6 +102,7 @@ site; its [`PUBLISHING.md`](./demos/gallery/PUBLISHING.md) and `publish.sh` are 
 | [`dna-script`](./demos/dna-script) | A shape notation for DNA, where complements interlock. |
 | [`wine`](./demos/wine) | Wine reviews on an embedding atlas. |
 | [`styleguide`](./demos/styleguide) | Every role, token and component of the design system on one page. |
+| [`catalog`](./demos/catalog) | The aiui-viz [catalog](./packages/aiui-viz/CATALOG.md) rendered as a page, every piece shown live where it can be. |
 | [`twins`](./demos/twins) | One [`oscillator`](./demos/oscillator) slice instantiated twice: the composability worked example. |
 | [`walkthrough`](./demos/walkthrough) | The frontend playbook built step by step on 1-D diffusion, every layer left standing. |
 | [`live`](./demos/live) | The GPT-Live lab: raw wire timing, delegation backends, a voice-driven app. Not in the gallery. |

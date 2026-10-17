@@ -175,6 +175,61 @@ importers:
         specifier: 'catalog:'
         version: 5.0.3(@types/node@26.2.0)(jsdom@29.1.1(@noble/hashes@2.4.0))(vite@8.3.3(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
 
+  demos/catalog:
+    dependencies:
+      '@habemus-papadum/aiui-design':
+        specifier: workspace:^
+        version: link:../../packages/aiui-design
+      '@habemus-papadum/aiui-dock':
+        specifier: workspace:^
+        version: link:../../packages/aiui-dock
+      '@habemus-papadum/aiui-pencil':
+        specifier: workspace:^
+        version: link:../../packages/aiui-pencil
+      '@habemus-papadum/aiui-source-processor':
+        specifier: workspace:^
+        version: link:../../packages/aiui-source-processor
+      '@habemus-papadum/aiui-viz':
+        specifier: workspace:^
+        version: link:../../packages/aiui-viz
+      '@observablehq/plot':
+        specifier: 'catalog:'
+        version: 0.6.17
+      '@solidjs/web':
+        specifier: catalog:solid
+        version: 2.0.0-rc.13(solid-js@2.0.0-rc.13)
+      katex:
+        specifier: ^0.17.0
+        version: 0.17.0
+      marked:
+        specifier: ^16.4.2
+        version: 16.4.2
+      mermaid:
+        specifier: ^12.2.0
+        version: 12.2.0
+      solid-js:
+        specifier: catalog:solid
+        version: 2.0.0-rc.13
+    devDependencies:
+      '@babel/core':
+        specifier: 'catalog:'
+        version: 7.29.7
+      jsdom:
+        specifier: 'catalog:'
+        version: 29.1.1(@noble/hashes@2.4.0)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vite:
+        specifier: 'catalog:'
+        version: 8.3.3(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
+      vite-plugin-solid:
+        specifier: catalog:solid
+        version: 3.0.0-next.27(@solidjs/web@2.0.0-rc.13(solid-js@2.0.0-rc.13))(solid-js@2.0.0-rc.13)(vite@8.3.3(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.3(@types/node@26.6.4)(jsdom@29.1.1(@noble/hashes@2.4.0))(vite@8.3.3(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
+
   demos/circle:
     dependencies:
       '@habemus-papadum/aiui-design':
