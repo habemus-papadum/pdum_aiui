@@ -1,6 +1,7 @@
 # aiui-viz and its sister packages — the plan for October 2026
 
-**Status:** in progress (opened 2026-10-17). Each item carries its own status: `planned`,
+**Status:** housekeeping and the four "now" items are done (opened and closed 2026-10-17; the deferred
+list below is what remains). Each item carries its own status: `planned`,
 `in progress`, `done <sha>`, `dropped`. Agents landing an item update its line. Delete this file
 when every item is done or dropped; git history is the record.
 
