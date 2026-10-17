@@ -238,26 +238,20 @@ real contact delivery, writing latency, and navigation feel. Optional outline
 conversion and concurrent pen/navigation are bounded experiments; they do not
 require changes to the document or semantic modes.
 
-### Hardware testing follow-up — 2026-10-16
+## Hardware input and Wacom compatibility
 
-Investigation is paused at the user's request. The user reports that resetting
-the Wacom driver resolved many of the remaining input problems and that drawing
-generally works, with a few small bugs still to revisit.
+The living [Wacom browser input note](./wacom-browser-input.md) records the
+Movink 13 hardware observations, representative browser traces, current
+compatibility behavior, validation status, and proposed input refactor. Keep new
+hardware findings there so users and future agents share one evidence record.
 
-The captured disappearing-stroke failure delivered `lostpointercapture` before
-`pointerup`. Input now keeps the contact alive until `pointerup` or a real
-cancellation, including when the terminal event lands outside the canvas.
-Unit and Chromium regression tests cover this ordering and cancellation cleanup.
-A later Wacom attempt delivered no pen events to the browser at all; keep that
-driver/input-delivery symptom separate from application cancellation.
+Capture loss alone no longer cancels a stroke: input remains active until
+pointer-up or a real cancellation, including when release occurs outside the
+canvas. Unit and browser regressions cover this ordering.
 
-Before calling hardware validation complete, repeat fast and slow Wacom strokes,
-light/heavy pressure, repeated pen lifts, release outside the canvas, and a
-mouse comparison after the driver reset. Confirm that completed strokes remain,
-no draft is stranded, and genuine cancellation still clears the active draft.
-Record reproducible steps for the remaining small bugs during that round.
-
-The `HOT_SCOPE_TIME` warnings caused by `inkSignals.snapshot` remain a separate
-performance follow-up. Inspect the lab's `plans` and `inkStats` cells, which
-recompute stroke geometry as live snapshots change. No performance fix was made
-as part of the capture-loss correction.
+The lab now handles Ctrl+wheel pinch and allows an ambiguous mouse draft to
+yield to it while preserving observed pen pressure/tilt evidence. These wheel
+rules are lab-specific; they do not yet form a unified library policy with
+pointer-based navigation. Ordinary wheel protection, committed stray marks,
+rotation delivery, and diagnostic geometry performance remain open. See the
+note before extending device detection or changing stroke ownership.

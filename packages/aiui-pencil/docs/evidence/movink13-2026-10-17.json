@@ -1,0 +1,1024 @@
+{
+  "schemaVersion": 1,
+  "capturedOn": "2026-10-17",
+  "environment": {
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36",
+    "platform": "MacIntel",
+    "maxTouchPoints": 0,
+    "touchstart": false,
+    "gesturestart": false,
+    "dpr": 1.75
+  },
+  "provenance": {
+    "kind": "selected excerpts of real user-operated hardware traces",
+    "scope": "Movink 13 / Pro Pen 3 on this macOS Chromium session only",
+    "timestamps": "Original collector page-relative milliseconds; not hardware-to-display latency measurements",
+    "fieldNames": {
+      "kind": "PointerEvent.pointerType",
+      "id": "pointerId in browser lifecycle records; stroke inputId in ink records",
+      "ctrl": "WheelEvent.ctrlKey",
+      "dx": "WheelEvent.deltaX",
+      "dy": "WheelEvent.deltaY",
+      "mode": "WheelEvent.deltaMode",
+      "fromTouch": "sourceCapabilities?.firesTouchEvents or null",
+      "onCanvas": "Observer composedPath included the drawing canvas"
+    },
+    "limitations": [
+      "Excerpts omit events and fields; they are not complete replay fixtures.",
+      "Collectors and runtime instances changed during HMR; use each scenario baseline, not lifetime counters across scenarios.",
+      "Missing properties mean not recorded, not zero or unsupported.",
+      "Ink callbacks can precede the window bubble observer for the originating pointer or wheel event.",
+      "Physical action labels come from the user-guided test, not inferred from pointerType."
+    ]
+  },
+  "scenarios": {
+    "captureLoss": {
+      "physicalAction": "Slow pen stroke after driver reset",
+      "events": [
+        {
+          "type": "pointerdown",
+          "at": 99551.9,
+          "id": 2,
+          "kind": "pen",
+          "buttons": 1,
+          "pressure": 0.007843137718737125,
+          "x": 479.685302734375,
+          "y": 211.39064025878906,
+          "onCanvas": true,
+          "trusted": true
+        },
+        {
+          "type": "gotpointercapture",
+          "at": 99571.3,
+          "id": 2,
+          "kind": "pen",
+          "buttons": 1,
+          "pressure": 0.38823530077934265,
+          "x": 479.482177734375,
+          "y": 209.2209930419922,
+          "onCanvas": true,
+          "trusted": true
+        },
+        {
+          "type": "lostpointercapture",
+          "at": 100515.3,
+          "id": 2,
+          "kind": "pen",
+          "buttons": 0,
+          "pressure": 0,
+          "x": 512.7745971679688,
+          "y": 230.4442138671875,
+          "onCanvas": true,
+          "trusted": true
+        },
+        {
+          "type": "pointerup",
+          "at": 100515.5,
+          "id": 2,
+          "kind": "pen",
+          "buttons": 0,
+          "pressure": 0,
+          "x": 512.7745971679688,
+          "y": 230.4442138671875,
+          "onCanvas": true,
+          "trusted": true
+        }
+      ],
+      "result": {
+        "strokes": 6,
+        "drafts": 0,
+        "input": {
+          "began": 6,
+          "ended": 6,
+          "cancelled": 0,
+          "scrolls": 0,
+          "zooms": 0,
+          "rotations": 0,
+          "touchDowns": 0,
+          "palms": 0,
+          "maxTouches": 0,
+          "observedSamples": 506,
+          "acceptedSamples": 250
+        }
+      }
+    },
+    "fingerDrag": {
+      "physicalAction": "One-finger drag with pen set aside",
+      "capturedPointerEvents": 74,
+      "events": [
+        {
+          "type": "pointermove",
+          "phase": "finger-only-drag",
+          "at": 3567315.8000001907,
+          "trusted": true,
+          "onCanvas": true,
+          "kind": "mouse",
+          "id": 1,
+          "buttons": 0,
+          "pressure": 0,
+          "tiltX": 0,
+          "tiltY": 0,
+          "width": 1,
+          "height": 1,
+          "x": 257.14288330078125,
+          "y": 217.1428680419922,
+          "fromTouch": null
+        },
+        {
+          "type": "pointermove",
+          "phase": "finger-only-drag",
+          "at": 3567321.9000000954,
+          "trusted": true,
+          "onCanvas": true,
+          "kind": "mouse",
+          "id": 1,
+          "buttons": 0,
+          "pressure": 0,
+          "tiltX": 0,
+          "tiltY": 0,
+          "width": 1,
+          "height": 1,
+          "x": 257.14288330078125,
+          "y": 217.1428680419922,
+          "fromTouch": null
+        },
+        {
+          "type": "pointermove",
+          "phase": "finger-only-drag",
+          "at": 3567338.4000000954,
+          "trusted": true,
+          "onCanvas": true,
+          "kind": "mouse",
+          "id": 1,
+          "buttons": 0,
+          "pressure": 0,
+          "tiltX": 0,
+          "tiltY": 0,
+          "width": 1,
+          "height": 1,
+          "x": 257.14288330078125,
+          "y": 217.1428680419922,
+          "fromTouch": null
+        },
+        {
+          "type": "pointermove",
+          "phase": "finger-only-drag",
+          "at": 3571338.5,
+          "trusted": true,
+          "onCanvas": true,
+          "kind": "mouse",
+          "id": 1,
+          "buttons": 0,
+          "pressure": 0,
+          "tiltX": 0,
+          "tiltY": 0,
+          "width": 1,
+          "height": 1,
+          "x": 61.921878814697266,
+          "y": 128.921875,
+          "fromTouch": null
+        }
+      ],
+      "result": {
+        "strokes": 1,
+        "input": {
+          "began": 57,
+          "ended": 56,
+          "cancelled": 1,
+          "scrolls": 0,
+          "zooms": 0,
+          "rotations": 0,
+          "touchDowns": 0,
+          "palms": 0,
+          "maxTouches": 0,
+          "observedSamples": 2961,
+          "acceptedSamples": 1668
+        },
+        "dpr": 1.75,
+        "scale": 1,
+        "inkView": {
+          "x": -6.857142925262451,
+          "y": 0,
+          "scale": 1
+        }
+      }
+    },
+    "pinchBeforeFix": {
+      "physicalAction": "Finger pinch out and in with pen set aside",
+      "summary": {
+        "counts": {
+          "pointermove": 122,
+          "pointerdown": 1,
+          "pointerup": 1,
+          "wheel": 216,
+          "viewport": 167
+        },
+        "ctrlWheels": 216,
+        "viewportScaleRange": [1, 2.739501953125],
+        "pinchBaseline": {
+          "strokes": 1,
+          "input": {
+            "began": 57,
+            "ended": 56,
+            "cancelled": 1,
+            "scrolls": 0,
+            "zooms": 0,
+            "rotations": 0,
+            "touchDowns": 0,
+            "palms": 0,
+            "maxTouches": 0,
+            "observedSamples": 2961,
+            "acceptedSamples": 1668
+          },
+          "dpr": 1.75,
+          "scale": 1,
+          "inkView": {
+            "x": -6.857142925262451,
+            "y": 0,
+            "scale": 1
+          },
+          "width": 942,
+          "height": 567
+        },
+        "now": {
+          "strokes": 2,
+          "input": {
+            "began": 58,
+            "ended": 57,
+            "cancelled": 1,
+            "scrolls": 0,
+            "zooms": 0,
+            "rotations": 0,
+            "touchDowns": 0,
+            "palms": 0,
+            "maxTouches": 0,
+            "observedSamples": 3018,
+            "acceptedSamples": 1672
+          },
+          "dpr": 1.75,
+          "scale": 1,
+          "inkView": {
+            "x": -6.857142925262451,
+            "y": 0,
+            "scale": 1
+          }
+        }
+      },
+      "events": [
+        {
+          "type": "wheel",
+          "phase": "finger-pinch",
+          "at": 3762512.3000001907,
+          "trusted": true,
+          "onCanvas": true,
+          "dx": 0,
+          "dy": -0.4193548134395054,
+          "dz": 0,
+          "mode": 0,
+          "ctrl": true,
+          "meta": false,
+          "shift": false,
+          "fromTouch": null
+        },
+        {
+          "type": "wheel",
+          "phase": "finger-pinch",
+          "at": 3762527.9000000954,
+          "trusted": true,
+          "onCanvas": true,
+          "dx": 0,
+          "dy": -1.2489433288574219,
+          "dz": 0,
+          "mode": 0,
+          "ctrl": true,
+          "meta": false,
+          "shift": false,
+          "fromTouch": null
+        },
+        {
+          "type": "wheel",
+          "phase": "finger-pinch",
+          "at": 3768880.700000286,
+          "trusted": true,
+          "onCanvas": true,
+          "dx": 0,
+          "dy": 0.42245510646275114,
+          "dz": 0,
+          "mode": 0,
+          "ctrl": true,
+          "meta": false,
+          "shift": false,
+          "fromTouch": null
+        },
+        {
+          "type": "wheel",
+          "phase": "finger-pinch",
+          "at": 3769385.9000000954,
+          "trusted": true,
+          "onCanvas": true,
+          "dx": 0,
+          "dy": -0.4193548134395054,
+          "dz": 0,
+          "mode": 0,
+          "ctrl": true,
+          "meta": false,
+          "shift": false,
+          "fromTouch": null
+        }
+      ]
+    },
+    "rotation": {
+      "physicalAction": "Two-finger twist with pen set aside",
+      "counts": {
+        "pointermove": 307,
+        "pointerdown": 2,
+        "pointerup": 2
+      },
+      "events": [
+        {
+          "type": "pointerdown",
+          "phase": "finger-rotation",
+          "at": 5263181.700000286,
+          "trusted": true,
+          "onCanvas": true,
+          "kind": "mouse",
+          "id": 1,
+          "buttons": 1,
+          "pressure": 0.5,
+          "tiltX": 0,
+          "tiltY": 0,
+          "width": 1,
+          "height": 1,
+          "x": 176.57144165039062,
+          "y": 225.71429443359375,
+          "fromTouch": null
+        },
+        {
+          "type": "pointerup",
+          "phase": "finger-rotation",
+          "at": 5265818.300000191,
+          "trusted": true,
+          "onCanvas": true,
+          "kind": "mouse",
+          "id": 1,
+          "buttons": 0,
+          "pressure": 0,
+          "tiltX": 0,
+          "tiltY": 0,
+          "width": 1,
+          "height": 1,
+          "x": 188.57144165039062,
+          "y": 229.71429443359375,
+          "fromTouch": null
+        },
+        {
+          "type": "pointerdown",
+          "phase": "finger-rotation",
+          "at": 5267370.1000003815,
+          "trusted": true,
+          "onCanvas": true,
+          "kind": "mouse",
+          "id": 1,
+          "buttons": 1,
+          "pressure": 0.5,
+          "tiltX": 0,
+          "tiltY": 0,
+          "width": 1,
+          "height": 1,
+          "x": 233.71429443359375,
+          "y": 183.42857360839844,
+          "fromTouch": null
+        },
+        {
+          "type": "pointerup",
+          "phase": "finger-rotation",
+          "at": 5269588.5,
+          "trusted": true,
+          "onCanvas": true,
+          "kind": "mouse",
+          "id": 1,
+          "buttons": 0,
+          "pressure": 0,
+          "tiltX": 0,
+          "tiltY": 0,
+          "width": 1,
+          "height": 1,
+          "x": 171.42857360839844,
+          "y": 230.2857208251953,
+          "fromTouch": null
+        }
+      ],
+      "result": {
+        "baseline": {
+          "strokes": 2,
+          "input": {
+            "began": 58,
+            "ended": 57,
+            "cancelled": 1,
+            "scrolls": 0,
+            "zooms": 0,
+            "rotations": 0,
+            "touchDowns": 0,
+            "palms": 0,
+            "maxTouches": 0,
+            "observedSamples": 3018,
+            "acceptedSamples": 1672
+          },
+          "dpr": 1.75,
+          "scale": 1,
+          "inkView": {
+            "x": -6.857142925262451,
+            "y": 0,
+            "scale": 1
+          }
+        },
+        "now": {
+          "strokes": 4,
+          "input": {
+            "began": 60,
+            "ended": 59,
+            "cancelled": 1,
+            "scrolls": 0,
+            "zooms": 0,
+            "rotations": 0,
+            "touchDowns": 0,
+            "palms": 0,
+            "maxTouches": 0,
+            "observedSamples": 3147,
+            "acceptedSamples": 1715
+          },
+          "dpr": 1.75,
+          "scale": 1,
+          "inkView": {
+            "x": -6.857142925262451,
+            "y": 0,
+            "scale": 1
+          }
+        }
+      }
+    },
+    "mouseLabelledPen": {
+      "physicalAction": "Three quick pen strokes after canvas zoom",
+      "events": [
+        {
+          "type": "pointerdown",
+          "at": 9098293.700000286,
+          "kind": "mouse",
+          "pressure": 0.501960813999176,
+          "onCanvas": true
+        },
+        {
+          "type": "pointerup",
+          "at": 9098446.100000381,
+          "kind": "mouse",
+          "pressure": 0,
+          "onCanvas": true
+        },
+        {
+          "type": "pointerdown",
+          "at": 9098546.600000381,
+          "kind": "mouse",
+          "pressure": 0.5333333611488342,
+          "onCanvas": true
+        },
+        {
+          "type": "pointerup",
+          "at": 9098729.400000095,
+          "kind": "mouse",
+          "pressure": 0,
+          "onCanvas": true
+        },
+        {
+          "type": "pointerdown",
+          "at": 9098780.400000095,
+          "kind": "mouse",
+          "pressure": 0.5411764979362488,
+          "onCanvas": true
+        },
+        {
+          "type": "pointerup",
+          "at": 9098948.400000095,
+          "kind": "mouse",
+          "pressure": 0,
+          "onCanvas": true
+        }
+      ],
+      "pinchDuringMouseDraft": {
+        "wheelCount": 315,
+        "withDraft": 32,
+        "unchanged": 31
+      },
+      "result": {
+        "baseline": {
+          "strokes": 5,
+          "live": 0,
+          "inkView": {
+            "x": -42.70037973655531,
+            "y": -78.16304372356339,
+            "scale": 1.155314063481456,
+            "rotation": 0
+          },
+          "pageScale": 1,
+          "zoom": true,
+          "navigation": true,
+          "input": {
+            "began": 1,
+            "ended": 1,
+            "cancelled": 0,
+            "scrolls": 0,
+            "zooms": 0,
+            "rotations": 0,
+            "touchDowns": 0,
+            "palms": 0,
+            "maxTouches": 0,
+            "observedSamples": 258,
+            "acceptedSamples": 37
+          }
+        },
+        "now": {
+          "strokes": 10,
+          "live": 0,
+          "inkView": {
+            "x": 73.22382247318102,
+            "y": -0.009489372592812462,
+            "scale": 1.055265093699632,
+            "rotation": 0
+          },
+          "pageScale": 1,
+          "zoom": true,
+          "navigation": true,
+          "input": {
+            "began": 6,
+            "ended": 6,
+            "cancelled": 0,
+            "scrolls": 0,
+            "zooms": 0,
+            "rotations": 0,
+            "touchDowns": 0,
+            "palms": 0,
+            "maxTouches": 0,
+            "observedSamples": 491,
+            "acceptedSamples": 134
+          }
+        }
+      }
+    },
+    "mixedGestureCleanup": {
+      "physicalAction": "Staggered fingers followed by navigation",
+      "summary": {
+        "phase": "pinch-handoff",
+        "baseline": {
+          "strokes": 10,
+          "live": 0,
+          "inkView": {
+            "x": 73.22382247318102,
+            "y": -0.009489372592812018,
+            "scale": 1.055265093699632,
+            "rotation": 0
+          },
+          "pageScale": 1,
+          "zoom": true,
+          "navigation": true,
+          "input": {
+            "began": 0,
+            "ended": 0,
+            "cancelled": 0,
+            "scrolls": 0,
+            "zooms": 0,
+            "rotations": 0,
+            "touchDowns": 0,
+            "palms": 0,
+            "maxTouches": 0,
+            "observedSamples": 0,
+            "acceptedSamples": 0
+          }
+        },
+        "now": {
+          "strokes": 0,
+          "live": 0,
+          "inkView": {
+            "x": 108.45895182446746,
+            "y": -24.060413908039465,
+            "scale": 0.7702204598693212,
+            "rotation": 0
+          },
+          "pageScale": 1,
+          "zoom": true,
+          "navigation": true,
+          "input": {
+            "began": 2,
+            "ended": 0,
+            "cancelled": 2,
+            "scrolls": 0,
+            "zooms": 0,
+            "rotations": 0,
+            "touchDowns": 0,
+            "palms": 0,
+            "maxTouches": 0,
+            "observedSamples": 184,
+            "acceptedSamples": 60
+          }
+        },
+        "totals": {
+          "pinch": 116,
+          "scroll": 124,
+          "preventedPinch": 116,
+          "pinchWithDraft": 0,
+          "pageScaleMin": 1,
+          "pageScaleMax": 1
+        },
+        "inkEvents": [
+          {
+            "type": "ink-begin",
+            "at": 9817620.30000019,
+            "id": "pointer-486a669a-bbec08ab-7cd22443-578b355a-1",
+            "strokes": 0,
+            "live": 1
+          },
+          {
+            "type": "ink-cancel",
+            "at": 9818053,
+            "id": "pointer-486a669a-bbec08ab-7cd22443-578b355a-1",
+            "strokes": 0,
+            "live": 0
+          },
+          {
+            "type": "ink-begin",
+            "at": 9824872.700000286,
+            "id": "pointer-486a669a-bbec08ab-7cd22443-578b355a-2",
+            "strokes": 0,
+            "live": 1
+          },
+          {
+            "type": "ink-cancel",
+            "at": 9825472.5,
+            "id": "pointer-486a669a-bbec08ab-7cd22443-578b355a-2",
+            "strokes": 0,
+            "live": 0
+          }
+        ],
+        "inkScaleRange": [0.7702204598693212, 1.267942011523668]
+      },
+      "qualification": "Both recorded cancellations coincided with ordinary wheel scrolling before pinch, not Ctrl+wheel."
+    },
+    "penRecoveryAndDirectPinchHandoff": {
+      "physicalAction": "Pen strokes after navigation, with further finger navigation",
+      "result": {
+        "phase": "pen-after-handoff",
+        "baseline": {
+          "strokes": 0,
+          "live": 0,
+          "inkView": {
+            "x": 108.45895182446746,
+            "y": -24.060413908039465,
+            "scale": 0.7702204598693212,
+            "rotation": 0
+          },
+          "pageScale": 1,
+          "zoom": true,
+          "navigation": true,
+          "input": {
+            "began": 2,
+            "ended": 0,
+            "cancelled": 2,
+            "scrolls": 0,
+            "zooms": 0,
+            "rotations": 0,
+            "touchDowns": 0,
+            "palms": 0,
+            "maxTouches": 0,
+            "observedSamples": 184,
+            "acceptedSamples": 60
+          }
+        },
+        "now": {
+          "strokes": 9,
+          "live": 0,
+          "inkView": {
+            "x": -190.77185908248464,
+            "y": -658.3379271814142,
+            "scale": 1.7416502568602157,
+            "rotation": 0
+          },
+          "pageScale": 1,
+          "zoom": true,
+          "navigation": true,
+          "input": {
+            "began": 12,
+            "ended": 9,
+            "cancelled": 3,
+            "scrolls": 0,
+            "zooms": 0,
+            "rotations": 0,
+            "touchDowns": 0,
+            "palms": 0,
+            "maxTouches": 0,
+            "observedSamples": 753,
+            "acceptedSamples": 412
+          }
+        },
+        "totals": {
+          "pinch": 409,
+          "scroll": 128,
+          "preventedPinch": 409,
+          "pinchWithDraft": 0,
+          "pageScaleMin": 1,
+          "pageScaleMax": 1
+        },
+        "inkEvents": [
+          {
+            "type": "ink-begin",
+            "at": 10001023.900000095,
+            "id": "pointer-486a669a-bbec08ab-7cd22443-578b355a-3",
+            "strokes": 0,
+            "live": 1
+          },
+          {
+            "type": "ink-finish",
+            "at": 10001456.80000019,
+            "id": "pointer-486a669a-bbec08ab-7cd22443-578b355a-3",
+            "strokes": 1,
+            "live": 0
+          },
+          {
+            "type": "ink-begin",
+            "at": 10001907.600000381,
+            "id": "pointer-486a669a-bbec08ab-7cd22443-578b355a-4",
+            "strokes": 1,
+            "live": 1
+          },
+          {
+            "type": "ink-finish",
+            "at": 10002423.600000381,
+            "id": "pointer-486a669a-bbec08ab-7cd22443-578b355a-4",
+            "strokes": 2,
+            "live": 0
+          },
+          {
+            "type": "ink-begin",
+            "at": 10003259.700000286,
+            "id": "pointer-486a669a-bbec08ab-7cd22443-578b355a-5",
+            "strokes": 2,
+            "live": 1
+          },
+          {
+            "type": "ink-finish",
+            "at": 10003942.200000286,
+            "id": "pointer-486a669a-bbec08ab-7cd22443-578b355a-5",
+            "strokes": 3,
+            "live": 0
+          },
+          {
+            "type": "ink-begin",
+            "at": 10004341.400000095,
+            "id": "pointer-486a669a-bbec08ab-7cd22443-578b355a-6",
+            "strokes": 3,
+            "live": 1
+          },
+          {
+            "type": "ink-finish",
+            "at": 10004909.5,
+            "id": "pointer-486a669a-bbec08ab-7cd22443-578b355a-6",
+            "strokes": 4,
+            "live": 0
+          },
+          {
+            "type": "ink-begin",
+            "at": 10007226.30000019,
+            "id": "pointer-486a669a-bbec08ab-7cd22443-578b355a-7",
+            "strokes": 4,
+            "live": 1
+          },
+          {
+            "type": "ink-finish",
+            "at": 10008144.400000095,
+            "id": "pointer-486a669a-bbec08ab-7cd22443-578b355a-7",
+            "strokes": 5,
+            "live": 0
+          },
+          {
+            "type": "ink-begin",
+            "at": 10008628,
+            "id": "pointer-486a669a-bbec08ab-7cd22443-578b355a-8",
+            "strokes": 5,
+            "live": 1
+          },
+          {
+            "type": "ink-finish",
+            "at": 10008842.30000019,
+            "id": "pointer-486a669a-bbec08ab-7cd22443-578b355a-8",
+            "strokes": 6,
+            "live": 0
+          },
+          {
+            "type": "ink-begin",
+            "at": 10009227.400000095,
+            "id": "pointer-486a669a-bbec08ab-7cd22443-578b355a-9",
+            "strokes": 6,
+            "live": 1
+          },
+          {
+            "type": "ink-cancel",
+            "at": 10009310.700000286,
+            "id": "pointer-486a669a-bbec08ab-7cd22443-578b355a-9",
+            "strokes": 6,
+            "live": 0
+          },
+          {
+            "type": "ink-begin",
+            "at": 10011361.700000286,
+            "id": "pointer-486a669a-bbec08ab-7cd22443-578b355a-10",
+            "strokes": 6,
+            "live": 1
+          },
+          {
+            "type": "ink-finish",
+            "at": 10012160.200000286,
+            "id": "pointer-486a669a-bbec08ab-7cd22443-578b355a-10",
+            "strokes": 7,
+            "live": 0
+          },
+          {
+            "type": "ink-begin",
+            "at": 10020548.400000095,
+            "id": "pointer-486a669a-bbec08ab-7cd22443-578b355a-11",
+            "strokes": 7,
+            "live": 1
+          },
+          {
+            "type": "ink-finish",
+            "at": 10021096.900000095,
+            "id": "pointer-486a669a-bbec08ab-7cd22443-578b355a-11",
+            "strokes": 8,
+            "live": 0
+          },
+          {
+            "type": "ink-begin",
+            "at": 10021864.700000286,
+            "id": "pointer-486a669a-bbec08ab-7cd22443-578b355a-12",
+            "strokes": 8,
+            "live": 1
+          },
+          {
+            "type": "ink-finish",
+            "at": 10022631.600000381,
+            "id": "pointer-486a669a-bbec08ab-7cd22443-578b355a-12",
+            "strokes": 9,
+            "live": 0
+          }
+        ],
+        "strokes": [
+          {
+            "id": "pointer-486a669a-bbec08ab-7cd22443-578b355a-3",
+            "points": 28,
+            "kinds": ["pen"],
+            "pressureMin": 0,
+            "pressureMax": 0.6941176652908325
+          },
+          {
+            "id": "pointer-486a669a-bbec08ab-7cd22443-578b355a-4",
+            "points": 33,
+            "kinds": ["pen"],
+            "pressureMin": 0,
+            "pressureMax": 0.729411780834198
+          },
+          {
+            "id": "pointer-486a669a-bbec08ab-7cd22443-578b355a-5",
+            "points": 43,
+            "kinds": ["pen"],
+            "pressureMin": 0,
+            "pressureMax": 0.5647059082984924
+          },
+          {
+            "id": "pointer-486a669a-bbec08ab-7cd22443-578b355a-6",
+            "points": 36,
+            "kinds": ["pen"],
+            "pressureMin": 0,
+            "pressureMax": 0.5764706134796143
+          },
+          {
+            "id": "pointer-486a669a-bbec08ab-7cd22443-578b355a-7",
+            "points": 57,
+            "kinds": ["pen"],
+            "pressureMin": 0,
+            "pressureMax": 0.5803921818733215
+          },
+          {
+            "id": "pointer-486a669a-bbec08ab-7cd22443-578b355a-8",
+            "points": 15,
+            "kinds": ["pen"],
+            "pressureMin": 0,
+            "pressureMax": 0.4901960790157318
+          },
+          {
+            "id": "pointer-486a669a-bbec08ab-7cd22443-578b355a-10",
+            "points": 49,
+            "kinds": ["pen"],
+            "pressureMin": 0,
+            "pressureMax": 0.6196078658103943
+          },
+          {
+            "id": "pointer-486a669a-bbec08ab-7cd22443-578b355a-11",
+            "points": 35,
+            "kinds": ["pen"],
+            "pressureMin": 0,
+            "pressureMax": 0.6000000238418579
+          },
+          {
+            "id": "pointer-486a669a-bbec08ab-7cd22443-578b355a-12",
+            "points": 49,
+            "kinds": ["pen"],
+            "pressureMin": 0,
+            "pressureMax": 0.6509804129600525
+          }
+        ],
+        "environment": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Safari/537.36",
+          "platform": "MacIntel",
+          "maxTouchPoints": 0,
+          "touchstart": false,
+          "gesturestart": false,
+          "dpr": 1.75
+        }
+      },
+      "events": [
+        {
+          "type": "pointerdown",
+          "at": 10009230.900000095,
+          "kind": "mouse",
+          "pressure": 0.5,
+          "tiltX": 0,
+          "tiltY": 0,
+          "onCanvas": true
+        },
+        {
+          "type": "ink-cancel",
+          "at": 10009310.700000286,
+          "id": "pointer-486a669a-bbec08ab-7cd22443-578b355a-9",
+          "strokes": 6,
+          "live": 0
+        },
+        {
+          "type": "wheel",
+          "at": 10009312.80000019,
+          "ctrl": true,
+          "dx": 0,
+          "dy": -1.659264428274972,
+          "x": 326,
+          "y": 346,
+          "mode": 0,
+          "onCanvas": true,
+          "prevented": true,
+          "strokes": 6,
+          "live": 0,
+          "inkView": {
+            "x": -144.75568078459762,
+            "y": -298.76670508310013,
+            "scale": 1.622578371325685,
+            "rotation": 0
+          },
+          "pageScale": 1,
+          "zoom": true,
+          "navigation": true
+        },
+        {
+          "type": "wheel",
+          "at": 10009326,
+          "ctrl": true,
+          "dx": 0,
+          "dy": -1.659264428274972,
+          "x": 326,
+          "y": 346,
+          "mode": 0,
+          "onCanvas": true,
+          "prevented": true,
+          "strokes": 6,
+          "live": 0,
+          "inkView": {
+            "x": -152.28774352782153,
+            "y": -307.62070648349766,
+            "scale": 1.6497258383526274,
+            "rotation": 0
+          },
+          "pageScale": 1,
+          "zoom": true,
+          "navigation": true
+        },
+        {
+          "type": "pointerup",
+          "at": 10010725.900000095,
+          "kind": "mouse",
+          "pressure": 0,
+          "tiltX": 0,
+          "tiltY": 0,
+          "onCanvas": true
+        }
+      ],
+      "qualification": "This later mouse draft cancelled during the first Ctrl+wheel event. Nine pen-labelled strokes committed; no draft remained."
+    }
+  },
+  "codebase": {
+    "baseCommit": "bd109ebb",
+    "compatibilityChanges": "uncommitted Pencil lab changes during this session; consult git history for eventual commit"
+  }
+}

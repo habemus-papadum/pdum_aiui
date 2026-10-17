@@ -149,4 +149,5 @@ navigation, and deliberate reflow. Scene controls exercise pan, zoom, rotation,
 and the explicit pause/resume boundary when reflow makes alignment uncertain.
 Circle demonstrates live measurement followed by fading ink and a retained score.
 
-[Architecture](./docs/architecture.md) · [Getting started](./docs/getting-started.md)
+[Architecture](./docs/architecture.md) · [Getting started](./docs/getting-started.md) ·
+[Wacom browser input evidence and refactor notes](./docs/wacom-browser-input.md)

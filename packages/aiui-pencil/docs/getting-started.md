@@ -17,6 +17,11 @@ applied; `held-during-pen` means those fingers need to lift and start again;
 `navigation-disabled` means the navigation or Pencil-mode switch is off.
 If the readout stays at "waiting for fingers", no touch input reached the canvas.
 
+On the tested Movink 13/macOS Chromium setup, finger gestures instead arrived as
+mouse and wheel events. The touch readout does not count that wheel navigation.
+See [Wacom browser input](./wacom-browser-input.md) for the working compatibility
+rules, recorded hardware evidence, and remaining limitations.
+
 Draw around a symbol on the patterned reference page. Use **Scroll down/up** to
 move it out of view and back, or **Zoom in/out** and **Rotate left/right** to inspect
 the coordinate mapping. **Link ink and content** keeps the ink and page aligned;

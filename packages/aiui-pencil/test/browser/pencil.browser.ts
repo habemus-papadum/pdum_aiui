@@ -155,6 +155,94 @@ test("browser-delivered wide finger contacts navigate the lab", async ({ page, c
   await session.detach();
 });
 
+test("Ctrl+wheel pinch zooms lab ink without page zoom or interrupting a pen stroke", async ({
+  page,
+  context,
+}) => {
+  await page.goto(labURL);
+  const canvas = page.locator("canvas.paper-canvas");
+  await expect(canvas).toBeVisible();
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error("Lab canvas missing");
+  const x = box.x + 150;
+  const y = box.y + 150;
+  const read = () =>
+    page.evaluate(
+      async ({ path, x, y }) => {
+        const { paper, inkDocument } = await import(path);
+        const ink = inkDocument.snapshot();
+        return {
+          viewport: paper.view.getViewport(),
+          anchor: paper.view.clientToInk({ x, y }),
+          pageScale: window.visualViewport?.scale,
+          strokes: ink.strokes.length,
+          live: ink.live.length,
+          cancelled: paper.input.counts().cancelled,
+        };
+      },
+      { path: labStore, x, y },
+    );
+  const session = await context.newCDPSession(page);
+  const pinch = () =>
+    session.send("Input.dispatchMouseEvent", {
+      type: "mouseWheel",
+      x,
+      y,
+      deltaX: 0,
+      deltaY: -40,
+      modifiers: 2,
+    });
+  await session.send("Input.dispatchMouseEvent", {
+    type: "mousePressed",
+    pointerType: "pen",
+    button: "left",
+    buttons: 1,
+    x,
+    y,
+    force: 0.6,
+  });
+  const drawing = await read();
+  expect(drawing.live).toBe(1);
+  await pinch();
+  expect(await read()).toEqual(drawing);
+  await session.send("Input.dispatchMouseEvent", {
+    type: "mouseReleased",
+    pointerType: "pen",
+    button: "left",
+    buttons: 0,
+    x,
+    y,
+    force: 0,
+  });
+  const before = await read();
+  expect(before.strokes).toBe(1);
+  await pinch();
+  await expect
+    .poll(async () => (await read()).viewport.scale)
+    .toBeGreaterThan(before.viewport.scale);
+  const after = await read();
+  expect(after.pageScale).toBe(1);
+  expect(after.anchor.x).toBeCloseTo(before.anchor.x);
+  expect(after.anchor.y).toBeCloseTo(before.anchor.y);
+  expect(after.strokes).toBe(1);
+  expect(after.live).toBe(0);
+  expect(after.cancelled).toBe(0);
+  // A finger may arrive as a mouse press before macOS recognizes the pinch.
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  expect((await read()).live).toBe(1);
+  await pinch();
+  await expect
+    .poll(async () => (await read()).viewport.scale)
+    .toBeGreaterThan(after.viewport.scale);
+  expect(await read()).toMatchObject({ pageScale: 1, strokes: 1, live: 0, cancelled: 1 });
+  // Its later move/up must not resurrect or commit the discarded draft.
+  await page.mouse.move(x + 10, y + 10);
+  await page.mouse.up();
+  expect(await read()).toMatchObject({ strokes: 1, live: 0, cancelled: 1 });
+  await session.detach();
+});
+
 async function drawCircle(page: Page) {
   const canvas = page.locator("canvas.circle-paper");
   await canvas.scrollIntoViewIfNeeded();

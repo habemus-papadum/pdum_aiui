@@ -379,6 +379,7 @@ export const scene = new LabScene({
   valid: sceneMappingValid,
   linked: () => linkContent.get(),
   width: () => contentWidth.get(),
+  zoomEnabled: () => navigationEnabled.get() && zoomEnabled.get(),
 });
 sceneRuntime = scene;
 

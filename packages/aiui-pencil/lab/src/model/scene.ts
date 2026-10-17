@@ -7,6 +7,7 @@ import {
   type PencilSurface,
 } from "@habemus-papadum/aiui-pencil";
 import type { PadRenderer } from "./pad-renderer";
+import { mouseDraftCanYieldToPinch } from "./wheel-navigation";
 
 export interface LabSceneState {
   content: InkTransform;
@@ -27,6 +28,7 @@ export interface LabSceneOptions {
   valid: State<boolean>;
   linked(): boolean;
   width(): number;
+  zoomEnabled(): boolean;
 }
 
 /** These are view coordinates; changing them never moves or rewrites source stroke samples. */
@@ -262,11 +264,37 @@ export class LabScene {
     this.options.state.set(state);
   }
 
-  /** Wheel motion changes real scrollTop/scrollLeft beneath the fixed input canvas. */
+  /** macOS pinch arrives as Ctrl+wheel; ordinary wheel motion scrolls the reference page. */
   private wheel = (event: WheelEvent): void => {
-    if (!this.scroller || event.ctrlKey) return;
+    if (!this.scroller) return;
     const unit =
       event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? this.scroller.clientHeight : 1;
+    if (event.ctrlKey) {
+      // Own pinch only over the canvas, including when navigation is disabled.
+      event.preventDefault();
+      const { paper } = this.options;
+      if (!this.valid || !this.options.zoomEnabled()) return;
+      const drafts = paper.document.snapshot().live;
+      if (drafts.length) {
+        // A Wacom finger may start mouse ink before the driver recognizes pinch.
+        // Preserve real pen data, including pen pressure/tilt mislabelled as mouse.
+        if (!drafts.every(mouseDraftCanYieldToPinch)) return;
+        paper.input?.cancel();
+        // Only the local input binding can yield its draft; leave other inputs alone.
+        if (paper.document.snapshot().live.length) return;
+      }
+      const rect = paper.canvas.getBoundingClientRect();
+      const anchor = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+      const delta = Math.max(-1000, Math.min(1000, event.deltaY * unit));
+      const current = paper.view.getViewport();
+      const viewport = applyNavigationTransform(
+        current,
+        { from: anchor, to: anchor, scale: Math.exp(-delta / 100), rotation: 0 },
+        { minScale: 0.1, maxScale: 10 },
+      );
+      if (viewport.scale !== current.scale) paper.setViewport(viewport);
+      return;
+    }
     this.scroller.scrollLeft += event.deltaX * unit;
     this.scroller.scrollTop += event.deltaY * unit;
     this.scrolled();
