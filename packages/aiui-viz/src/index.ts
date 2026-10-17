@@ -192,6 +192,10 @@ export {
   toolFingerprint,
   toolSnapshot,
 } from "./tool-brief";
+export type { ElementTarget } from "./viewport";
+// viewport.ts — the resize seam: the layout viewport's size, an element's
+// content box over one shared observer, and `now` ticking only while read.
+export { elementHeight, elementWidth, now, viewportHeight, viewportWidth } from "./viewport";
 export type { WorkerCancel, WorkerReply, WorkerRequest, WorkerRun } from "./worker-stream";
 // worker-stream.ts — cancellable request/stream protocol for Web Workers.
 export { fromWorker, workerStream } from "./worker-stream";
