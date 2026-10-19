@@ -7,7 +7,7 @@
 import { render } from "@solidjs/web";
 import katex from "katex";
 import { createSignal } from "solid-js";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { control } from "../control";
 import { resetControlSurface, tick } from "../testing";
 import { assembleTeX, RichTeX, renderMarked, TERM_ATTR, Term } from "./rich-tex";
@@ -165,6 +165,58 @@ describe("markers change no layout", () => {
 });
 
 describe("<RichTeX>", () => {
+  it("updates changing term sets through empty and annotated note strips", async () => {
+    const warning = vi.spyOn(console, "warn");
+    const [names, setNames] = createSignal(["x0"]);
+    let clicked = "";
+    try {
+      const host = mount(() => (
+        <RichTeX display>
+          {names().map((name) =>
+            name === "annotated" ? (
+              <Term
+                id={name}
+                note={<i>explanation</i>}
+                onClick={() => {
+                  clicked = name;
+                }}
+              >
+                x
+              </Term>
+            ) : (
+              <Term
+                id={name}
+                onClick={() => {
+                  clicked = name;
+                }}
+              >
+                {name}
+              </Term>
+            ),
+          )}
+        </RichTeX>
+      ));
+      for (let i = 1; i <= 8; i++) {
+        setNames([`x${i}`]);
+        await tick();
+        expect(host.querySelector(`[${TERM_ATTR}="x${i - 1}"]`)).toBeNull();
+        (host.querySelector(`[${TERM_ATTR}="x${i}"]`) as HTMLElement).click();
+        expect(clicked).toBe(`x${i}`);
+        expect(host.querySelectorAll(".aiui-note").length).toBe(0);
+      }
+      setNames(["annotated"]);
+      await tick();
+      expect(host.querySelector(".aiui-note i")?.textContent).toBe("explanation");
+      setNames(["final"]);
+      await tick();
+      expect(host.querySelectorAll(".aiui-note").length).toBe(0);
+      expect(
+        warning.mock.calls.filter((args) => String(args[0]).includes("UNSTABLE_MEMO_OUTPUT")),
+      ).toEqual([]);
+    } finally {
+      warning.mockRestore();
+    }
+  });
   it("stamps the clean equation on the root and each term's tex on its span", () => {
     const host = mount(() => (
       <RichTeX display>

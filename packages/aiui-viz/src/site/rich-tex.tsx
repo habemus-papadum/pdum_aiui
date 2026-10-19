@@ -439,23 +439,26 @@ export function RichTeX(props: RichTeXProps): JSX.Element {
   // ── notes ─────────────────────────────────────────────────────────────────
   // One spec per annotated term, keyed on the assembled term (a re-assembly
   // rebuilds them, as it rebuilds the spans). Display math only.
-  const notes = createMemo((): NoteSpec[] =>
-    display()
-      ? assembled()
-          .terms.filter((t) => "note" in t.props)
-          .map((t) => ({
-            id: t.id,
-            get side() {
-              return t.props.place ?? "below";
-            },
-            get active() {
-              return t.props.active === true;
-            },
-            get note() {
-              return t.props.note;
-            },
-          }))
-      : [],
+  const notes = createMemo(
+    (): NoteSpec[] =>
+      display()
+        ? assembled()
+            .terms.filter((t) => "note" in t.props)
+            .map((t) => ({
+              id: t.id,
+              get side() {
+                return t.props.place ?? "below";
+              },
+              get active() {
+                return t.props.active === true;
+              },
+              get note() {
+                return t.props.note;
+              },
+            }))
+        : [],
+    // Changing an unannotated equation must not invalidate both empty note strips.
+    { equals: (a, b) => a === b || (a.length === 0 && b.length === 0) },
   );
   const Layer = (p: { side: "above" | "below" }) => (
     <NoteLayer

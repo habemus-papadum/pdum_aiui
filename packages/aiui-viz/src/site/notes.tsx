@@ -203,8 +203,10 @@ export function NoteLayer(props: NoteLayerProps): JSX.Element {
   ensureStyles(STYLE_MARK, NOTES_STYLES);
   const layout = (): "margin" | "overlay" => props.layout;
   const stripSide = (): "above" | "below" => props.side ?? "below";
-  const shown = createMemo(() =>
-    layout() === "margin" ? props.notes.filter((n) => sideOf(n) === stripSide()) : props.notes,
+  const shown = createMemo(
+    () =>
+      layout() === "margin" ? props.notes.filter((n) => sideOf(n) === stripSide()) : props.notes,
+    { equals: (a, b) => a.length === b.length && a.every((note, i) => note === b[i]) },
   );
 
   let layer: HTMLElement | undefined;

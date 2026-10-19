@@ -1,8 +1,14 @@
 # Semantic and reactive SVG
 
-Status: proposed direction, 2026-10-14. Concrete applications will establish the
-document models, symbol conventions, interaction semantics, and reusable APIs.
-The working package name is `aiui-svg`.
+Status: proposed direction; the five interaction experiments and two editing
+studies have been reviewed and their lessons consolidated on 2026-10-19. The
+exploration is paused at the user's request. The working package name remains
+`aiui-svg`; no public SVG package or general document schema has been established.
+
+Start with the [consolidated lessons](./semantic-svg-lessons.md) for the current
+conclusions, implementation boundaries and questions to retain. The design
+material and experiment history below preserve the proposal's development; they
+are not an instruction to continue adding studies.
 
 AIUI should provide a SolidJS-driven SVG layer for rich, interactive diagrams.
 Electrical circuits, mechanical diagrams, graphs, and other structured visual
@@ -189,3 +195,111 @@ composition, identity, interaction APIs, edit history, annotation attachment, an
 effect behavior. Performance and responsiveness should be evaluated in those
 applications, alongside whether the visual richness makes the information
 clearer and the editing more natural.
+
+## First experiment and the next review
+
+[`demos/semantic-svg-lab`](../../demos/semantic-svg-lab/README.md) implements the
+first increment: a fixed circuit fixture with two occurrences of one block, a
+main drawing, a movable terminal-revealing lens, an aggregated navigation
+overview, linked feature selection, and a resistor-value edit through the lens.
+The UI and local agent tools share revision-checked edits and undo/redo.
+The second increment is a guided Pencil workflow: choose, mark a frozen view,
+capture, add newer ink, review a scripted change, apply and undo. An intervening
+edit exercises explicit reconsideration. Original view/ink evidence remains
+immutable; eligible strokes also follow their selected target in the live views.
+Strokes crossing a lens boundary remain in the captured view. The site provides
+the instructions and deterministic response; AI interpretation is a separate
+future lab, not a dependency of this experiment.
+
+As settled in the [workspace plan](./workspace-and-project.md#2-decisions-already-taken),
+magic lenses belong to the SVG direction: a lens re-renders a local view of the
+same source objects. It must preserve a meaningful mapping from what the person
+points at to a source object or feature. The existing trigger/peek/detail `Lens`
+is a related attention component, not this spatial projection contract. An
+overview may aggregate a selected feature to its containing object; the lab
+makes that distinction explicit.
+
+The intended sequence is circuit views, restricted analytic contact geometry,
+then a small statics experiment. Each gets a review before its scope grows.
+After those experiments, build a fresh combined example and decide what is
+shared, application-specific, worth redesigning, or discarded. Rebuilding is an
+expected outcome. Retain mathematical tests, useful fixtures and behavioral
+evidence; provisional schemas, component structures and package boundaries may
+be replaced. A universal document schema is not a prerequisite.
+
+The lab's README records its scope, actual agent operation surface, validation,
+and questions for the next review. No circuit simulator or agent runtime is
+required for this first increment. Scripted callers establish operation semantics;
+interpretation of handwriting, speech and ambiguous references requires the
+later real-agent integration.
+
+The third increment tests a circle against an infinite horizontal line, with
+free dragging, a one-time tangent placement, maintained tangency, and linked
+geometry/equation highlighting. Its SVG radius label uses the same `createKnobs`
+controller as the `RichTeX` term; both write one declared control. The deliberately
+restricted half-millimetre model permits exact contact classification without a
+visual tolerance. It establishes an interaction experiment, not a general
+geometry kernel; the lab README records its bounds and review questions.
+
+The fourth increment is a statically determinate beam with a pin, a roller and
+one point load. It exercises force arrows linked to equilibrium terms and a
+free-body projection of the same model. Both load positioning and magnitude use
+the existing knob controller, shared with equation terms. This remains a small
+analytic example; support editing, deformation, contact mechanics and a general
+solver have not been introduced.
+
+The fifth increment moves a circle around another, maintaining external tangency
+while the centre-line normal changes direction. It distinguishes intersection,
+internal tangency, containment and coincident boundaries, including an explicitly
+undefined normal at coincident centres. Shared radius controls drive the SVG and
+equation; authored polar parameters determine the relation, while Cartesian
+constructions are numerical. The source and review questions remain in the lab.
+
+
+### From scalar demonstrations to an editing study
+
+The sixth increment changes direction: one four-joint structure can be edited,
+broken, inspected and repaired. Members can be added, removed or reconnected;
+joints, supports and the load can change. The construction, isolated joint,
+separated member-end view, force coloring, equilibrium terms and diagnostics use
+the same object references. A Pencil request previews a scripted topology change
+against a frozen source revision. It can be reviewed, applied and undone without
+an AI interpreter.
+
+The deliberately small numerical solver distinguishes unique equilibrium,
+infinitesimal mechanisms, redundant constraints and directionless members. It
+withholds forces when the model cannot determine them. The ghost motion is a
+first-order witness, not a simulated trajectory. The lab README states the rank
+and residual tolerances and the physical assumptions.
+
+This is meant to test a coherent design task, not demonstrate one more draggable
+parameter. Earlier experiments established shared inputs and coordinated fixed
+views but did not establish a general semantic layer. This study still keeps
+mechanics, object lookup, commands and projection logic local. The next extraction
+criterion is concrete: carry one useful reference/selection, diagnostic or
+proposal primitive back to the circuit without requiring its schema to look like
+a mechanical structure. Review the design workflow before building more domains
+or deciding package boundaries.
+
+
+### Paired circuit study, then consolidation
+
+The seventh increment provides the circuit counterpart to the structure study:
+a loaded resistor divider with editable explicit wires, component placement,
+terminal-anchored net inspection, linked current-balance terms and scripted
+Pencil repair. Open returns, passive floating islands, source shorts and bypassed
+resistors have different consequences; the display preserves quantities that
+remain determined instead of replacing every readout with a global failure.
+
+This study deliberately separates schematic layout from electrical connectivity.
+Its inspected net is derived from a stable terminal reference, so rewiring may
+change net membership without changing the object being followed. The structure
+study instead treats joint geometry as physical input. Both now consume the same
+small application-local diagnostic presenter and Pencil capture adapter; neither
+requires the other's domain schema.
+
+The two editing tasks have now been reviewed. The
+[consolidated lessons](./semantic-svg-lessons.md) record the shared adapters,
+contrasting geometry/identity contracts, remaining hypotheses and explicit
+stopping point. The study is paused; framework APIs and package boundaries remain
+open. Further implementation requires a new request to resume.
