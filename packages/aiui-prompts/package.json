@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-prompts",
-  "version": "0.22.0",
+  "version": "0.22.1",
   "description": "Structured prompt records, deterministic compilation, provenance, and delivery operations for Node.js and browsers.",
   "type": "module",
   "license": "MIT",
