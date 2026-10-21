@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-cf-creds",
-  "version": "0.21.0+dev",
+  "version": "0.22.0",
   "description": "Broker-backed ephemeral credentials for aiui apps: adapters from the cf_browser_credentials kit to aiui's credential seams (the OpenAI realtime key source, STT connect, Mosaic connector, MotherDuck).",
   "type": "module",
   "license": "MIT",

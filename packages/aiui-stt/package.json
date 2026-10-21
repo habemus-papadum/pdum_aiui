@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-stt",
-  "version": "0.21.0+dev",
+  "version": "0.22.0",
   "description": "Browser speech-to-text with ElevenLabs Scribe, injected audio and credentials, and cumulative transcripts.",
   "type": "module",
   "license": "MIT",

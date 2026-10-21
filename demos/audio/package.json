@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/demo-audio",
-  "version": "0.21.0+dev",
+  "version": "0.22.0",
   "description": "In-repo aiui demo: audio.",
   "private": true,
   "type": "module",

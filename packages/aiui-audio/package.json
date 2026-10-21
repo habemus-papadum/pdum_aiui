@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-audio",
-  "version": "0.21.0+dev",
+  "version": "0.22.0",
   "description": "Shared browser microphone capture, exclusive audio routing, playback, and controls for aiui voice sessions.",
   "type": "module",
   "license": "MIT",
