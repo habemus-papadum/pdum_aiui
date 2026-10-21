@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-screen-capture",
-  "version": "0.23.0",
+  "version": "0.23.0+dev",
   "description": "Browser screen capture, native element cropping, and Solid preview controls.",
   "type": "module",
   "license": "MIT",

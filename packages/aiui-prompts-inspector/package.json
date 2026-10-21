@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-prompts-inspector",
-  "version": "0.23.0",
+  "version": "0.23.0+dev",
   "description": "Native Solid inspection and compact previews for stored structured prompt records.",
   "type": "module",
   "license": "MIT",
