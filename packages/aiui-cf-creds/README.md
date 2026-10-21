@@ -1,15 +1,9 @@
 # @habemus-papadum/aiui-cf-creds
 
-Broker-backed ephemeral credentials for aiui apps: adapters from the
-[`cf_browser_credentials`](https://github.com/habemus-papadum/cf_browser_credentials) kit
-(`@habemus-papadum/cf-*`) to aiui's existing credential seams. A bridge in the strict sense — it
-implements one contract against the other and adds no seam of its own. Contract of record: the
-aiui-cf-creds proposal (pdum_aiui git history).
-
-The target apps are **serverless/static aiui deployments** behind a broker-fronted origin (a small
-Cloudflare Worker owning `/api/credentials/*`, static site and broker both behind Cloudflare
-Access): a static page that mints its own short-lived credentials with **no vendor key existing
-anywhere** — not in the page, not in a server, not at all.
+Request short-lived credentials for AIUI apps through a Cloudflare Access
+credential service. This package adapts the published
+[`cf_browser_credentials`](https://github.com/habemus-papadum/cf_browser_credentials)
+SDK to OpenAI Realtime, ElevenLabs, Mosaic, and MotherDuck.
 
 ## Install
 
@@ -23,30 +17,22 @@ Each bridge lives on its own subpath so an app pays only for what it uses:
 
 ### `aiui-cf-creds/openai` — the federated OpenAI key source
 
-`ek_` client secrets minted entirely browser-side over OpenAI workload identity federation
-(the broker's own short-lived identity token → the OpenAI SDK's `workloadIdentity` exchange →
-`POST /v1/realtime/client_secrets`). No parent key and no cloud credential exists; the OpenAI
-service account behind it is created keyless. The result is an `OpenAIKeySource` — the shape of
-aiui-oracle's `KeySource`, declared here so this package depends on nothing of the oracle —
-and the oracle's key chain takes it as is:
+The service returns a short-lived identity token. The OpenAI SDK exchanges it,
+then requests an `ek_` client secret for Realtime sessions. The returned source
+implements `OpenAIKeySource`; callers can reuse the secret until it expires.
 
 ```ts
-import { chainKeySource, cachingKeySource, pasteKeySource, devKeySource } from "@habemus-papadum/aiui-oracle";
 import { federatedKeySource } from "@habemus-papadum/aiui-cf-creds/openai";
 
-const keySource = chainKeySource([
-  pasteKeySource(localStorage, {}),   // a pasted key still trumps everything
-  devKeySource("openai", {}),         // dev serve still just works
-  cachingKeySource(                   // one ek_ opens multiple sessions until TTL
-    federatedKeySource({ key: "app" }),
-  ),
-]);
+const source = federatedKeySource({ grantPath: "app" });
+const credential = await source.credential({ type: "realtime" });
+// Use credential.ek to open the Realtime connection.
 ```
 
-Under the broker's **key contract** the app passes only `key` — its own name — and the
-identity token, audience, and federation ids all ride the broker's one-mint bundle: no
-deployment identity anywhere in the page. `key` is required. Needs kit ≥0.6 on both sides —
-a broker still answering the old STS-envelope bundle needs aiui-cf-creds ≤0.21.
+The app supplies `grantPath`. The response includes the identity token,
+audience, and federation IDs. `grantPath` is required unless you supply an
+already configured `RealtimeClient`. The credential service must support the
+`grant_path` query parameter and return service-issued identity tokens.
 
 ### `aiui-cf-creds/stt` — ElevenLabs Scribe credentials
 
@@ -56,9 +42,9 @@ Fresh single-use tokens from a broker or a browser-provided parent key.
 import { scribeConnectUrl, standardScribeConnectUrl } from "@habemus-papadum/aiui-cf-creds/stt";
 
 // Broker-only, one fresh single-use token per connection:
-const brokerUrl = () => scribeConnectUrl({ key: "app" });
+const brokerUrl = () => scribeConnectUrl({ grantPath: "app" });
 // Demo keys (pasted/dev), falling back to an explicitly configured broker:
-const demoUrl = () => standardScribeConnectUrl({ brokerUrl: "https://creds.example.com", key: "app" });
+const demoUrl = () => standardScribeConnectUrl({ brokerUrl: "https://creds.example.com", grantPath: "app" });
 // Explicit key callback; can read your application's own credential storage:
 const customUrl = () => standardScribeConnectUrl({ apiKey: () => myKey });
 ```
@@ -74,18 +60,18 @@ import { brokerConnector } from "@habemus-papadum/aiui-cf-creds/mosaic";
 import { duckdbConnector } from "@habemus-papadum/aiui-viz/mosaic-connector";
 
 coordinator.databaseConnector(
-  brokerConnector(duckdbConnector({ duckdb: db, connection }), { key: "app" }),
+  brokerConnector(duckdbConnector({ duckdb: db, connection }), { grantPath: "app" }),
 );
 ```
 
-With `key`, the S3 region rides the broker's credential envelope; without one, pass
+With `grantPath`, the S3 region rides the broker's credential envelope; without one, pass
 `region` explicitly as before.
 
 ### `aiui-cf-creds/motherduck` — the in-tab MotherDuck engine
 
 The kit's `motherDuckEngine` composed the way the oracle's key chain is: a DEV key the aiui Vite
 plugin injected (`devKeys: ["motherduck"]`, dev serve only, from `MOTHERDUCK_BROWSER_TOKEN`) wins,
-else the broker route under the key contract. One stock `AsyncDuckDB` with the MotherDuck extension
+else the broker route under the grant path selection. One stock `AsyncDuckDB` with the MotherDuck extension
 attached comes back, in the stock types: aiui-viz's `duckdbConnector` (Mosaic's stock connector
 plus HUGEINT decoded to numbers — the stock one draws NaN after the first brush) and `duckdbRunner`
 take it unchanged; `motherDuckRunner` is the agent's runner over the client's own connection
@@ -97,7 +83,7 @@ shape 4, "The RUN_QUERY wedge").
 import { motherDuckRunner, standardMotherDuckEngine } from "@habemus-papadum/aiui-cf-creds/motherduck";
 import { duckdbConnector } from "@habemus-papadum/aiui-viz/mosaic-connector";
 
-const engine = standardMotherDuckEngine({ key: "app", params: { sessionName: "app" } });
+const engine = standardMotherDuckEngine({ grantPath: "app", params: { sessionName: "app" } });
 const { db, connect, connection } = await engine.ready();
 coordinator.databaseConnector(duckdbConnector({ duckdb: db, connection: await connect() }));
 registerSqlTools(kit, {
@@ -109,17 +95,30 @@ registerSqlTools(kit, {
 engine.onRebuild(() => { /* re-wire, re-materialize: local tables are gone */ });
 ```
 
-## Two deployment knobs
+## Select the service and grant
 
-In production everything is same-origin relative (the kit's `/api/credentials/*` convention) —
-zero config. For cross-origin dev (`vite dev` against the deployed broker, authenticated by the
-same Access cookie), pass the broker's origin once. Against a key-contract broker (kit ≥0.4),
-pass `key` — the app's own name — alongside; it rides every route and replaces the per-provider
-ids entirely:
+`brokerUrl` is the credential-service origin. Omit it to use same-origin
+`/api/credentials/*` routes. `grantPath` selects the grant and is sent as
+`?grant_path=...`; Cloudflare Access supplies the caller's identity.
 
 ```ts
 import { brokerAwsManager } from "@habemus-papadum/aiui-cf-creds";
 
-const manager = brokerAwsManager({ brokerUrl: "https://creds.example.com", key: "app" });
-// …then hand the one manager to each bridge's `manager` option.
+const manager = brokerAwsManager({
+  brokerUrl: "https://creds.example.com",
+  grantPath: "app",
+});
+// Pass this manager to adapters that share the same grant.
 ```
+
+## Migration to 0.23
+
+This release depends on the published browser credential SDK 0.7. Replace
+broker option `key` with `grantPath`. The third argument to `brokerRoute()`
+is now named `grantPath` and produces the canonical query parameter.
+`MintClient` is now `RealtimeClient`; `FederatedMintOptions` is now
+`FederatedCredentialOptions`. These names have no aliases in AIUI.
+
+Actual API keys, `apiKey` callbacks, and the `OpenAIKeySource` contract keep
+their existing names. Update external OpenAI identity mappings from JWT
+claim `key` to `grant_path` when deploying the service migration.

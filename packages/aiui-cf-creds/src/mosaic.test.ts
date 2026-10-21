@@ -92,7 +92,7 @@ describe("brokerConnector", () => {
     expect(installs[1]?.sql).toContain("AKIAFIXTURE2");
   });
 
-  it("under the key contract, needs no region: it rides the broker envelope", async () => {
+  it("under the grant path selection, needs no region: it rides the broker envelope", async () => {
     const { base, queries } = fakeBase();
     const urls: string[] = [];
     vi.stubGlobal("fetch", async (url: string) => {
@@ -108,11 +108,11 @@ describe("brokerConnector", () => {
         { status: 200 },
       );
     });
-    const connector = brokerConnector(base, { key: "app-fixture" });
+    const connector = brokerConnector(base, { grantPath: "app-fixture" });
 
     await connector.query({ type: "arrow", sql: "SELECT 1" } as never);
 
-    expect(urls).toEqual(["/api/credentials/aws?key=app-fixture"]);
+    expect(urls).toEqual(["/api/credentials/aws?grant_path=app-fixture"]);
     expect(queries[0]?.sql).toContain("yy-envelope-9");
   });
 

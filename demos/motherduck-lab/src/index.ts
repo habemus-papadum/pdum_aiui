@@ -4,5 +4,5 @@
  */
 export * from "./model/catalog";
 export { type AppGraph, graph } from "./model/graph";
-export { appScope, BROKER_KEY, store } from "./model/store";
+export { appScope, BROKER_GRANT_PATH, store } from "./model/store";
 export { App } from "./ui/App";

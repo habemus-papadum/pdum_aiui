@@ -1,34 +1,16 @@
 /**
- * openai.ts — the federated OpenAI key source: `ek_` client secrets minted
- * entirely browser-side, with NO parent key existing anywhere.
- *
- * The chain (kit ≥0.6): one keyed broker mint returns a short-lived identity
- * token the broker itself signed, plus the audience and federation ids → the
- * OpenAI SDK's `workloadIdentity` exchange (internal, re-minting on demand) →
- * `POST /v1/realtime/client_secrets` → `ek_`. No AWS leg remains. Every link
- * before the mint is the kit's (`cf-creds-openai`); this module owns only the
- * mint call and the mapping onto the key-source contract below.
- *
- * The app passes only `key` — its own name — and everything else rides the
- * broker's one-mint bundle (`createBrokeredOpenAI`). The explicit id trio of
- * kit ≤0.5 went with the STS leg.
- *
- * The contract is declared HERE, structurally: {@link OpenAIKeySource} and
- * {@link OpenAICredential} are the shapes of aiui-oracle's `KeySource` and
- * `OracleCredential`, so the oracle accepts a federated source as the fourth
- * species in its key chain — composed as
- * `cachingKeySource(federatedKeySource({...}))` behind paste-key and dev-key
- * (caching is CORRECT here, as over `mintingKeySource`: one `ek_` opens
- * multiple sessions until it expires) — while this public package depends on
- * nothing of the oracle, which is internal scaffolding. The two declarations
- * are pinned equal at compile time in demos/audio, the one package with both.
+ * OpenAI Realtime credentials through workload identity federation.
+ * The credential service returns an identity token and federation IDs for a
+ * grant path. The SDK exchanges the identity token, then requests an `ek_`
+ * client secret. OpenAIKeySource matches aiui-oracle's structural contract
+ * without depending on that internal package.
  */
 import { createBrokeredOpenAI, OPENAI_CREDENTIALS_PATH } from "@habemus-papadum/cf-creds-openai";
 import { type BrokerOptions, brokerRoute } from "./shared";
 
 /**
- * A short-lived credential for opening realtime sessions. One `ek_` mints
- * MULTIPLE sessions until it expires — reconnects reuse it within TTL. The
+ * A short-lived credential for opening realtime sessions. One `ek_` opens
+ * multiple sessions until it expires — reconnects reuse it within TTL. The
  * shape of aiui-oracle's `OracleCredential`.
  */
 export interface OpenAICredential {
@@ -53,12 +35,12 @@ export interface OpenAIKeySource {
 }
 
 /**
- * The one SDK surface the mint uses — structural, so tests inject a stub and
+ * The OpenAI SDK interface used to request client secrets. Tests inject a stub;
  * this package never names the `openai` types in its own signatures (the SDK
  * stays `cf-creds-openai`'s peer, reached only through
  * `createBrokeredOpenAI`).
  */
-export interface MintClient {
+export interface RealtimeClient {
   realtime: {
     clientSecrets: {
       // Loose on purpose: the fields the SDK's ClientSecretCreateParams
@@ -73,38 +55,35 @@ export interface MintClient {
   };
 }
 
-export interface FederatedMintOptions extends BrokerOptions {
+export interface FederatedCredentialOptions extends BrokerOptions {
   /** `ek_` TTL, seconds; vendor bounds 10–7200. Default 600. */
   expiresAfterSeconds?: number;
   /** Inject a ready client (tests, a custom federation). Default: the
-   * keyed broker bundle (`createBrokeredOpenAI`); `key` is then required. */
-  client?: MintClient;
+   * credential-service response (`createBrokeredOpenAI`); `grantPath` is then required. */
+  client?: RealtimeClient;
 }
 
 /**
- * Mint `ek_` client secrets browser-side over workload identity federation.
+ * Request `ek_` client secrets browser-side over workload identity federation.
  * The wire session config is forwarded as the secret's baked DEFAULT, not a
  * sandbox — the client can `session.update` over it; TTL is the real bound.
  */
-export function federatedKeySource(options: FederatedMintOptions): OpenAIKeySource {
-  // Lazy: a chained source that never wins must not build SDK clients (nor,
-  // in the keyed lane, fetch the broker bundle). Memoized as a promise; a
-  // failed build is forgotten so a transient broker error doesn't wedge the
-  // source for the page's lifetime.
-  let clientPromise: Promise<MintClient> | undefined;
-  const buildClient = async (): Promise<MintClient> => {
+export function federatedKeySource(options: FederatedCredentialOptions): OpenAIKeySource {
+  // Create the SDK client only when credentials are requested. Concurrent
+  // calls share the promise; a failed request can be retried.
+  let clientPromise: Promise<RealtimeClient> | undefined;
+  const buildClient = async (): Promise<RealtimeClient> => {
     if (options.client !== undefined) return options.client;
-    if (options.key === undefined) {
-      throw new Error("federatedKeySource needs `key` (the broker's key contract)");
+    if (options.grantPath === undefined) {
+      throw new Error("federatedKeySource needs `grantPath`");
     }
-    // The key contract: one mint returns the identity token AND the whole
-    // federation config — no ids at the composition root.
+    // One request returns the identity token and federation configuration.
     const { client } = await createBrokeredOpenAI({
-      url: brokerRoute(OPENAI_CREDENTIALS_PATH, options.brokerUrl, options.key),
+      url: brokerRoute(OPENAI_CREDENTIALS_PATH, options.brokerUrl, options.grantPath),
     });
     return client;
   };
-  const clientOf = (): Promise<MintClient> => {
+  const clientOf = (): Promise<RealtimeClient> => {
     clientPromise ??= buildClient().catch((error) => {
       clientPromise = undefined;
       throw error;
@@ -114,19 +93,19 @@ export function federatedKeySource(options: FederatedMintOptions): OpenAIKeySour
   return {
     describe: () => "cf-federation",
     async credential(session): Promise<OpenAICredential> {
-      const minted = await (await clientOf()).realtime.clientSecrets.create({
+      const credential = await (await clientOf()).realtime.clientSecrets.create({
         expires_after: {
           anchor: "created_at",
           seconds: options.expiresAfterSeconds ?? 600,
         },
         session,
       });
-      if (typeof minted.value !== "string" || minted.value === "") {
-        throw new Error("federated mint returned no client secret");
+      if (typeof credential.value !== "string" || credential.value === "") {
+        throw new Error("OpenAI returned no client secret");
       }
       return {
-        ek: minted.value,
-        expiresAt: typeof minted.expires_at === "number" ? minted.expires_at : 0,
+        ek: credential.value,
+        expiresAt: typeof credential.expires_at === "number" ? credential.expires_at : 0,
         source: "cf-federation",
       };
     },

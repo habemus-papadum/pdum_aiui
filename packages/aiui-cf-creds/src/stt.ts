@@ -17,8 +17,8 @@ export interface ScribeConnectOptions extends BrokerOptions, ScribeSocketOptions
  * EVERY connect — the token dies at first use; there is nothing to reuse.
  */
 export function scribeConnectUrl(options: ScribeConnectOptions = {}): Promise<string> {
-  const { brokerUrl, key, ...socket } = options;
-  return connectUrl(brokerRoute(ELEVENLABS_CREDENTIALS_PATH, brokerUrl, key), socket);
+  const { brokerUrl, grantPath, ...socket } = options;
+  return connectUrl(brokerRoute(ELEVENLABS_CREDENTIALS_PATH, brokerUrl, grantPath), socket);
 }
 
 /** Demo composition: pasted key → dev key → explicitly configured broker.
@@ -32,7 +32,7 @@ export async function standardScribeConnectUrl(
     const minted = await mintScribeToken(key);
     return scribeSocketUrl(minted.token, broker);
   }
-  if (!broker.brokerUrl && !broker.key)
+  if (!broker.brokerUrl && !broker.grantPath)
     throw new Error("Add an ElevenLabs key or configure a credential broker");
   return scribeConnectUrl(broker);
 }

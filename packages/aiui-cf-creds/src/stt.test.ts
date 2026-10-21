@@ -63,13 +63,13 @@ describe("scribeConnectUrl", () => {
     expect(new URL(second).searchParams.get("token")).toBe("sutkn_fixture_2");
   });
 
-  it("rides the key contract: ?key= on the route, same-origin or against a broker", async () => {
+  it("rides the grant path selection: ?grant_path= on the route, same-origin or against a broker", async () => {
     const seen = stubScribeBroker();
-    await scribeConnectUrl({ key: "app-fixture" });
-    await scribeConnectUrl({ brokerUrl: "https://broker.example.test", key: "app-fixture" });
-    expect(seen[0]?.url).toBe("/api/credentials/elevenlabs?key=app-fixture");
+    await scribeConnectUrl({ grantPath: "app-fixture" });
+    await scribeConnectUrl({ brokerUrl: "https://broker.example.test", grantPath: "app-fixture" });
+    expect(seen[0]?.url).toBe("/api/credentials/elevenlabs?grant_path=app-fixture");
     expect(seen[1]?.url).toBe(
-      "https://broker.example.test/api/credentials/elevenlabs?key=app-fixture",
+      "https://broker.example.test/api/credentials/elevenlabs?grant_path=app-fixture",
     );
   });
 });
@@ -95,8 +95,10 @@ describe("standardScribeConnectUrl", () => {
   });
   it("falls back to a configured broker and reports missing credentials", async () => {
     const seen = stubScribeBroker();
-    await standardScribeConnectUrl({ brokerUrl: "https://creds.example.test", key: "app" });
-    expect(seen[0].url).toBe("https://creds.example.test/api/credentials/elevenlabs?key=app");
+    await standardScribeConnectUrl({ brokerUrl: "https://creds.example.test", grantPath: "app" });
+    expect(seen[0].url).toBe(
+      "https://creds.example.test/api/credentials/elevenlabs?grant_path=app",
+    );
     await expect(standardScribeConnectUrl()).rejects.toThrow("Add an ElevenLabs key");
   });
 });

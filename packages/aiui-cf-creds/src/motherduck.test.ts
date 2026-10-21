@@ -70,7 +70,7 @@ describe("devMotherDuckEngine", () => {
 });
 
 describe("brokerMotherDuckEngine", () => {
-  it("fetches the keyed route under brokerUrl and builds with the minted token", async () => {
+  it("fetches the grant route under brokerUrl and builds with the minted token", async () => {
     const urls: string[] = [];
     vi.stubGlobal("fetch", async (url: string) => {
       urls.push(url);
@@ -87,17 +87,19 @@ describe("brokerMotherDuckEngine", () => {
     const engine = brokerMotherDuckEngine({
       client,
       brokerUrl: "https://creds.example.test",
-      key: "notes",
+      grantPath: "notes",
       params: { sessionName: "visitor" },
     });
 
     await engine.ready();
 
-    expect(urls).toEqual(["https://creds.example.test/api/credentials/motherduck?key=notes"]);
+    expect(urls).toEqual([
+      "https://creds.example.test/api/credentials/motherduck?grant_path=notes",
+    ]);
     expect(creates).toEqual([{ sessionName: "visitor", mdToken: "md_minted" }]);
   });
 
-  it("stays same-origin relative without brokerUrl, the key still riding", async () => {
+  it("stays same-origin relative without brokerUrl, the grant path included", async () => {
     const urls: string[] = [];
     vi.stubGlobal("fetch", async (url: string) => {
       urls.push(url);
@@ -107,14 +109,14 @@ describe("brokerMotherDuckEngine", () => {
       );
     });
     const { client } = fakeClient();
-    await brokerMotherDuckEngine({ client, key: "notes" }).ready();
-    expect(urls).toEqual(["/api/credentials/motherduck?key=notes"]);
+    await brokerMotherDuckEngine({ client, grantPath: "notes" }).ready();
+    expect(urls).toEqual(["/api/credentials/motherduck?grant_path=notes"]);
   });
 
   it("surfaces the kit's read_only refusal at construction", () => {
     const { client } = fakeClient();
     expect(() =>
-      brokerMotherDuckEngine({ client, key: "notes", params: { accessMode: "read_only" } }),
+      brokerMotherDuckEngine({ client, grantPath: "notes", params: { accessMode: "read_only" } }),
     ).toThrow(/read_only/);
   });
 });
@@ -162,14 +164,17 @@ describe("standardMotherDuckEngine", () => {
     vi.stubGlobal("fetch", fetchMock);
     const dev = fakeClient();
     await standardMotherDuckEngine(
-      { client: dev.client, key: "notes" },
+      { client: dev.client, grantPath: "notes" },
       withDevKey("md_dev"),
     ).ready();
     expect(dev.creates[0]?.mdToken).toBe("md_dev");
     expect(fetchMock).not.toHaveBeenCalled();
 
     const prod = fakeClient();
-    await standardMotherDuckEngine({ client: prod.client, key: "notes" }, withDevKey()).ready();
+    await standardMotherDuckEngine(
+      { client: prod.client, grantPath: "notes" },
+      withDevKey(),
+    ).ready();
     expect(prod.creates[0]?.mdToken).toBe("md_minted");
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });

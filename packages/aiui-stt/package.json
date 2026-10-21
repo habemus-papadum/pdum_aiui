@@ -47,7 +47,7 @@
   },
   "devDependencies": {
     "@habemus-papadum/aiui-build-config": "workspace:^",
-    "@habemus-papadum/cf-creds-elevenlabs": "^0.6.0",
+    "@habemus-papadum/cf-creds-elevenlabs": "^0.7.0",
     "@playwright/test": "^1.64.0",
     "jsdom": "catalog:",
     "vite": "catalog:",

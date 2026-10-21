@@ -1,42 +1,39 @@
 # Getting Started with @habemus-papadum/aiui-cf-creds
 
 Adapters that let aiui components draw their ephemeral credentials from a **credential broker**
-built on the `cf_browser_credentials` kit. Three bridges, one per subpath:
+built on the `cf_browser_credentials` kit. Four adapters, one per subpath:
 
-| Subpath | What it gives you | Credential species |
+| Subpath | What it gives you | Credential type |
 | --- | --- | --- |
-| `/openai` | `federatedKeySource` — browser-side `ek_` minting, no parent key; the oracle's `KeySource` by shape | federated (mint on demand) |
+| `/openai` | `federatedKeySource` — browser-side `ek_` requests, no parent key; the oracle's `KeySource` by shape | federated (request on demand) |
 | `/stt` | `scribeConnectUrl` (broker) + `standardScribeConnectUrl` (pasted/dev key or configured broker) | single-use |
 | `/mosaic` | `brokerConnector` — queries run with credentials installed | session (cached, rotated) |
 | `/motherduck` | `standardMotherDuckEngine` — the in-tab MotherDuck engine (dev key, else the broker) + `motherDuckRunner` | session (a live session outlives its token; rebuild is explicit) |
 
 ## Prerequisites
 
-A deployed broker (the kit's worker, ≥0.6) fronting your app's origin behind Cloudflare Access,
+A deployed credential service that supports `grant_path`, protected by Cloudflare Access,
 and — for the federated OpenAI bridge — the one-time OpenAI setup: a keyless service account with
 a project role, and a workload identity provider registered for the broker's own OIDC issuer with
-a mapping from the key claim to that service account.
+a mapping from the `grant_path` claim to that service account.
 
 ## The shortest path
 
 ```ts
-import { cachingKeySource } from "@habemus-papadum/aiui-oracle";
 import { federatedKeySource } from "@habemus-papadum/aiui-cf-creds/openai";
 
-const keySource = cachingKeySource(
-  federatedKeySource({ key: "app" }),  // the app's own name, nothing else
-);
+const keySource = federatedKeySource({ grantPath: "app" });
 ```
 
-Under the broker's **key contract** that is the whole composition root: the broker maps
-`(key, identity)` to a short-lived identity token it signs plus the audience and OpenAI
-federation ids, and returns them with the mint — no deployment identity in the page. For cross-origin dev pass
-`brokerUrl: "https://creds.example.com"` (the deployed broker's origin) alongside and log in to
-Access in another tab.
+The service uses the grant path and authenticated identity to select a
+credential grant. It returns the identity token and OpenAI federation IDs.
+Set `brokerUrl: "https://creds.example.com"` to use a different origin.
+The service must accept `grant_path`, and its external OpenAI mapping must
+match the JWT claim `grant_path`.
 
-## Species rules worth knowing
+## Credential lifetime and refresh
 
-- **Scribe tokens are single-use** with a fixed 15-minute mint-to-connect TTL. Call
+- **Scribe tokens are single-use** with a fixed 15-minute lifetime before connection. Call
   `scribeConnectUrl()` immediately before *every* WebSocket connect. The API deliberately offers
   nowhere to hold a token.
 - **One `ek_` opens multiple sessions** until it expires, so wrapping the federated sources in

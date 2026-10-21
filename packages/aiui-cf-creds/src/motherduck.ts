@@ -2,8 +2,8 @@
  * motherduck.ts — the in-tab MotherDuck engine for aiui apps: the kit's
  * `motherDuckEngine` (`cf-creds-motherduck`) over a token source, composed
  * the way the oracle's key chain is composed — a pasted token, then a DEV
- * key injected by the aiui Vite plugin, else the broker route under the key
- * contract. The engine it yields is one stock duckdb-wasm `AsyncDuckDB` with
+ * key injected by the aiui Vite plugin, else the service selected by grantPath.
+ * The engine is one stock duckdb-wasm `AsyncDuckDB` with
  * the MotherDuck extension attached: hand `db` + a connection to aiui-viz's
  * `duckdbConnector` (Mosaic's `wasmConnector` plus HUGEINT decoded to numbers;
  * the stock one draws a NaN axis after the first brush — aiui-viz's
@@ -167,7 +167,7 @@ export interface MotherDuckEngineComposeOptions extends MotherDuckEngineOptions 
 
 export interface BrokerMotherDuckOptions extends BrokerOptions, MotherDuckEngineComposeOptions {
   /** Reuse a source built elsewhere (an app-wide manager); default: the
-   * kit's manager on the conventional route with `brokerUrl` + `key`. */
+   * kit's manager on the conventional route with `brokerUrl` + `grantPath`. */
   source?: TokenSource;
 }
 
@@ -200,16 +200,16 @@ export function devMotherDuckEngine(
 }
 
 /**
- * An engine over the broker route: the page names only itself (`key`), the
- * broker's motherduck grant names the lane (service account, TTL), and the
- * manager keeps a fresh token at hand for the next (re)build.
+ * An engine using a credential grant selected by grantPath. The grant defines
+ * the MotherDuck service account and token lifetime. The manager refreshes
+ * the token for the next connection or rebuild.
  */
 export function brokerMotherDuckEngine(options: BrokerMotherDuckOptions = {}): MotherDuckEngine {
-  const { source, brokerUrl, key, params, ...engine } = options;
+  const { source, brokerUrl, grantPath, params, ...engine } = options;
   const manager =
     source ??
     createMotherDuckCredentialManager({
-      url: brokerRoute(MOTHERDUCK_CREDENTIALS_PATH, brokerUrl, key),
+      url: brokerRoute(MOTHERDUCK_CREDENTIALS_PATH, brokerUrl, grantPath),
     });
   return adapt(motherDuckEngine(manager, params, engine));
 }
@@ -222,11 +222,11 @@ export function standardMotherDuckEngine(
   options: BrokerMotherDuckOptions = {},
   global: unknown = globalThis,
 ): MotherDuckEngine {
-  const { source, brokerUrl, key, params, ...engine } = options;
+  const { source, brokerUrl, grantPath, params, ...engine } = options;
   let manager = source;
   const broker = (): TokenSource =>
     (manager ??= createMotherDuckCredentialManager({
-      url: brokerRoute(MOTHERDUCK_CREDENTIALS_PATH, brokerUrl, key),
+      url: brokerRoute(MOTHERDUCK_CREDENTIALS_PATH, brokerUrl, grantPath),
     }));
   return adapt(
     motherDuckEngine(

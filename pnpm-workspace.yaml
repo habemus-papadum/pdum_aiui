@@ -81,11 +81,11 @@ allowBuilds:
 minimumReleaseAgeExclude:
   # The cf_browser_credentials kit (aiui-cf-creds' substrate) is our own —
   # freshly published versions are consumed deliberately, pinned per version.
-  - '@habemus-papadum/cf-browser-credentials@0.6.0'
-  - '@habemus-papadum/cf-creds-aws@0.6.0'
-  - '@habemus-papadum/cf-creds-elevenlabs@0.6.0'
-  - '@habemus-papadum/cf-creds-mosaic@0.6.0'
-  - '@habemus-papadum/cf-creds-motherduck@0.6.0'
-  - '@habemus-papadum/cf-creds-openai@0.6.0'
+  - '@habemus-papadum/cf-browser-credentials@0.6.0 || 0.7.0'
+  - '@habemus-papadum/cf-creds-aws@0.6.0 || 0.7.0'
+  - '@habemus-papadum/cf-creds-elevenlabs@0.6.0 || 0.7.0'
+  - '@habemus-papadum/cf-creds-mosaic@0.6.0 || 0.7.0'
+  - '@habemus-papadum/cf-creds-motherduck@0.6.0 || 0.7.0'
+  - '@habemus-papadum/cf-creds-openai@0.6.0 || 0.7.0'
   - vite-plugin-solid@3.0.0-next.27
   - '@anthropic-ai/claude-agent-sdk@0.3.272'

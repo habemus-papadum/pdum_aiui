@@ -1,21 +1,21 @@
 /**
- * openai.test.ts — the mint mapping and the key-source contract. The
+ * openai.test.ts — the client-secret mapping and the key-source contract. The
  * federation chain itself (broker identity token → SDK exchange) is the
- * kit's; what THIS package owns is the mint call's body
+ * kit's; what THIS package owns is the client-secret request body
  * and the mapping onto OpenAICredential (the oracle's OracleCredential by
  * shape; demos/audio pins the two equal) — pinned here over an injected
  * structural client. All identity values are invented fixtures (D2).
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { federatedKeySource, type MintClient } from "./openai";
+import { federatedKeySource, type RealtimeClient } from "./openai";
 
-// The keyed lane's seam: the kit's createBrokeredOpenAI is what turns a key
+// The kit's createBrokeredOpenAI resolves a grant path
 // into a configured client (its own tests own that behavior); THIS package
 // owns handing it the right route and using what comes back. Everything else
 // in the module stays real.
 const brokered = vi.hoisted(() => ({
   calls: [] as Array<Record<string, unknown>>,
-  client: undefined as MintClient | undefined,
+  client: undefined as RealtimeClient | undefined,
   failOnce: undefined as Error | undefined,
 }));
 vi.mock("@habemus-papadum/cf-creds-openai", async (importOriginal) => {
@@ -37,7 +37,7 @@ vi.mock("@habemus-papadum/cf-creds-openai", async (importOriginal) => {
 /** A capturing stub of the one SDK surface the mint uses. */
 function stubClient(reply?: { value?: unknown; expires_at?: unknown }) {
   const calls: Array<Record<string, unknown>> = [];
-  const client: MintClient = {
+  const client: RealtimeClient = {
     realtime: {
       clientSecrets: {
         create: async (body) => {
@@ -53,7 +53,7 @@ function stubClient(reply?: { value?: unknown; expires_at?: unknown }) {
   return { client, calls };
 }
 
-const FIXTURE = { key: "app-fixture" };
+const FIXTURE = { grantPath: "app-fixture" };
 
 describe("federatedKeySource", () => {
   it("mints with the default TTL and forwards the session verbatim", async () => {
@@ -102,25 +102,25 @@ describe("federatedKeySource", () => {
   });
 });
 
-describe("federatedKeySource — the key contract", () => {
+describe("federatedKeySource — the grant path selection", () => {
   beforeEach(() => {
     brokered.calls.length = 0;
     brokered.client = undefined;
     brokered.failOnce = undefined;
   });
 
-  it("builds the client from nothing but the app's own key", async () => {
+  it("builds the client from nothing but the app's grant path", async () => {
     const { client, calls } = stubClient();
     brokered.client = client;
     const source = federatedKeySource({
-      key: "app-fixture",
+      grantPath: "app-fixture",
       brokerUrl: "https://creds.example.test",
     });
 
     const credential = await source.credential({ type: "realtime" });
 
     expect(brokered.calls).toEqual([
-      { url: "https://creds.example.test/api/credentials/openai?key=app-fixture" },
+      { url: "https://creds.example.test/api/credentials/openai?grant_path=app-fixture" },
     ]);
     expect(calls).toHaveLength(1);
     expect(credential.ek).toBe("ek_test_fixture");
@@ -128,21 +128,21 @@ describe("federatedKeySource — the key contract", () => {
 
   it("stays same-origin relative when no brokerUrl is given", async () => {
     brokered.client = stubClient().client;
-    await federatedKeySource({ key: "app-fixture" }).credential({});
-    expect(brokered.calls[0]).toEqual({ url: "/api/credentials/openai?key=app-fixture" });
+    await federatedKeySource({ grantPath: "app-fixture" }).credential({});
+    expect(brokered.calls[0]).toEqual({ url: "/api/credentials/openai?grant_path=app-fixture" });
   });
 
-  it("without a key, fails lazily with a clear error", async () => {
+  it("without a grant path, fails lazily with a clear error", async () => {
     // Construction must stay cheap and silent (a chained source that never
     // wins); the error surfaces only when the source is actually asked.
     const source = federatedKeySource({});
     expect(brokered.calls).toHaveLength(0);
-    await expect(source.credential({})).rejects.toThrow(/needs `key`/);
+    await expect(source.credential({})).rejects.toThrow(/needs `grantPath`/);
   });
 
   it("forgets a failed build so a transient broker error does not wedge the source", async () => {
     brokered.failOnce = new Error("transient broker failure");
-    const source = federatedKeySource({ key: "app-fixture" });
+    const source = federatedKeySource({ grantPath: "app-fixture" });
     await expect(source.credential({})).rejects.toThrow(/transient broker failure/);
 
     brokered.client = stubClient().client;
@@ -154,7 +154,7 @@ describe("federatedKeySource — the key contract", () => {
   it("builds once across concurrent mints", async () => {
     const { client, calls } = stubClient();
     brokered.client = client;
-    const source = federatedKeySource({ key: "app-fixture" });
+    const source = federatedKeySource({ grantPath: "app-fixture" });
     await Promise.all([source.credential({}), source.credential({})]);
     expect(brokered.calls).toHaveLength(1);
     expect(calls).toHaveLength(2);

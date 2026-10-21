@@ -478,7 +478,7 @@ and moves the smaller one. So shape 4 is shape 1 with a different engine factory
 it unchanged, and so does `duckdbRunner`.
 
 The engine, the token, and the rules live in two packages: the kit's `cf-creds-motherduck`
-(`motherDuckEngine`, the session-species manager, `staticMotherDuckToken`) and this repo's
+(`motherDuckEngine`, the session credential manager, `staticMotherDuckToken`) and this repo's
 `@habemus-papadum/aiui-cf-creds/motherduck` (`standardMotherDuckEngine`: a shared pasted token, then the dev key the aiui Vite
 plugin injects under `vite serve`, else the broker route; `motherDuckRunner`). The reference is
 `demos/motherduck-lab`, available in the gallery with a bring-your-own-token flow.
@@ -486,7 +486,7 @@ plugin injects under `vite serve`, else the broker route; `motherDuckRunner`). T
 ```ts
 // store.ts — the durable island
 const engine = standardMotherDuckEngine({
-  key: "my-app",                                       // the broker's key contract (production)
+  grantPath: "my-app",                                 // credential grant used in production
   params: { sessionName: "my-app", customUserAgent: "my-app/1",
             duckDBAssetsURLPrefix: duckdbAssetsLocation().prefix },  // the self-hosted wasm
 });

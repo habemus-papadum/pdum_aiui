@@ -59,7 +59,7 @@ import type { TableRef } from "./catalog";
 export const appScope = scope("motherduck-lab");
 
 /** The lab's name at an optional broker. The gallery uses pasted/dev tokens. */
-export const BROKER_KEY = "motherduck-lab";
+export const BROKER_GRANT_PATH = "motherduck-lab";
 
 /** MotherDuck's public `sample_data` share — attached in single mode so the lab has tables to show. */
 export const SAMPLE_DATA_SHARE = "md:_share/sample_data/23b0d623-1361-421d-ae77-62d701d471e6";
@@ -134,7 +134,7 @@ export const store: LabStore = appScope.durable("store", () => {
   const prefix = assetsPrefix();
   const attach = attachConfigFromUrl(typeof location === "undefined" ? "" : location.search);
   const engine = standardMotherDuckEngine({
-    key: BROKER_KEY,
+    grantPath: BROKER_GRANT_PATH,
     params: {
       sessionName: "motherduck-lab",
       customUserAgent: "aiui-motherduck-lab/0",
