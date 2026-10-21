@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/demo-motherduck-lab",
-  "version": "0.22.1+dev",
+  "version": "0.23.0",
   "description": "Explore MotherDuck cloud tables, linked histograms, and local DuckDB samples with your own token.",
   "private": true,
   "aiui": {

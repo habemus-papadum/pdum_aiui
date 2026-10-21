@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/demo-catalog",
-  "version": "0.22.1+dev",
+  "version": "0.23.0",
   "description": "In-repo aiui demo: the aiui-viz catalog, rendered — every piece the package provides, with a live specimen where one fits.",
   "private": true,
   "type": "module",
