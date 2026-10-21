@@ -63,12 +63,12 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@habemus-papadum/cf-browser-credentials": "^0.5.0",
-    "@habemus-papadum/cf-creds-aws": "^0.5.0",
-    "@habemus-papadum/cf-creds-elevenlabs": "^0.5.0",
-    "@habemus-papadum/cf-creds-mosaic": "^0.5.0",
-    "@habemus-papadum/cf-creds-motherduck": "^0.5.0",
-    "@habemus-papadum/cf-creds-openai": "^0.5.0"
+    "@habemus-papadum/cf-browser-credentials": "^0.6.0",
+    "@habemus-papadum/cf-creds-aws": "^0.6.0",
+    "@habemus-papadum/cf-creds-elevenlabs": "^0.6.0",
+    "@habemus-papadum/cf-creds-mosaic": "^0.6.0",
+    "@habemus-papadum/cf-creds-motherduck": "^0.6.0",
+    "@habemus-papadum/cf-creds-openai": "^0.6.0"
   },
   "peerDependencies": {
     "@duckdb/duckdb-wasm": ">=1.29",
@@ -91,7 +91,6 @@
     }
   },
   "devDependencies": {
-    "@aws-sdk/client-sts": "^3.1104.0",
     "@duckdb/duckdb-wasm": "catalog:",
     "@habemus-papadum/aiui-build-config": "workspace:^",
     "@habemus-papadum/aiui-viz": "workspace:^",

@@ -12,10 +12,10 @@ built on the `cf_browser_credentials` kit. Three bridges, one per subpath:
 
 ## Prerequisites
 
-A deployed broker (the kit's worker) fronting your app's origin behind Cloudflare Access, and —
-for the federated bridges — the one-time infra setup: outbound web identity federation enabled on
-the AWS account, `sts:GetWebIdentityToken` allowed on the role, and an OpenAI workload identity
-provider + keyless service account pinned to the role ARN.
+A deployed broker (the kit's worker, ≥0.6) fronting your app's origin behind Cloudflare Access,
+and — for the federated OpenAI bridge — the one-time OpenAI setup: a keyless service account with
+a project role, and a workload identity provider registered for the broker's own OIDC issuer with
+a mapping from the key claim to that service account.
 
 ## The shortest path
 
@@ -28,15 +28,11 @@ const keySource = cachingKeySource(
 );
 ```
 
-Under the broker's **key contract** (kit ≥0.4) that is the whole composition root: the broker
-maps `(key, identity)` to the role, region, audience, and OpenAI federation ids, and returns
-them with the mint — no deployment identity in the page. For cross-origin dev pass
+Under the broker's **key contract** that is the whole composition root: the broker maps
+`(key, identity)` to a short-lived identity token it signs plus the audience and OpenAI
+federation ids, and returns them with the mint — no deployment identity in the page. For cross-origin dev pass
 `brokerUrl: "https://creds.example.com"` (the deployed broker's origin) alongside and log in to
 Access in another tab.
-
-Against a broker predating the contract, the legacy explicit form still works (deprecated):
-`federatedKeySource({ region, identityProviderId, serviceAccountId })` — three per-deployment,
-non-secret facts baked at the composition root.
 
 ## Species rules worth knowing
 

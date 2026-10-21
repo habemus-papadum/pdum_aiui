@@ -23,10 +23,10 @@ Each bridge lives on its own subpath so an app pays only for what it uses:
 
 ### `aiui-cf-creds/openai` — the federated OpenAI key source
 
-`ek_` client secrets minted entirely browser-side over AWS workload identity federation
-(broker credentials → STS `GetWebIdentityToken` → the OpenAI SDK's `workloadIdentity`
-exchange → `POST /v1/realtime/client_secrets`). No parent key exists; the OpenAI service
-account behind it is created keyless. The result is an `OpenAIKeySource` — the shape of
+`ek_` client secrets minted entirely browser-side over OpenAI workload identity federation
+(the broker's own short-lived identity token → the OpenAI SDK's `workloadIdentity` exchange →
+`POST /v1/realtime/client_secrets`). No parent key and no cloud credential exists; the OpenAI
+service account behind it is created keyless. The result is an `OpenAIKeySource` — the shape of
 aiui-oracle's `KeySource`, declared here so this package depends on nothing of the oracle —
 and the oracle's key chain takes it as is:
 
@@ -43,11 +43,10 @@ const keySource = chainKeySource([
 ]);
 ```
 
-Under the broker's **key contract** (kit ≥0.4) the app passes only `key` — its own name — and
-the region, audience, and federation ids all ride the broker's one-mint bundle: no deployment
-identity anywhere in the page. Against a broker predating the contract, the legacy explicit
-trio still works (deprecated): `federatedKeySource({ region, identityProviderId,
-serviceAccountId })`.
+Under the broker's **key contract** the app passes only `key` — its own name — and the
+identity token, audience, and federation ids all ride the broker's one-mint bundle: no
+deployment identity anywhere in the page. `key` is required. Needs kit ≥0.6 on both sides —
+a broker still answering the old STS-envelope bundle needs aiui-cf-creds ≤0.21.
 
 ### `aiui-cf-creds/stt` — ElevenLabs Scribe credentials
 

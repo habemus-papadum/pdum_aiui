@@ -1,7 +1,7 @@
 /**
  * openai.test.ts — the mint mapping and the key-source contract. The
- * federation chain itself (broker → STS → SDK exchange) is the kit's,
- * verified live 2026-08-07; what THIS package owns is the mint call's body
+ * federation chain itself (broker identity token → SDK exchange) is the
+ * kit's; what THIS package owns is the mint call's body
  * and the mapping onto OpenAICredential (the oracle's OracleCredential by
  * shape; demos/audio pins the two equal) — pinned here over an injected
  * structural client. All identity values are invented fixtures (D2).
@@ -53,11 +53,7 @@ function stubClient(reply?: { value?: unknown; expires_at?: unknown }) {
   return { client, calls };
 }
 
-const FIXTURE = {
-  region: "xx-invented-1",
-  identityProviderId: "idp_test_fixture",
-  serviceAccountId: "user-test-fixture",
-};
+const FIXTURE = { key: "app-fixture" };
 
 describe("federatedKeySource", () => {
   it("mints with the default TTL and forwards the session verbatim", async () => {
@@ -136,14 +132,12 @@ describe("federatedKeySource — the key contract", () => {
     expect(brokered.calls[0]).toEqual({ url: "/api/credentials/openai?key=app-fixture" });
   });
 
-  it("without key or the explicit trio, fails lazily with a clear error", async () => {
+  it("without a key, fails lazily with a clear error", async () => {
     // Construction must stay cheap and silent (a chained source that never
     // wins); the error surfaces only when the source is actually asked.
     const source = federatedKeySource({});
     expect(brokered.calls).toHaveLength(0);
-    await expect(source.credential({})).rejects.toThrow(
-      /needs `key`.*region \+ identityProviderId \+ serviceAccountId/,
-    );
+    await expect(source.credential({})).rejects.toThrow(/needs `key`/);
   });
 
   it("forgets a failed build so a transient broker error does not wedge the source", async () => {

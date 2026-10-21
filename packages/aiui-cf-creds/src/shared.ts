@@ -33,9 +33,9 @@ export interface BrokerOptions {
    * The app's OWN name under the broker's key contract (kit ≥0.4): the
    * broker maps `(key, identity)` to everything the page needs — role,
    * region, and for OpenAI the whole federation config — so no deployment
-   * identity is baked anywhere. Rides every route as `?key=`. With a key,
-   * per-provider ids stop being required; without one, the legacy explicit
-   * options still work.
+   * identity is baked anywhere. Rides every route as `?key=`. The OpenAI
+   * bridge requires it; elsewhere, without one, the explicit options (the
+   * Mosaic `region`) still work.
    */
   key?: string;
 }
