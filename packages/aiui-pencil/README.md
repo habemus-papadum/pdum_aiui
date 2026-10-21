@@ -150,4 +150,5 @@ and the explicit pause/resume boundary when reflow makes alignment uncertain.
 Circle demonstrates live measurement followed by fading ink and a retained score.
 
 [Architecture](./docs/architecture.md) · [Getting started](./docs/getting-started.md) ·
-[Wacom browser input evidence and refactor notes](./docs/wacom-browser-input.md)
+[Wacom browser input evidence and refactor notes](./docs/wacom-browser-input.md) ·
+[Status and review handoff](./docs/review-handoff.md)

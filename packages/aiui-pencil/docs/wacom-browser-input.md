@@ -17,6 +17,10 @@ note for Pencil. [Architecture](./architecture.md) describes the current library
 boundaries. [Recorded excerpts](./evidence/movink13-2026-10-17.json) preserve the
 measurements behind the conclusions below.
 
+[Status and review handoff](./review-handoff.md) records the committed baseline,
+remaining console warnings and an ordered follow-up checklist for independent
+review.
+
 ## Scope and evidence
 
 | Item | Tested setup |
