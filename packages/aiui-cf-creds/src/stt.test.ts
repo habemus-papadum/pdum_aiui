@@ -93,6 +93,19 @@ describe("standardScribeConnectUrl", () => {
     expect(seen[0].init?.headers).toEqual({ "xi-api-key": "explicit-fixture" });
     expect(browserVendorKey).not.toHaveBeenCalled();
   });
+  it("keeps a browser-provided key ahead of a configured broker", async () => {
+    vi.mocked(browserVendorKey).mockReturnValue("fixture-browser-key");
+    const seen = stubScribeBroker();
+
+    await standardScribeConnectUrl({
+      brokerUrl: "https://unused.example.test",
+      grantPath: "unused",
+    });
+
+    expect(seen).toHaveLength(1);
+    expect(seen[0].url).toBe("https://api.elevenlabs.io/v1/single-use-token/realtime_scribe");
+    expect(seen[0].init?.headers).toEqual({ "xi-api-key": "fixture-browser-key" });
+  });
   it("falls back to a configured broker and reports missing credentials", async () => {
     const seen = stubScribeBroker();
     await standardScribeConnectUrl({ brokerUrl: "https://creds.example.test", grantPath: "app" });

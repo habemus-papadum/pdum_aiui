@@ -49,6 +49,62 @@ afterEach(() => {
 });
 
 describe("brokerConnector", () => {
+  it("uses an injected source for get and refresh without constructing a broker", async () => {
+    const { base, queries } = fakeBase();
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const credential = (accessKeyId: string) => ({
+      accessKeyId,
+      secretAccessKey: "invented-secret",
+      sessionToken: "invented-session",
+      expiration: new Date(Date.now() + 3_600_000).toISOString(),
+      region: "xx-invented-1",
+    });
+    const manager = {
+      get: vi.fn(async () => credential("AKIAFIXTURE1")),
+      refresh: vi.fn(async () => credential("AKIAFIXTURE2")),
+    };
+    let refresh = false;
+    const connector = brokerConnector(base, { manager, forceRefresh: () => refresh });
+
+    await connector.query({ type: "arrow", sql: "SELECT 1" } as never);
+    refresh = true;
+    await connector.query({ type: "arrow", sql: "SELECT 2" } as never);
+
+    expect(manager.get).toHaveBeenCalledTimes(1);
+    expect(manager.refresh).toHaveBeenCalledTimes(1);
+    expect(queries.map((q) => q.type)).toEqual(["exec", "arrow", "exec", "arrow"]);
+    expect(queries[0]?.sql).toContain("AKIAFIXTURE1");
+    expect(queries[2]?.sql).toContain("AKIAFIXTURE2");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("does not fall back to a broker or run the query when an injected source refuses", async () => {
+    const { base, queries } = fakeBase();
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const refusal = new Error("the application must sign in again");
+    const manager = {
+      get: async () => {
+        throw refusal;
+      },
+      refresh: async () => {
+        throw refusal;
+      },
+    };
+    const connector = brokerConnector(base, {
+      manager,
+      brokerUrl: "https://unused.example.test",
+      grantPath: "unused",
+    });
+
+    await expect(connector.query({ type: "arrow", sql: "SELECT 1" } as never)).rejects.toBe(
+      refusal,
+    );
+    expect(queries).toEqual([]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("installs credentials from the conventional route before the first query", async () => {
     const { base, queries } = fakeBase();
     const { urls } = stubAwsBroker();

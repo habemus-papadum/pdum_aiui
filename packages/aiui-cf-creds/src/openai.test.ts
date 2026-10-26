@@ -109,6 +109,33 @@ describe("federatedKeySource — the grant path selection", () => {
     brokered.failOnce = undefined;
   });
 
+  it("accepts an injected client without a grant path and never builds a broker client", async () => {
+    const { client, calls } = stubClient();
+    const source = federatedKeySource({ client });
+
+    await source.credential({ type: "realtime" });
+
+    expect(calls).toHaveLength(1);
+    expect(brokered.calls).toEqual([]);
+  });
+
+  it("propagates an injected client's refusal without falling back to a broker", async () => {
+    const refusal = new Error("the application must sign in again");
+    const client: RealtimeClient = {
+      realtime: {
+        clientSecrets: {
+          create: async () => {
+            throw refusal;
+          },
+        },
+      },
+    };
+    const source = federatedKeySource({ client, grantPath: "unused" });
+
+    await expect(source.credential({})).rejects.toBe(refusal);
+    expect(brokered.calls).toEqual([]);
+  });
+
   it("builds the client from nothing but the app's grant path", async () => {
     const { client, calls } = stubClient();
     brokered.client = client;

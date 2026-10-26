@@ -27,10 +27,14 @@ import { type BrokerOptions, brokerAwsManager } from "./shared";
 
 export type { InstallMode } from "@habemus-papadum/cf-creds-mosaic";
 
+/** The two operations used at the query boundary. The app owns authentication,
+ * caching, renewal and disposal; a concrete CredentialManager is optional. */
+export type AwsCredentialSource = Pick<CredentialManager<AwsCredentials>, "get" | "refresh">;
+
 export interface BrokerConnectorOptions extends BrokerOptions, CredentialAwareOptions {
-  /** Reuse the app's manager; default constructs one against `brokerUrl`
-   * and the grant selected by `grantPath`. */
-  manager?: CredentialManager<AwsCredentials>;
+  /** Use the app's credential source. When omitted, construct a manager against
+   * `brokerUrl` and the grant selected by `grantPath`. */
+  manager?: AwsCredentialSource;
   /** The S3 region installed with each credential set. Use the region from the credential response
    * by default. Set this only to override it. */
   region?: string;
@@ -48,9 +52,13 @@ export interface BrokerConnectorOptions extends BrokerOptions, CredentialAwareOp
  */
 export function brokerConnector(base: Connector, options: BrokerConnectorOptions = {}): Connector {
   const { manager, brokerUrl, grantPath, ...aware } = options;
+  const source = manager ?? brokerAwsManager({ brokerUrl, grantPath });
+  // cf-creds-mosaic 0.7 declares a concrete manager, but its runtime calls only
+  // get/refresh. Keep this assertion at that boundary until the dependency's
+  // declarations accept the structural source; no manager state is accessed.
   return credentialAwareConnector(
     base,
-    manager ?? brokerAwsManager({ brokerUrl, grantPath }),
+    source as Parameters<typeof credentialAwareConnector>[1],
     aware,
   );
 }

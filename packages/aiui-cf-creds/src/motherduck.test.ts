@@ -70,6 +70,34 @@ describe("devMotherDuckEngine", () => {
 });
 
 describe("brokerMotherDuckEngine", () => {
+  it("uses an injected source on each rebuild without reading a broker or dev key", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("__AIUI__", { devKeys: { motherduck: "md_unused" } });
+    const { client, creates } = fakeClient();
+    let token = "md_source";
+    const source = {
+      get: vi.fn(async () => ({
+        token,
+        expiration: new Date(Date.now() + 3_600_000).toISOString(),
+      })),
+    };
+    const engine = brokerMotherDuckEngine({
+      source,
+      client,
+      params: { sessionName: "source-fixture" },
+    });
+
+    await engine.ready();
+    token = "md_replacement";
+    await engine.rebuild();
+
+    expect(creates.map((params) => params.mdToken)).toEqual(["md_source", "md_replacement"]);
+    expect(source.get).toHaveBeenCalledTimes(2);
+    expect(fetchMock).not.toHaveBeenCalled();
+    await engine.close();
+  });
+
   it("fetches the grant route under brokerUrl and builds with the minted token", async () => {
     const urls: string[] = [];
     vi.stubGlobal("fetch", async (url: string) => {

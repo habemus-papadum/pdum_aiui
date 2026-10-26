@@ -67,6 +67,24 @@ coordinator.databaseConnector(
 With `grantPath`, the S3 region rides the broker's credential envelope; without one, pass
 `region` explicitly as before.
 
+An application can supply its own credential source without extending a manager class:
+
+```ts
+import { brokerConnector, type AwsCredentialSource } from "@habemus-papadum/aiui-cf-creds/mosaic";
+
+const source: AwsCredentialSource = {
+  get: () => credentials.get(),
+  refresh: () => credentials.refresh(),
+};
+coordinator.databaseConnector(
+  brokerConnector(duckdbConnector({ duckdb: db, connection }), { manager: source }),
+);
+```
+
+The source returns `AwsCredentials`, including the S3 region. It owns authentication,
+caching and renewal. The connector calls `get()` before each query, or `refresh()` when
+`forceRefresh` requests it. It does not close the source or select a different source on error.
+
 ### `aiui-cf-creds/motherduck` — the in-tab MotherDuck engine
 
 The kit's `motherDuckEngine` composed the way the oracle's key chain is: a DEV key the aiui Vite
@@ -94,6 +112,27 @@ registerSqlTools(kit, {
 });
 engine.onRebuild(() => { /* re-wire, re-materialize: local tables are gone */ });
 ```
+
+## Use application-owned authentication
+
+The URL-backed helpers are one way to obtain credentials. Applications with a different
+discovery or authentication protocol can use these existing injection points:
+
+| Consumer | Inject | Application responsibility |
+| --- | --- | --- |
+| OpenAI Realtime | `federatedKeySource({ client })` | Supply a configured SDK client that can create Realtime client secrets. No `grantPath` is required. |
+| Scribe STT | `scribeTransport({ connectUrl })` from `aiui-stt` | Return a socket URL with a fresh single-use token for each connection. |
+| S3 / Mosaic | `brokerConnector(base, { manager })` | Supply `get()` and `refresh()` returning current AWS credentials. |
+| MotherDuck | `brokerMotherDuckEngine({ source, params })` | Supply the token source; choose connection settings and when to rebuild. |
+
+These injection points do not read pasted or development keys. They do not fall back to a
+URL-backed broker when the injected source fails. The application handles sign-in and chooses
+whether to retry. Keep credential values out of controls, tool results and diagnostic logs.
+
+The `standardScribeConnectUrl` and `standardMotherDuckEngine` helpers retain their demo
+behavior: pasted key, then injected development key, then the configured broker or source.
+An explicit Scribe `apiKey` callback still selects the application's own key lookup. A public
+demo can keep its key-entry UI; an application can separately choose an injected source alone.
 
 ## Select the service and grant
 
