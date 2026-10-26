@@ -10,6 +10,8 @@
  * the real-Plot behavioral test lives in mosaic.test.tsx.
  */
 import { render } from "@solidjs/web";
+import { Coordinator, MosaicClient } from "@uwdata/mosaic-core";
+import { createSignal } from "solid-js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MosaicView } from "./mosaic";
 
@@ -54,7 +56,7 @@ describe("MosaicView disposal", () => {
       disconnect: (c: unknown) => void disconnected.push(c),
     };
 
-    const mark = { theMark: true };
+    const mark = { theMark: true, destroy: vi.fn() };
     const brushing: { selection?: ReturnType<typeof fakeSelection> } = {};
     const selection = fakeSelection([]);
     brushing.selection = selection;
@@ -82,7 +84,59 @@ describe("MosaicView disposal", () => {
     dispose();
     dispose = undefined;
     expect(disconnected).toEqual([mark]);
+    expect(mark.destroy).toHaveBeenCalledOnce();
     expect(selection.updates).toEqual([{ source: brushing, value: null, predicate: null }]);
+  });
+
+  it.each([
+    "unmount",
+    "spec replacement",
+  ])("settles pending preparation without a query after %s", async (change) => {
+    let finishPrepare!: () => void;
+    const prepared = new Promise<void>((resolve) => {
+      finishPrepare = resolve;
+    });
+    class PreparingMark extends MosaicClient {
+      prepare() {
+        return prepared;
+      }
+    }
+    const mark = new PreparingMark();
+    const coordinator = new Coordinator(undefined, { logger: null });
+    const request = vi.spyOn(coordinator, "requestQuery");
+    const [include, setInclude] = createSignal(true);
+    dispose = render(
+      () => (
+        <MosaicView
+          coordinator={coordinator}
+          spec={() =>
+            include() ? [(p) => void (p as unknown as { marks: unknown[] }).marks.push(mark)] : []
+          }
+        />
+      ),
+      document.body,
+    );
+    await tick();
+    expect(coordinator.clients.has(mark)).toBe(true);
+    // Observe the actual Mosaic continuation, including a rejection in the
+    // broken case; an unhandled-rejection listener must not hide this race.
+    const settled = mark.pending.then(
+      () => "resolved",
+      () => "rejected",
+    );
+
+    if (change === "unmount") {
+      dispose();
+      dispose = undefined;
+    } else {
+      setInclude(false);
+      await tick();
+    }
+    expect(coordinator.clients.has(mark)).toBe(false);
+    finishPrepare();
+
+    expect(await settled).toBe("resolved");
+    expect(request).not.toHaveBeenCalled();
   });
 
   it("publishes no retraction when the interactor holds no active clause", async () => {

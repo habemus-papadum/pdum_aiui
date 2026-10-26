@@ -12,7 +12,7 @@
  * than one self-contained figure.
  *
  * We build the Plot ourselves (rather than vgplot's `plot()` helper) for one
- * reason: to keep the marks, so disposal can `coordinator.disconnect` each and
+ * reason: to keep the marks, so disposal can destroy each and
  * not leak a client on every hot edit or theme flip. The spec is a reactive
  * thunk; reading a per-mode palette inside it makes a system theme change
  * rebuild the view against the surviving coordinator + selection.
@@ -98,7 +98,14 @@ export function MosaicView(props: {
           : undefined;
       return () => {
         unregister?.();
-        for (const mark of p.marks) coordinator.disconnect(mark);
+        for (const mark of p.marks) {
+          // destroy() disables a mark before disconnecting it. A pending
+          // prepare() can then settle without querying a missing coordinator.
+          mark.destroy();
+          // Structural coordinator wrappers may track their own registration;
+          // retain the explicit disconnect (Mosaic's disconnect is idempotent).
+          coordinator.disconnect(mark);
+        }
         // Interactors are NOT marks, and their published clauses live in the
         // SURVIVING selection keyed by interactor instance — Mosaic only
         // replaces a clause arriving from the same source object, so a view
