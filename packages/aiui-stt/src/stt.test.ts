@@ -5,8 +5,10 @@
  * commit), the status lifecycle, and loud settlement when a connect fails
  * with commits queued.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { scribeTransport } from "./scribe";
 import { createStt } from "./stt";
+import { fakeSocket } from "./test-support/fakes";
 import type { AudioSource, SttCallbacks, SttConnection, SttTransport } from "./types";
 
 type Op =
@@ -255,6 +257,51 @@ describe("connection and audio fences", () => {
     await second;
     expect(stt.status()).toBe("ready");
     stt.close();
+  });
+  it("requests a fresh Scribe URL per connection, sharing only concurrent connect calls", async () => {
+    const sockets: ReturnType<typeof fakeSocket>[] = [];
+    let issued = 0;
+    const connectUrl = vi.fn(async () => {
+      issued += 1;
+      return `wss://fixture.example.test/scribe?token=single-use-fixture-${issued}`;
+    });
+    const stt = createStt({
+      transport: scribeTransport({
+        connectUrl,
+        socketFactory: (url, protocols, handlers) => {
+          const socket = fakeSocket();
+          sockets.push(socket);
+          return socket.factory(url, protocols, handlers);
+        },
+      }),
+    });
+    try {
+      const first = stt.connect();
+      const sameConnection = stt.connect();
+      await tick();
+      expect(connectUrl).toHaveBeenCalledTimes(1);
+      expect(sockets).toHaveLength(1);
+      sockets[0].message({ message_type: "session_started", config: {} });
+      await Promise.all([first, sameConnection]);
+
+      sockets[0].close(1006, "fixture network loss");
+      expect(stt.status()).toBe("error");
+      const second = stt.connect();
+      await tick();
+      expect(connectUrl).toHaveBeenCalledTimes(2);
+      expect(sockets).toHaveLength(2);
+      expect(new URL(sockets[0].url() ?? "").searchParams.get("token")).toBe(
+        "single-use-fixture-1",
+      );
+      expect(new URL(sockets[1].url() ?? "").searchParams.get("token")).toBe(
+        "single-use-fixture-2",
+      );
+      sockets[1].message({ message_type: "session_started", config: {} });
+      await second;
+      expect(stt.status()).toBe("ready");
+    } finally {
+      stt.close();
+    }
   });
   it("close releases a socket still waiting for session_started", async () => {
     const t = stubTransport();
