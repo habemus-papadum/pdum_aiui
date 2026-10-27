@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/demo-semantic-svg-lab",
-  "version": "0.23.0+dev",
+  "version": "0.24.0",
   "description": "Semantic SVG experiment: coordinated circuit views, terminal lens, and revisioned editing.",
   "private": true,
   "type": "module",

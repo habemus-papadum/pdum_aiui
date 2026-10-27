@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-prompts-authoring-spike",
-  "version": "0.23.0+dev",
+  "version": "0.24.0",
   "description": "Native TSX syntax and prompt-turn-history workflow spike.",
   "type": "module",
   "license": "MIT",

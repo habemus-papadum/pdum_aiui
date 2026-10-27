@@ -1,6 +1,6 @@
 {
   "name": "pdum_aiui",
-  "version": "0.23.0+dev",
+  "version": "0.24.0",
   "private": true,
   "type": "module",
   "description": "pdum_aiui - a UI framework for agent-written scientific interfaces, its AI utilities, and the demos: a lockstep-versioned TypeScript monorepo.",

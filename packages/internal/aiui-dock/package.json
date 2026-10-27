@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-dock",
-  "version": "0.23.0+dev",
+  "version": "0.24.0",
   "private": true,
   "description": "The voice dock: an oracle and a live session embedded in any aiui page, wired to its own tools, with a key field and the tool log",
   "type": "module",

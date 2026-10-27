@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-prompts-inspector-spike",
-  "version": "0.23.0+dev",
+  "version": "0.24.0",
   "description": "Fixture-driven prompt inspector interaction spike.",
   "type": "module",
   "license": "MIT",
