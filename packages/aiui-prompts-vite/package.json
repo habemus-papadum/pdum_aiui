@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-prompts-vite",
-  "version": "0.24.0",
+  "version": "0.24.0+dev",
   "description": "Vite routing and optional source provenance instrumentation for structured prompt JSX.",
   "type": "module",
   "license": "MIT",

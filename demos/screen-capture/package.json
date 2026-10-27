@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/demo-screen-capture",
-  "version": "0.24.0",
+  "version": "0.24.0+dev",
   "description": "Screen capture with live previews, element cropping, and frame statistics.",
   "private": true,
   "type": "module",
