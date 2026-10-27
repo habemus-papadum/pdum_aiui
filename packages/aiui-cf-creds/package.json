@@ -63,12 +63,12 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@habemus-papadum/cf-browser-credentials": "^0.7.0",
-    "@habemus-papadum/cf-creds-aws": "^0.7.0",
-    "@habemus-papadum/cf-creds-elevenlabs": "^0.7.0",
-    "@habemus-papadum/cf-creds-mosaic": "^0.7.0",
-    "@habemus-papadum/cf-creds-motherduck": "^0.7.0",
-    "@habemus-papadum/cf-creds-openai": "^0.7.0"
+    "@habemus-papadum/cf-browser-credentials": "^0.8.0",
+    "@habemus-papadum/cf-creds-aws": "^0.8.0",
+    "@habemus-papadum/cf-creds-elevenlabs": "^0.8.0",
+    "@habemus-papadum/cf-creds-mosaic": "^0.8.0",
+    "@habemus-papadum/cf-creds-motherduck": "^0.8.0",
+    "@habemus-papadum/cf-creds-openai": "^0.8.0"
   },
   "peerDependencies": {
     "@duckdb/duckdb-wasm": ">=1.29",
