@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aibr",
-  "version": "0.24.1",
+  "version": "0.24.1+dev",
   "description": "Persistent shared browsers and exec-based Claude Code / Codex launchers.",
   "type": "module",
   "license": "MIT",
