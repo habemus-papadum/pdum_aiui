@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/demo-gallery",
-  "version": "0.24.0+dev",
+  "version": "0.0.0",
   "description": "The notebook-gallery shell: discovers sibling demo packages via their aiui.sitePage markers and composes them into one SPA (dev + the published static site).",
   "private": true,
   "type": "module",
@@ -17,13 +17,13 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@habemus-papadum/aiui-design": "workspace:^",
-    "@habemus-papadum/aiui-dock": "workspace:^",
-    "@habemus-papadum/aiui-source-processor": "workspace:^",
-    "@habemus-papadum/aiui-viz": "workspace:^",
+    "@habemus-papadum/aiui-design": "workspace:>=0.24.0",
+    "@habemus-papadum/aiui-dock": "workspace:>=0.0.0",
+    "@habemus-papadum/aiui-source-processor": "workspace:>=0.24.0",
+    "@habemus-papadum/aiui-viz": "workspace:>=0.24.0",
     "@solidjs/web": "catalog:solid",
     "solid-js": "catalog:solid",
-    "@habemus-papadum/aiui-audio": "workspace:^"
+    "@habemus-papadum/aiui-audio": "workspace:>=0.24.0"
   },
   "devDependencies": {
     "@babel/core": "catalog:",

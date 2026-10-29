@@ -1,9 +1,9 @@
 {
   "name": "pdum_aiui",
-  "version": "0.24.0+dev",
+  "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "pdum_aiui - a UI framework for agent-written scientific interfaces, its AI utilities, and the demos: a lockstep-versioned TypeScript monorepo.",
+  "description": "pdum_aiui - a UI framework for agent-written scientific interfaces, its AI utilities, and the demos: a pnpm TypeScript workspace whose packages release independently.",
   "author": "Nehal Patel <nehal@alum.mit.edu>",
   "license": "MIT",
   "repository": {
@@ -30,8 +30,7 @@
     "test:packaging": "node scripts/packaging-test.mjs",
     "test:template": "tsx scripts/template-e2e.ts",
     "test:watch": "vitest",
-    "typecheck": "pnpm -r run typecheck",
-    "version:check": "node scripts/versioning.mjs current"
+    "typecheck": "pnpm -r run typecheck"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.2",

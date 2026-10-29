@@ -28,6 +28,7 @@ import {
 } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { DEPENDENCY_VERSIONS } from "./version";
 
 /** What the scaffolder finds at the target path. */
 export type TargetState = "new" | "existing-scaffold" | "occupied";
@@ -62,13 +63,25 @@ export function classifyTarget(target: string): TargetState {
 }
 
 /**
- * The dependency range the scaffold pins aiui packages to: this build's exact
- * release line when it has one, `latest` from a dev build (whose `X.Y.Z+dev`
- * doesn't exist on the registry).
+ * The range the scaffold pins one aiui package to. Every package releases on
+ * its own version, so the range is per name: `^X.Y.Z`, the release line of
+ * that package baked into this build (`versions` holds each dependency's
+ * workspace manifest version at build time, `X.Y.Z` or `X.Y.Z+dev`), or
+ * `latest` when this build carries none for it — a source checkout run
+ * through tsx, or a package that has never released (`0.0.0`).
  */
-export function dependencyRange(version: string): string {
-  return /^\d+\.\d+\.\d+$/.test(version) ? `^${version}` : "latest";
+export function dependencyRange(
+  name: string,
+  versions: Readonly<Record<string, string>> = DEPENDENCY_VERSIONS,
+): string {
+  const match = /^(\d+\.\d+\.\d+)(?:\+dev)?$/.exec(versions[name] ?? "");
+  return match && match[1] !== "0.0.0" ? `^${match[1]}` : "latest";
 }
+
+/** A range per dependency name, or one range for all of them. */
+export type DependencyRange = string | ((name: string) => string);
+
+const RANGE_TOKEN = "__AIUI_VERSION_RANGE__";
 
 /** A valid npm package name from the target directory's basename. */
 export function appNameFrom(target: string): string {
@@ -82,15 +95,17 @@ export function appNameFrom(target: string): string {
 /** File extensions the token pass rewrites — the template's text files. */
 const TOKEN_FILE_EXTENSIONS = new Set([".ts", ".tsx", ".html", ".md", ".json", ".css"]);
 
-/** Recursively resolve `__APP_NAME__` / `__AIUI_VERSION_RANGE__` in the
- * scaffolded tree's text files. Tokens live in string/comment positions in the
- * template source (e.g. `scope("__APP_NAME__")` in store.ts), so the shipped
- * template stays syntactically valid TypeScript and typecheckable as-is. */
-function resolveTokens(dir: string, appName: string, range: string): void {
+/** Recursively resolve `__APP_NAME__` in the scaffolded tree's text files and
+ * `__AIUI_VERSION_RANGE__` in its package.json files, where it stands as a
+ * dependency's range and is replaced by that dependency's own range. Tokens
+ * live in string/comment positions in the template source (e.g.
+ * `scope("__APP_NAME__")` in store.ts), so the shipped template stays
+ * syntactically valid TypeScript and typecheckable as-is. */
+function resolveTokens(dir: string, appName: string, rangeFor: (name: string) => string): void {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) {
-      resolveTokens(path, appName, range);
+      resolveTokens(path, appName, rangeFor);
       continue;
     }
     const dot = entry.name.lastIndexOf(".");
@@ -98,9 +113,19 @@ function resolveTokens(dir: string, appName: string, range: string): void {
       continue;
     }
     const text = readFileSync(path, "utf8");
-    const resolved = text
-      .replaceAll("__APP_NAME__", appName)
-      .replaceAll("__AIUI_VERSION_RANGE__", range);
+    let resolved = text.replaceAll("__APP_NAME__", appName);
+    if (entry.name === "package.json" && resolved.includes(RANGE_TOKEN)) {
+      const pkg = JSON.parse(resolved) as Record<string, unknown>;
+      for (const section of ["dependencies", "devDependencies", "peerDependencies"]) {
+        const deps = pkg[section] as Record<string, string> | undefined;
+        for (const [name, range] of Object.entries(deps ?? {})) {
+          if (range === RANGE_TOKEN && deps) {
+            deps[name] = rangeFor(name);
+          }
+        }
+      }
+      resolved = `${JSON.stringify(pkg, null, 2)}\n`;
+    }
     if (resolved !== text) {
       writeFileSync(path, resolved);
     }
@@ -112,18 +137,18 @@ function resolveTokens(dir: string, appName: string, range: string): void {
  * (`gitignore` → `.gitignore`, `envrc` → `.envrc`), and resolve the tokens
  * across the whole tree — package.json AND source (the app's name feeds
  * `scope("__APP_NAME__")` in store.ts, the page title, the marker): the app's
- * name comes from the directory, the aiui dependency range from `range`.
+ * name comes from the directory, each aiui dependency's range from `range`.
  *
- * `range` defaults to what this build should pin to, and exists so a caller can
- * override it: this repo's own `pnpm new-demo` scaffolds the same template into
- * `demos/<slug>` with `workspace:^`, resolving aiui packages from the checkout
- * instead of the registry. One template, both paths.
+ * `range` defaults to the release lines baked into this build, and exists so a
+ * caller can override it: this repo's own `pnpm new-demo` scaffolds the same
+ * template into `demos/<slug>` with workspace floors (`workspace:>=X.Y.Z`),
+ * resolving aiui packages from the checkout instead of the registry. One
+ * template, both paths.
  */
 export function scaffoldApp(
   template: string,
   target: string,
-  version: string,
-  range: string = dependencyRange(version),
+  range: DependencyRange = dependencyRange,
 ): void {
   mkdirSync(target, { recursive: true });
   cpSync(template, target, { recursive: true });
@@ -132,7 +157,8 @@ export function scaffoldApp(
       renameSync(join(target, undotted), join(target, `.${undotted}`));
     }
   }
-  resolveTokens(target, appNameFrom(target), range);
+  const rangeFor = typeof range === "string" ? () => range : range;
+  resolveTokens(target, appNameFrom(target), rangeFor);
 }
 
 /**

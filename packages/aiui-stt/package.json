@@ -40,17 +40,20 @@
     "test:browser": "playwright test --project=offline",
     "test:live": "playwright test --config=playwright.live.config.ts"
   },
-  "dependencies": {
-    "@solidjs/web": "catalog:solid",
-    "solid-js": "catalog:solid",
-    "@habemus-papadum/aiui-audio": "workspace:^"
+  "peerDependencies": {
+    "@habemus-papadum/aiui-audio": "workspace:>=0.24.0",
+    "solid-js": ">=2.0.0-rc.13 <3",
+    "@solidjs/web": ">=2.0.0-rc.13 <3"
   },
   "devDependencies": {
-    "@habemus-papadum/aiui-build-config": "workspace:^",
-    "@habemus-papadum/cf-creds-elevenlabs": "^0.8.0",
+    "@habemus-papadum/aiui-build-config": "workspace:*",
+    "@habemus-papadum/cf-creds-elevenlabs": ">=0.8.0",
     "@playwright/test": "^1.64.0",
     "jsdom": "catalog:",
     "vite": "catalog:",
-    "vite-plugin-solid": "catalog:solid"
+    "vite-plugin-solid": "catalog:solid",
+    "@habemus-papadum/aiui-audio": "workspace:*",
+    "solid-js": "catalog:solid",
+    "@solidjs/web": "catalog:solid"
   }
 }

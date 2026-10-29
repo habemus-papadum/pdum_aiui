@@ -58,8 +58,8 @@
     "gen:styles": "node scripts/gen-styles.mjs"
   },
   "devDependencies": {
-    "@habemus-papadum/aiui-build-config": "workspace:^",
-    "@habemus-papadum/aiui-design": "workspace:^",
+    "@habemus-papadum/aiui-build-config": "workspace:*",
+    "@habemus-papadum/aiui-design": "workspace:*",
     "@solidjs/web": "catalog:solid",
     "@types/katex": "^0.16.7",
     "@types/node": "^26.1.0",
@@ -68,10 +68,10 @@
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plugin-solid": "catalog:solid",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@habemus-papadum/aiui-prompts": "workspace:*"
   },
   "dependencies": {
-    "@habemus-papadum/aiui-prompts": "workspace:^",
     "katex": "^0.17.0",
     "mdast-util-from-markdown": "^2.1.0",
     "mdast-util-gfm": "^3.1.0",
@@ -81,6 +81,7 @@
   },
   "peerDependencies": {
     "@solidjs/web": ">=2.0.0-rc.13 <3",
-    "solid-js": ">=2.0.0-rc.13 <3"
+    "solid-js": ">=2.0.0-rc.13 <3",
+    "@habemus-papadum/aiui-prompts": "workspace:>=0.24.0"
   }
 }

@@ -57,7 +57,7 @@ function main(): void {
         process.exitCode = 1;
         return;
       }
-      scaffoldApp(template, target, VERSION);
+      scaffoldApp(template, target);
       console.log(`scaffolded your app at ${target}`);
       initGitRepo(target);
       break;

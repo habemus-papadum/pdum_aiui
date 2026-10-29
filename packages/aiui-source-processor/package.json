@@ -52,7 +52,7 @@
   },
   "devDependencies": {
     "@babel/core": "catalog:",
-    "@habemus-papadum/aiui-build-config": "workspace:^",
+    "@habemus-papadum/aiui-build-config": "workspace:*",
     "@types/babel__core": "^7.20.5",
     "vite": "catalog:"
   }

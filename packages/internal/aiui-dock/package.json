@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-dock",
-  "version": "0.24.0+dev",
+  "version": "0.0.0",
   "private": true,
   "description": "The voice dock: an oracle and a live session embedded in any aiui page, wired to its own tools, with a key field and the tool log",
   "type": "module",
@@ -23,17 +23,17 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@habemus-papadum/aiui-live": "workspace:^",
-    "@habemus-papadum/aiui-oracle": "workspace:^",
-    "@habemus-papadum/aiui-viz": "workspace:^",
+    "@habemus-papadum/aiui-live": "workspace:>=0.0.0",
+    "@habemus-papadum/aiui-oracle": "workspace:>=0.0.0",
+    "@habemus-papadum/aiui-viz": "workspace:>=0.24.0",
     "@solidjs/web": "catalog:solid",
     "highlight.js": "^11.12.0",
     "marked": "^16.4.2",
     "solid-js": "catalog:solid",
-    "@habemus-papadum/aiui-audio": "workspace:^"
+    "@habemus-papadum/aiui-audio": "workspace:>=0.24.0"
   },
   "devDependencies": {
-    "@habemus-papadum/aiui-build-config": "workspace:^",
+    "@habemus-papadum/aiui-build-config": "workspace:*",
     "jsdom": "catalog:",
     "vite-plugin-solid": "catalog:solid"
   }

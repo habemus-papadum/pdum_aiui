@@ -208,5 +208,5 @@ These are three independent public packages. Core has no third-party runtime dep
 in Node or a browser without DOM globals. Its root does not re-export operations; import that explicit
 subpath when preparing delivery. Markdown, KaTeX, and Solid belong to the inspector package. Vite and
 source instrumentation belong to the build plugin, normally installed as a development dependency.
-They use the workspace's public lockstep publication configuration (`dist/` swapped in by
+They use the workspace's publication configuration (`dist/` swapped in by
 `publishConfig` at pack time); both nested spikes stay private and unpublished.

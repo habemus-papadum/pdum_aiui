@@ -40,21 +40,22 @@
     "lint": "biome check src test package.json tsconfig.json tsconfig.test.json vite.config.ts"
   },
   "devDependencies": {
-    "@habemus-papadum/aiui-build-config": "workspace:^",
-    "@habemus-papadum/aiui-source-processor": "workspace:^",
+    "@habemus-papadum/aiui-build-config": "workspace:*",
+    "@habemus-papadum/aiui-source-processor": "workspace:*",
     "@solidjs/web": "catalog:solid",
     "@types/node": "^26.1.0",
     "solid-js": "catalog:solid",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plugin-solid": "catalog:solid",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@habemus-papadum/aiui-prompts": "workspace:*"
   },
   "dependencies": {
-    "@habemus-papadum/aiui-prompts": "workspace:^",
     "magic-string": "^0.30.21"
   },
   "peerDependencies": {
-    "vite": ">=8"
+    "vite": ">=8",
+    "@habemus-papadum/aiui-prompts": "workspace:>=0.24.0"
   }
 }

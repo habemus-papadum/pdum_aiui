@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// npm provisioning helpers. Releases authenticate with the NPM_TOKEN secret
-// (see AGENTS.md → Releasing), so a new package's first publish needs NO
-// setup — the only live provisioning act here is the optional `reserve`.
+// npm provisioning helpers. Releases run through ship's release workflow and
+// authenticate with the NPM_TOKEN secret (see AGENTS.md → Releasing), so a new
+// package's first publish needs NO setup — the only live provisioning act here
+// is the optional `reserve`. Nothing here publishes a real version.
 // Zero dependencies; run with the repo's Node.
 //
 // Subcommands:
@@ -9,12 +10,9 @@
 //   reserve [slug...]     OPTIONAL: placeholder-publish names not yet on the registry,
 //                         claiming them ahead of their first real release (local auth;
 //                         may prompt for 2FA)
-//   publish [--tag <t>]   pack each package and `npm publish` the tarball with ambient
-//                         auth. The workflow publishes via `pnpm -r publish` instead;
-//                         kept as the per-tarball alternative.
 //
-// `reserve`/`publish` default to ALL publishable packages when no slug is
-// given. `reserve` also accepts `--dry-run`.
+// `reserve` defaults to ALL publishable packages when no slug is given and
+// accepts `--dry-run`.
 
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -41,7 +39,7 @@ function fail(message) {
 // --- package discovery -----------------------------------------------------
 
 /**
- * Every packages/* that release.yml would publish: has a package.json and is not
+ * Every packages/* that ship would publish: has a package.json and is not
  * `"private": true` (the --no-publish opt-out). Returns {slug, name, dir, access}.
  */
 function listPublishable() {
@@ -152,7 +150,7 @@ function cmdReserve(args) {
       writeFileSync(
         join(staging, "README.md"),
         `# ${p.name}\n\nName-reservation placeholder. The real package is published from CI ` +
-          `(\`.github/workflows/release.yml\`).\n`,
+          `(the release workflow, which runs ship).\n`,
       );
       const publishArgs = ["publish", "--access", p.access, "--tag", RESERVE_TAG];
       if (otp) publishArgs.push(`--otp=${otp}`);
@@ -182,45 +180,6 @@ function cmdReserve(args) {
   if (failed) process.exitCode = 1;
 }
 
-// Pack each publishable package (pnpm rewrites `workspace:^` -> the real
-// version in the tarball), then `npm publish` the tarball with ambient auth +
-// --provenance. Build must have run first. The workflow uses `pnpm -r publish`
-// instead; this remains as the per-tarball alternative.
-function cmdPublish(args = []) {
-  const targets = listPublishable();
-  // A dist-tag, for canary builds. npm defaults to `latest`, which is exactly
-  // what a prerelease must NOT become: `npm i @habemus-papadum/aiui-viz` would
-  // start handing people a canary.
-  const tagIdx = args.findIndex((a) => a === "--tag" || a.startsWith("--tag="));
-  const distTag = tagIdx < 0 ? null : (args[tagIdx].split("=")[1] ?? args[tagIdx + 1]);
-  if (tagIdx >= 0 && !distTag) fail("--tag needs a value, e.g. --tag canary");
-  const staging = mkdtempSync(join(tmpdir(), "npm-publish-"));
-  for (const p of targets) {
-    process.stdout.write(`\n=== ${p.name} ===\n`);
-    const packOut = execFileSync("pnpm", ["pack", "--pack-destination", staging], {
-      cwd: p.dir,
-      encoding: "utf8",
-    });
-    // pnpm prints the tarball path as the last non-empty line of its output.
-    const tarball = packOut
-      .trim()
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter((l) => l.endsWith(".tgz"))
-      .pop();
-    if (!tarball || !existsSync(tarball)) fail(`could not locate packed tarball for ${p.name}`);
-    execFileSync(
-      "npm",
-      ["publish", tarball, "--provenance", ...(distTag ? ["--tag", distTag] : [])],
-      { stdio: "inherit" },
-    );
-  }
-  rmSync(staging, { recursive: true, force: true });
-  process.stdout.write(
-    `\npublished ${targets.length} package(s)${distTag ? ` under dist-tag "${distTag}"` : ""}.\n`,
-  );
-}
-
 // --- CLI -------------------------------------------------------------------
 
 const [cmd, ...rest] = process.argv.slice(2);
@@ -231,12 +190,9 @@ switch (cmd) {
   case "reserve":
     cmdReserve(rest);
     break;
-  case "publish":
-    cmdPublish(rest);
-    break;
   default:
     process.stderr.write(
-      "usage: npm-provision.mjs <list [--slugs] | reserve [slug...] | publish [--tag <t>]> [--dry-run] [--otp=<code>]\n",
+      "usage: npm-provision.mjs <list [--slugs] | reserve [slug...]> [--dry-run] [--otp=<code>]\n",
     );
     process.exit(2);
 }

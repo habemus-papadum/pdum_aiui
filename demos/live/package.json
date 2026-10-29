@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/demo-live",
-  "version": "0.24.0+dev",
+  "version": "0.0.0",
   "description": "GPT-Live lab: raw wire timing, delegation backends (Responses / Claude Code), and a full aiui app driven by voice.",
   "private": true,
   "type": "module",
@@ -23,16 +23,16 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json"
   },
   "dependencies": {
-    "@habemus-papadum/aiui-design": "workspace:^",
-    "@habemus-papadum/aiui-live": "workspace:^",
-    "@habemus-papadum/aiui-oracle": "workspace:^",
-    "@habemus-papadum/aiui-oscillator": "workspace:^",
-    "@habemus-papadum/aiui-prompts": "workspace:^",
-    "@habemus-papadum/aiui-source-processor": "workspace:^",
-    "@habemus-papadum/aiui-viz": "workspace:^",
+    "@habemus-papadum/aiui-design": "workspace:>=0.24.0",
+    "@habemus-papadum/aiui-live": "workspace:>=0.0.0",
+    "@habemus-papadum/aiui-oracle": "workspace:>=0.0.0",
+    "@habemus-papadum/aiui-oscillator": "workspace:>=0.0.0",
+    "@habemus-papadum/aiui-prompts": "workspace:>=0.24.0",
+    "@habemus-papadum/aiui-source-processor": "workspace:>=0.24.0",
+    "@habemus-papadum/aiui-viz": "workspace:>=0.24.0",
     "@solidjs/web": "catalog:solid",
     "solid-js": "catalog:solid",
-    "@habemus-papadum/aiui-audio": "workspace:^"
+    "@habemus-papadum/aiui-audio": "workspace:>=0.24.0"
   },
   "devDependencies": {
     "@babel/core": "catalog:",

@@ -7,6 +7,7 @@
 export {
   appNameFrom,
   classifyTarget,
+  type DependencyRange,
   dependencyRange,
   initGitRepo,
   packageManager,
@@ -14,4 +15,4 @@ export {
   type TargetState,
   templateRoot,
 } from "./scaffold";
-export { VERSION } from "./version";
+export { DEPENDENCY_VERSIONS, VERSION } from "./version";

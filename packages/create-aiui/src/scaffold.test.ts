@@ -54,9 +54,13 @@ describe("classifyTarget", () => {
 });
 
 describe("dependencyRange", () => {
-  it("pins to the release line for real versions, latest for dev builds", () => {
-    expect(dependencyRange("1.4.0")).toBe("^1.4.0");
-    expect(dependencyRange("0.0.0+dev")).toBe("latest");
+  it("pins each package to its own baked release line, latest when none is baked", () => {
+    const baked = { "@x/a": "1.4.0+dev", "@x/b": "0.9.2", "@x/c": "0.0.0+dev" };
+    expect(dependencyRange("@x/a", baked)).toBe("^1.4.0");
+    expect(dependencyRange("@x/b", baked)).toBe("^0.9.2");
+    expect(dependencyRange("@x/c", baked)).toBe("latest"); // never released
+    expect(dependencyRange("@x/d", baked)).toBe("latest"); // not baked
+    expect(dependencyRange("@x/a", {})).toBe("latest"); // source checkout, nothing baked
   });
 });
 
@@ -82,7 +86,7 @@ describe("scaffoldApp (against the real shipped template)", () => {
     const template = templateRoot();
     expect(template).toBeDefined();
     const target = join(dir, "my-viz-app");
-    scaffoldApp(template as string, target, "0.0.0+dev");
+    scaffoldApp(template as string, target);
 
     // The app shape a user (and the packaging test) relies on.
     for (const file of [
@@ -120,7 +124,7 @@ describe("scaffoldApp (against the real shipped template)", () => {
     };
     expect(pkg.name).toBe("my-viz-app");
     expect(pkg.aiui?.scaffold).toBe(true);
-    // Placeholders resolved to a real range (dev build → "latest").
+    // Placeholders resolved to a real range (nothing baked under the test runner → "latest").
     expect(pkg.dependencies["@habemus-papadum/aiui-viz"]).toBe("latest");
     expect(pkg.dependencies["@habemus-papadum/aiui-source-processor"]).toBe("latest");
 
@@ -128,23 +132,44 @@ describe("scaffoldApp (against the real shipped template)", () => {
     expect(classifyTarget(target)).toBe("existing-scaffold");
   });
 
-  it("pins release builds to the release line", () => {
+  it("pins a release build to each package's own release line", () => {
     const target = join(dir, "pinned");
-    scaffoldApp(templateRoot() as string, target, "1.4.0");
+    const baked = {
+      "@habemus-papadum/aiui-viz": "1.4.0+dev",
+      "@habemus-papadum/aiui-source-processor": "1.2.0+dev",
+      "@habemus-papadum/aiui-design": "0.9.3",
+    };
+    scaffoldApp(templateRoot() as string, target, (name) => dependencyRange(name, baked));
     const pkg = JSON.parse(readFileSync(join(target, "package.json"), "utf8")) as {
       dependencies: Record<string, string>;
     };
     expect(pkg.dependencies["@habemus-papadum/aiui-viz"]).toBe("^1.4.0");
+    expect(pkg.dependencies["@habemus-papadum/aiui-source-processor"]).toBe("^1.2.0");
+    expect(pkg.dependencies["@habemus-papadum/aiui-design"]).toBe("^0.9.3");
+    expect(pkg.dependencies["solid-js"]).toBe("2.0.0-rc.13"); // untouched: no token
   });
 
-  it("honors an explicit range — what `pnpm new-demo` uses for workspace links", () => {
+  it("honors an explicit range — what `pnpm new-demo` uses for workspace floors", () => {
     const target = join(dir, "in-repo");
-    scaffoldApp(templateRoot() as string, target, "1.4.0", "workspace:^");
+    const floors: Record<string, string> = {
+      "@habemus-papadum/aiui-viz": "workspace:>=0.24.0",
+      "@habemus-papadum/aiui-source-processor": "workspace:>=0.24.0",
+      "@habemus-papadum/aiui-design": "workspace:>=0.0.0",
+    };
+    scaffoldApp(templateRoot() as string, target, (name) => floors[name] ?? "latest");
     const pkg = JSON.parse(readFileSync(join(target, "package.json"), "utf8")) as {
       dependencies: Record<string, string>;
       devDependencies: Record<string, string>;
     };
-    expect(pkg.dependencies["@habemus-papadum/aiui-viz"]).toBe("workspace:^");
-    expect(pkg.dependencies["@habemus-papadum/aiui-source-processor"]).toBe("workspace:^");
+    expect(pkg.dependencies["@habemus-papadum/aiui-viz"]).toBe("workspace:>=0.24.0");
+    expect(pkg.dependencies["@habemus-papadum/aiui-design"]).toBe("workspace:>=0.0.0");
+
+    // One string applies to every token.
+    const flat = join(dir, "flat");
+    scaffoldApp(templateRoot() as string, flat, "workspace:*");
+    const flatPkg = JSON.parse(readFileSync(join(flat, "package.json"), "utf8")) as {
+      dependencies: Record<string, string>;
+    };
+    expect(flatPkg.dependencies["@habemus-papadum/aiui-source-processor"]).toBe("workspace:*");
   });
 });

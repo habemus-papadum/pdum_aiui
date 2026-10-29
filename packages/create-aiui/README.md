@@ -13,9 +13,9 @@ pnpm dev          # Vite; open the printed URL
 > Use the `@latest` tag: `pnpm create` runs through a dlx cache that can otherwise reuse a
 > previously-resolved (older) scaffolder. And if you need a release published **within the last
 > day**, pin it exactly (`…/aiui@0.9.0 my-app`) — pnpm's minimum-release-age gate silently holds
-> back very fresh versions, even under `@latest`. Either way the version matters: the scaffolder
-> pins the app's aiui dependencies to *its own* release line, so an old scaffolder gives you old
-> `@habemus-papadum/*` packages.
+> back very fresh versions, even under `@latest`. Either way the version matters: each scaffolder
+> build carries the release line of every aiui package it was built beside, and pins the app's
+> dependencies to those, so an old scaffolder gives you old `@habemus-papadum/*` packages.
 
 The scaffolded app opens on a banner that explains itself. Its starter content — a Maurer rose
 driven by two sliders — is scenery built to be rebuilt, but its
@@ -47,7 +47,11 @@ are shown in the repo's `demos/gallery` reference notebooks.
   are shipped undotted (`gitignore`, `envrc`) because npm strips dot-paths from tarballs; the
   scaffolder restores them.
 - `__APP_NAME__` and `__AIUI_VERSION_RANGE__` in the template's `package.json` are resolved at
-  scaffold time (release builds pin `^X.Y.Z`; dev builds fall back to `latest`).
+  scaffold time. The range is per package: `vite.config.ts` bakes each aiui dependency's version
+  from its workspace manifest into the build (`<last release>+dev` between releases), and the
+  scaffolder writes `^<last release>`; a source checkout run through tsx has nothing baked and
+  writes `latest`. Packages release independently, so release the library before the scaffolder
+  when the template needs a change in it.
 - `pnpm typecheck` checks the template's source too (`tsconfig.template.json`, resolving
   `@habemus-papadum/*` through the workspace) — template code that doesn't compile fails CI here,
   not in a user's freshly scaffolded app.

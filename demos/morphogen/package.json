@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/demo-morphogen",
-  "version": "0.24.0+dev",
+  "version": "0.0.0",
   "description": "Gray-Scott reaction–diffusion lab: a WebGL simulation island, a worker analysis pipeline, and an observable history ring — the original aiui reference notebook.",
   "private": true,
   "type": "module",
@@ -32,10 +32,10 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@habemus-papadum/aiui-design": "workspace:^",
-    "@habemus-papadum/aiui-dock": "workspace:^",
-    "@habemus-papadum/aiui-source-processor": "workspace:^",
-    "@habemus-papadum/aiui-viz": "workspace:^",
+    "@habemus-papadum/aiui-design": "workspace:>=0.24.0",
+    "@habemus-papadum/aiui-dock": "workspace:>=0.0.0",
+    "@habemus-papadum/aiui-source-processor": "workspace:>=0.24.0",
+    "@habemus-papadum/aiui-viz": "workspace:>=0.24.0",
     "@observablehq/plot": "catalog:",
     "@solidjs/web": "catalog:solid",
     "d3": "^7.9.0",

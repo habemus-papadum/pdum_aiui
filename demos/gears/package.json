@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/demo-gears",
-  "version": "0.24.0+dev",
+  "version": "0.0.0",
   "description": "A live involute-gear studio: two spur gears in kinematic mesh, the line of action and contact point, and a single-tooth studio — all pure geometry.",
   "private": true,
   "type": "module",
@@ -33,10 +33,10 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@habemus-papadum/aiui-design": "workspace:^",
-    "@habemus-papadum/aiui-dock": "workspace:^",
-    "@habemus-papadum/aiui-source-processor": "workspace:^",
-    "@habemus-papadum/aiui-viz": "workspace:^",
+    "@habemus-papadum/aiui-design": "workspace:>=0.24.0",
+    "@habemus-papadum/aiui-dock": "workspace:>=0.0.0",
+    "@habemus-papadum/aiui-source-processor": "workspace:>=0.24.0",
+    "@habemus-papadum/aiui-viz": "workspace:>=0.24.0",
     "@solidjs/web": "catalog:solid",
     "solid-js": "catalog:solid"
   },

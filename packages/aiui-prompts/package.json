@@ -67,7 +67,7 @@
     "lint": "biome check src test package.json tsconfig.json tsconfig.test.json vite.config.ts"
   },
   "devDependencies": {
-    "@habemus-papadum/aiui-build-config": "workspace:^",
+    "@habemus-papadum/aiui-build-config": "workspace:*",
     "@types/node": "^26.1.0",
     "tsx": "catalog:",
     "typescript": "catalog:",

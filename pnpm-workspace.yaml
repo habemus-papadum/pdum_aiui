@@ -1,15 +1,14 @@
 packages:
   - "packages/*"
   # Internal scaffolding for this repo's labs and demos: packages with a replacement
-  # in mind (the voice dock, the oracle, live). Never published, but full workspace
-  # members, so they resolve source-first and stay in version lockstep.
+  # in mind (the voice dock, the oracle, live). Never published (version 0.0.0; ship
+  # ignores private members), but full workspace members, so they resolve source-first.
   - "packages/internal/*"
   # Private prompt experiments live with their future foundation package.
   - "packages/aiui-prompts/spikes/*"
-  # In-repo demo apps (`pnpm new-demo <name>`): never published, but full workspace
-  # members so their `@habemus-papadum/*` deps resolve to source via `workspace:^`.
-  # Note this also enrolls them in version lockstep — scripts/versioning.mjs reads
-  # the globs in this list, so every demo carries the shared version.
+  # In-repo demo apps (`pnpm new-demo <name>`): never published (version 0.0.0), but
+  # full workspace members so their `@habemus-papadum/*` deps resolve to source
+  # through workspace floors (`workspace:>=X.Y.Z`).
   - "demos/*"
 
 catalog:

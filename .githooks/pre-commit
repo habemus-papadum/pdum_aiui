@@ -1,8 +1,12 @@
 #!/bin/sh
+# Installed through `core.hooksPath` by the root `prepare` script (every
+# `pnpm install`), so there is nothing else to set up. Bypass for a genuine
+# emergency: `git commit --no-verify`.
+
 # Biome gate — CI runs `biome check .` and fails the build on any lint/format
 # error, so catch it here first. `--staged` checks exactly what this commit
 # ships; fixable errors: run `pnpm format` (repo-wide `biome check --write`)
-# and re-stage. Bypass for a genuine emergency: `git commit --no-verify`.
+# and re-stage.
 pnpm exec biome check --staged --no-errors-on-unmatched || {
   echo ""
   echo "✖ biome found problems in the staged files."
@@ -10,3 +14,14 @@ pnpm exec biome check --staged --no-errors-on-unmatched || {
   exit 1
 }
 
+# ship-check — rejects a commit with a link:/file: dependency, a path/editable
+# uv source, a stale lockfile or a stale skill copy. It runs the ship this
+# repository installs through uv.lock, so nothing here changes when ship
+# releases; CI runs the full check through `uv run ship deps check`. This is the
+# `ship-check` pre-commit hook from ship's conventions in the form this hook
+# path takes (pre-commit itself refuses to install under `core.hooksPath`).
+uv run --locked ship deps check --hook || {
+  echo ""
+  echo "✖ ship deps check --hook failed (see above)."
+  exit 1
+}

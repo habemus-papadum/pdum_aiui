@@ -61,6 +61,6 @@
     "@types/ws": "catalog:",
     "ws": "catalog:",
     "@types/proper-lockfile": "^4.1.4",
-    "@habemus-papadum/aiui-build-config": "workspace:^"
+    "@habemus-papadum/aiui-build-config": "workspace:*"
   }
 }

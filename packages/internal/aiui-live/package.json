@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-live",
-  "version": "0.24.0+dev",
+  "version": "0.0.0",
   "private": true,
   "description": "The live oracle — a full-duplex voice front (OpenAI GPT-Live over WebRTC/WebSocket) with pluggable delegation backends: local tools, hosted Responses, or Claude Code.",
   "type": "module",
@@ -27,13 +27,13 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@habemus-papadum/aiui-prompts": "workspace:^",
-    "@habemus-papadum/aiui-prompts-inspector": "workspace:^",
-    "@habemus-papadum/aiui-viz": "workspace:^",
+    "@habemus-papadum/aiui-prompts": "workspace:>=0.24.0",
+    "@habemus-papadum/aiui-prompts-inspector": "workspace:>=0.24.0",
+    "@habemus-papadum/aiui-viz": "workspace:>=0.24.0",
     "@solidjs/web": "catalog:solid",
     "solid-js": "catalog:solid",
     "ws": "catalog:",
-    "@habemus-papadum/aiui-audio": "workspace:^"
+    "@habemus-papadum/aiui-audio": "workspace:>=0.24.0"
   },
   "peerDependencies": {
     "@anthropic-ai/claude-agent-sdk": ">=0.3.0",
@@ -53,7 +53,7 @@
   },
   "devDependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.272",
-    "@habemus-papadum/aiui-build-config": "workspace:^",
+    "@habemus-papadum/aiui-build-config": "workspace:*",
     "@types/node": "^22.0.0",
     "@types/ws": "catalog:",
     "jsdom": "catalog:",

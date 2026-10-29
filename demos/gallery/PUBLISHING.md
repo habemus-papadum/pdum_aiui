@@ -16,10 +16,13 @@ Credentials come from `AWS_PROFILE` (default `personal` — the account that own
 the bucket). Locally the script auto-discovers the CloudFront distribution by
 domain alias.
 
-## CI (release.yml → `publish-site` job) — secretless, over OIDC
+## CI (gallery.yml → `publish-site` job) — secretless, over OIDC
 
-On a real release, the `publish-site` job publishes the site the same way
-`npm-publish` talks to npm: **GitHub OIDC, no stored secret**. The job's
+On every push to `main` that touches the demos, the packages or the lockfile
+(and on `workflow_dispatch`), the `publish-site` job of `gallery.yml` publishes
+the site over **GitHub OIDC, no stored secret**. It used to run inside the
+release workflow; ship now releases one npm package per run, so the site
+deploys from `main` instead. The job's
 `id-token` lets `aws-actions/configure-aws-credentials` assume an IAM role; the
 script then runs with those ambient credentials (it skips the named profile when
 `AWS_ACCESS_KEY_ID` is present) and takes `CF_ID` from the environment (the role
@@ -79,7 +82,7 @@ else (verified with `aws iam simulate-principal-policy`):
 ```
 
 The role ARN — `arn:aws:iam::789030644255:role/pdum-aiui-gallery-publish` — is
-hardcoded in `release.yml`. It is **not a secret**: it is only assumable through
+hardcoded in `gallery.yml`. It is **not a secret**: it is only assumable through
 the OIDC trust above, so nothing is gained by hiding it.
 
 ### To tighten further (optional)

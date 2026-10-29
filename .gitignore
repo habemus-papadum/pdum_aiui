@@ -28,3 +28,5 @@ pnpm-debug.log*
 # Other developers' agent worktrees (each is its own checkout)
 .claude/worktrees/
 .aiui-cache/
+# ship runs from a uv environment (pyproject.toml); the environment itself is local
+.venv/

@@ -1,49 +1,48 @@
 # Agent guardrails for pdum_aiui
 
-## Version management — do NOT touch versions
+## Versions and releases
 
-The `version` field in every `package.json` (the root and every workspace member — `packages/*` and
-`demos/*` alike) **and in the repo-root Claude-plugin manifest `.claude-plugin/plugin.json`** is
-managed **exclusively** by the CI release pipeline. Do not edit it, and do not run
-`node scripts/versioning.mjs set`. Between releases the tree carries an `X.Y.Z+dev` marker; the
-pipeline writes the clean `X.Y.Z` at release time. If you think a version change is needed, tell the
-user — do not make it.
+`ship` (habemus-papadum-ship) releases this repository's packages. Each publishable package under
+`packages/*` has its own version and its own tag series, `<package>-v<version>` (the npm name
+without the scope: `aiui-viz-v0.24.0`). Between releases a manifest says `<last release>+dev`.
+Never edit a `version` field by hand; `ship deps check` reports anything other than the marker.
+Private workspace members (`packages/internal/*`, the spikes, every demo, `aiui-build-config`)
+carry `0.0.0` and are never released; the root `package.json` and the plugin manifest
+`.claude-plugin/plugin.json` are not packages (the plugin's version is bumped by hand, see
+CLAUDE.md).
 
-## Releasing — do NOT publish
+To release, ask the operator; when they agree, run the release workflow for one package:
 
-Releasing is a single GitHub Actions workflow: `.github/workflows/release.yml`, a `workflow_dispatch`
-a human runs from the Actions UI (or `gh workflow run release.yml -f bump=minor`). There is **no**
-local release script and **no** tag trigger — CI is the only publish path.
+```sh
+gh workflow run release.yml -f package=@habemus-papadum/aiui-viz -f bump=minor -f dry_run=true   # see the plan
+gh workflow run release.yml -f package=@habemus-papadum/aiui-viz -f bump=minor -f dry_run=false  # release
+```
 
-It has **two modes**, and both live in that one file so there is exactly one workflow that can
-publish — one gate, one version computation, one secret surface:
+The workflow waits for this commit's CI, builds the package and its workspace dependencies, runs
+the workspace's tests, publishes to npm, tags, pushes, creates the GitHub release and restores the
+`+dev` marker. Do not publish from this machine; never run `pnpm publish` or push a tag by hand.
+There is no canary mode: a consumer that needs a fix gets a patch release of the one package.
 
-- **release** (default) — stamp `X.Y.Z` across every manifest, commit, tag, publish to `latest`,
-  cut a GitHub Release, deploy the gallery (the demo notebooks' static site).
-- **canary** — `gh workflow run release.yml -f canary=true` publishes
-  `X.Y.Z-canary.<sha>` under the **`canary`** dist-tag and stops. No commit, no tag, no GitHub
-  Release, no site deploy. It exists so a small upstream fix can reach a consumer in a couple of
-  minutes rather than a full release, which is what otherwise discourages making the fix
-  upstream at all. `latest` is never touched.
+Do not update repositories that consume a package you changed; their scheduled refresh does that.
+The one exception: if your change needs a newer release of another `@habemus-papadum/*` package,
+raise that package's floor here. Do not pin one of our packages to an exact version without a
+reason on the same line or in `[tool.ship.pins]` (`pyproject.toml`). Never commit a `link:` or
+`file:` dependency, or a `path`/`editable` entry in `[tool.uv.sources]` (`pnpm link` writes one).
 
-The workflow authenticates with the **`NPM_TOKEN` repo secret** (an npm token from the owner's
-account — see CLAUDE.md → *Publication convention*). Never run `pnpm publish` / `npm publish` to
-cut a release, never push a `vX.Y.Z` tag, and do not suggest a release unless the user explicitly
-asks about the process.
+Run `uv run ship deps check` before you finish. The `ship-release` and `ship-adopt` skills under
+`.agents/skills/` (mirrored at `.claude/skills/`) are written by `uv run ship skills sync`; do not
+edit them.
 
-**The token expires.** `NPM_TOKEN` is an npm *granular access token* with an expiry chosen at
-creation (the one set 2026-10-08 expires **2027-01-06**; `gh secret list` shows the date it was
-set). An expired token fails the publish with `404 Not Found - PUT …` on the first package —
-npm answers an unauthorized PUT with 404, which reads like "package not found" — AFTER
-`prepare` has already committed and pushed the stamped version and the `vX.Y.Z` tag. Recover by
-replacing the secret (`gh secret set NPM_TOKEN --repo habemus-papadum/pdum_aiui`) and re-running
-the failed job in place: `gh run rerun <run-id> --failed`. Never re-dispatch the workflow for
-that release — it would compute the NEXT version from the tag that already exists. Two more
+**The npm token.** The workflow authenticates with the `NPM_TOKEN` repository secret, an npm
+*granular access token* with an expiry chosen at creation (the one set 2026-10-08 expires
+**2027-01-06**; `gh secret list` shows the date it was set). An expired token fails the publish
+with `404 Not Found - PUT …` (npm answers an unauthorized PUT with 404). ship publishes before it
+commits or tags, so a failed publish leaves nothing behind: replace the secret
+(`gh secret set NPM_TOKEN --repo habemus-papadum/pdum_aiui`) and run the workflow again. Two more
 registry facts as of 2026-10: a token's first publish of a NEW package leaves a public
-`0.0.0-stage` placeholder version beside the real one (harmless; carets never match it), and
-npm removes direct publishing by bypass-2FA tokens in **January 2027** — before then this
-workflow must move to trusted publishing (OIDC; pnpm already attempts the exchange) or to
-staged publishing with a human 2FA approval.
+`0.0.0-stage` placeholder version beside the real one (harmless; carets never match it), and npm
+removes direct publishing by bypass-2FA tokens in **January 2027** — before then ship's reusable
+workflow must move to trusted publishing (OIDC) or to staged publishing with a human 2FA approval.
 
 **Name reservation is not releasing.** `pnpm npm:reserve <slug>` (placeholder-publish a name to
 claim it ahead of its first real release — optional; nothing requires it) is a deliberate local
@@ -61,26 +60,38 @@ pnpm lint        # Biome (also enforced in CI)
 pnpm demo        # the notebook gallery's dev server (every demo, one site)
 pnpm -C demos/<slug> dev   # one demo on its own
 pnpm new-package <name> (--public | --private | --no-publish) [--no-reserve]
-pnpm new-demo <name>    # scaffold demos/<name> — an in-repo demo app on workspace:^ deps
-pnpm npm:list    # the packages release.yml would publish
+pnpm new-demo <name>    # scaffold demos/<name> — an in-repo demo app on workspace floors
+pnpm npm:list    # the packages ship would publish
 pnpm npm:reserve # optionally claim npm name(s) early — placeholder publish (local auth)
+uv run ship packages   # every package, its manifest version and its last tag
+uv run ship changed    # packages with commits since their last release
 ```
 
 `new-package` requires a publication level — see [CLAUDE.md](./CLAUDE.md) for the
-`--public` / `--private` / `--no-publish` convention. A publishable `new-package` auto-reserves
-its npm name (opt out with `--no-reserve`); no other provisioning exists — the next release
-publishes it.
+`--public` / `--private` / `--no-publish` convention. A publishable package starts at `0.0.0+dev`
+with no tag; its first release computes `0.1.0` or `0.0.1`. A publishable `new-package`
+auto-reserves its npm name (opt out with `--no-reserve`); no other provisioning exists — the next
+release publishes it.
 
-`new-demo` takes no level: demos are never published, but they *are* full workspace members, so they
-join version lockstep like everything else — see [CLAUDE.md](./CLAUDE.md) → *In-repo demo apps*.
+`new-demo` takes no level: demos are never published and carry `0.0.0`, but they *are* full
+workspace members — see [CLAUDE.md](./CLAUDE.md) → *In-repo demo apps*.
 
 ## Architecture
 
-- pnpm workspace; every `packages/*` is an independent npm package under `@habemus-papadum`.
-  `demos/*` are workspace members too, but never published (`pnpm new-demo`).
-- **Lockstep versioning**: all workspace members share one version, enforced by
-  `node scripts/versioning.mjs current` (checked in CI) — demos included.
-- Internal dependencies use `workspace:^` (never hand-pinned).
+- pnpm workspace; every `packages/*` is an independent npm package under `@habemus-papadum`,
+  released on its own. `demos/*` are workspace members too, but never published (`pnpm new-demo`).
+- Dependencies between packages are floors: `workspace:>=X.Y.Z` on the sibling's last release
+  (published as `>=X.Y.Z`), `workspace:>=0.0.0` on a private sibling, `workspace:*` in
+  `devDependencies`. Never `workspace:^` (it publishes as one minor of a 0.x package) and never a
+  hand-written exact version.
+- In a library, a sibling or framework whose objects cross the public API or that holds
+  process-wide state is a **peer dependency** with a floor, plus a `workspace:*` (or catalog)
+  devDependency so the package builds and tests alone: `aiui-viz` (its scopes, registries, mode
+  engine and key layer are one per document) for audio, screen-capture, slides and cf-creds;
+  `aiui-prompts` (its records and `PromptError` cross the inspector's, the Vite plugin's and
+  aiui-viz's APIs); `aiui-audio` (its `AudioSource` crosses aiui-stt's); `solid-js` and
+  `@solidjs/web` everywhere they are used. A sibling used only internally is a regular dependency
+  with the same floor form.
 - **Editable (source-first) deps**: dev manifests point `exports`/`main`/`types` at
   `src/index.ts`; the `dist/` mapping lives in `publishConfig` and is swapped in by pnpm at
   pack/publish time. In-workspace consumers always run live source — no rebuild loop. `bin`
@@ -89,4 +100,4 @@ join version lockstep like everything else — see [CLAUDE.md](./CLAUDE.md) → 
 - Build: Vite library mode (ESM) + `tsc --emitDeclarationOnly` for `.d.ts` — the *published*
   artifact; the workspace dev loop doesn't consume it.
 - The repo root is a Claude Code plugin (`.claude-plugin/`, reusable skills in `skills/`); its
-  manifest version is part of the lockstep above.
+  manifest `version` is the plugin's own, bumped by hand (CLAUDE.md).

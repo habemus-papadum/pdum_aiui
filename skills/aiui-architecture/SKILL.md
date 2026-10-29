@@ -78,9 +78,10 @@ template ([packages/create-aiui/templates/app/package.json](../../packages/creat
 catalog. Never trust a version written in prose (this skill included); the template is the
 source of truth.
 
-- **deps**: `aiui-viz` + `aiui-source-processor` at one matching version (they release in
-  lockstep; the template's `__AIUI_VERSION_RANGE__` placeholder means "current release" —
-  plain `pnpm add` gets it), plus `solid-js` and `@solidjs/web` at the template's EXACT
+- **deps**: `aiui-viz` + `aiui-source-processor`, each at its own current release (the
+  packages release independently; the template's `__AIUI_VERSION_RANGE__` placeholder is
+  resolved per package to the release line baked into create-aiui — plain `pnpm add` gets
+  the current one), plus `solid-js` and `@solidjs/web` at the template's EXACT
   pins. Through the Solid 2.0 release candidates the runtime and its signals core move in
   lockstep (the template's `@solidjs/signals` override) and the JSX compiler rides the Vite
   plugin — never loosen those pins to a `^`/`>=` range in an app.

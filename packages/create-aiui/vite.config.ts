@@ -4,12 +4,31 @@ import { defineConfig } from "vite";
 
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8"));
 
+// The release line of every aiui package the template depends on, read from
+// its workspace manifest beside this one. Between releases a manifest says
+// `X.Y.Z+dev`, X.Y.Z being that package's last release; the scaffolder pins
+// `^X.Y.Z`. Packages release independently (ship), so each line is its own.
+const template = JSON.parse(
+  readFileSync(new URL("./templates/app/package.json", import.meta.url), "utf8"),
+);
+const dependencyVersions: Record<string, string> = {};
+for (const [name, range] of Object.entries<string>({
+  ...template.dependencies,
+  ...template.devDependencies,
+})) {
+  if (range !== "__AIUI_VERSION_RANGE__") continue;
+  const sibling = JSON.parse(
+    readFileSync(new URL(`../${name.split("/")[1]}/package.json`, import.meta.url), "utf8"),
+  );
+  dependencyVersions[name] = sibling.version;
+}
+
 export default defineConfig({
   define: {
-    // Bake the version into the CLI so the scaffolder can pin the aiui
-    // dependency range without a runtime package.json read (same convention
-    // as the aiui CLI's __AIUI_VERSION__).
+    // Bake the versions into the CLI so the scaffolder can pin each aiui
+    // dependency's range without a runtime package.json read.
     __CREATE_AIUI_VERSION__: JSON.stringify(pkg.version),
+    __AIUI_DEPENDENCY_VERSIONS__: JSON.stringify(dependencyVersions),
   },
   build: {
     lib: {

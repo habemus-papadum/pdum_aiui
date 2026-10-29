@@ -4,8 +4,7 @@
 // here would break `node scripts/new-package.mjs`; tsx loads a .mjs fine. Keep
 // it that way — types travel as JSDoc, never as syntax.
 
-import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, globSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -39,15 +38,52 @@ export function slugify(name) {
 }
 
 /**
- * The single lockstep version every workspace member must carry, read from the
- * shared versioning tool.
- * @returns {string}
+ * The `packages:` globs of pnpm-workspace.yaml (list form only; the file is
+ * ours and keeps that shape).
+ * @returns {string[]}
  */
-export function currentVersion() {
-  return execFileSync("node", [join(scriptsDir, "versioning.mjs"), "current"], {
-    cwd: repoRoot,
-    encoding: "utf8",
-  }).trim();
+function workspaceGlobs() {
+  const text = readFileSync(join(repoRoot, "pnpm-workspace.yaml"), "utf8");
+  const globs = [];
+  let inPackages = false;
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.replace(/#.*$/, "");
+    if (/^packages:\s*$/.test(line)) {
+      inPackages = true;
+      continue;
+    }
+    if (!inPackages) continue;
+    const match = line.match(/^\s*-\s*['"]?([^'"]+?)['"]?\s*$/);
+    if (match) {
+      globs.push(match[1]);
+    } else if (line.trim() !== "" && !/^\s/.test(line)) {
+      inPackages = false;
+    }
+  }
+  return globs;
+}
+
+/**
+ * Workspace member name → the floor a sibling declares on it. ship releases
+ * each package on its own version; a consumer in this workspace writes
+ * `workspace:>=X.Y.Z`, where X.Y.Z is the member's last release (its manifest
+ * version minus the `+dev` marker) or `0.0.0` for a private member, which is
+ * never released. pnpm links the checkout during development and writes the
+ * plain floor when it publishes.
+ * @returns {Map<string, string>}
+ */
+export function workspaceFloors() {
+  const floors = new Map();
+  for (const glob of workspaceGlobs()) {
+    for (const dir of globSync(glob, { cwd: repoRoot })) {
+      const file = join(repoRoot, dir, "package.json");
+      if (!existsSync(file)) continue;
+      const pkg = JSON.parse(readFileSync(file, "utf8"));
+      const release = pkg.private === true ? "0.0.0" : String(pkg.version).replace(/\+dev$/, "");
+      floors.set(pkg.name, `workspace:>=${release}`);
+    }
+  }
+  return floors;
 }
 
 /**

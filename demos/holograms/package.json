@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/demo-holograms",
-  "version": "0.24.0+dev",
+  "version": "0.0.0",
   "description": "The film that remembers light: record interference on a virtual bench, develop the film, replay the reference, and the object's wavefront comes back — parallax, cut-the-film, magnification remixes, and every real failure mode, computed live from the wave equation.",
   "private": true,
   "type": "module",
@@ -32,11 +32,11 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@habemus-papadum/aiui-design": "workspace:^",
-    "@habemus-papadum/aiui-dock": "workspace:^",
-    "@habemus-papadum/aiui-optics": "workspace:^",
-    "@habemus-papadum/aiui-source-processor": "workspace:^",
-    "@habemus-papadum/aiui-viz": "workspace:^",
+    "@habemus-papadum/aiui-design": "workspace:>=0.24.0",
+    "@habemus-papadum/aiui-dock": "workspace:>=0.0.0",
+    "@habemus-papadum/aiui-optics": "workspace:>=0.0.0",
+    "@habemus-papadum/aiui-source-processor": "workspace:>=0.24.0",
+    "@habemus-papadum/aiui-viz": "workspace:>=0.24.0",
     "@solidjs/web": "catalog:solid",
     "solid-js": "catalog:solid"
   },

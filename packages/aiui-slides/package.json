@@ -42,17 +42,20 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run"
   },
-  "dependencies": {
-    "@habemus-papadum/aiui-viz": "workspace:^",
-    "@solidjs/web": "catalog:solid",
-    "solid-js": "catalog:solid"
+  "peerDependencies": {
+    "@habemus-papadum/aiui-viz": "workspace:>=0.24.0",
+    "solid-js": ">=2.0.0-rc.13 <3",
+    "@solidjs/web": ">=2.0.0-rc.13 <3"
   },
   "devDependencies": {
-    "@habemus-papadum/aiui-build-config": "workspace:^",
+    "@habemus-papadum/aiui-build-config": "workspace:*",
     "jsdom": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plugin-solid": "catalog:solid",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@habemus-papadum/aiui-viz": "workspace:*",
+    "solid-js": "catalog:solid",
+    "@solidjs/web": "catalog:solid"
   }
 }

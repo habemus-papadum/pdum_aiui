@@ -80,28 +80,28 @@ importers:
   demos/audio:
     dependencies:
       '@habemus-papadum/aiui-audio':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-audio
       '@habemus-papadum/aiui-cf-creds':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-cf-creds
       '@habemus-papadum/aiui-design':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-design
       '@habemus-papadum/aiui-dock':
-        specifier: workspace:^
+        specifier: workspace:>=0.0.0
         version: link:../../packages/internal/aiui-dock
       '@habemus-papadum/aiui-oracle':
-        specifier: workspace:^
+        specifier: workspace:>=0.0.0
         version: link:../../packages/internal/aiui-oracle
       '@habemus-papadum/aiui-source-processor':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-source-processor
       '@habemus-papadum/aiui-stt':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-stt
       '@habemus-papadum/aiui-viz':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-viz
       '@solidjs/web':
         specifier: catalog:solid
@@ -135,16 +135,16 @@ importers:
   demos/aztec:
     dependencies:
       '@habemus-papadum/aiui-design':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-design
       '@habemus-papadum/aiui-dock':
-        specifier: workspace:^
+        specifier: workspace:>=0.0.0
         version: link:../../packages/internal/aiui-dock
       '@habemus-papadum/aiui-source-processor':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-source-processor
       '@habemus-papadum/aiui-viz':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-viz
       '@observablehq/plot':
         specifier: 'catalog:'
@@ -178,19 +178,19 @@ importers:
   demos/catalog:
     dependencies:
       '@habemus-papadum/aiui-design':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-design
       '@habemus-papadum/aiui-dock':
-        specifier: workspace:^
+        specifier: workspace:>=0.0.0
         version: link:../../packages/internal/aiui-dock
       '@habemus-papadum/aiui-pencil':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-pencil
       '@habemus-papadum/aiui-source-processor':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-source-processor
       '@habemus-papadum/aiui-viz':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-viz
       '@observablehq/plot':
         specifier: 'catalog:'
@@ -233,19 +233,19 @@ importers:
   demos/circle:
     dependencies:
       '@habemus-papadum/aiui-design':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-design
       '@habemus-papadum/aiui-dock':
-        specifier: workspace:^
+        specifier: workspace:>=0.0.0
         version: link:../../packages/internal/aiui-dock
       '@habemus-papadum/aiui-pencil':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-pencil
       '@habemus-papadum/aiui-source-processor':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-source-processor
       '@habemus-papadum/aiui-viz':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-viz
       '@solidjs/web':
         specifier: catalog:solid
@@ -279,16 +279,16 @@ importers:
   demos/dna-script:
     dependencies:
       '@habemus-papadum/aiui-design':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-design
       '@habemus-papadum/aiui-dock':
-        specifier: workspace:^
+        specifier: workspace:>=0.0.0
         version: link:../../packages/internal/aiui-dock
       '@habemus-papadum/aiui-source-processor':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-source-processor
       '@habemus-papadum/aiui-viz':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-viz
       '@solidjs/web':
         specifier: catalog:solid
@@ -319,19 +319,19 @@ importers:
   demos/gallery:
     dependencies:
       '@habemus-papadum/aiui-audio':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-audio
       '@habemus-papadum/aiui-design':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-design
       '@habemus-papadum/aiui-dock':
-        specifier: workspace:^
+        specifier: workspace:>=0.0.0
         version: link:../../packages/internal/aiui-dock
       '@habemus-papadum/aiui-source-processor':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-source-processor
       '@habemus-papadum/aiui-viz':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-viz
       '@solidjs/web':
         specifier: catalog:solid
@@ -356,22 +356,22 @@ importers:
   demos/gear-talk:
     dependencies:
       '@habemus-papadum/aiui-design':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-design
       '@habemus-papadum/aiui-dock':
-        specifier: workspace:^
+        specifier: workspace:>=0.0.0
         version: link:../../packages/internal/aiui-dock
       '@habemus-papadum/aiui-slides':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-slides
       '@habemus-papadum/aiui-source-processor':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-source-processor
       '@habemus-papadum/aiui-viz':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-viz
       '@habemus-papadum/demo-gears':
-        specifier: workspace:^
+        specifier: workspace:>=0.0.0
         version: link:../gears
       '@solidjs/web':
         specifier: catalog:solid
@@ -402,16 +402,16 @@ importers:
   demos/gears:
     dependencies:
       '@habemus-papadum/aiui-design':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-design
       '@habemus-papadum/aiui-dock':
-        specifier: workspace:^
+        specifier: workspace:>=0.0.0
         version: link:../../packages/internal/aiui-dock
       '@habemus-papadum/aiui-source-processor':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-source-processor
       '@habemus-papadum/aiui-viz':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-viz
       '@solidjs/web':
         specifier: catalog:solid
@@ -442,19 +442,19 @@ importers:
   demos/gratings:
     dependencies:
       '@habemus-papadum/aiui-design':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-design
       '@habemus-papadum/aiui-dock':
-        specifier: workspace:^
+        specifier: workspace:>=0.0.0
         version: link:../../packages/internal/aiui-dock
       '@habemus-papadum/aiui-optics':
-        specifier: workspace:^
+        specifier: workspace:>=0.0.0
         version: link:../optics
       '@habemus-papadum/aiui-source-processor':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-source-processor
       '@habemus-papadum/aiui-viz':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-viz
       '@solidjs/web':
         specifier: catalog:solid
@@ -485,19 +485,19 @@ importers:
   demos/holograms:
     dependencies:
       '@habemus-papadum/aiui-design':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-design
       '@habemus-papadum/aiui-dock':
-        specifier: workspace:^
+        specifier: workspace:>=0.0.0
         version: link:../../packages/internal/aiui-dock
       '@habemus-papadum/aiui-optics':
-        specifier: workspace:^
+        specifier: workspace:>=0.0.0
         version: link:../optics
       '@habemus-papadum/aiui-source-processor':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-source-processor
       '@habemus-papadum/aiui-viz':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-viz
       '@solidjs/web':
         specifier: catalog:solid
@@ -528,28 +528,28 @@ importers:
   demos/live:
     dependencies:
       '@habemus-papadum/aiui-audio':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-audio
       '@habemus-papadum/aiui-design':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-design
       '@habemus-papadum/aiui-live':
-        specifier: workspace:^
+        specifier: workspace:>=0.0.0
         version: link:../../packages/internal/aiui-live
       '@habemus-papadum/aiui-oracle':
-        specifier: workspace:^
+        specifier: workspace:>=0.0.0
         version: link:../../packages/internal/aiui-oracle
       '@habemus-papadum/aiui-oscillator':
-        specifier: workspace:^
+        specifier: workspace:>=0.0.0
         version: link:../oscillator
       '@habemus-papadum/aiui-prompts':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-prompts
       '@habemus-papadum/aiui-source-processor':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-source-processor
       '@habemus-papadum/aiui-viz':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-viz
       '@solidjs/web':
         specifier: catalog:solid
@@ -586,16 +586,16 @@ importers:
   demos/morphogen:
     dependencies:
       '@habemus-papadum/aiui-design':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-design
       '@habemus-papadum/aiui-dock':
-        specifier: workspace:^
+        specifier: workspace:>=0.0.0
         version: link:../../packages/internal/aiui-dock
       '@habemus-papadum/aiui-source-processor':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-source-processor
       '@habemus-papadum/aiui-viz':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-viz
       '@observablehq/plot':
         specifier: 'catalog:'
@@ -638,19 +638,19 @@ importers:
         specifier: 1.33.1-dev64.0
         version: 1.33.1-dev64.0
       '@habemus-papadum/aiui-cf-creds':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-cf-creds
       '@habemus-papadum/aiui-design':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-design
       '@habemus-papadum/aiui-dock':
-        specifier: workspace:^
+        specifier: workspace:>=0.0.0
         version: link:../../packages/internal/aiui-dock
       '@habemus-papadum/aiui-source-processor':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-source-processor
       '@habemus-papadum/aiui-viz':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-viz
       '@motherduck/wasm-client':
         specifier: ^1.5.5-r.1
@@ -717,14 +717,14 @@ importers:
   demos/oscillator:
     dependencies:
       '@habemus-papadum/aiui-viz':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-viz
     devDependencies:
       '@babel/core':
         specifier: 'catalog:'
         version: 7.29.7
       '@habemus-papadum/aiui-source-processor':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../packages/aiui-source-processor
       '@solidjs/web':
         specifier: catalog:solid
@@ -736,16 +736,16 @@ importers:
   demos/screen-capture:
     dependencies:
       '@habemus-papadum/aiui-design':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-design
       '@habemus-papadum/aiui-screen-capture':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-screen-capture
       '@habemus-papadum/aiui-source-processor':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-source-processor
       '@habemus-papadum/aiui-viz':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-viz
       '@solidjs/web':
         specifier: catalog:solid
@@ -779,16 +779,16 @@ importers:
         specifier: 1.33.1-dev64.0
         version: 1.33.1-dev64.0
       '@habemus-papadum/aiui-design':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-design
       '@habemus-papadum/aiui-dock':
-        specifier: workspace:^
+        specifier: workspace:>=0.0.0
         version: link:../../packages/internal/aiui-dock
       '@habemus-papadum/aiui-source-processor':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-source-processor
       '@habemus-papadum/aiui-viz':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-viz
       '@observablehq/plot':
         specifier: 'catalog:'
@@ -837,16 +837,16 @@ importers:
   demos/semantic-svg-lab:
     dependencies:
       '@habemus-papadum/aiui-design':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-design
       '@habemus-papadum/aiui-pencil':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-pencil
       '@habemus-papadum/aiui-source-processor':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-source-processor
       '@habemus-papadum/aiui-viz':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-viz
       '@solidjs/web':
         specifier: catalog:solid
@@ -883,16 +883,16 @@ importers:
   demos/styleguide:
     dependencies:
       '@habemus-papadum/aiui-design':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-design
       '@habemus-papadum/aiui-dock':
-        specifier: workspace:^
+        specifier: workspace:>=0.0.0
         version: link:../../packages/internal/aiui-dock
       '@habemus-papadum/aiui-source-processor':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-source-processor
       '@habemus-papadum/aiui-viz':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-viz
       '@solidjs/web':
         specifier: catalog:solid
@@ -926,19 +926,19 @@ importers:
   demos/twins:
     dependencies:
       '@habemus-papadum/aiui-design':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-design
       '@habemus-papadum/aiui-dock':
-        specifier: workspace:^
+        specifier: workspace:>=0.0.0
         version: link:../../packages/internal/aiui-dock
       '@habemus-papadum/aiui-oscillator':
-        specifier: workspace:^
+        specifier: workspace:>=0.0.0
         version: link:../oscillator
       '@habemus-papadum/aiui-source-processor':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-source-processor
       '@habemus-papadum/aiui-viz':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-viz
       '@solidjs/web':
         specifier: catalog:solid
@@ -969,16 +969,16 @@ importers:
   demos/walkthrough:
     dependencies:
       '@habemus-papadum/aiui-design':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-design
       '@habemus-papadum/aiui-dock':
-        specifier: workspace:^
+        specifier: workspace:>=0.0.0
         version: link:../../packages/internal/aiui-dock
       '@habemus-papadum/aiui-source-processor':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-source-processor
       '@habemus-papadum/aiui-viz':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-viz
       '@solidjs/web':
         specifier: catalog:solid
@@ -1012,16 +1012,16 @@ importers:
         specifier: 1.33.1-dev64.0
         version: 1.33.1-dev64.0
       '@habemus-papadum/aiui-design':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-design
       '@habemus-papadum/aiui-dock':
-        specifier: workspace:^
+        specifier: workspace:>=0.0.0
         version: link:../../packages/internal/aiui-dock
       '@habemus-papadum/aiui-source-processor':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-source-processor
       '@habemus-papadum/aiui-viz':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../packages/aiui-viz
       '@solidjs/web':
         specifier: catalog:solid
@@ -1092,7 +1092,7 @@ importers:
         version: 3.4.0
     devDependencies:
       '@habemus-papadum/aiui-build-config':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../aiui-build-config
       '@types/proper-lockfile':
         specifier: ^4.1.4
@@ -1105,26 +1105,25 @@ importers:
         version: 8.21.0
 
   packages/aiui-audio:
-    dependencies:
-      '@habemus-papadum/aiui-viz':
-        specifier: workspace:^
-        version: link:../aiui-viz
-      '@solidjs/web':
-        specifier: catalog:solid
-        version: 2.0.0-rc.13(solid-js@2.0.0-rc.13)
-      solid-js:
-        specifier: catalog:solid
-        version: 2.0.0-rc.13
     devDependencies:
       '@habemus-papadum/aiui-build-config':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../aiui-build-config
+      '@habemus-papadum/aiui-viz':
+        specifier: workspace:*
+        version: link:../aiui-viz
       '@playwright/test':
         specifier: ^1.64.0
         version: 1.64.0
+      '@solidjs/web':
+        specifier: catalog:solid
+        version: 2.0.0-rc.13(solid-js@2.0.0-rc.13)
       jsdom:
         specifier: 'catalog:'
         version: 29.1.1(@noble/hashes@2.4.0)
+      solid-js:
+        specifier: catalog:solid
+        version: 2.0.0-rc.13
       vite-plugin-solid:
         specifier: catalog:solid
         version: 3.0.0-next.27(@solidjs/web@2.0.0-rc.13(solid-js@2.0.0-rc.13))(solid-js@2.0.0-rc.13)(vite@8.3.3(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
@@ -1134,32 +1133,32 @@ importers:
   packages/aiui-cf-creds:
     dependencies:
       '@habemus-papadum/cf-browser-credentials':
-        specifier: ^0.8.0
+        specifier: '>=0.8.0'
         version: 0.8.0
       '@habemus-papadum/cf-creds-aws':
-        specifier: ^0.8.0
+        specifier: '>=0.8.0'
         version: 0.8.0
       '@habemus-papadum/cf-creds-elevenlabs':
-        specifier: ^0.8.0
+        specifier: '>=0.8.0'
         version: 0.8.0
       '@habemus-papadum/cf-creds-mosaic':
-        specifier: ^0.8.0
+        specifier: '>=0.8.0'
         version: 0.8.0(@uwdata/mosaic-core@0.28.1)
       '@habemus-papadum/cf-creds-motherduck':
-        specifier: ^0.8.0
+        specifier: '>=0.8.0'
         version: 0.8.0(@motherduck/wasm-client@1.5.5-r.1(apache-arrow@17.0.0))(apache-arrow@17.0.0)
       '@habemus-papadum/cf-creds-openai':
-        specifier: ^0.8.0
+        specifier: '>=0.8.0'
         version: 0.8.0(openai@7.4.0(@aws-sdk/credential-provider-node@3.972.78)(@smithy/signature-v4@5.7.4)(ws@8.21.0)(zod@4.4.3))
     devDependencies:
       '@duckdb/duckdb-wasm':
         specifier: 1.33.1-dev64.0
         version: 1.33.1-dev64.0
       '@habemus-papadum/aiui-build-config':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../aiui-build-config
       '@habemus-papadum/aiui-viz':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../aiui-viz
       '@motherduck/wasm-client':
         specifier: 1.5.5-r.1
@@ -1187,7 +1186,7 @@ importers:
         version: 5.3.0
     devDependencies:
       '@habemus-papadum/aiui-build-config':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../aiui-build-config
       typescript:
         specifier: 'catalog:'
@@ -1200,23 +1199,19 @@ importers:
         version: 5.0.3(@types/node@26.6.4)(jsdom@29.1.1(@noble/hashes@2.4.0))(vite@8.3.3(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
 
   packages/aiui-pencil:
-    dependencies:
-      '@habemus-papadum/aiui-viz':
-        specifier: workspace:^
-        version: link:../aiui-viz
-      solid-js:
-        specifier: catalog:solid
-        version: 2.0.0-rc.13
     devDependencies:
       '@babel/core':
         specifier: 'catalog:'
         version: 7.29.7
       '@habemus-papadum/aiui-build-config':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../aiui-build-config
       '@habemus-papadum/aiui-source-processor':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../aiui-source-processor
+      '@habemus-papadum/aiui-viz':
+        specifier: workspace:*
+        version: link:../aiui-viz
       '@playwright/test':
         specifier: ^1.64.0
         version: 1.64.0
@@ -1226,6 +1221,9 @@ importers:
       jsdom:
         specifier: 'catalog:'
         version: 29.1.1(@noble/hashes@2.4.0)
+      solid-js:
+        specifier: catalog:solid
+        version: 2.0.0-rc.13
       vite:
         specifier: 'catalog:'
         version: 8.3.3(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
@@ -1236,7 +1234,7 @@ importers:
   packages/aiui-prompts:
     devDependencies:
       '@habemus-papadum/aiui-build-config':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../aiui-build-config
       '@types/node':
         specifier: ^26.1.0
@@ -1256,9 +1254,6 @@ importers:
 
   packages/aiui-prompts-inspector:
     dependencies:
-      '@habemus-papadum/aiui-prompts':
-        specifier: workspace:^
-        version: link:../aiui-prompts
       katex:
         specifier: ^0.17.0
         version: 0.17.0
@@ -1279,11 +1274,14 @@ importers:
         version: 3.1.0
     devDependencies:
       '@habemus-papadum/aiui-build-config':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../aiui-build-config
       '@habemus-papadum/aiui-design':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../aiui-design
+      '@habemus-papadum/aiui-prompts':
+        specifier: workspace:*
+        version: link:../aiui-prompts
       '@solidjs/web':
         specifier: catalog:solid
         version: 2.0.0-rc.13(solid-js@2.0.0-rc.13)
@@ -1314,18 +1312,18 @@ importers:
 
   packages/aiui-prompts-vite:
     dependencies:
-      '@habemus-papadum/aiui-prompts':
-        specifier: workspace:^
-        version: link:../aiui-prompts
       magic-string:
         specifier: ^0.30.21
         version: 0.30.21
     devDependencies:
       '@habemus-papadum/aiui-build-config':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../aiui-build-config
+      '@habemus-papadum/aiui-prompts':
+        specifier: workspace:*
+        version: link:../aiui-prompts
       '@habemus-papadum/aiui-source-processor':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../aiui-source-processor
       '@solidjs/web':
         specifier: catalog:solid
@@ -1352,10 +1350,10 @@ importers:
   packages/aiui-prompts/spikes/authoring:
     devDependencies:
       '@habemus-papadum/aiui-build-config':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../aiui-build-config
       '@habemus-papadum/aiui-design':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../../aiui-design
       '@types/node':
         specifier: ^26.1.0
@@ -1393,51 +1391,49 @@ importers:
         version: 5.0.3(@types/node@26.6.4)(jsdom@29.1.1(@noble/hashes@2.4.0))(vite@8.3.3(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
 
   packages/aiui-screen-capture:
-    dependencies:
-      '@habemus-papadum/aiui-viz':
-        specifier: workspace:^
-        version: link:../aiui-viz
-      '@solidjs/web':
-        specifier: catalog:solid
-        version: 2.0.0-rc.13(solid-js@2.0.0-rc.13)
-      solid-js:
-        specifier: catalog:solid
-        version: 2.0.0-rc.13
     devDependencies:
       '@habemus-papadum/aiui-build-config':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../aiui-build-config
+      '@habemus-papadum/aiui-viz':
+        specifier: workspace:*
+        version: link:../aiui-viz
       '@playwright/test':
         specifier: ^1.64.0
         version: 1.64.0
+      '@solidjs/web':
+        specifier: catalog:solid
+        version: 2.0.0-rc.13(solid-js@2.0.0-rc.13)
       '@types/node':
         specifier: ^26.1.0
         version: 26.6.4
       jsdom:
         specifier: 'catalog:'
         version: 29.1.1(@noble/hashes@2.4.0)
+      solid-js:
+        specifier: catalog:solid
+        version: 2.0.0-rc.13
       vite-plugin-solid:
         specifier: catalog:solid
         version: 3.0.0-next.27(@solidjs/web@2.0.0-rc.13(solid-js@2.0.0-rc.13))(solid-js@2.0.0-rc.13)(vite@8.3.3(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
 
   packages/aiui-slides:
-    dependencies:
+    devDependencies:
+      '@habemus-papadum/aiui-build-config':
+        specifier: workspace:*
+        version: link:../aiui-build-config
       '@habemus-papadum/aiui-viz':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../aiui-viz
       '@solidjs/web':
         specifier: catalog:solid
         version: 2.0.0-rc.13(solid-js@2.0.0-rc.13)
-      solid-js:
-        specifier: catalog:solid
-        version: 2.0.0-rc.13
-    devDependencies:
-      '@habemus-papadum/aiui-build-config':
-        specifier: workspace:^
-        version: link:../aiui-build-config
       jsdom:
         specifier: 'catalog:'
         version: 29.1.1(@noble/hashes@2.4.0)
+      solid-js:
+        specifier: catalog:solid
+        version: 2.0.0-rc.13
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -1457,7 +1453,7 @@ importers:
         specifier: 'catalog:'
         version: 7.29.7
       '@habemus-papadum/aiui-build-config':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../aiui-build-config
       '@types/babel__core':
         specifier: ^7.20.5
@@ -1467,29 +1463,28 @@ importers:
         version: 8.3.3(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
 
   packages/aiui-stt:
-    dependencies:
-      '@habemus-papadum/aiui-audio':
-        specifier: workspace:^
-        version: link:../aiui-audio
-      '@solidjs/web':
-        specifier: catalog:solid
-        version: 2.0.0-rc.13(solid-js@2.0.0-rc.13)
-      solid-js:
-        specifier: catalog:solid
-        version: 2.0.0-rc.13
     devDependencies:
+      '@habemus-papadum/aiui-audio':
+        specifier: workspace:*
+        version: link:../aiui-audio
       '@habemus-papadum/aiui-build-config':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../aiui-build-config
       '@habemus-papadum/cf-creds-elevenlabs':
-        specifier: ^0.8.0
+        specifier: '>=0.8.0'
         version: 0.8.0
       '@playwright/test':
         specifier: ^1.64.0
         version: 1.64.0
+      '@solidjs/web':
+        specifier: catalog:solid
+        version: 2.0.0-rc.13(solid-js@2.0.0-rc.13)
       jsdom:
         specifier: 'catalog:'
         version: 29.1.1(@noble/hashes@2.4.0)
+      solid-js:
+        specifier: catalog:solid
+        version: 2.0.0-rc.13
       vite:
         specifier: 'catalog:'
         version: 8.3.3(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0)
@@ -1498,10 +1493,6 @@ importers:
         version: 3.0.0-next.27(@solidjs/web@2.0.0-rc.13(solid-js@2.0.0-rc.13))(solid-js@2.0.0-rc.13)(vite@8.3.3(@types/node@26.6.4)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.5)(yaml@2.9.0))
 
   packages/aiui-viz:
-    dependencies:
-      '@habemus-papadum/aiui-prompts':
-        specifier: workspace:^
-        version: link:../aiui-prompts
     devDependencies:
       '@babel/core':
         specifier: 'catalog:'
@@ -1510,16 +1501,19 @@ importers:
         specifier: 1.33.1-dev64.0
         version: 1.33.1-dev64.0
       '@habemus-papadum/aiui-build-config':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../aiui-build-config
       '@habemus-papadum/aiui-design':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../aiui-design
+      '@habemus-papadum/aiui-prompts':
+        specifier: workspace:*
+        version: link:../aiui-prompts
       '@habemus-papadum/aiui-prompts-inspector':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../aiui-prompts-inspector
       '@habemus-papadum/aiui-source-processor':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../aiui-source-processor
       '@observablehq/plot':
         specifier: 'catalog:'
@@ -1573,16 +1567,16 @@ importers:
         specifier: 'catalog:'
         version: 7.29.7
       '@habemus-papadum/aiui-build-config':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../aiui-build-config
       '@habemus-papadum/aiui-design':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../aiui-design
       '@habemus-papadum/aiui-source-processor':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../aiui-source-processor
       '@habemus-papadum/aiui-viz':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../aiui-viz
       '@solidjs/web':
         specifier: catalog:solid
@@ -1606,16 +1600,16 @@ importers:
   packages/internal/aiui-dock:
     dependencies:
       '@habemus-papadum/aiui-audio':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../aiui-audio
       '@habemus-papadum/aiui-live':
-        specifier: workspace:^
+        specifier: workspace:>=0.0.0
         version: link:../aiui-live
       '@habemus-papadum/aiui-oracle':
-        specifier: workspace:^
+        specifier: workspace:>=0.0.0
         version: link:../aiui-oracle
       '@habemus-papadum/aiui-viz':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../aiui-viz
       '@solidjs/web':
         specifier: catalog:solid
@@ -1631,7 +1625,7 @@ importers:
         version: 2.0.0-rc.13
     devDependencies:
       '@habemus-papadum/aiui-build-config':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../aiui-build-config
       jsdom:
         specifier: 'catalog:'
@@ -1643,16 +1637,16 @@ importers:
   packages/internal/aiui-live:
     dependencies:
       '@habemus-papadum/aiui-audio':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../aiui-audio
       '@habemus-papadum/aiui-prompts':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../aiui-prompts
       '@habemus-papadum/aiui-prompts-inspector':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../aiui-prompts-inspector
       '@habemus-papadum/aiui-viz':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../aiui-viz
       '@solidjs/web':
         specifier: catalog:solid
@@ -1668,7 +1662,7 @@ importers:
         specifier: ^0.3.272
         version: 0.3.272(@anthropic-ai/sdk@0.125.0(zod@4.4.3))(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(zod@4.4.3)
       '@habemus-papadum/aiui-build-config':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../aiui-build-config
       '@types/node':
         specifier: ^22.0.0
@@ -1692,16 +1686,16 @@ importers:
   packages/internal/aiui-oracle:
     dependencies:
       '@habemus-papadum/aiui-audio':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../aiui-audio
       '@habemus-papadum/aiui-prompts':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../aiui-prompts
       '@habemus-papadum/aiui-prompts-inspector':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../aiui-prompts-inspector
       '@habemus-papadum/aiui-viz':
-        specifier: workspace:^
+        specifier: workspace:>=0.24.0
         version: link:../../aiui-viz
       '@pydantic/genai-prices':
         specifier: ^0.1.0
@@ -1714,10 +1708,10 @@ importers:
         version: 2.0.0-rc.13
     devDependencies:
       '@habemus-papadum/aiui-build-config':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../aiui-build-config
       '@habemus-papadum/aiui-source-processor':
-        specifier: workspace:^
+        specifier: workspace:*
         version: link:../../aiui-source-processor
       jsdom:
         specifier: 'catalog:'

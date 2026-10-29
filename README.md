@@ -10,9 +10,10 @@ scientific notebooks composed into one gallery, published at
 **<https://habemus-papadum.net/aiui/>**.
 
 A pnpm + TypeScript monorepo. Packages live under `packages/*` in the `@habemus-papadum` scope,
-versioned in **lockstep** (one shared version across the whole repo); every package declares a
-publication level when it is created (see [CLAUDE.md](./CLAUDE.md)). The repo root is also a
-Claude Code plugin carrying reusable skills:
+each released on its own version and tag series by
+[ship](https://github.com/habemus-papadum/pdum_ship); every package declares a publication level
+when it is created (see [CLAUDE.md](./CLAUDE.md)). The repo root is also a Claude Code plugin
+carrying reusable skills:
 
 - [`aiui:aiui-architecture`](./skills/aiui-architecture/SKILL.md) — the aiui frontend methodology.
 - [`aiui:source-first-workspaces`](./skills/source-first-workspaces/SKILL.md) — set up a repo so
@@ -120,32 +121,59 @@ pnpm new-package my-lib --no-publish  # internal-only, never published
 pnpm new-demo spectra                 # demos/spectra, on workspace:^ deps, in the gallery
 ```
 
-Internal dependencies use `workspace:^` and run from source (no build step between edits);
-`pnpm test:packaging` guards the published shape, `pnpm test:template` the starter template, and
-`pnpm skills:check` the plugin's links. The conventions behind all of this are in
-[CLAUDE.md](./CLAUDE.md).
+Internal dependencies are workspace floors (`workspace:>=X.Y.Z`, published as `>=X.Y.Z`) and run
+from source (no build step between edits); `pnpm test:packaging` guards the published shape,
+`pnpm test:template` the starter template, and `pnpm skills:check` the plugin's links. The
+conventions behind all of this are in [CLAUDE.md](./CLAUDE.md).
 
 ## Releasing
 
-Releases run **entirely in CI** — no local release script, no tag trigger. From the GitHub
-Actions UI run the **release** workflow (or `gh workflow run release.yml -f bump=minor`): it
-computes the next version from the latest tag, stamps every manifest, publishes to npm, cuts a
-GitHub Release and deploys the gallery; `canary=true` publishes a prerelease under the `canary`
-dist-tag and stops. Between releases the tree carries an `X.Y.Z+dev` version, which npm rejects,
-so a stray publish cannot overwrite a released one. The guardrails are in
-[AGENTS.md](./AGENTS.md).
+[ship](https://github.com/habemus-papadum/pdum_ship) releases one package per run, entirely in
+CI — there is no local release script, no tag trigger and no canary mode. From the GitHub Actions
+UI run the **release** workflow, or:
+
+```sh
+gh workflow run release.yml -f package=@habemus-papadum/aiui-viz -f bump=minor -f dry_run=true   # plan
+gh workflow run release.yml -f package=@habemus-papadum/aiui-viz -f bump=minor -f dry_run=false  # release
+```
+
+The workflow waits for this commit's CI to be green, computes the next version from the package's
+last tag (`aiui-viz-v0.24.0` → `0.25.0` for `minor`), builds the package and its workspace
+dependencies, runs the workspace's tests, publishes to npm, commits, tags `<package>-v<version>`,
+pushes, creates the GitHub release and returns the manifest to `<version>+dev`. Each package has
+its own version; releasing one does not touch the others. The gallery is not part of a release:
+it deploys on every push to `main` that touches the demos or the packages (`gallery.yml`).
+
+Between releases a manifest carries `X.Y.Z+dev`; ship refuses to publish it, and
+`uv run ship deps check` reports a manifest that says anything else. To see what would be released:
+
+```sh
+uv run ship packages                                      # every package, version, last tag
+uv run ship changed                                       # commits since each last release
+uv run ship release @habemus-papadum/aiui-viz --bump minor --dry-run
+```
+
+### One-time setup
+
+The `NPM_TOKEN` Actions secret holds an npm automation token. Locally, `uv sync` installs ship (it
+is the only Python dependency; `pyproject.toml` exists for it). The pre-commit hook under
+`.githooks/` (Biome plus `ship deps check --hook`) is installed by `pnpm install` through the root
+`prepare` script. The guardrails are in [AGENTS.md](./AGENTS.md).
 
 ## Layout
 
 ```
-packages/*               the published libraries (one lockstep version)
+packages/*               the published libraries, each with its own version and tags
 packages/internal/*      internal scaffolding for the labs and demos (dock, oracle, live); never published
 demos/*                  the notebooks, the gallery shell, and two demo-only libraries
 docs/application-patterns/ application recipes, shared principles, and planned spikes
 docs/proposals/          finished proposals, kept as a record (status in each header)
 experiments/             standalone infrastructure spikes outside the published workspace
 skills/*                 reusable skills of the repo-root Claude plugin (.claude-plugin/)
-scripts/                 versioning (CI-managed), new-package / new-demo, the packaging and
-                         template gates, npm name reservation, the skill-link check
-.github/workflows/       ci.yml (gate) + release.yml (publish + gallery deploy)
+scripts/                 new-package / new-demo, the packaging and template gates, npm name
+                         reservation, the skill-link check
+pyproject.toml           installs ship and holds [tool.ship]; not a Python package
+.agents/skills/          ship's agent skills, written by `uv run ship skills sync`
+.github/workflows/       ci.yml (gate), release.yml (calls ship's reusable release workflow),
+                         gallery.yml (deploys the gallery on push to main)
 ```

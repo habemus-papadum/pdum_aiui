@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/demo-gear-talk",
-  "version": "0.24.0+dev",
+  "version": "0.0.0",
   "description": "The Involute Gear, as a talk: the reference deck for @habemus-papadum/aiui-slides — six viewport slides over demo-gears' pure geometry, with Lens details folded into the talk's own control surface.",
   "private": true,
   "type": "module",
@@ -32,12 +32,12 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@habemus-papadum/aiui-design": "workspace:^",
-    "@habemus-papadum/aiui-dock": "workspace:^",
-    "@habemus-papadum/aiui-slides": "workspace:^",
-    "@habemus-papadum/aiui-source-processor": "workspace:^",
-    "@habemus-papadum/aiui-viz": "workspace:^",
-    "@habemus-papadum/demo-gears": "workspace:^",
+    "@habemus-papadum/aiui-design": "workspace:>=0.24.0",
+    "@habemus-papadum/aiui-dock": "workspace:>=0.0.0",
+    "@habemus-papadum/aiui-slides": "workspace:>=0.24.0",
+    "@habemus-papadum/aiui-source-processor": "workspace:>=0.24.0",
+    "@habemus-papadum/aiui-viz": "workspace:>=0.24.0",
+    "@habemus-papadum/demo-gears": "workspace:>=0.0.0",
     "@solidjs/web": "catalog:solid",
     "solid-js": "catalog:solid"
   },

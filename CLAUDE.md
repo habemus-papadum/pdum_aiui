@@ -38,9 +38,10 @@ live in `skills/aiui-architecture` and `skills/source-first-workspaces`. Because
 the whole repo, the skills link straight into `packages/*/docs/` with ordinary relative links.
 Installs get the docs from the same snapshot; nothing is bundled or generated.
 `pnpm skills:check` (CI) is the only guard: manifests parse,
-every relative link resolves. The plugin manifest's `version` is **lockstep** (stamped by
-`scripts/versioning.mjs`; never hand-edit — AGENTS.md), which pins marketplace updates to
-release bumps. Install: `claude plugin marketplace add habemus-papadum/pdum_aiui` +
+every relative link resolves. The plugin manifest's `version` is the plugin's own: ship releases
+the npm packages and ignores it, nothing stamps it, so bump it by hand in the commit that changes
+a skill materially (it is the version a marketplace install reports; it started where the last
+lockstep release left it, `0.24.0`). Install: `claude plugin marketplace add habemus-papadum/pdum_aiui` +
 `claude plugin install aiui@pdum-aiui`; a checkout loads with `claude --plugin-dir <repo root>`.
 
 ## Workspace dependencies are editable (source-first) — the convention
@@ -69,7 +70,7 @@ Without it, `require.resolve()` on the *installed* package throws
 `exports` are bare strings that match any condition (this silently broke a subpath for
 installed consumers once; `pnpm test:packaging` now asserts it).
 
-So `workspace:^` deps behave like Python *editable installs*: edit a package, and every
+So workspace deps (`workspace:>=X.Y.Z` floors) behave like Python *editable installs*: edit a package, and every
 in-workspace consumer (a demo's dev server, sibling tests, tsx-run scripts) picks it up with
 **no build step** — Vite, Vitest, and tsx all transpile TS from linked packages. Rules:
 
@@ -135,8 +136,8 @@ demo-prefixed class names (or a root class, like `.gears`) so nothing leaks onto
 same document.
 
 **`demos/gallery` is the thin composer** — the SPA shell and the published static site at
-https://habemus-papadum.net/aiui/ (`pnpm demo` serves it; `pnpm publish:gallery` deploys;
-`release.yml` deploys on every release). It depends on NO demo: a Vite plugin
+https://habemus-papadum.net/aiui/ (`pnpm demo` serves it; `pnpm publish:gallery` deploys by
+hand; `gallery.yml` deploys on every push to `main` that touches the demos or the packages). It depends on NO demo: a Vite plugin
 (`demos/gallery/demo-discovery.ts`) scans `demos/*/package.json` for the `aiui.sitePage` marker
 and serves `virtual:demo-pages` — sidebar, routes, lazy page and card loaders all derive from
 it. Adding a demo to the gallery = the marker existing. The shell drives pause-not-destroy across
@@ -149,8 +150,9 @@ Three things follow from `demos/*` being a workspace glob in `pnpm-workspace.yam
 
 - **Demos are never published.** The template's `package.json` carries `"private": true`, so
   `pnpm -r publish` skips them; no `publishConfig` belongs in a demo.
-- **Demos are in version lockstep.** `scripts/versioning.mjs` derives its set from the workspace
-  globs, so every demo carries the shared `X.Y.Z+dev` or `pnpm version:check` fails in CI.
+- **Demos carry version `0.0.0`.** ship releases only publishable packages and ignores private
+  members, so nothing rewrites a demo's version. A demo's sibling dependencies are floors:
+  `workspace:>=X.Y.Z` on a published sibling's last release, `workspace:>=0.0.0` on a private one.
 - **Demos are typechecked by CI.** A demo that stops building is a signal, not noise.
 
 A demo is not its own git repo, ships no `.gitignore`/`.envrc`, and drops the
@@ -159,14 +161,16 @@ to touch it.
 
 ## Publication convention
 
-Publishing authenticates with the **`NPM_TOKEN` repo secret** (rotate with
-`gh secret set NPM_TOKEN --repo habemus-papadum/pdum_aiui`) and runs one recursive
-`pnpm -r publish`; a NEW package needs **no provisioning** — its first release publishes it.
-Assumption: a paid npm org (publishing scoped packages as `restricted` requires one).
+ship's release workflow publishes one package per run and authenticates with the **`NPM_TOKEN`
+repo secret** (rotate with `gh secret set NPM_TOKEN --repo habemus-papadum/pdum_aiui`); a NEW
+package needs **no provisioning** — it starts at `0.0.0+dev` and its first release publishes it
+at `0.1.0` (minor) or `0.0.1` (patch). Assumption: a paid npm org (publishing scoped packages as
+`restricted` requires one).
 
 **`packages/internal/*` is for packages with a replacement in mind** — not for packages that
 happen to be niche. They carry `"private": true` and no `publishConfig` (the demo shape), keep the
-source-first dev fields, and stay in version lockstep through their own workspace glob.
+source-first dev fields, carry version `0.0.0` (ship ignores them) and stay workspace members
+through their own glob.
 
 **Every package declares a publication level at creation time.** `pnpm new-package <name>`
 requires exactly one of `--public` (`publishConfig.access: "public"`), `--private`
@@ -182,6 +186,6 @@ a name early; idempotent; `pnpm new-package … --public` does it automatically 
 opts out). `pnpm npm:list` shows what is publishable.
 
 **Publishing is CI-only.** Real versions ship **exclusively** through
-`.github/workflows/release.yml` (a manual `workflow_dispatch`). Never run `pnpm publish` /
-`npm publish` locally; the only local npm-write is the optional reservation above. See
-[AGENTS.md](./AGENTS.md).
+`.github/workflows/release.yml`, a manual `workflow_dispatch` that calls ship's reusable release
+workflow for one package. Never run `pnpm publish` / `npm publish` locally; the only local
+npm-write is the optional reservation above. See [AGENTS.md](./AGENTS.md).

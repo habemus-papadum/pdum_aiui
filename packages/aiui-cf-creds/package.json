@@ -63,18 +63,18 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@habemus-papadum/cf-browser-credentials": "^0.8.0",
-    "@habemus-papadum/cf-creds-aws": "^0.8.0",
-    "@habemus-papadum/cf-creds-elevenlabs": "^0.8.0",
-    "@habemus-papadum/cf-creds-mosaic": "^0.8.0",
-    "@habemus-papadum/cf-creds-motherduck": "^0.8.0",
-    "@habemus-papadum/cf-creds-openai": "^0.8.0"
+    "@habemus-papadum/cf-browser-credentials": ">=0.8.0",
+    "@habemus-papadum/cf-creds-aws": ">=0.8.0",
+    "@habemus-papadum/cf-creds-elevenlabs": ">=0.8.0",
+    "@habemus-papadum/cf-creds-mosaic": ">=0.8.0",
+    "@habemus-papadum/cf-creds-motherduck": ">=0.8.0",
+    "@habemus-papadum/cf-creds-openai": ">=0.8.0"
   },
   "peerDependencies": {
     "@duckdb/duckdb-wasm": ">=1.29",
     "@motherduck/wasm-client": ">=1.5.5-r.1",
     "@uwdata/mosaic-core": ">=0.28",
-    "@habemus-papadum/aiui-viz": ">=0.18"
+    "@habemus-papadum/aiui-viz": "workspace:>=0.24.0"
   },
   "peerDependenciesMeta": {
     "@uwdata/mosaic-core": {
@@ -92,8 +92,8 @@
   },
   "devDependencies": {
     "@duckdb/duckdb-wasm": "catalog:",
-    "@habemus-papadum/aiui-build-config": "workspace:^",
-    "@habemus-papadum/aiui-viz": "workspace:^",
+    "@habemus-papadum/aiui-build-config": "workspace:*",
+    "@habemus-papadum/aiui-viz": "workspace:*",
     "@motherduck/wasm-client": "1.5.5-r.1",
     "@uwdata/mosaic-core": "^0.28.1",
     "apache-arrow": "^17.0.0",

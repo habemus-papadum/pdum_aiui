@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-prompts-authoring-spike",
-  "version": "0.24.0+dev",
+  "version": "0.0.0",
   "description": "Native TSX syntax and prompt-turn-history workflow spike.",
   "type": "module",
   "license": "MIT",
@@ -30,8 +30,8 @@
     "lint": "biome check ."
   },
   "devDependencies": {
-    "@habemus-papadum/aiui-design": "workspace:^",
-    "@habemus-papadum/aiui-build-config": "workspace:^",
+    "@habemus-papadum/aiui-design": "workspace:*",
+    "@habemus-papadum/aiui-build-config": "workspace:*",
     "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",

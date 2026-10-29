@@ -5,8 +5,9 @@
 // The internal twin of `pnpm create @habemus-papadum/aiui`. Same template, same
 // starter app — wired to this checkout instead of the registry. Where the public
 // scaffolder pins `@habemus-papadum/*` to a published range and makes the target
-// its own git repo, this one resolves them with `workspace:^` (editable,
-// source-first, no build step) and leaves the app in this repo's history.
+// its own git repo, this one resolves them with workspace floors
+// (`workspace:>=X.Y.Z`, which pnpm links to the checkout: editable, source-first,
+// no build step) and leaves the app in this repo's history.
 //
 // It reuses create-aiui's `scaffoldApp`/`templateRoot` rather than keeping a
 // second copy of the starter, so fixing the template fixes both paths. That is
@@ -18,21 +19,22 @@
 //   - Demos are never published. The template's package.json already carries
 //     `"private": true` — npm's own opt-out, which makes `pnpm -r publish` skip
 //     the package. Nothing else is needed, and no publishConfig belongs here.
-//   - Demos DO join version lockstep. scripts/versioning.mjs derives its package
-//     set from the `packages:` globs in pnpm-workspace.yaml, and `demos/*` is one
-//     of them — so a demo without the shared version fails `pnpm version:check`
-//     in CI. We stamp it at creation; the release pipeline rewrites it after.
+//   - Demos carry version 0.0.0. ship (which releases the packages) ignores a
+//     private workspace member, so nothing ever rewrites a demo's version; its
+//     dependencies on siblings are floors on each sibling's last release
+//     (`workspace:>=0.24.0`) or `workspace:>=0.0.0` for a sibling that is itself
+//     private and never released.
 
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { scaffoldApp, templateRoot } from "../packages/create-aiui/src/scaffold";
 import {
   catalogRefs,
-  currentVersion,
   deriveContext,
   fail,
   repoRoot,
   slugify,
+  workspaceFloors,
 } from "./lib/common.mjs";
 
 const USAGE = 'usage: pnpm new-demo <name> [--description "..."]';
@@ -62,7 +64,7 @@ function parseArgs(argv: string[]): { name: string; description?: string } {
 /**
  * Rewrite the scaffolded package.json for life inside the workspace.
  *
- * Dependency *ranges* are already `workspace:^` (scaffoldApp resolved the token);
+ * Dependency *ranges* are already workspace floors (scaffoldApp resolved the token);
  * the dependency *sets* are the template's, untouched, so the two scaffolders
  * can't drift on what the starter app needs. Everything else is replaced:
  *
@@ -80,6 +82,7 @@ function rewirePackageJson(
   description: string,
   version: string,
   { scope, repoUrl }: { scope: string; repoUrl: string },
+  floors: Map<string, string>,
 ): void {
   const pkgPath = join(dest, "package.json");
   const template = JSON.parse(readFileSync(pkgPath, "utf8")) as {
@@ -113,7 +116,7 @@ function rewirePackageJson(
       test: "vitest run",
       typecheck: "tsc --noEmit -p tsconfig.json",
     },
-    dependencies: withCatalogRefs(withVoiceDock(template.dependencies)),
+    dependencies: withCatalogRefs(withVoiceDock(template.dependencies, floors)),
     devDependencies: withCatalogRefs(template.devDependencies),
   };
   writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
@@ -128,12 +131,19 @@ const VOICE_DOCK = "@habemus-papadum/aiui-dock";
  * (see {@link injectVoiceDock} for the source side). Asserted absent from the
  * template so a template that grows the dock back fails this script loudly.
  */
-function withVoiceDock(deps: Record<string, string>): Record<string, string> {
+function withVoiceDock(
+  deps: Record<string, string>,
+  floors: Map<string, string>,
+): Record<string, string> {
   if (VOICE_DOCK in deps) {
     fail(`the template depends on ${VOICE_DOCK} itself — update new-demo.ts's dock injection`);
   }
+  const dock = floors.get(VOICE_DOCK);
+  if (!dock) {
+    fail(`${VOICE_DOCK} is not a workspace member — update new-demo.ts's dock injection`);
+  }
   return Object.fromEntries(
-    Object.entries({ ...deps, [VOICE_DOCK]: "workspace:^" }).sort(([a], [b]) => a.localeCompare(b)),
+    Object.entries({ ...deps, [VOICE_DOCK]: dock }).sort(([a], [b]) => a.localeCompare(b)),
   );
 }
 
@@ -243,8 +253,9 @@ the wiring underneath.
 
 It differs from a scaffolded sandbox in exactly two ways, both deliberate:
 
-- \`@habemus-papadum/*\` deps resolve through \`workspace:^\` — you are editing the real packages
-  next door, live, with no build step. A change to \`packages/aiui-viz\` shows up here on save.
+- \`@habemus-papadum/*\` deps are workspace floors (\`workspace:>=X.Y.Z\`), which pnpm links to the
+  packages next door — you are editing them live, with no build step. A change to
+  \`packages/aiui-viz\` shows up here on save.
 - It lives in this repo's git history. Commits here are commits to pdum_aiui.
 
 Run the dev server with \`pnpm dev\` from this directory (plain \`vite\`); the voice dock takes its
@@ -259,8 +270,8 @@ function readmeMd(slug: string, description: string): string {
 
 ${description}
 
-An in-repo demo wired to the workspace (\`workspace:^\`, no npm install of aiui packages, no build
-step). Run it from this directory:
+An in-repo demo wired to the workspace (\`workspace:>=X.Y.Z\` floors that pnpm links to the
+checkout: no npm install of aiui packages, no build step). Run it from this directory:
 
 \`\`\`sh
 pnpm dev      # this app (Vite)
@@ -289,10 +300,19 @@ function main(): void {
     fail("could not find create-aiui's app template");
   }
 
-  const version = currentVersion();
-  scaffoldApp(template, dest, version, "workspace:^");
+  // A demo is private: ship ignores it and its version stays 0.0.0. Its aiui
+  // dependencies are floors on the siblings' own release lines.
+  const version = "0.0.0";
+  const floors = workspaceFloors();
+  scaffoldApp(template, dest, (name) => {
+    const floor = floors.get(name);
+    if (!floor) {
+      fail(`${name} is not a workspace member — the template depends on it`);
+    }
+    return floor;
+  });
 
-  rewirePackageJson(dest, slug, description, version, deriveContext());
+  rewirePackageJson(dest, slug, description, version, deriveContext(), floors);
   injectVoiceDock(dest);
   writeFileSync(join(dest, "tsconfig.json"), TSCONFIG);
   writeFileSync(

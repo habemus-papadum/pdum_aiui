@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-oracle",
-  "version": "0.24.0+dev",
+  "version": "0.0.0",
   "private": true,
   "description": "The oracle — a realtime voice control surface for aiui apps (WebRTC to OpenAI Realtime, the app's cells as tools).",
   "type": "module",
@@ -26,19 +26,19 @@
     "lab": "vite --config lab/vite.config.ts"
   },
   "devDependencies": {
-    "@habemus-papadum/aiui-build-config": "workspace:^",
-    "@habemus-papadum/aiui-source-processor": "workspace:^",
+    "@habemus-papadum/aiui-build-config": "workspace:*",
+    "@habemus-papadum/aiui-source-processor": "workspace:*",
     "jsdom": "catalog:",
     "vite": "catalog:",
     "vite-plugin-solid": "catalog:solid"
   },
   "dependencies": {
-    "@habemus-papadum/aiui-prompts": "workspace:^",
-    "@habemus-papadum/aiui-prompts-inspector": "workspace:^",
-    "@habemus-papadum/aiui-viz": "workspace:^",
+    "@habemus-papadum/aiui-prompts": "workspace:>=0.24.0",
+    "@habemus-papadum/aiui-prompts-inspector": "workspace:>=0.24.0",
+    "@habemus-papadum/aiui-viz": "workspace:>=0.24.0",
     "@pydantic/genai-prices": "^0.1.0",
     "@solidjs/web": "catalog:solid",
     "solid-js": "catalog:solid",
-    "@habemus-papadum/aiui-audio": "workspace:^"
+    "@habemus-papadum/aiui-audio": "workspace:>=0.24.0"
   }
 }

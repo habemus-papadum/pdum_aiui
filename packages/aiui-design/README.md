@@ -49,6 +49,6 @@ option memo written against them needs no change if a second palette ever slots 
 ## Developing
 
 Change flow: edit `DESIGN.md` first, make `src/` follow, check `demos/styleguide` (it rides
-the gallery: `pnpm demo`, then `/styleguide`), and let the version lockstep carry it. The
+the gallery: `pnpm demo`, then `/styleguide`), and let the next release of this package carry it. The
 test next to the theme module pins the literal palette to the CSS ladder and checks the
 contrasts the design document claims.

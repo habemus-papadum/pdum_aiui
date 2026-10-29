@@ -203,7 +203,7 @@
   },
   "peerDependencies": {
     "@duckdb/duckdb-wasm": ">=1.29",
-    "@habemus-papadum/aiui-prompts-inspector": "workspace:^",
+    "@habemus-papadum/aiui-prompts-inspector": "workspace:>=0.24.0",
     "@observablehq/plot": "^0.6",
     "@solidjs/web": ">=2.0.0-rc.13 <3",
     "@uwdata/flechette": ">=2.5",
@@ -214,7 +214,8 @@
     "katex": "^0.16 || ^0.17",
     "marked": "^16",
     "mermaid": "^12",
-    "solid-js": ">=2.0.0-rc.13 <3"
+    "solid-js": ">=2.0.0-rc.13 <3",
+    "@habemus-papadum/aiui-prompts": "workspace:>=0.24.0"
   },
   "peerDependenciesMeta": {
     "@duckdb/duckdb-wasm": {
@@ -251,16 +252,13 @@
       "optional": true
     }
   },
-  "dependencies": {
-    "@habemus-papadum/aiui-prompts": "workspace:^"
-  },
   "devDependencies": {
     "@babel/core": "catalog:",
     "@duckdb/duckdb-wasm": "catalog:",
-    "@habemus-papadum/aiui-build-config": "workspace:^",
-    "@habemus-papadum/aiui-design": "workspace:^",
-    "@habemus-papadum/aiui-prompts-inspector": "workspace:^",
-    "@habemus-papadum/aiui-source-processor": "workspace:^",
+    "@habemus-papadum/aiui-build-config": "workspace:*",
+    "@habemus-papadum/aiui-design": "workspace:*",
+    "@habemus-papadum/aiui-prompts-inspector": "workspace:*",
+    "@habemus-papadum/aiui-source-processor": "workspace:*",
     "@observablehq/plot": "catalog:",
     "@solidjs/web": "catalog:solid",
     "@uwdata/flechette": "^2.5.0",
@@ -275,6 +273,7 @@
     "mermaid": "^12.2.0",
     "solid-js": "catalog:solid",
     "vite": "catalog:",
-    "vite-plugin-solid": "catalog:solid"
+    "vite-plugin-solid": "catalog:solid",
+    "@habemus-papadum/aiui-prompts": "workspace:*"
   }
 }

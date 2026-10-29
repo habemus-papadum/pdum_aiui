@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/demo-seismos",
-  "version": "0.24.0+dev",
+  "version": "0.0.0",
   "description": "Earthquakes & the Gutenberg–Richter law: DuckDB-WASM + Mosaic crossfilter over a bundled catalog, with a live b-value fit and an agent SQL tool.",
   "private": true,
   "type": "module",
@@ -33,10 +33,10 @@
   },
   "dependencies": {
     "@duckdb/duckdb-wasm": "catalog:",
-    "@habemus-papadum/aiui-design": "workspace:^",
-    "@habemus-papadum/aiui-dock": "workspace:^",
-    "@habemus-papadum/aiui-source-processor": "workspace:^",
-    "@habemus-papadum/aiui-viz": "workspace:^",
+    "@habemus-papadum/aiui-design": "workspace:>=0.24.0",
+    "@habemus-papadum/aiui-dock": "workspace:>=0.0.0",
+    "@habemus-papadum/aiui-source-processor": "workspace:>=0.24.0",
+    "@habemus-papadum/aiui-viz": "workspace:>=0.24.0",
     "@observablehq/plot": "catalog:",
     "@solidjs/web": "catalog:solid",
     "@uwdata/mosaic-core": "^0.28.1",

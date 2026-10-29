@@ -35,6 +35,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # ship reads each package's release tags
 
       - uses: pnpm/action-setup@v4
 
@@ -44,11 +46,18 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
       - name: Install (frozen lockfile — also the lockfile-drift guard)
         run: pnpm install --frozen-lockfile
 
-      - name: Lockstep version invariant
-        run: node scripts/versioning.mjs current
+      - name: Install ship
+        run: uv sync --locked
+
+      - name: Release policy (versions, tags, peer ranges, lockfiles, skill copies)
+        run: uv run ship deps check
 
       - name: Plugin manifests parse & skill markdown links resolve
         run: node scripts/check-skill-links.mjs
@@ -79,7 +88,7 @@ jobs:
   # tarballs into a scratch npm project → probe the installed packages the way
   # a consumer would. Catches missing `files` entries (a package shipping
   # without its built assets), subpaths that only resolve in the workspace
-  # layout, and workspace:^ ranges that don't convert. No browser. Locally:
+  # layout, and workspace: ranges that don't convert. No browser. Locally:
   # `pnpm test:packaging`.
   packaging:
     runs-on: ubuntu-latest

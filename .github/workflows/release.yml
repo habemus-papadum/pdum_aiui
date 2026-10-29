@@ -1,268 +1,49 @@
+# The only publish path. ship releases one package per run: it computes the version
+# from the package's last tag, builds the package and its workspace dependencies,
+# runs the tests, publishes to npm, tags <package>-v<version>, pushes, creates the
+# GitHub release and returns the manifest to <version>+dev. The gallery deploys on
+# push to main (gallery.yml), not here. Run from the Actions UI or:
+#   gh workflow run release.yml -f package=@habemus-papadum/aiui-viz -f bump=minor -f dry_run=false
 name: release
-
-# The ONLY publish path. There is no local release script and no tag trigger,
-# which is what makes a local/CI double-publish impossible. Run from the Actions
-# UI (release -> Run workflow) or: gh workflow run release.yml -f bump=minor
-#
-# ── Two modes ────────────────────────────────────────────────────────────────
-# release  the real thing: stamp X.Y.Z across every manifest, commit, tag, publish
-#          to `latest`, cut a GitHub Release, deploy the gallery (the demo
-#          notebooks' static site — the only site this repo publishes).
-#
-# canary   gh workflow run release.yml -f canary=true
-#          publish X.Y.Z-canary.<sha> under the `canary` dist-tag and stop. No
-#          commit, no tag, no GitHub Release, no site deploy — nothing durable
-#          except the tarballs. For getting a small upstream fix into a consumer
-#          (another repo on these packages) in ~2 minutes instead of a full release.
-#
-# The canary lives HERE rather than in its own workflow file so there is
-# exactly ONE workflow that can publish: one gate, one version computation, one
-# secret surface. (Historically this was also forced by npm trusted publishing,
-# which bound auth to this file's identity; auth is a stored NPM_TOKEN now —
-# see the npm-publish job — but the single-publish-path discipline stands.)
-
 on:
   workflow_dispatch:
     inputs:
+      package:
+        description: Package to release (npm packages by their scoped name)
+        type: string
+        required: true
       bump:
-        description: "Release size relative to the last release tag"
+        description: patch, minor or major, applied to the last release tag
         type: choice
         options: [patch, minor, major]
         default: minor
-      skip_ci_check:
-        description: "Release even if this commit's CI isn't green (skip the gate)"
-        type: boolean
-        default: false
       dry_run:
-        description: "Compute the version + show the diff, but do NOT commit/tag/publish"
+        description: Plan and print; write nothing
+        type: boolean
+        default: true
+      skip_ci_check:
+        description: Release without waiting for the CI workflow
         type: boolean
         default: false
-      canary:
-        description: "Publish X.Y.Z-canary.<sha> under the `canary` dist-tag — no commit, no tag, no release"
+      skip_tests:
+        description: Do not run the test commands before publishing
         type: boolean
         default: false
-
 permissions:
   contents: read
-
 jobs:
-  gate:
-    if: ${{ !inputs.skip_ci_check }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      actions: read # read ci.yml run status
-    steps:
-      - name: Wait for ci.yml and require success on ${{ github.sha }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          SHA: ${{ github.sha }}
-        run: |
-          jq_row='if length>0 then (.[0] | [.status, (.conclusion // ""), .url] | @tsv) else "" end'
-          for i in $(seq 1 60); do # up to ~30 min (60 x 30s)
-            ROW=$(gh run list -w ci.yml -c "$SHA" -e push -L 1 --json status,conclusion,url --jq "$jq_row")
-            if [ -z "$ROW" ]; then echo "no ci.yml push run for $SHA yet... ($i/60)"; sleep 30; continue; fi
-            IFS=$'\t' read -r STATUS CONCL URL <<<"$ROW"
-            if [ "$STATUS" = "completed" ]; then
-              if [ "$CONCL" = "success" ]; then echo "::notice::CI green on $SHA"; exit 0; fi
-              echo "::error::ci.yml concluded '$CONCL' on $SHA ($URL) — fix CI, or re-dispatch with skip_ci_check=true."
-              exit 1
-            fi
-            echo "ci.yml still $STATUS on $SHA... ($i/60)"
-            sleep 30
-          done
-          echo "::error::timed out waiting for ci.yml on $SHA"
-          exit 1
-
-  prepare:
-    needs: [gate]
-    if: ${{ !cancelled() && needs.gate.result != 'failure' }}
-    runs-on: ubuntu-latest
+  release:
+    uses: habemus-papadum/pdum_ship/.github/workflows/release.yml@main
+    with:
+      package: ${{ inputs.package }}
+      bump: ${{ inputs.bump }}
+      dry_run: ${{ inputs.dry_run }}
+      skip_ci_check: ${{ inputs.skip_ci_check }}
+      skip_tests: ${{ inputs.skip_tests }}
+    secrets:
+      PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     permissions:
       contents: write
-    outputs:
-      version: ${{ steps.ver.outputs.version }}
-      tag: ${{ steps.ver.outputs.tag }}
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0 # need every tag for latest-tag
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Compute this release's version
-        id: ver
-        run: |
-          RELEASE=$(node scripts/versioning.mjs compute-release "${{ inputs.bump }}")
-          LAST=$(node scripts/versioning.mjs latest-tag)
-          if [ "${{ inputs.canary }}" = "true" ]; then
-            # A prerelease of the NEXT version, so semver sorts it above the last
-            # release and below the real one it precedes.
-            RELEASE="$RELEASE-canary.$(git rev-parse --short=7 HEAD)"
-            echo "Last release: ${LAST:-<none>} -> canary: $RELEASE (dist-tag: canary)"
-          else
-            echo "Last release: ${LAST:-<none>} -> this release: $RELEASE"
-          fi
-          echo "version=$RELEASE" >> "$GITHUB_OUTPUT"
-          echo "tag=v$RELEASE" >> "$GITHUB_OUTPUT"
-
-      - name: Write the release version across every package.json
-        run: |
-          node scripts/versioning.mjs set "${{ steps.ver.outputs.version }}"
-          pnpm install --lockfile-only
-          {
-            echo "### Release ${{ steps.ver.outputs.version }}"
-            echo ''
-            echo '```'
-            git --no-pager diff --stat
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Dry run — stop here (no commit/tag/publish)
-        if: ${{ inputs.dry_run }}
-        run: echo "::notice::DRY RUN — computed ${{ steps.ver.outputs.version }} but did not commit, tag, or publish."
-
-      # A canary leaves nothing behind: no version commit, no tag. The stamped
-      # manifests exist only inside the npm-publish job's checkout.
-      - name: Commit, tag, push
-        if: ${{ !inputs.dry_run && !inputs.canary }}
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -am "${{ steps.ver.outputs.version }}"
-          git tag -a "${{ steps.ver.outputs.tag }}" -m "${{ steps.ver.outputs.version }}"
-          git push origin "HEAD:${GITHUB_REF_NAME}" "refs/tags/${{ steps.ver.outputs.tag }}"
-
-  npm-publish:
-    needs: [prepare]
-    if: ${{ !inputs.dry_run }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write # provenance attestation (independent of the token publish)
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          # A release checks out its TAG, which carries the stamped versions. A
-          # canary never made one, so it takes the dispatch SHA and stamps here.
-          ref: ${{ inputs.canary && github.sha || needs.prepare.outputs.tag }}
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-      - name: Stamp the canary version (release mode gets it from the tag)
-        if: ${{ inputs.canary }}
-        run: |
-          node scripts/versioning.mjs set "${{ needs.prepare.outputs.version }}"
-          pnpm install --lockfile-only
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm -r run build
-
-      - name: Publish to npm
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc-publish"
-          export NPM_CONFIG_USERCONFIG="$HOME/.npmrc-publish"
-          # ONE recursive publish across the workspace (the cf_browser_credentials
-          # pattern). pnpm auto-skips `private: true` members (demos), applies
-          # the publishConfig dist/ swap, and expands each `workspace:^` dep to
-          # ^<release> at pack time.
-          #
-          # Auth = NPM_TOKEN (repo secret; an npm token from the owner's account —
-          # a NEW package's first publish just works, with no per-package
-          # trusted-publisher step). --provenance = OIDC attestation only, via the
-          # id-token permission above; it is independent of the auth.
-          pnpm -r publish --provenance --no-git-checks ${{ inputs.canary && '--tag canary' || '' }}
-          rm -f "$HOME/.npmrc-publish"
-
-  github-release:
-    needs: [prepare, npm-publish]
-    if: ${{ !inputs.dry_run && !inputs.canary }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      # A GitHub Release on the tag `prepare` pushed, with generated notes. The
-      # npm tarballs are the release artifacts; nothing is attached here.
-      - uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.prepare.outputs.tag }}
-          generate_release_notes: true
-
-  # Publish the demos/gallery static site to S3 + invalidate CloudFront, the same
-  # way npm-publish talks to npm: over OIDC, with NO stored secret. The job's
-  # id-token lets aws-actions/configure-aws-credentials assume the IAM role
-  # `pdum-aiui-gallery-publish`, whose trust policy allows ONLY this repo's
-  # release.yml on refs/heads/main (sub claim) and whose permission policy is
-  # least-privilege: write under s3://habemus-papadum.net/aiui/* and
-  # CreateInvalidation on one distribution — nothing else. The role ARN is not a
-  # secret (it is only assumable via the OIDC trust above), so it lives here in
-  # plaintext. Provisioned out-of-band in AWS account 789030644255; the resources
-  # and the recreate commands are recorded in demos/gallery/PUBLISHING.md.
-  publish-site:
-    needs: [prepare, npm-publish]
-    if: ${{ !inputs.dry_run && !inputs.canary }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write # OIDC: assume the AWS publish role — no stored secret
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          ref: ${{ needs.prepare.outputs.tag }}
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-      # Source-first: the gallery builds from linked workspace source, so a plain
-      # install is all the prep the vite build needs.
-      - run: pnpm install --frozen-lockfile
-
-      - name: Assume the AWS publish role (GitHub OIDC — no secret)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::789030644255:role/pdum-aiui-gallery-publish
-          aws-region: us-east-1
-
-      - name: Build demos/gallery and publish to S3 + invalidate CloudFront
-        env:
-          PUBLISH: "1" # real upload, not the script's default dry run
-          CF_ID: E2OPILUJ3WDTIB # skip ListDistributions (role isn't allowed it)
-        run: bash demos/gallery/publish.sh --publish
-
-  finalize:
-    needs: [prepare, npm-publish]
-    if: ${{ !inputs.dry_run && !inputs.canary }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          ref: ${{ github.ref_name }}
-          fetch-depth: 0
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Set the +dev marker and push
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          node scripts/versioning.mjs set "${{ needs.prepare.outputs.version }}+dev"
-          pnpm install --lockfile-only
-          git commit -am "back to dev (${{ needs.prepare.outputs.version }}+dev)"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+      actions: read
+      id-token: write   # npm provenance attestations

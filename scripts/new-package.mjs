@@ -15,8 +15,10 @@
 // --no-reserve to skip — reservation is optional: releases authenticate with the
 // NPM_TOKEN secret, and a new package's first publish needs no setup at all.
 //
-// The new package joins version lockstep immediately (it adopts the current shared
-// version). No other file needs editing — the packages/* glob picks it up everywhere.
+// A publishable package starts at 0.0.0+dev with no tag; its first `ship release`
+// computes 0.1.0 (minor) or 0.0.1 (patch). A --no-publish package carries 0.0.0,
+// which ship ignores. No other file needs editing — the packages/* glob picks the
+// new member up everywhere.
 
 import { execFileSync } from "node:child_process";
 import {
@@ -29,14 +31,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import {
-  currentVersion,
-  deriveContext,
-  fail,
-  repoRoot,
-  scriptsDir,
-  slugify,
-} from "./lib/common.mjs";
+import { deriveContext, fail, repoRoot, scriptsDir, slugify } from "./lib/common.mjs";
 
 const skeletonDir = join(scriptsDir, "_skeleton");
 const packagesDir = join(repoRoot, "packages");
@@ -109,7 +104,9 @@ function main() {
   }
 
   const { scope, repoUrl } = deriveContext();
-  const version = currentVersion();
+  // ship's convention: a package that will be released starts at 0.0.0+dev and
+  // is tagged by its first release; a never-published member carries 0.0.0.
+  const version = publish ? "0.0.0+dev" : "0.0.0";
 
   cpSync(skeletonDir, dest, { recursive: true });
 
