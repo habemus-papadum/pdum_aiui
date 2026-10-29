@@ -1,6 +1,6 @@
 {
   "name": "@habemus-papadum/aiui-pencil",
-  "version": "0.24.0+dev",
+  "version": "0.24.1",
   "description": "Editable stroke input, pure geometry, Canvas views, fading, and reactive observation.",
   "type": "module",
   "license": "MIT",
