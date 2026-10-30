@@ -59,6 +59,10 @@
  *    and where labels are measured: pass an element INSIDE the host so the
  *    measurement sees the host's font (`fontFamily: "inherit"` then works;
  *    measured in the body, labels overflow their boxes).
+ *    Each render owns its stage until it settles. If the component unmounts,
+ *    the stage stays connected and hidden with its measured width and computed
+ *    styles: Mermaid cannot cancel queued/in-flight layout, which still needs
+ *    document lookup and text measurement after the page has gone away.
  *  - On a parse error `render` rejects with the message; with
  *    `suppressErrorRendering` nothing is left in the document. The message
  *    is shown here, the last good SVG stays.
@@ -313,6 +317,35 @@ interface Indexed {
 
 const SHAPE = ":scope > rect, :scope > polygon, :scope > circle, :scope > ellipse, :scope > path";
 
+/** Measure in the author's CSS context. Only an abandoned render moves to body;
+ * its frozen styles and width keep layout valid until Mermaid releases it. */
+function createRenderStage(root: HTMLElement) {
+  const element = document.createElement("div");
+  element.className = "aiui-mmd-stage";
+  element.setAttribute("aria-hidden", "true");
+  root.append(element);
+  // Capture while attached: owner cleanup may run after the page was removed.
+  const computed = getComputedStyle(element);
+  const styles = Array.from(computed, (name) => [name, computed.getPropertyValue(name)] as const);
+  const width = element.getBoundingClientRect().width;
+  return {
+    element,
+    retain() {
+      for (const [name, value] of styles) element.style.setProperty(name, value);
+      Object.assign(element.style, {
+        position: "fixed",
+        left: "0",
+        top: "0",
+        width: `${width}px`,
+        boxSizing: "border-box",
+        visibility: "hidden",
+        pointerEvents: "none",
+      });
+      document.body.append(element);
+    },
+  };
+}
+
 export function Mermaid(props: MermaidProps): JSX.Element {
   ensureStyles(STYLE_MARK, MERMAID_STYLES);
   const source = createMemo(() => withConfig(props.text, props.config));
@@ -322,7 +355,7 @@ export function Mermaid(props: MermaidProps): JSX.Element {
 
   let root!: HTMLElement;
   let host!: HTMLElement;
-  let stage!: HTMLElement;
+  const pendingStages = new Set<ReturnType<typeof createRenderStage>>();
   // id → element, for the CURRENT svg; rebuilt on every swap.
   let index = new Map<string, Indexed>();
   let marksNow: Readonly<Record<string, MermaidMark>> = {};
@@ -399,6 +432,9 @@ export function Mermaid(props: MermaidProps): JSX.Element {
   };
   onCleanup(() => {
     seq++; // any render in flight is now stale
+    // Mermaid's queue cannot be cancelled. Removing its measurement DOM before
+    // it settles produces invalid SVG geometry even though we discard the result.
+    for (const stage of pendingStages) stage.retain();
     if (!adopted) return;
     host.removeEventListener("pointerover", onPointerOver);
     host.removeEventListener("pointerleave", onPointerLeave);
@@ -525,10 +561,20 @@ export function Mermaid(props: MermaidProps): JSX.Element {
     const id = `aiui-mmd-${++renderCount}`;
     const t0 = typeof performance === "undefined" ? Date.now() : performance.now();
     loadMermaid()
-      .then((m) => m.render(id, src, stage))
+      .then(async (m) => {
+        if (mine !== seq) return;
+        const stage = createRenderStage(root);
+        pendingStages.add(stage);
+        try {
+          return await m.render(id, src, stage.element);
+        } finally {
+          pendingStages.delete(stage);
+          stage.element.remove();
+        }
+      })
       .then(
         (r) => {
-          if (mine !== seq) return;
+          if (mine !== seq || r === undefined) return;
           const ms = (typeof performance === "undefined" ? Date.now() : performance.now()) - t0;
           setError(undefined);
           const svg = swap(r.svg);
@@ -615,13 +661,6 @@ export function Mermaid(props: MermaidProps): JSX.Element {
         class="aiui-mmd-svg"
         ref={(el) => {
           host = el;
-        }}
-      />
-      <div
-        class="aiui-mmd-stage"
-        aria-hidden="true"
-        ref={(el) => {
-          stage = el;
         }}
       />
       <KnobReadout of={knobs} />

@@ -15,7 +15,13 @@ import { control } from "../control";
 import { resetControlSurface, tick } from "../testing";
 
 const fake = vi.hoisted(() => {
-  const state = { auto: true, pending: [] as (() => void)[], renders: 0 };
+  const state = {
+    auto: true,
+    pending: [] as (() => void)[],
+    containers: [] as HTMLElement[],
+    measuredConnected: [] as boolean[],
+    renders: 0,
+  };
   const svgOf = (id: string, text: string): string => {
     const nodes: string[] = [];
     const edges: [string, string][] = [];
@@ -48,10 +54,12 @@ const fake = vi.hoisted(() => {
   };
   const api = {
     initialize: () => {},
-    render: (id: string, text: string) =>
+    render: (id: string, text: string, container: HTMLElement) =>
       new Promise<{ svg: string; diagramType: string }>((resolve, reject) => {
         state.renders++;
+        state.containers.push(container);
         const go = () => {
+          state.measuredConnected.push(container.isConnected);
           if (/bad/.test(text)) reject(new Error(`Parse error: ${text}`));
           else resolve({ svg: svgOf(id, text), diagramType: "flowchart-v2" });
         };
@@ -78,6 +86,8 @@ let dispose: (() => void) | undefined;
 beforeEach(() => {
   fake.state.auto = true;
   fake.state.pending = [];
+  fake.state.containers = [];
+  fake.state.measuredConnected = [];
 });
 afterEach(() => {
   dispose?.();
@@ -311,6 +321,82 @@ describe("<Mermaid>", () => {
     await settle();
     expect(el(host, "Y")).toBeTruthy();
     expect(host.querySelector(`[${MERMAID_ID_ATTR}="X"]`)).toBeNull();
+  });
+
+  it("does not submit a render after disposal while loading Mermaid", async () => {
+    const before = fake.state.renders;
+    mount(() => <Mermaid text="flowchart LR\n A --> B" />);
+    dispose?.();
+    dispose = undefined;
+    await settle();
+    expect(fake.state.renders).toBe(before);
+    expect(document.querySelector(".aiui-mmd-stage")).toBeNull();
+  });
+
+  it("keeps an in-flight stage connected with its typography and width until it settles", async () => {
+    fake.state.auto = false;
+    const onRender = vi.fn();
+    const styles = document.createElement("style");
+    styles.textContent =
+      ".aiui-mmd-stage { font-family: Georgia; font-size: 19px; line-height: 27px; letter-spacing: 2px; }";
+    document.body.append(styles);
+    const bounds = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 390,
+      bottom: 0,
+      width: 390,
+      height: 0,
+      toJSON: () => ({}),
+    });
+    const host = mount(() => <Mermaid text="flowchart LR\n A --> B" onRender={onRender} />);
+    await settle();
+    bounds.mockRestore();
+    const stage = fake.state.containers[0] as HTMLElement;
+    expect(host.contains(stage)).toBe(true);
+    // Both cleanup orders occur in hosts: retain the captured layout even if
+    // the page was detached before the component owner is disposed.
+    host.remove();
+    dispose?.();
+    dispose = undefined;
+    expect(stage.isConnected).toBe(true);
+    expect(stage.style.width).toBe("390px");
+    expect(stage.style.fontFamily).toBe("Georgia");
+    expect(stage.style.fontSize).toBe("19px");
+    expect(stage.style.lineHeight).toBe("27px");
+    expect(stage.style.letterSpacing).toBe("2px");
+    expect(stage.style.visibility).toBe("hidden");
+    fake.state.pending[0]?.();
+    await settle();
+    expect(fake.state.measuredConnected).toEqual([true]);
+    expect(onRender).not.toHaveBeenCalled();
+    expect(document.querySelector(".aiui-mmd-stage")).toBeNull();
+  });
+
+  it("cleans up every disposed stage on success or rejection without publishing stale results", async () => {
+    fake.state.auto = false;
+    const onRender = vi.fn();
+    const [text, setText] = createSignal("flowchart LR\n A --> B");
+    const host = mount(() => <Mermaid text={text()} onRender={onRender} />);
+    await settle();
+    setText("flowchart LR\n A --> bad");
+    await settle();
+    expect(fake.state.containers).toHaveLength(2);
+    dispose?.();
+    dispose = undefined;
+    host.remove();
+    expect(fake.state.containers.every((stage) => stage.isConnected)).toBe(true);
+    fake.state.pending[0]?.();
+    await settle();
+    expect(document.querySelectorAll(".aiui-mmd-stage")).toHaveLength(1);
+    fake.state.pending[1]?.();
+    await settle();
+    expect(fake.state.measuredConnected).toEqual([true, true]);
+    expect(onRender).not.toHaveBeenCalled();
+    expect(document.querySelector(".aiui-mmd-stage")).toBeNull();
+    expect(document.querySelector(".aiui-mmd-error")).toBeNull();
   });
 
   it("shows a parse error and keeps the last good drawing", async () => {
