@@ -1,6 +1,7 @@
-# Publish the demos/gallery static site to S3 and invalidate CloudFront on every
-# push to main that can change it (the demos, the packages they build from, the
-# lockfile), or by hand. It used to ride the release workflow; ship releases one
+# Publish the demos/gallery static site, with the aiui-viz lab at /aiui/lab/
+# (packages/aiui-viz/lab; publish.sh builds both), to S3 and invalidate CloudFront
+# on every push to main that can change it (the demos, the packages they build
+# from, the lockfile), or by hand. It used to ride the release workflow; ship releases one
 # package per run, so the site deploys from main instead.
 #
 # The job talks to AWS over OIDC, with NO stored secret. Its id-token lets
@@ -57,7 +58,7 @@ jobs:
           role-to-assume: arn:aws:iam::789030644255:role/pdum-aiui-gallery-publish
           aws-region: us-east-1
 
-      - name: Build demos/gallery and publish to S3 + invalidate CloudFront
+      - name: Build demos/gallery + the aiui-viz lab and publish to S3 + invalidate CloudFront
         env:
           PUBLISH: "1" # real upload, not the script's default dry run
           CF_ID: E2OPILUJ3WDTIB # skip ListDistributions (role isn't allowed it)

@@ -14,6 +14,7 @@
  */
 import { type DemoCard, PageBoundary } from "@habemus-papadum/aiui-viz";
 import { createSignal, For, Show } from "solid-js";
+import { LAB_HREF } from "./nav";
 import { DEMOS, type DemoPageEntry } from "./registry";
 import { hrefOf } from "./router";
 
@@ -65,6 +66,27 @@ function DemoCardTile(props: { entry: DemoPageEntry }) {
   );
 }
 
+/** The aiui-viz lab is its own document, so it opens in a new tab: the link
+ * interceptor leaves targeted anchors alone, and an open turn here survives. */
+function LabCard() {
+  return (
+    <a class="demo-card" href={LAB_HREF} target="_blank" rel="noopener">
+      <div class="demo-card-preview">
+        <div class="demo-card-placeholder">E = mc²</div>
+      </div>
+      <div class="demo-card-body">
+        <div class="demo-card-title">aiui-viz lab</div>
+        <p class="demo-card-blurb">
+          Rich math and rich Mermaid: equations and diagrams whose pieces stay addressable.
+        </p>
+        <span class="demo-card-open">
+          open <span aria-hidden="true">↗</span>
+        </span>
+      </div>
+    </a>
+  );
+}
+
 export function Landing() {
   return (
     <div class="landing">
@@ -78,6 +100,7 @@ export function Landing() {
       </header>
       <div class="demo-card-grid">
         <For each={DEMOS}>{(d) => <DemoCardTile entry={d} />}</For>
+        <LabCard />
       </div>
     </div>
   );

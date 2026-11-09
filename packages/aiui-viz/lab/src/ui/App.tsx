@@ -6,7 +6,7 @@
 import { navigateTo, pathname, SiteNav } from "@habemus-papadum/aiui-viz/site";
 import { Dynamic, type JSX } from "@solidjs/web";
 import { createEffect, createMemo, onCleanup } from "solid-js";
-import { NAV } from "./nav";
+import { BASE, NAV } from "./nav";
 import { Anatomy } from "./pages/Anatomy";
 import { Derivation } from "./pages/Derivation";
 import { Fidelity } from "./pages/Fidelity";
@@ -25,7 +25,10 @@ const PAGES: Record<string, () => JSX.Element> = {
 };
 
 export function App(): JSX.Element {
-  const route = createMemo(() => pathname().replace(/^\/+/, "").split("/")[0] ?? "");
+  const route = createMemo(() => {
+    const path = pathname();
+    return path.startsWith(BASE) ? (path.slice(BASE.length).split("/")[0] ?? "") : "";
+  });
   createEffect(route, (r) => {
     const item = NAV.find((n) => n.id === r);
     document.title = item ? `${item.name} · aiui-viz lab` : "aiui-viz lab";
@@ -38,7 +41,8 @@ export function App(): JSX.Element {
     if (!(anchor instanceof HTMLAnchorElement)) return;
     if (anchor.target !== "" || anchor.hasAttribute("download")) return;
     const url = new URL(anchor.href, location.href);
-    if (url.origin !== location.origin) return;
+    // Published, the gallery shares this origin: its links are real navigations.
+    if (url.origin !== location.origin || !url.pathname.startsWith(BASE)) return;
     if (url.pathname === location.pathname && url.hash !== "") return;
     e.preventDefault();
     navigateTo(url.pathname);
@@ -52,7 +56,7 @@ export function App(): JSX.Element {
   return (
     <div class="app-frame">
       <SiteNav
-        brand={{ name: "aiui-viz", suffix: "lab", href: "/" }}
+        brand={{ name: "aiui-viz", suffix: "lab", href: BASE }}
         items={[...NAV]}
         active={route()}
         links={{ github: "https://github.com/habemus-papadum/pdum_aiui" }}

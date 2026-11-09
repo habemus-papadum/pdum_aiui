@@ -5,6 +5,13 @@ The gallery is a static site (one SPA document, base `/aiui/`) served from
 `E2OPILUJ3WDTIB` in AWS account **789030644255**. There are two publish paths,
 and they share **one script** — `publish.sh` — so there is no drift.
 
+The script also builds the **aiui-viz lab** (`packages/aiui-viz/lab`, the RichTeX
+and Mermaid rigs) into `dist/lab/`, published at `/aiui/lab/`. It is a second
+document, not a gallery page: it keeps its own sidebar and routes, and each page
+gets a real `lab/<page>/index.html`. It sits under the `/aiui` prefix, so the role,
+the policy and the invalidation below cover it, and the sync's `--delete` keeps it
+because it is in `dist/`. A deploy from a checkout without the lab build removes it.
+
 ## Local (manual)
 
 ```sh

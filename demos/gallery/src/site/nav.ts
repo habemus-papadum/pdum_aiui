@@ -22,6 +22,12 @@ export const LINKS = {
   docs: "https://habemus-papadum.github.io/pdum_aiui/",
 };
 
+/** The aiui-viz lab: a second document published beside the gallery (publish.sh),
+ * which the gallery's dev server does not serve, so dev links to the published one. */
+export const LAB_HREF = import.meta.env.DEV
+  ? "https://habemus-papadum.net/aiui/lab/"
+  : `${import.meta.env.BASE_URL}lab/`;
+
 export const NAV_ITEMS: SiteNavItem[] = DEMOS.map((d) => ({
   id: d.slug,
   href: hrefOf(d.slug),

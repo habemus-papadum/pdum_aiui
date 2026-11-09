@@ -8,6 +8,8 @@
  *
  *   pnpm -C packages/aiui-viz lab
  *
+ * Published with the gallery at https://habemus-papadum.net/aiui/lab/.
+ *
  * Pages (one document, routed on the pathname):
  *   RichTeX
  *   /fidelity    the proof — marked and plain renders, pixel-diffed and measured

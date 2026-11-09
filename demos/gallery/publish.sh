@@ -4,7 +4,9 @@
 # and publish it to https://habemus-papadum.net/aiui/.
 #
 # What it does:
-#   1. `vite build` (base is /aiui/ in production — see vite.config.ts) into dist/.
+#   1. `vite build` (base is /aiui/ in production — see vite.config.ts) into dist/,
+#      then the aiui-viz lab into dist/lab/ (its own document, base /aiui/lab/ —
+#      packages/aiui-viz/lab/vite.config.ts), so the sync below carries both.
 #   2. Syncs dist/ to s3://habemus-papadum.net/aiui with `aws s3 sync --delete`
 #      (deletes only under the /aiui prefix, never the bucket root).
 #   3. Invalidates the CloudFront edge cache for /aiui/* so the new content is
@@ -67,9 +69,17 @@ aws sts get-caller-identity >/dev/null 2>&1 || {
 echo "==> Building static site -> dist/ (base /aiui/)…"
 npx vite build
 
+echo "==> Building the aiui-viz lab -> dist/lab/ (base /aiui/lab/)…"
+(cd ../../packages/aiui-viz && npx vite build --config lab/vite.config.ts \
+  --outDir "$SCRIPT_DIR/dist/lab" --emptyOutDir)
+
 [ -d dist ] || { echo "error: build did not produce dist/" >&2; exit 1; }
 [ -f dist/index.html ] || {
   echo "error: dist/ is missing index.html — refusing to publish a partial site" >&2
+  exit 1
+}
+[ -f dist/lab/index.html ] || {
+  echo "error: dist/lab/ is missing index.html — refusing to publish a partial site" >&2
   exit 1
 }
 
@@ -101,6 +111,9 @@ ROUTES="$(node -e '
   console.log(found.map((d) => d.slug).join(" "));
 ')"
 echo "==> Deep-link routes (from aiui.sitePage markers): $ROUTES"
+case " $ROUTES " in
+  *" lab "*) echo "error: a demo's slug is 'lab', which is the aiui-viz lab's URL" >&2; exit 1 ;;
+esac
 for route in $ROUTES; do
   cp dist/index.html "dist/$route.html"
 done
