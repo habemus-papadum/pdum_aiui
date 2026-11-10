@@ -101,3 +101,12 @@ workspace members — see [CLAUDE.md](./CLAUDE.md) → *In-repo demo apps*.
   artifact; the workspace dev loop doesn't consume it.
 - The repo root is a Claude Code plugin (`.claude-plugin/`, reusable skills in `skills/`); its
   manifest `version` is the plugin's own, bumped by hand (CLAUDE.md).
+
+## Weekly dependency maintenance
+
+The scheduled/manual `deps-refresh.yml` workflow uses Ship's shared refresh action.
+`[tool.ship] refresh-test` owns its explicit maintenance checks; release tests keep
+their existing scope. See [dependency maintenance](docs/dependency-maintenance.md)
+for commands, outcomes and verification limits. No package release or deployment
+is part of a dependency refresh. Keep generated reports out of Git and preserve
+human/agent edits on an existing repair PR.

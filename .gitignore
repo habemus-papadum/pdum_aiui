@@ -30,3 +30,6 @@ pnpm-debug.log*
 .aiui-cache/
 # ship runs from a uv environment (pyproject.toml); the environment itself is local
 .venv/
+
+# Weekly refresh diagnostics are retained as workflow artifacts.
+.ship-refresh/
