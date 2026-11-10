@@ -49,3 +49,13 @@ Ship 0.12.0 was installed from PyPI and its synced skills/policy checks passed.
 The final configured verification also passed: 1,927 JavaScript tests (five
 existing skips), workspace build and typecheck. Existing locked JavaScript
 versions were retained; the tooling upgrade added only Ship and packaging.
+
+## Manual verification, November 10
+
+[Run 42861801224](https://github.com/habemus-papadum/pdum_aiui/actions/runs/42861801224) completed successfully. The retained integration report records `committed` at phase `complete`, after the configured baseline installation, policy and maintenance checks.
+
+The passing candidate was committed as [dd33eb56](https://github.com/habemus-papadum/pdum_aiui/commit/dd33eb56d8d744c3d496214e26294faa47ee07bc). Six CF packages moved from 0.8.0 to 0.8.1. Native pnpm also re-resolved transitive dependencies; the complete change table is retained in the run artifact. Dependency declarations were unchanged.
+
+[Ordinary CI 42863008492](https://github.com/habemus-papadum/pdum_aiui/actions/runs/42863008492) was explicitly dispatched for that exact bot commit and passed all five jobs, including packaging/template and both lifecycle platforms. A GITHUB_TOKEN push alone does not trigger push workflows; only ordinary CI was dispatched, not the gallery deployment.
+
+The shared action's failed-candidate draft-PR path was separately exercised in its [integration smoke](https://github.com/habemus-papadum/pdum_ship/actions/runs/42859986953). Repository-level Actions PR creation is enabled; the default token permission remains read unless a workflow explicitly requests more.
